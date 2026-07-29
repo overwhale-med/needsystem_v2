@@ -2,6 +2,9 @@ import math
 import json
 import datetime
 import openpyxl
+import base64
+import pytz # 🌟 นำเข้าโมดูลจัดการโซนเวลา
+from django.core.files.base import ContentFile
 from decimal import Decimal, ROUND_DOWN, InvalidOperation
 
 from django.shortcuts import render, redirect, get_object_or_404
@@ -180,7 +183,10 @@ def sales_dashboard(request):
     if not is_sales_authorized(request.user): return redirect('dashboard')
 
     target_employees, scope_title = get_target_employees(request.user)
-    today = timezone.now().date()
+    
+    # 🌟 [FIXED] ใช้เวลาประเทศไทย
+    tz_bkk = pytz.timezone('Asia/Bangkok')
+    today_bkk = timezone.now().astimezone(tz_bkk).date()
 
     # 🌟 [NEW] ระบบดึงข้อมูลสาขา เพื่อใช้เป็น Dropdown ตัวกรอง
     from hr.models import Department
@@ -213,8 +219,8 @@ def sales_dashboard(request):
 
     return render(request, 'sales/dashboard.html', {
         'scope_title': scope_title,
-        'start_date': today.strftime('%Y-%m-%d'),
-        'end_date': today.strftime('%Y-%m-%d'),
+        'start_date': today_bkk.strftime('%Y-%m-%d'),
+        'end_date': today_bkk.strftime('%Y-%m-%d'),
         'departments': departments,
         'is_manager': is_manager,
         'is_supervisor': is_supervisor
@@ -232,13 +238,16 @@ def api_dashboard_data(request):
 
     target_employees, scope_title = get_target_employees(request.user)
     emp = getattr(request.user, 'employee', None)
-    today = timezone.now().date()
+    
+    # 🌟 [FIXED] ใช้เวลาประเทศไทย
+    tz_bkk = pytz.timezone('Asia/Bangkok')
+    today_bkk = timezone.now().astimezone(tz_bkk).date()
 
     start_date_str = request.GET.get('start_date')
     end_date_str = request.GET.get('end_date')
 
-    start_date = parse_date(start_date_str) if start_date_str else today
-    end_date = parse_date(end_date_str) if end_date_str else today
+    start_date = parse_date(start_date_str) if start_date_str else today_bkk
+    end_date = parse_date(end_date_str) if end_date_str else today_bkk
     end_date_inclusive = end_date + timedelta(days=1)
 
     branch_filter = request.GET.get('branch', '')
@@ -253,11 +262,12 @@ def api_dashboard_data(request):
     total_sales = float((pos_qs_all.filter(status='PAID').aggregate(Sum('total_amount'))['total_amount__sum'] or 0) +
                         (inv_qs_all.filter(status='PAID').aggregate(Sum('grand_total'))['grand_total__sum'] or 0))
 
-    today_start = datetime.datetime.combine(today, datetime.time.min)
+    today_start = datetime.datetime.combine(today_bkk, datetime.time.min)
+    today_start = tz_bkk.localize(today_start) # ระบุโซนเวลาให้ datetime
     tomorrow_start = today_start + timedelta(days=1)
 
     pos_today_count = get_sales_queryset(POSOrder, request.user, target_employees).filter(created_at__gte=today_start, created_at__lt=tomorrow_start).count()
-    inv_today_count = get_sales_queryset(Invoice, request.user, target_employees).filter(date=today).count()
+    inv_today_count = get_sales_queryset(Invoice, request.user, target_employees).filter(date=today_bkk).count()
     total_orders_today = pos_today_count + inv_today_count
 
     qt_all_qs = get_sales_queryset(Quotation, request.user, target_employees)
@@ -325,8 +335,11 @@ def api_dashboard_data(request):
             jobs = item.quotation_ref.production_orders.all()
             if jobs.exists(): job = ", ".join([j.code for j in jobs])
 
+        # แปลงเวลาสร้างให้เป็นโซนเวลาไทยก่อนแสดงผล
+        item_time_bkk = item.created_at.astimezone(tz_bkk)
+        
         recent_sales_data.append({
-            'time': item.created_at.strftime('%H:%M') if item.created_at.date() == today else item.created_at.strftime('%d/%m/%Y'),
+            'time': item_time_bkk.strftime('%H:%M') if item_time_bkk.date() == today_bkk else item_time_bkk.strftime('%d/%m/%Y'),
             'code': item.code, 'is_pos': is_pos, 'qt_code': qt, 'job_code': job,
             'employee_name': item.employee.first_name if item.employee else '-',
             'employee_branch': item.employee.department.name if item.employee and item.employee.department else '-',
@@ -357,10 +370,18 @@ def sales_hub(request):
     inv_qs = get_sales_queryset(Invoice, request.user, target_employees)
     pos_qs = get_sales_queryset(POSOrder, request.user, target_employees)
 
+    # 🌟 [FIXED] ใช้เวลาประเทศไทย
+    tz_bkk = pytz.timezone('Asia/Bangkok')
+    today_bkk = timezone.now().astimezone(tz_bkk).date()
+
     ready_quotes = qt_qs.filter(status='APPROVED').order_by('-created_at')
-    today = timezone.now().date()
-    today_invoices = inv_qs.filter(date=today).order_by('-created_at')
-    today_pos = pos_qs.filter(created_at__date=today).order_by('-created_at')
+    
+    # คำนวณขอบเขตของ "วันนี้" ตามเวลาไทย
+    today_start = tz_bkk.localize(datetime.datetime.combine(today_bkk, datetime.time.min))
+    tomorrow_start = today_start + timedelta(days=1)
+    
+    today_invoices = inv_qs.filter(date=today_bkk).order_by('-created_at')
+    today_pos = pos_qs.filter(created_at__gte=today_start, created_at__lt=tomorrow_start).order_by('-created_at')
 
     return render(request, 'sales/sales_hub.html', {
         'ready_quotes': ready_quotes,
@@ -383,7 +404,7 @@ def record_deposit(request, qt_id):
         if amount > 0:
             qt.deposit_amount = amount
             qt.deposit_method = method
-            if date_str: qt.deposit_date = parse_thai_date(date_str) 
+            if date_str: qt.deposit_date = parse_thai_date(date_str)
             else: qt.deposit_date = timezone.now().date()
             qt.is_deposit_paid = True
 
@@ -488,13 +509,13 @@ def create_job_order(request, qt_id):
     final_delivery_date = monday_of_delivery_week + datetime.timedelta(days=4)
 
     target_date_str = request.POST.get('target_date')
-    
+
     requested_date_obj = parse_thai_date(target_date_str) if target_date_str else None
 
     if requested_date_obj and requested_date_obj != final_delivery_date:
         approval_status = 'PENDING'
         req_date = requested_date_obj
-        deadline = requested_date_obj 
+        deadline = requested_date_obj
     else:
         approval_status = 'NOT_REQUIRED'
         req_date = None
@@ -567,16 +588,19 @@ def sales_timeline(request):
         messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์เข้าถึงหน้า Timeline")
         return redirect('dashboard')
 
-    today = timezone.now().date()
+    # 🌟 [FIXED] ใช้เวลาประเทศไทย
+    tz_bkk = pytz.timezone('Asia/Bangkok')
+    today_bkk = timezone.now().astimezone(tz_bkk).date()
+    
     company_info = CompanyInfo.objects.first()
     max_quota = company_info.weekly_job_quota if company_info and company_info.weekly_job_quota else 25
 
     deposit_date_str = request.GET.get('deposit_date')
     if deposit_date_str:
-        try: calc_deposit_date = parse_thai_date(deposit_date_str) or today
-        except: calc_deposit_date = today
+        try: calc_deposit_date = parse_thai_date(deposit_date_str) or today_bkk
+        except: calc_deposit_date = today_bkk
     else:
-        calc_deposit_date = today
+        calc_deposit_date = today_bkk
 
     current_check_date = calc_deposit_date
     weeks_pushed = 0
@@ -613,7 +637,7 @@ def sales_timeline(request):
     chart1_pending = []
     chart1_delivered = []
 
-    start_date = today - datetime.timedelta(weeks=4)
+    start_date = today_bkk - datetime.timedelta(weeks=4)
     for i in range(8):
         w_date = start_date + datetime.timedelta(weeks=i)
         iso_year, iso_week, _ = w_date.isocalendar()
@@ -637,10 +661,10 @@ def sales_timeline(request):
 
     filter_date_str = request.GET.get('filter_date')
     if filter_date_str:
-        try: filter_date = parse_thai_date(filter_date_str) or today
-        except: filter_date = today
+        try: filter_date = parse_thai_date(filter_date_str) or today_bkk
+        except: filter_date = today_bkk
     else:
-        filter_date = today
+        filter_date = today_bkk
 
     f_iso_year, f_iso_week, _ = filter_date.isocalendar()
     target_cohort = f"{f_iso_year}-W{f_iso_week:02d}"
@@ -657,7 +681,7 @@ def sales_timeline(request):
         chart2_data.append(int(qty))
 
     return render(request, 'sales/sales_timeline.html', {
-        'today': today,
+        'today': today_bkk,
         'calc_deposit_date': calc_deposit_date,
         'smart_eta_date': smart_eta_date,
         'filter_date': filter_date,
@@ -681,10 +705,14 @@ def convert_quote_to_invoice(request, qt_id):
     balance = qt.grand_total - qt.deposit_amount
     status = 'PAID' if balance <= 0 else 'UNPAID'
 
+    # 🌟 [FIXED] ใช้เวลาประเทศไทย
+    tz_bkk = pytz.timezone('Asia/Bangkok')
+    today_bkk = timezone.now().astimezone(tz_bkk).date()
+
     invoice = Invoice.objects.create(
         code=new_code,
         quotation_ref=qt,
-        date=timezone.now().date(),
+        date=today_bkk,
         customer=qt.customer,
         employee=request.user.employee if hasattr(request.user, 'employee') else None,
         grand_total=qt.grand_total,
@@ -854,24 +882,29 @@ def quotation_list(request):
     search_query = request.GET.get('q', '')
     status_filter = request.GET.get('status')
     prod_status_filter = request.GET.get('prod_status')
-    branch_filter = request.GET.get('branch', '') # 🌟 รับค่าตัวกรองสาขา
+    deliv_status_filter = request.GET.get('deliv_status')
+    branch_filter = request.GET.get('branch', '')
 
-    # 🌟 กรองข้อมูลตาม "สาขา"
+    # 🌟 1. กรองข้อมูลตาม "สาขา"
     if branch_filter and (is_manager or is_supervisor):
         queryset = queryset.filter(employee__department_id=branch_filter)
 
+    # 🌟 2. กรองข้อมูลตาม "สถานะเอกสาร" 
     if status_filter:
-        if status_filter == 'PENDING_PRODUCTION':
-             queryset = queryset.filter(is_deposit_paid=True, production_orders__isnull=True).distinct()
-        elif status_filter == 'PENDING_CLOSING':
+        if status_filter == 'PENDING_CLOSING': # รอรับมัดจำ
             queryset = queryset.filter(status='APPROVED', is_deposit_paid=False).distinct()
-        elif status_filter == 'IN_PRODUCTION':
-            queryset = queryset.filter(status='APPROVED', is_deposit_paid=True).distinct()
+        elif status_filter == 'PENDING_VERIFY': # รอตรวจมัดจำ (เพิ่มใหม่)
+            queryset = queryset.filter(status='APPROVED', is_deposit_paid=True, is_deposit_verified=False).distinct()
+        elif status_filter == 'READY': # พร้อมส่งงาน (มัดจำผ่านแล้ว แต่ยังไม่สั่งผลิต) (เพิ่มใหม่)
+            queryset = queryset.filter(status='APPROVED', is_deposit_paid=True, is_deposit_verified=True, production_orders__isnull=True).distinct()
+        elif status_filter == 'IN_PRODUCTION': # กำลังดำเนินการผลิต
+            queryset = queryset.filter(status='APPROVED', is_deposit_paid=True, is_deposit_verified=True, production_orders__isnull=False).distinct()
         else:
             queryset = queryset.filter(status=status_filter).distinct()
 
     total_departments_count = ProductionStatus.objects.count()
 
+    # 🌟 3. กรองข้อมูลตาม "สถานะผลิต" 
     if prod_status_filter:
         if prod_status_filter == 'CLOSED':
             valid_jobs = ProductionOrder.objects.filter(is_closed=True)
@@ -881,25 +914,48 @@ def quotation_list(request):
                  valid_jobs = valid_jobs.annotate(dept_count=Count('completed_departments')).filter(status='IN_PROGRESS', dept_count__lt=total_departments_count)
             elif prod_status_filter == 'IN_PROGRESS_6':
                  valid_jobs = valid_jobs.annotate(dept_count=Count('completed_departments')).filter(status='IN_PROGRESS', dept_count=total_departments_count)
+            elif prod_status_filter == 'WAITING_QC_REWORK':
+                 valid_jobs = valid_jobs.filter(status__in=['WAITING_QC', 'REWORK'])
             else:
                   valid_jobs = valid_jobs.filter(status=prod_status_filter)
         valid_job_ids = list(valid_jobs.values_list('id', flat=True))
         queryset = queryset.filter(production_orders__in=valid_job_ids).distinct()
 
+    # 🌟 4. กรองข้อมูลตาม "สถานะจัดส่ง" 
+    if deliv_status_filter:
+        if deliv_status_filter == 'NO_TRUCK': 
+            valid_jobs = ProductionOrder.objects.filter(
+                Q(status='COMPLETED') | Q(status='WAITING_QC') | Q(is_onsite=True)
+            ).filter(transporter__isnull=True)
+        elif deliv_status_filter == 'DELIVERING': 
+            valid_jobs = ProductionOrder.objects.filter(transporter__isnull=False).exclude(
+                delivery_status__name__in=['ส่งมอบสำเร็จ', 'ลูกค้าเซ็นรับแล้ว', 'จัดส่งเรียบร้อย']
+            )
+        elif deliv_status_filter == 'DELIVERED': 
+            valid_jobs = ProductionOrder.objects.filter(
+                delivery_status__name__in=['ส่งมอบสำเร็จ', 'ลูกค้าเซ็นรับแล้ว', 'จัดส่งเรียบร้อย']
+            )
+        valid_job_ids = list(valid_jobs.values_list('id', flat=True))
+        queryset = queryset.filter(production_orders__in=valid_job_ids).distinct()
+
+    # 🌟 5. กรองคำค้นหา
     if search_query:
         queryset = queryset.filter(Q(code__icontains=search_query) | Q(customer_name__icontains=search_query)).distinct()
 
-    # 🌟 กรองวันที่ (ตั้งค่าเริ่มต้นเป็น "ช่วง 30 วันก่อนหน้า") 🌟
+    # 🌟 6. กรองวันที่ (FIXED: ใช้เวลาประเทศไทย) 🌟
+    tz_bkk = pytz.timezone('Asia/Bangkok')
+    today_bkk = timezone.now().astimezone(tz_bkk).date()
+    
     date_start = request.GET.get('start_date')
     date_end = request.GET.get('end_date')
 
     if not date_start or date_start == 'None':
-        date_start = (timezone.now().date() - datetime.timedelta(days=29)).strftime('%Y-%m-%d')
+        date_start = (today_bkk - datetime.timedelta(days=29)).strftime('%Y-%m-%d')
     if not date_end or date_end == 'None':
-        date_end = timezone.now().date().strftime('%Y-%m-%d')
+        date_end = today_bkk.strftime('%Y-%m-%d')
 
-    # 🌟 [NEW] ถ้าเลือก 'สถานะเอกสาร' หรือ 'สถานะผลิต' ให้ข้ามการกรองวันที่ (ดึงข้อมูลมาทั้งหมด) 🌟
-    if not status_filter and not prod_status_filter:
+    # ถ้ามีการกรองสถานะใดๆ ให้ข้ามการกรองวันที่ไป เพื่อให้เจองานที่ค้างอยู่ทั้งหมด
+    if not status_filter and not prod_status_filter and not deliv_status_filter:
         queryset = queryset.filter(date__gte=date_start, date__lte=date_end).distinct()
 
     paginator = Paginator(queryset, 10)
@@ -932,9 +988,13 @@ def quotation_create(request):
             if cust_id:
                 try: qt.customer = Customer.objects.get(pk=cust_id)
                 except Customer.DoesNotExist: pass
-            now = datetime.datetime.now()
-            thai_year = (now.year + 543) % 100
-            prefix = f"QT-{thai_year:02d}{now.strftime('%m')}"
+            
+            # 🌟 [FIXED] รันรหัสใบเสนอราคาตามเวลาประเทศไทย
+            tz_bkk = pytz.timezone('Asia/Bangkok')
+            now_bkk = timezone.now().astimezone(tz_bkk)
+            
+            thai_year = (now_bkk.year + 543) % 100
+            prefix = f"QT-{thai_year:02d}{now_bkk.strftime('%m')}"
             last = Quotation.objects.filter(code__startswith=prefix).order_by('code').last()
             seq = int(last.code.split('-')[-1]) + 1 if last else 1
             qt.code = f"{prefix}-{seq:03d}"
@@ -942,11 +1002,15 @@ def quotation_create(request):
             if not qt.payment_terms: qt.payment_terms = "-ชำระเงินมัดจำ 50% ของยอดรวมเพื่อยืนยันการสั่งซื้อ ส่วนที่เหลือชำระก่อนการจัดส่ง"
             if not qt.note: qt.note = "-ไม่มี-"
 
+            # กำหนด date เป็นวันปัจจุบันของไทย
+            qt.date = now_bkk.date()
             qt.save()
             messages.success(request, f"ร่างใบเสนอราคา {qt.code} เรียบร้อย กรุณาเพิ่มรายการสินค้า")
             return redirect('quotation_edit', qt_id=qt.id)
     else:
-        form = QuotationForm(initial={'date': datetime.date.today(), 'valid_until': datetime.date.today() + datetime.timedelta(days=15)})
+        tz_bkk = pytz.timezone('Asia/Bangkok')
+        today_bkk = timezone.now().astimezone(tz_bkk).date()
+        form = QuotationForm(initial={'date': today_bkk, 'valid_until': today_bkk + datetime.timedelta(days=15)})
     return render(request, 'sales/quotation_form.html', {'form': form})
 
 
@@ -1094,17 +1158,21 @@ def delete_item(request, item_id):
 @login_required
 def quotation_clone(request, qt_id):
     old_qt = get_object_or_404(Quotation, pk=qt_id)
-    now = datetime.datetime.now()
-    thai_year = (now.year + 543) % 100
-    prefix = f"QT-{thai_year:02d}{now.strftime('%m')}"
+    
+    # 🌟 [FIXED] รันรหัสใบเสนอราคาใหม่ตามเวลาประเทศไทย
+    tz_bkk = pytz.timezone('Asia/Bangkok')
+    now_bkk = timezone.now().astimezone(tz_bkk)
+    
+    thai_year = (now_bkk.year + 543) % 100
+    prefix = f"QT-{thai_year:02d}{now_bkk.strftime('%m')}"
     last = Quotation.objects.filter(code__startswith=prefix).order_by('code').last()
     seq = int(last.code.split('-')[-1]) + 1 if last else 1
     new_code = f"{prefix}-{seq:03d}"
 
     new_qt = Quotation.objects.create(
         code=new_code,
-        date=timezone.now().date(),
-        valid_until=timezone.now().date() + datetime.timedelta(days=15),
+        date=now_bkk.date(),
+        valid_until=now_bkk.date() + datetime.timedelta(days=15),
         customer=old_qt.customer,
         customer_name=old_qt.customer_name,
         customer_address=old_qt.customer_address,
@@ -1158,11 +1226,11 @@ def quotation_cancel(request, qt_id):
         # 🌟 ด่านตรวจที่ 2: ห้ามยกเลิกถ้าสั่งผลิตแล้ว 🌟
         if qt.production_orders.exists():
             messages.error(request, "❌ ไม่อนุญาตให้ยกเลิก เนื่องจากเอกสารนี้ถูกส่งเข้ากระบวนการผลิตเรียบร้อยแล้ว")
-        
+
         # 🌟 ด่านตรวจที่ 1: ห้ามยกเลิกถ้าจ่ายมัดจำแล้ว 🌟
         elif qt.is_deposit_paid:
             messages.error(request, "❌ ไม่สามารถยกเลิกได้ เนื่องจากมีการรับมัดจำแล้ว กรุณาทำเรื่องคืนเงินมัดจำก่อน")
-            
+
         # 🌟 ผ่านด่านตรวจ จึงจะยอมให้ยกเลิก 🌟
         elif qt.status in ['DRAFT', 'APPROVED']:
             qt.status = 'CANCELLED'
@@ -1363,15 +1431,18 @@ def invoice_list(request):
             qs_invoice = qs_invoice.filter(status=status_filter)
             qs_pos = qs_pos.filter(status=status_filter)
 
-    # 🌟 กรองวันที่
+    # 🌟 กรองวันที่ (FIXED: ใช้เวลาประเทศไทย) 🌟
+    tz_bkk = pytz.timezone('Asia/Bangkok')
+    today_bkk = timezone.now().astimezone(tz_bkk).date()
+    
     start_date = request.GET.get('start_date')
     end_date = request.GET.get('end_date')
 
-    # ถ้าไม่มีการเลือกวันที่มา (โหลดหน้าแรก) ให้บังคับดึงข้อมูลของ "วันนี้"
+    # ถ้าไม่มีการเลือกวันที่มา (โหลดหน้าแรก) ให้บังคับดึงข้อมูลของ "วันนี้" (เวลาไทย)
     if not start_date or start_date == 'None':
-        start_date = timezone.now().date().strftime('%Y-%m-%d')
+        start_date = today_bkk.strftime('%Y-%m-%d')
     if not end_date or end_date == 'None':
-        end_date = timezone.now().date().strftime('%Y-%m-%d')
+        end_date = today_bkk.strftime('%Y-%m-%d')
 
     qs_invoice = qs_invoice.filter(date__gte=start_date, date__lte=end_date)
     qs_pos = qs_pos.filter(created_at__date__gte=start_date, created_at__date__lte=end_date)
@@ -1671,10 +1742,12 @@ def crm_lead_create(request):
         channel = request.POST.get('channel', 'LINE')
         requirements = request.POST.get('requirements', '')
 
-        # รันรหัสลูกค้ามุ่งหวัง (Auto ID)
-        now = datetime.datetime.now()
-        thai_year = (now.year + 543) % 100
-        prefix = f"LD-{thai_year:02d}{now.strftime('%m')}"
+        # 🌟 [FIXED] รันรหัสลูกค้าระบบ CRM ตามเวลาประเทศไทย
+        tz_bkk = pytz.timezone('Asia/Bangkok')
+        now_bkk = timezone.now().astimezone(tz_bkk)
+
+        thai_year = (now_bkk.year + 543) % 100
+        prefix = f"LD-{thai_year:02d}{now_bkk.strftime('%m')}"
         last = CustomerLead.objects.filter(code__startswith=prefix).order_by('code').last()
         seq = int(last.code.split('-')[-1]) + 1 if last else 1
         new_code = f"{prefix}-{seq:04d}"
@@ -1791,3 +1864,87 @@ def appointment_update(request, apt_id):
         apt.save()
         messages.success(request, "✅ อัปเดตข้อมูลการนัดหมายเรียบร้อยแล้ว!")
     return redirect('appointment_board_global')
+
+# ... (โค้ดเดิมด้านบนทั้งหมด) ...
+
+@csrf_exempt
+def customer_sign_quotation(request, token):
+    # ดึงใบเสนอราคาตามรหัส Token ลับ
+    qt = get_object_or_404(Quotation, signature_token=token)
+
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            signature_data = data.get('signature_data')
+
+            if signature_data:
+                format, imgstr = signature_data.split(';base64,')
+                ext = format.split('/')[-1]
+                img_data = base64.b64decode(imgstr)
+                file_name = f"sign_QT_{qt.code}.{ext}"
+
+                qt.customer_signature.save(file_name, ContentFile(img_data), save=False)
+                qt.signature_date = timezone.now()
+                qt.save()
+                return JsonResponse({'success': True})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
+
+    main_total = sum(item.quantity * item.unit_price for item in qt.items.all())
+    upsale_total = sum(u.quantity * u.unit_price for u in qt.upsales.all())
+    item_total = main_total + upsale_total
+    company = CompanyInfo.objects.first()
+
+    return render(request, 'sales/customer_sign.html', {
+        'qt': qt,
+        'company': company,
+        'item_total': item_total
+    })
+
+# 🌟 [NEW] สมองกลบันทึกลายเซ็น "สัญญามัดจำ" 🌟
+@csrf_exempt
+def customer_sign_deposit(request, token):
+    qt = get_object_or_404(Quotation, deposit_signature_token=token)
+
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            signature_data = data.get('signature_data')
+
+            if signature_data:
+                # แปลง Base64 รูปภาพเซ็นมือ
+                format, imgstr = signature_data.split(';base64,')
+                ext = format.split('/')[-1]
+                img_data = base64.b64decode(imgstr)
+                file_name = f"sign_DEP_{qt.code}.{ext}"
+
+                # บันทึกรูปและอัปเดตเวลาลงตารางใหม่
+                qt.customer_deposit_signature.save(file_name, ContentFile(img_data), save=False)
+                qt.deposit_signature_date = timezone.now()
+                qt.save()
+                return JsonResponse({'success': True})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
+
+    # ส่งตัวแปรทั้งหมดเหมือนหน้า Print เอกสาร
+    company = CompanyInfo.objects.first()
+    grand_total = qt.grand_total if qt.grand_total else Decimal('0.00')
+    deposit_amount = qt.deposit_amount if qt.deposit_amount else Decimal('0.00')
+    balance_due = grand_total - deposit_amount
+
+    grand_total_text = get_thai_baht_text(grand_total)
+    deposit_amount_text = get_thai_baht_text(deposit_amount)
+    balance_due_text = get_thai_baht_text(balance_due)
+
+    job = qt.production_orders.first()
+    delivery_date = job.delivery_date if job else None
+
+    return render(request, 'sales/customer_sign_deposit.html', {
+        'qt': qt,
+        'company': company,
+        'grand_total_text': grand_total_text,
+        'deposit_amount_text': deposit_amount_text,
+        'balance_due': balance_due,
+        'balance_due_text': balance_due_text,
+        'delivery_date': delivery_date,
+    })

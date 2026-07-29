@@ -1,0 +1,314 @@
+{% load humanize %}
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>เซ็นสัญญามัดจำ - {{ qt.code }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        html, body { 
+            font-family: 'Sarabun', sans-serif; background: #525659; color: #000; overflow-x: hidden; margin: 0; 
+            -webkit-text-size-adjust: 100%; text-size-adjust: 100%; 
+        }
+        /* 🌟 [FIXED] เพิ่ม align-items: flex-start เพื่อให้กระดาษยืดหยุ่นได้เต็มที่ 🌟 */
+        .zoom-wrapper { width: 100%; overflow-x: hidden; background: #525659; padding-top: 20px; display: flex; justify-content: center; align-items: flex-start; margin-bottom: 80px; }
+        
+        /* 🌟 [FIXED] เพิ่ม padding-bottom เป็น 70px เพื่อให้ขอบล่างคลุมข้อความได้สวยงาม 🌟 */
+        .page-a4 { width: 800px; min-height: 1131px; padding: 40px 50px 70px 50px; background: white; position: relative; box-shadow: 0 10px 30px rgba(0,0,0,0.3); transform-origin: top center; flex-shrink: 0; font-size: 15px; line-height: 1.6; }
+        
+        .text-indent { text-indent: 40px; }
+        .editable-textarea { width: 100%; border: none; padding: 0; font-family: 'Sarabun', sans-serif; font-size: 15px; resize: none; background-color: transparent; border-radius: 4px; }
+        .fixed-bottom-bar { position: fixed; bottom: 0; left: 0; right: 0; background: white; padding: 15px 20px; box-shadow: 0 -5px 20px rgba(0,0,0,0.15); z-index: 1000; }
+        .btn-sign-trigger { animation: pulse 2s infinite; }
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.7); } 70% { box-shadow: 0 0 0 15px rgba(255, 193, 7, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 193, 7, 0); } }
+        .sig-modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 2000; display: flex; align-items: center; justify-content: center; padding: 15px; backdrop-filter: blur(5px); opacity: 0; visibility: hidden; transition: all 0.3s ease; }
+        .sig-modal-overlay.active { opacity: 1; visibility: visible; }
+        .sig-modal-content { background: white; width: 100%; max-width: 500px; padding: 20px; border-radius: 20px; box-shadow: 0 15px 35px rgba(0,0,0,0.3); transform: translateY(20px); transition: all 0.3s ease; }
+        .sig-modal-overlay.active .sig-modal-content { transform: translateY(0); }
+        .signature-pad { border: 2px dashed #ced4da; border-radius: 12px; width: 100%; height: 250px; background-color: #f8f9fa; touch-action: none; cursor: crosshair; }
+        .success-banner { background: #198754; color: white; padding: 15px; text-align: center; font-weight: bold; position: sticky; top: 0; z-index: 500; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+    </style>
+</head>
+<body>
+
+    {% if qt.customer_deposit_signature %}
+    <div class="success-banner">
+        <i class="fas fa-check-circle me-2 fs-5"></i> สัญญามัดจำฉบับนี้ถูกลงนามเรียบร้อยแล้ว
+    </div>
+    {% endif %}
+
+    <div class="zoom-wrapper" id="zoom-wrapper">
+        <div class="page-a4" id="a4-page">
+            <div class="d-flex justify-content-center align-items-center mb-4">
+                <div class="pe-4 text-center" style="width: 25%;">
+                    {% if company.logo %}
+                        <img src="{{ company.logo.url }}" alt="Logo" style="max-height: 80px; max-width: 100%; object-fit: contain;">
+                    {% else %}
+                        <h3 class="fw-bold mb-0" style="color: #4b8b9b;">NEED</h3>
+                    {% endif %}
+                </div>
+                <div style="border-left: 2px solid #000; height: 90px; margin: 0 15px;"></div>
+                <div class="ps-3" style="width: 75%;">
+                    <h5 class="fw-bold mb-2">{{ company.name|default:"บริษัท นีด ช็อปปิ้ง จำกัด" }}</h5>
+                    <p class="mb-0" style="font-size: 14px; line-height: 1.4;">{{ company.address|default:"10/10 หมู่ 10 ตำบลบางพระ อำเภอศรีราชา จังหวัดชลบุรี 20110" }}</p>
+                    <p class="mb-0" style="font-size: 14px; line-height: 1.4;">โทร: {{ company.phone|default:"033-1666-99" }} &nbsp; Email: {{ company.email|default:"needshopping.acc@gmail.com" }}</p>
+                    <p class="mb-0" style="font-size: 14px; line-height: 1.4;">เลขประจำตัวผู้เสียภาษีอากร: {{ company.tax_id|default:"0205563029342" }} (สำนักงานใหญ่)</p>
+                </div>
+            </div>
+
+            <h5 class="fw-bold text-center mb-3">สัญญาจะซื้อจะขายและวางเงินมัดจำตู้สำนักงานสำเร็จรูป</h5>
+
+            <div class="text-end mb-3">
+                <p class="mb-1">เลขที่สัญญา: <strong>{{ qt.code }}</strong></p>
+                <p class="mb-0">วันที่: <strong>{% now "d / m / Y" %}</strong></p>
+            </div>
+
+            <p class="text-indent" style="text-align: justify;">
+                สัญญาฉบับนี้ทำขึ้นระหว่าง <strong>{{ company.name|default:"บริษัท นีด ช็อปปิ้ง จำกัด" }}</strong> เลขทะเบียนนิติบุคคล <strong>{{ company.tax_id|default:"0205563029342" }}</strong> ตั้งอยู่เลขที่ {{ company.address|default:"10/10 หมู่ที่ 10 ตำบลบางพระ อำเภอศรีราชา จังหวัดชลบุรี" }} โดยมี <strong>นางสาวเบญจณัฎฐ์ ชัยทัศธนโชค</strong> เป็นกรรมการผู้มีอำนาจลงนาม ซึ่งต่อไปในสัญญานี้เรียกว่า <strong>“ผู้จะขาย”</strong> ฝ่ายหนึ่ง กับ
+            </p>
+            <p class="text-indent mb-3" style="text-align: justify;">
+                <strong>บริษัท/คุณ {{ qt.customer_name|default:"........................................................................" }}</strong>
+                เอกสารเลขที่ <strong>{{ qt.customer_tax_id|default:"........................................................" }}</strong>
+                ที่อยู่ {{ qt.customer_address|default:"..................................................................................................................." }} ซึ่งต่อไปในสัญญานี้เรียกว่า <strong>“ผู้จะซื้อ”</strong> อีกฝ่ายหนึ่ง
+            </p>
+
+            <p class="text-indent fw-bold mb-2">คู่สัญญาทั้งสองฝ่ายตกลงทำสัญญาจะซื้อจะขาย ตู้สำนักงานสำเร็จรูป กันดังมีข้อความต่อไปนี้</p>
+
+            <p class="mb-2" style="text-align: justify;">
+                <strong>ข้อ 1.</strong> ผู้จะขายตกลงจะขายและผู้จะซื้อตกลงจะซื้อ ตู้สำนักงานสำเร็จรูป ซึ่งต่อไปในสัญญานี้เรียกว่า “สินค้า” (รายละเอียดตามเอกสารแบบแปลนการผลิตแนบท้ายสัญญา) รวมเป็นเงิน <strong>{{ qt.grand_total|floatformat:2|intcomma }}</strong> บาท <strong>(-{{ grand_total_text }}-)</strong> ตามใบเสนอราคาเลขที่ <strong>{{ qt.code }}</strong> โดยให้ถือเป็นส่วนหนึ่งของสัญญานี้ด้วย
+            </p>
+
+            <p class="mb-2" style="text-align: justify;">
+                <strong>ข้อ 2.</strong> ในวันทำสัญญานี้ผู้จะซื้อได้วางเงินมัดจำไว้ให้กับผู้จะขายเป็นจำนวนเงิน <strong>{{ qt.deposit_amount|floatformat:2|intcomma }}</strong> บาท <strong>(-{{ deposit_amount_text }}-)</strong>
+                
+                {% if qt.deposit_method == 'CASH' %} โดยชำระเป็น <strong>เงินสด</strong>
+                {% elif qt.deposit_method == 'TRANSFER' %} โดยชำระเป็น <strong>โอนเงินเข้าบัญชีธนาคาร</strong>
+                {% elif qt.deposit_method == 'CHECK' %} โดยชำระเป็น <strong>เช็คธนาคาร</strong>
+                {% else %} โดยชำระเป็น ................................................................ {% endif %}
+                
+                ซึ่งผู้จะขายได้รับไว้แล้วในวันทำสัญญานี้ <br>
+                ส่วนที่ยังค้างอยู่อีกจำนวน <strong>{{ balance_due|floatformat:2|intcomma }}</strong> บาท <strong>(-{{ balance_due_text }}-)</strong> ผู้จะซื้อตกลงจะชำระให้ผู้จะขายก่อนวันที่ส่งมอบสินค้า
+            </p>
+
+            <p class="mb-2" style="text-align: justify;">
+                <strong>ข้อ 3.</strong> ผู้จะขายและผู้จะซื้อตกลงซื้อขายสินค้า โดยจะส่งมอบสินค้าและชำระค่าสินค้าให้แก่กันแล้วเสร็จ ในวันที่ <strong>{% if delivery_date %}{{ delivery_date|date:"d/m/Y" }}{% else %}........................................................{% endif %}</strong> ตามขอบเขต คุณภาพ และมาตรฐาน และตามเงื่อนไขอื่นที่กำหนดในสัญญานี้
+            </p>
+
+            <p class="mb-1" style="text-align: justify;">
+                <strong>ข้อ 4.</strong> การรับมอบ และส่งมอบสินค้า หากผู้จะขายส่งมอบสินค้า ถูกต้องครบถ้วนตามที่กำหนดไว้ในสัญญาฉบับนี้แล้ว ผู้จะซื้อจะรับมอบสินค้าไว้เป็นลายลักษณ์อักษร และถือว่าผู้จะขายได้ทำตามสัญญาฉบับนี้สมบูรณ์ครบถ้วนแล้ว มีข้อกำหนดดังนี้
+            </p>
+            <p class="text-indent mb-0">- กรณีที่ราคาสินค้ารวมค่าขนส่งสินค้า ผู้จะขายเป็นผู้รับผิดชอบค่าใช้จ่ายในจัดส่ง โดยผู้จะซื้อต้องเตรียมพื้นที่วางสินค้าตามที่ผู้จะขายกำหนดและหากพื้นที่ไม่เป็นไปตามที่กำหนด ค่าใช้จ่ายที่เกิดขึ้นผู้จะซื้อยินยอมรับผิดชอบทั้งสิ้น</p>
+            <p class="text-indent mb-2">- กรณีที่ราคาสินค้าไม่รวมค่าขนส่งสินค้า ผู้จะซื้อเป็นผู้รับผิดชอบการขนส่ง และค่าใช้จ่ายที่เกิดขึ้นจากการจัดส่ง รวมถึงการยกวางสินค้า เพื่อเป็นไปตามความต้องการของผู้จะซื้อ ผู้จะซื้อยินยอมเป็นผู้ชำระทั้งสิ้น</p>
+
+            <p class="mb-1" style="text-align: justify;">
+                <strong>ข้อ 5.</strong> เงื่อนไขการรับประกันสินค้า และหน้าที่ผู้จะขาย และข้อตกลงอื่น ๆ (หากมี)
+            </p>
+            <div class="ps-4 mb-2">
+                <p class="mb-0">- โครงสร้างหลักสินค้าเป็นเหล็กกัลวาไนท์ หากมีการผุกร่อนอันเกิดจากสนิม โดยผู้จะซื้อต้องดำเนินการตามวิธีติดตั้ง และวางสินค้า ที่ผู้จะขายกำหนดเท่านั้น (ข้อความท้ายสัญญา)</p>
+                <p class="mb-0">- โครงสร้างผนัง และหลังคา หากมีน้ำรั่วซึมเข้าพื้นที่ด้านใน อันเกิดจากการผลิตของผู้จะขายเท่านั้น</p>
+                <p class="mb-0">- โครงสร้างพื้น หากมีการชำรุด อันเกิดจากการผลิตของผู้จะขายเท่านั้น (ไม่รวมถึงวัสดุปูพื้น เช่น ผ้ายาง, กระเบื้องยาง SPC, กระเบื้องปูห้องน้ำทั้งหมด)</p>
+                <p class="mb-0">- ระบบไฟฟ้า หากมีการขัดข้อง ใช้งานไม่ได้ อันเกิดจากการผลิตของผู้จะขายเท่านั้น</p>
+                <p class="mb-0">- ระบบประปา หากมีการรั่วซึม ขัดข้อง ใช้งานไม่ได้ อันเกิดจากการผลิตของผู้จะขายเท่านั้น</p>
+                <p class="mb-0">- สีภายใน ภายนอก ผู้จะขายรับประกันสินค้าเฉพาะการแก้ไข จนกว่าผู้จะซื้อตรวจสอบ และยินยอมรับสินค้าเป็นลายลักษณ์อักษร ก่อนการส่งมอบสินค้าเท่านั้น</p>
+                <p class="mb-0">- การตรวจสอบ และแก้ไขการชำรุดของสินค้าผู้จะซื้อรับว่าจะวางเงินประกันการเข้าตรวจสอบการชำรุด ให้ผู้จะขาย ครั้งละ 2,000.00 บาท และหากการชำรุดนั้นเกิดขึ้นจากการผลิตสินค้าแล้ว ผู้จะขายรับว่าจะคืนเงินประกันการเข้าตรวจสอบการชำรุดให้แก่ผู้จะซื้อทั้งหมด และหากการชำรุดนั้นไม่ได้เกิดขึ้นจากการผลิตสินค้าแล้ว ผู้จะซื้อยินยอมให้ผู้จะขายเรียกเก็บค่าใช้จ่ายจากการเข้าตรวจสอบการชำรุด และการซ่อมแซมการชำรุด และนำเงินประกันการเข้าตรวจสอบการชำรุดมาหักจากค่าใช้จ่ายที่เรียกเก็บจากผู้จะซื้อได้ทันที</p>
+                <p class="mb-1 mt-1">- อื่นๆ</p>
+                <textarea class="editable-textarea" rows="3" placeholder="(พื้นที่เงื่อนไขเพิ่มเติม...)" disabled></textarea>
+            </div>
+
+            <p class="mb-2" style="text-align: justify;">
+                <strong>ข้อ 6.</strong> หากผู้จะซื้อผิดสัญญา ผู้จะขายมีสิทธิบอกเลิกสัญญาและริบมัดจำทั้งหมดที่วางไว้แก่ผู้จะขายได้ โดยผู้จะซื้อไม่มีสิทธิที่จะเรียกร้องค่าเสียหายใด ๆ จากผู้จะขาย และหากผู้จะขายผิดสัญญา ผู้จะซื้อมีสิทธิบอกเลิกสัญญาและผู้จะขายต้องคืนเงินมัดจำทั้งหมดที่ได้รับมาจากผู้จะซื้อทันที โดยผู้จะขายไม่มีสิทธิที่จะเรียกร้องค่าเสียหายใด ๆ จากผู้จะซื้อ
+            </p>
+            <p class="mb-4" style="text-align: justify;">
+                <strong>ข้อ 7.</strong> การบอกกล่าว ผู้จะซื้อและผู้จะขายตกลงกันว่าคำบอกกล่าวหรือหนังสือซึ่งต้องแจ้งให้แก่กันภายใต้สัญญาฉบับนี้จะถือว่าได้มีการแจ้งแก่กันแล้ว หากว่าได้มีการส่งไปยังที่อยู่ของคู่สัญญาแต่ละฝ่ายตามที่ได้ระบุไว้ในสัญญาฉบับนี้
+            </p>
+
+            <p class="text-indent mb-5" style="text-align: justify;">
+                สัญญาจะซื้อจะขายและวางเงินมัดจำฉบับนี้ได้ทำขึ้นเป็นสองฉบับ มีข้อความถูกต้องตรงกันทุกประการ คู่สัญญาแต่ละฝ่ายได้อ่านโดยตลอดแล้วยืนยันว่าถูกต้องตรงตามเจตนา จึงได้ลงลายมือชื่อไว้เป็นสำคัญ และแต่ละฝ่ายถือไว้เป็นหลักฐานฝ่ายละฉบับ
+            </p>
+
+            <div class="row text-center mt-4">
+                
+                <div class="col-6 mb-5">
+                    <div style="height: 80px; display: flex; align-items: flex-end; justify-content: center;">
+                        {% if qt.employee and qt.employee.signature %}
+                            <img src="{{ qt.employee.signature.url }}" style="height: 60px; mix-blend-mode: multiply; margin-bottom: -15px; position: relative; z-index: 5;" alt="ลายเซ็นผู้ขาย">
+                        {% endif %}
+                    </div>
+                    <p class="mb-0" style="position: relative; z-index: 1;">ลงชื่อ ............................................................. ผู้จะขาย</p>
+                    <p class="mt-2 mb-0">( บริษัท นีด ช็อปปิ้ง จำกัด )</p>
+                </div>
+                
+                <div class="col-6 mb-5">
+                    <div style="height: 80px; display: flex; align-items: flex-end; justify-content: center; position: relative;">
+                        {% if qt.customer_deposit_signature %}
+                            <img src="{{ qt.customer_deposit_signature.url }}" style="height: 70px; mix-blend-mode: multiply; margin-bottom: -15px; position: relative; z-index: 5;">
+                        {% else %}
+                            <img id="preview-sig" src="" style="height: 70px; mix-blend-mode: multiply; margin-bottom: -15px; position: relative; z-index: 5;" class="d-none">
+                            <button type="button" id="open-modal-btn" class="btn btn-warning btn-sm fw-bold shadow text-dark btn-sign-trigger" style="border-radius: 20px; position: absolute; bottom: 10px;">
+                                <i class="fas fa-pen-nib me-1"></i> แตะเพื่อเซ็นชื่อ
+                            </button>
+                        {% endif %}
+                    </div>
+                    
+                    <p class="mb-0" style="position: relative; z-index: 1;">
+                        ลงชื่อ {% if not qt.customer_deposit_signature %}<span id="sig-line-display">.............................................................</span>{% else %}.............................................................{% endif %} ผู้จะซื้อ
+                    </p>
+                    <p class="mt-2 mb-0">( <strong id="sig-name-display">{{ qt.customer_name|default:"............................................................." }}</strong> )</p>
+                    
+                    {% if qt.deposit_signature_date %}
+                        <p class="mt-1 mb-0" style="font-size: 11px; color: #666;">วันที่ {{ qt.deposit_signature_date|date:"d/m/Y" }}</p>
+                    {% else %}
+                        <p class="mt-1 mb-0" id="sig-date-display" style="font-size: 11px; color: #666; min-height: 17px;"></p>
+                    {% endif %}
+                </div>
+
+            </div>
+            
+            <hr class="mt-4 mb-3 border-dark">
+            <h6 class="fw-bold">ข้อความท้ายสัญญา</h6>
+            <p class="small text-muted mb-1" style="text-align: justify;">- การติดตั้ง และวางสินค้า สำหรับสินค้าที่มีห้องน้ำ หรือต้องเชื่อมต่อระบบสุขาภิบาลภายนอก ผู้จะซื้อต้องวางสินค้าสูงจากพื้นดินไม่น้อยกว่า 40 เซนติเมตร และสำหรับสินค้าที่ไม่มีห้องน้ำ หรือไม่ต้องเชื่อมต่อระบบสุขาภิบาลภายนอก ผู้จะซื้อต้องวางสินค้าสูงจากพื้นดินไม่น้อยกว่า 15 เซนติเมตร</p>
+            <p class="small text-muted mb-0" style="text-align: justify;">- การติดตั้ง และวางสินค้า ผู้จะซื้อต้องตรวจสอบให้แน่ใจว่าสินค้า ได้วางอยู่ในแนวราบหรือแนวระนาบที่ถูกต้องตามเครื่องมือวัดระดับน้ำ (Spirit Level) หากการวางสินค้าไม่ได้วางอยู่ในแนวราบหรือแนวระนาบที่ถูกต้องแล้วเป็นเหตุให้เกิดความชำรุด เสียหายกับสินค้า ผู้จะซื้อรับว่าไม่ได้เกิดขึ้นจากการผลิตของผู้จะขาย</p>
+        </div>
+    </div>
+
+    <!-- 🌟 Pop-up วาดลายเซ็น (Modal) 🌟 -->
+    {% if not qt.customer_deposit_signature %}
+    <div id="signature-modal" class="sig-modal-overlay">
+        <div class="sig-modal-content">
+            <h5 class="fw-bold text-center mb-3"><i class="fas fa-pen-nib text-primary me-2"></i>เซ็นสัญญามัดจำ</h5>
+            <div class="text-center text-muted small mb-2">ใช้นิ้วหรือปากกาวาดลงในกรอบด้านล่าง</div>
+            <div class="position-relative mb-3">
+                <canvas id="signature-pad" class="signature-pad"></canvas>
+                <button id="clear-pad-btn" class="btn btn-sm btn-light border position-absolute shadow-sm" style="top: 10px; right: 10px; z-index: 50;">
+                    <i class="fas fa-eraser me-1"></i> ลบใหม่
+                </button>
+            </div>
+            <div class="d-flex gap-2">
+                <button id="close-modal-btn" class="btn btn-light border flex-fill fw-bold rounded-pill">ยกเลิก</button>
+                <button id="apply-sig-btn" class="btn btn-warning flex-fill fw-bold rounded-pill text-dark shadow-sm">นำไปวางบนเอกสาร</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="fixed-bottom-bar text-center">
+        <div class="small text-muted mb-2 fw-bold" id="status-hint">กรุณาแตะปุ่มสีเหลืองเพื่อเซ็นชื่อลงในเอกสาร</div>
+        <button id="submit-doc-btn" class="btn btn-primary btn-lg w-100 fw-bold rounded-pill shadow-sm" disabled>
+            <i class="fas fa-paper-plane me-2"></i> ยืนยันสัญญามัดจำ
+        </button>
+    </div>
+    {% endif %}
+
+    <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.0.0/dist/signature_pad.umd.min.js"></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            
+            // 🌟 [FIXED] Script บังคับกล่องสีขาวให้ยืดตามความยาวเนื้อหา 🌟
+            function scaleA4Page() {
+                var wrapper = document.getElementById('zoom-wrapper');
+                var page = document.getElementById('a4-page');
+                
+                page.style.transform = 'none'; // ล้าง scale เดิมเพื่อวัดขนาด
+                page.style.height = 'auto'; // ล้างความสูงเก่า
+                
+                var availableWidth = window.innerWidth;
+                var actualHeight = page.scrollHeight; // วัดความสูงจริงของตัวหนังสือทั้งหมด
+
+                // บังคับให้กระดาษขาวมีความสูงเท่าเนื้อหาเป๊ะๆ
+                page.style.height = actualHeight + 'px';
+
+                if (availableWidth < 820) {
+                    var scaleRatio = (availableWidth - 20) / 800;
+                    page.style.transform = 'scale(' + scaleRatio + ')';
+                    wrapper.style.height = (actualHeight * scaleRatio) + 50 + 'px'; 
+                } else {
+                    page.style.transform = 'scale(1)';
+                    wrapper.style.height = actualHeight + 50 + 'px';
+                }
+            }
+            window.addEventListener('resize', scaleA4Page);
+            setTimeout(scaleA4Page, 200); // หน่วงเวลารอขยายฟอนต์เสร็จ
+
+            {% if not qt.customer_deposit_signature %}
+            var canvas = document.getElementById('signature-pad');
+            var signaturePad = new SignaturePad(canvas, {
+                backgroundColor: 'rgba(255, 255, 255, 0)', 
+                penColor: 'rgb(0, 0, 0)'
+            });
+            var signatureDataToSave = null;
+
+            function resizeCanvas() {
+                var ratio =  Math.max(window.devicePixelRatio || 1, 1);
+                canvas.width = canvas.offsetWidth * ratio;
+                canvas.height = canvas.offsetHeight * ratio;
+                canvas.getContext("2d").scale(ratio, ratio);
+                signaturePad.clear();
+            }
+
+            document.getElementById('open-modal-btn').addEventListener('click', function() {
+                document.getElementById('signature-modal').classList.add('active');
+                resizeCanvas();
+            });
+
+            document.getElementById('close-modal-btn').addEventListener('click', function() {
+                document.getElementById('signature-modal').classList.remove('active');
+            });
+
+            document.getElementById('clear-pad-btn').addEventListener('click', function() {
+                signaturePad.clear();
+            });
+
+            document.getElementById('apply-sig-btn').addEventListener('click', function() {
+                if (signaturePad.isEmpty()) {
+                    alert("กรุณาเซ็นชื่อก่อนครับ");
+                    return;
+                }
+                signatureDataToSave = signaturePad.toDataURL("image/png");
+                
+                document.getElementById('preview-sig').src = signatureDataToSave;
+                document.getElementById('preview-sig').classList.remove('d-none');
+                document.getElementById('open-modal-btn').classList.add('d-none');
+                document.getElementById('sig-line-display').classList.add('d-none'); 
+                
+                document.getElementById('sig-name-display').innerText = '({{ qt.customer_name|default:"ไม่ระบุชื่อ" }})';
+                let today = new Date();
+                document.getElementById('sig-date-display').innerText = `วันที่ ${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth() + 1).padStart(2, '0')}/${today.getFullYear() + 543}`;
+
+                document.getElementById('signature-modal').classList.remove('active');
+                document.getElementById('submit-doc-btn').disabled = false;
+                document.getElementById('status-hint').innerText = "✅ เอกสารพร้อมส่งแล้ว กรุณากดปุ่มสีน้ำเงินด้านล่าง";
+                document.getElementById('status-hint').classList.replace('text-muted', 'text-success');
+            });
+
+            document.getElementById('submit-doc-btn').addEventListener('click', function() {
+                if (!signatureDataToSave) return;
+                
+                var btn = this;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> กำลังบันทึกเอกสาร...';
+                btn.disabled = true;
+
+                fetch(window.location.href, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ signature_data: signatureDataToSave })
+                }).then(response => response.json()).then(data => {
+                    if(data.success) {
+                        window.location.reload(); 
+                    } else {
+                        alert("เกิดข้อผิดพลาด: " + data.error);
+                        btn.innerHTML = '<i class="fas fa-paper-plane me-2"></i> ยืนยันสัญญามัดจำ';
+                        btn.disabled = false;
+                    }
+                }).catch(err => {
+                    alert("เกิดข้อผิดพลาดในการเชื่อมต่อ");
+                    btn.innerHTML = '<i class="fas fa-paper-plane me-2"></i> ยืนยันสัญญามัดจำ';
+                    btn.disabled = false;
+                });
+            });
+            {% endif %}
+        });
+    </script>
+</body>
+</html>

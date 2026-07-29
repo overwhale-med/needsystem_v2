@@ -7,7 +7,7 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
+
     <style>
         :root { --primary-dark: #1a1a1a; --border-color: #000; }
         body { font-family: 'Sarabun', sans-serif; background: #525659; color: #000; font-size: 14px; line-height: 1.3; }
@@ -39,14 +39,14 @@
         .grand-total-row td { padding-top: 8px; padding-bottom: 8px; font-size: 18px; font-weight: 700; color: #000; }
         .payment-box { font-size: 13px; line-height: 1.4; color: #333; }
         .note-box { font-size: 12px; color: #555; line-height: 1.3; }
-        
+
         .signature-section { margin-top: 40px; }
         .sig-box { text-align: center; position: relative; height: 140px; padding: 0 10px; }
         .sig-line { border-bottom: 1px dotted #000; width: 90%; margin: 0 auto 5px; position: absolute; bottom: 50px; left: 0; right: 0; }
         .sig-role { font-size: 11px; font-weight: 700; position: absolute; bottom: 30px; left: 0; right: 0; }
         .sig-name { font-size: 11px; position: absolute; bottom: 15px; left: 0; right: 0; }
         .sig-date { font-size: 10px; color: #666; position: absolute; bottom: 0; left: 0; right: 0; }
-        
+
         .sig-img { position: absolute; bottom: 65px; left: 50%; transform: translateX(-50%); height: 60px; width: auto; object-fit: contain; z-index: 5; }
         .seal-img { position: absolute; bottom: 65px; left: 50%; transform: translateX(-50%) rotate(-15deg); width: 85px; opacity: 0.8; pointer-events: none; z-index: 10; }
 
@@ -59,8 +59,16 @@
     </style>
 </head>
 <body>
+    <!-- 🌟 [FIXED] เพิ่มปุ่มคัดลอกลิงก์ในแถบสีดำด้านบน 🌟 -->
     <div class="text-center py-3 no-print sticky-top" style="background: rgba(50,50,50,0.8); backdrop-filter: blur(5px);">
         <button onclick="window.print()" class="btn btn-light fw-bold shadow-sm rounded-pill px-4 me-2"><i class="fas fa-print me-2"></i> พิมพ์เอกสาร</button>
+        
+        {% if qt.signature_token %}
+        <button onclick="copySignLink('{{ request.scheme }}://{{ request.get_host }}{% url 'customer_sign_quotation' qt.signature_token %}')" class="btn btn-success fw-bold shadow-sm rounded-pill px-4 me-2">
+            <i class="fas fa-link me-2"></i> คัดลอกลิงก์ให้ลูกค้าเซ็น
+        </button>
+        {% endif %}
+
         <button onclick="window.close()" class="btn btn-outline-light fw-bold shadow-sm rounded-pill px-4">ปิดหน้าต่าง</button>
     </div>
 
@@ -108,7 +116,7 @@
                         <tr>
                             <td class="ref-label">พนักงานขาย:</td>
                             <td class="ref-value">
-                                {{ qt.employee.first_name|default:"-" }} 
+                                {{ qt.employee.first_name|default:"-" }}
                                 {% if qt.employee.department %}/ {{ qt.employee.department.name }}{% endif %}
                             </td>
                         </tr>
@@ -170,11 +178,11 @@
                         เลขบัญชี: <strong>075-3-824782</strong>
                     </div>
                 </div>
-                
+
                 <div class="note-box mb-2"><strong>เงื่อนไขการชำระเงิน:</strong><br>{{ qt.payment_terms|default:"-ชำระเงินมัดจำ 50% ของยอดรวมเพื่อยืนยันการสั่งซื้อ ส่วนที่เหลือชำระก่อนการจัดส่ง"|linebreaksbr }}</div>
                 <div class="note-box"><strong>หมายเหตุ:</strong><br>{{ qt.note|default:"-ไม่มี-"|linebreaksbr }}</div>
             </div>
-            
+
             <div class="col-5">
                 <table class="total-table">
                     <tr><td class="total-label">รวมราคาสินค้า</td><td class="total-value">{{ item_total|floatformat:2|intcomma }}</td></tr>
@@ -189,13 +197,23 @@
         </div>
 
         <div class="row signature-section">
-            
-            <div class="col-4">
+
+            <div class="col-4 position-relative">
                 <div class="sig-box">
+                    <!-- 🌟 ถ้าระบบพบว่ามีรูปลายเซ็น จะนำมาวางทับเส้นประ 🌟 -->
+                    {% if qt.customer_signature %}
+                        <img src="{{ qt.customer_signature.url }}" class="sig-img" style="bottom: 55px; mix-blend-mode: multiply;">
+                    {% endif %}
                     <div class="sig-line"></div>
                     <div class="sig-role">ผู้สั่งซื้อ (Buyer)</div>
-                    <div class="sig-name">................................................</div>
-                    <div class="sig-date">วันที่ ........./........./.............</div>
+
+                    {% if qt.customer_signature %}
+                        <div class="sig-name">({{ qt.customer_name|default:"ไม่ระบุชื่อ" }})</div>
+                        <div class="sig-date">วันที่ {{ qt.signature_date|date:"d/m/Y" }}</div>
+                    {% else %}
+                        <div class="sig-name">................................................</div>
+                        <div class="sig-date">วันที่ ........./........./.............</div>
+                    {% endif %}
                 </div>
             </div>
 
@@ -214,16 +232,16 @@
             <div class="col-4 position-relative">
                 <div class="sig-box">
                     {% if qt.status == 'APPROVED' and company.seal %}
-                        <img src="{{ company.seal.url }}" class="seal-img"> 
+                        <img src="{{ company.seal.url }}" class="seal-img">
                     {% endif %}
 
                     {% if qt.status == 'APPROVED' and qt.approved_by and qt.approved_by.signature %}
                         <img src="{{ qt.approved_by.signature.url }}" class="sig-img">
                     {% endif %}
-                    
+
                     <div class="sig-line"></div>
                     <div class="sig-role">ผู้อนุมัติ (Authorized By)</div>
-                    
+
                     {% if qt.status == 'APPROVED' %}
                         <div class="sig-name">({{ qt.approved_by.first_name }} {{ qt.approved_by.last_name }})</div>
                         <div class="sig-date">วันที่ {{ qt.approved_at|date:"d/m/Y" }}</div>
@@ -273,6 +291,15 @@
                 }
             }
             return text;
+        }
+
+        // 🌟 [NEW] ฟังก์ชันคัดลอกลิงก์ 🌟
+        function copySignLink(url) {
+            navigator.clipboard.writeText(url).then(function() {
+                alert('🔗 คัดลอกลิงก์เรียบร้อยแล้ว!\nสามารถนำไปส่งให้ลูกค้าทาง LINE หรือ Email ได้เลยครับ');
+            }, function(err) {
+                alert('ไม่สามารถคัดลอกได้: ', err);
+            });
         }
     </script>
 </body>
