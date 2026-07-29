@@ -9,51 +9,38 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        @page {
-            size: A4;
-            margin: 10mm 15mm;
-        }
-        body {
-            font-family: 'Sarabun', sans-serif;
-            color: #000;
-            background: #eee;
-            font-size: 15px;
-            line-height: 1.6;
-        }
-        .page-a4 {
-            width: 210mm; min-height: 297mm; background: white;
-            margin: 20px auto; padding: 20mm 15mm; box-shadow: 0 0 10px rgba(0,0,0,0.1);
-        }
-
+        @page { size: A4; margin: 10mm 15mm; }
+        body { font-family: 'Sarabun', sans-serif; color: #000; background: #eee; font-size: 15px; line-height: 1.6; }
+        .page-a4 { width: 210mm; min-height: 297mm; background: white; margin: 20px auto; padding: 20mm 15mm; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
         .text-indent { text-indent: 40px; }
         .text-indent-double { text-indent: 80px; }
-
-        .editable-textarea {
-            width: 100%; border: 1px dashed #ccc; padding: 8px;
-            font-family: 'Sarabun', sans-serif; font-size: 15px;
-            resize: vertical; background-color: #fcfcfc; border-radius: 4px;
-        }
-
+        .editable-textarea { width: 100%; border: 1px dashed #ccc; padding: 8px; font-family: 'Sarabun', sans-serif; font-size: 15px; resize: vertical; background-color: #fcfcfc; border-radius: 4px; }
         @media print {
             body { background: white; margin: 0; padding: 0; }
             .page-a4 { box-shadow: none; margin: 0; width: 100%; padding: 15mm; }
             .d-print-none { display: none !important; }
-            .editable-textarea {
-                border: none !important; background-color: transparent !important;
-                resize: none !important; padding: 0 !important; overflow: hidden !important;
-            }
+            .editable-textarea { border: none !important; background-color: transparent !important; resize: none !important; padding: 0 !important; overflow: hidden !important; }
             * { -webkit-print-color-adjust: exact !important; color-adjust: exact !important; }
         }
     </style>
 </head>
 <body>
 
-    <div class="text-center mt-4 d-print-none mb-3">
-        <div class="alert alert-info d-inline-block shadow-sm">
-            <i class="fas fa-info-circle me-2"></i> <strong>Tips:</strong> คุณสามารถคลิกที่ข้อความใน <b>"ข้อ 5. อื่นๆ"</b> เพื่อพิมพ์เงื่อนไขเพิ่มเติมได้ (ขอบกล่องจะหายไปตอนกดปริ้นท์)
-        </div><br>
-        <button onclick="window.print()" class="btn btn-primary btn-lg rounded-pill shadow"><i class="fas fa-print me-2"></i> พิมพ์เอกสาร</button>
-        <button onclick="window.close()" class="btn btn-secondary btn-lg rounded-pill shadow ms-2">ปิดหน้าต่าง</button>
+    <div class="text-center py-3 d-print-none sticky-top" style="background: rgba(50,50,50,0.8); backdrop-filter: blur(5px); z-index: 1000;">
+        
+        {% if qt.deposit_signature_token %}
+        <button onclick="copySignLink('{{ request.scheme }}://{{ request.get_host }}{% url 'customer_sign_deposit' qt.deposit_signature_token %}')" class="btn btn-success btn-sm fw-bold shadow-sm rounded-pill px-4 me-2">
+            <i class="fas fa-link me-2"></i> คัดลอกลิงก์ให้ลูกค้าเซ็นมัดจำ
+        </button>
+        {% endif %}
+        
+        <button onclick="window.print()" class="btn btn-light btn-sm fw-bold shadow-sm rounded-pill px-4 me-2"><i class="fas fa-print me-2"></i> พิมพ์เอกสาร</button>
+        
+        <button onclick="window.close()" class="btn btn-outline-light btn-sm fw-bold shadow-sm rounded-pill px-4">ปิดหน้าต่าง</button>
+        
+        <div class="alert alert-info d-inline-block shadow-sm py-1 px-3 mt-2 mb-0 d-block mx-auto" style="font-size: 12px; border-radius: 20px; width: fit-content;">
+            <i class="fas fa-info-circle me-1"></i> <strong>Tips:</strong> คุณสามารถคลิกที่ข้อความใน <b>"ข้อ 5. อื่นๆ"</b> เพื่อพิมพ์เงื่อนไขเพิ่มเติมได้ (ขอบกล่องจะหายไปตอนกดปริ้นท์)
+        </div>
     </div>
 
     <div class="page-a4">
@@ -122,8 +109,8 @@
         <p class="mb-1" style="text-align: justify;">
             <strong>ข้อ 4.</strong> การรับมอบ และส่งมอบสินค้า หากผู้จะขายส่งมอบสินค้า ถูกต้องครบถ้วนตามที่กำหนดไว้ในสัญญาฉบับนี้แล้ว ผู้จะซื้อจะรับมอบสินค้าไว้เป็นลายลักษณ์อักษร และถือว่าผู้จะขายได้ทำตามสัญญาฉบับนี้สมบูรณ์ครบถ้วนแล้ว มีข้อกำหนดดังนี้
         </p>
-        <p class="text-indent mb-0">- ผู้จะซื้อต้องตรวจรับมอบสินค้า เป็นลายลักษณ์อักษร ก่อนการขึ้นรถจัดส่งสินค้า</p>
-        <p class="text-indent mb-2">- ผู้จะซื้อเป็นผู้รับผิดชอบการขนส่ง และค่าใช้จ่ายที่เกิดขึ้นจากการจัดส่ง รวมถึงการยกวางสินค้า เพื่อเป็นไปตามความต้องการของผู้จะซื้อ ผู้จะซื้อยินยอมเป็นผู้ชำระทั้งสิ้น</p>
+        <p class="text-indent mb-0">- กรณีที่ราคาสินค้ารวมค่าขนส่งสินค้า ผู้จะขายเป็นผู้รับผิดชอบค่าใช้จ่ายในจัดส่ง โดยผู้จะซื้อต้องเตรียมพื้นที่วางสินค้าตามที่ผู้จะขายกำหนดและหากพื้นที่ไม่เป็นไปตามที่กำหนด ค่าใช้จ่ายที่เกิดขึ้นผู้จะซื้อยินยอมรับผิดชอบทั้งสิ้น</p>
+        <p class="text-indent mb-2">- กรณีที่ราคาสินค้าไม่รวมค่าขนส่งสินค้า ผู้จะซื้อเป็นผู้รับผิดชอบการขนส่ง และค่าใช้จ่ายที่เกิดขึ้นจากการจัดส่ง รวมถึงการยกวางสินค้า เพื่อเป็นไปตามความต้องการของผู้จะซื้อ ผู้จะซื้อยินยอมเป็นผู้ชำระทั้งสิ้น</p>
 
         <p class="mb-1" style="text-align: justify;">
             <strong>ข้อ 5.</strong> เงื่อนไขการรับประกันสินค้า และหน้าที่ผู้จะขาย และข้อตกลงอื่น ๆ (หากมี)
@@ -148,31 +135,35 @@
         </p>
 
         <p class="text-indent mb-5" style="text-align: justify;">
-            สัญญาจะซื้อจะขายและวางเงินมัดจำฉบับนี้ได้ทำขึ้นเป็นสองฉบับ มีข้อความถูกต้องตรงกันทุกประการ คู่สัญญาแต่ละฝ่ายได้อ่านโดยตลอดแล้วยืนยันว่าถูกต้องตรงตามเจตนา จึงได้ลงลายมือชื่อไว้เป็นสำคัญต่อหน้าพยาน และแต่ละฝ่ายถือไว้เป็นหลักฐานฝ่ายละฉบับ
+            สัญญาจะซื้อจะขายและวางเงินมัดจำฉบับนี้ได้ทำขึ้นเป็นสองฉบับ มีข้อความถูกต้องตรงกันทุกประการ คู่สัญญาแต่ละฝ่ายได้อ่านโดยตลอดแล้วยืนยันว่าถูกต้องตรงตามเจตนา จึงได้ลงลายมือชื่อไว้เป็นสำคัญ และแต่ละฝ่ายถือไว้เป็นหลักฐานฝ่ายละฉบับ
         </p>
 
         <div class="row text-center mt-4">
-            <div class="col-6 mb-5">
-                <p>ลงชื่อ ............................................................. ผู้จะขาย</p>
+            <!-- 🌟 ผู้จะขาย 🌟 -->
+            <div class="col-6 mb-5 position-relative">
+                {% if qt.employee and qt.employee.signature %}
+                    <img src="{{ qt.employee.signature.url }}" style="position: absolute; bottom: 65px; left: 50%; transform: translateX(-50%); height: 60px; mix-blend-mode: multiply; z-index: 5;" alt="ลายเซ็นผู้ขาย">
+                {% endif %}
+                <p style="position: relative; z-index: 1;">ลงชื่อ ............................................................. ผู้จะขาย</p>
                 <p class="mt-2">( บริษัท นีด ช็อปปิ้ง จำกัด)</p>
             </div>
-            <div class="col-6 mb-5">
-                <p>ลงชื่อ ............................................................. ผู้จะซื้อ</p>
+            
+            <!-- 🌟 ผู้จะซื้อ (ขยับลายเซ็นให้สูงขึ้นเป็น 90px) 🌟 -->
+            <div class="col-6 mb-5 position-relative">
+                {% if qt.customer_deposit_signature %}
+                    <img src="{{ qt.customer_deposit_signature.url }}" style="position: absolute; bottom: 90px; left: 50%; transform: translateX(-50%); height: 70px; mix-blend-mode: multiply; z-index: 5;" alt="ลายเซ็นสัญญามัดจำ">
+                {% endif %}
+                <p style="position: relative; z-index: 1;">ลงชื่อ ............................................................. ผู้จะซื้อ</p>
                 <p class="mt-2">( <strong>{{ qt.customer_name|default:"............................................................." }}</strong> )</p>
-            </div>
-            <div class="col-6">
-                <p>ลงชื่อ ............................................................. พยาน</p>
-                <p class="mt-2">( ............................................................. )</p>
-            </div>
-            <div class="col-6">
-                <p>ลงชื่อ ............................................................. พยาน</p>
-                <p class="mt-2">( ............................................................. )</p>
+                {% if qt.deposit_signature_date %}
+                    <p class="mt-0" style="font-size: 11px; color: #666;">วันที่ {{ qt.deposit_signature_date|date:"d/m/Y" }}</p>
+                {% endif %}
             </div>
         </div>
 
         <hr class="mt-4 mb-3 border-dark">
         <h6 class="fw-bold">ข้อความท้ายสัญญา</h6>
-        <p class="small text-muted mb-1" style="text-align: justify;">- การติดตั้ง และวางสินค้า สำหรับสินค้าที่มีห้องน้ำ หรือต้องเชื่อมต่อระบบสุขาภิบาลภายนอก ผู้จะซื้อต้องวางสินค้าสูงจากพื้นดินไม่น้อยกว่า 45 เซนติเมตร และสำหรับสินค้าที่ไม่มีห้องน้ำ หรือไม่ต้องเชื่อมต่อระบบสุขาภิบาลภายนอก ผู้จะซื้อต้องวางสินค้าสูงจากพื้นดินไม่น้อยกว่า 25 เซนติเมตร</p>
+        <p class="small text-muted mb-1" style="text-align: justify;">- การติดตั้ง และวางสินค้า สำหรับสินค้าที่มีห้องน้ำ หรือต้องเชื่อมต่อระบบสุขาภิบาลภายนอก ผู้จะซื้อต้องวางสินค้าสูงจากพื้นดินไม่น้อยกว่า 40 เซนติเมตร และสำหรับสินค้าที่ไม่มีห้องน้ำ หรือไม่ต้องเชื่อมต่อระบบสุขาภิบาลภายนอก ผู้จะซื้อต้องวางสินค้าสูงจากพื้นดินไม่น้อยกว่า 15 เซนติเมตร</p>
         <p class="small text-muted mb-0" style="text-align: justify;">- การติดตั้ง และวางสินค้า ผู้จะซื้อต้องตรวจสอบให้แน่ใจว่าสินค้า ได้วางอยู่ในแนวราบหรือแนวระนาบที่ถูกต้องตามเครื่องมือวัดระดับน้ำ (Spirit Level) หากการวางสินค้าไม่ได้วางอยู่ในแนวราบหรือแนวระนาบที่ถูกต้องแล้วเป็นเหตุให้เกิดความชำรุด เสียหายกับสินค้า ผู้จะซื้อรับว่าไม่ได้เกิดขึ้นจากการผลิตของผู้จะขาย</p>
 
     </div>
@@ -186,6 +177,14 @@
         function OnInput() {
             this.style.height = 0;
             this.style.height = (this.scrollHeight) + "px";
+        }
+        
+        function copySignLink(url) {
+            navigator.clipboard.writeText(url).then(function() {
+                alert('🔗 คัดลอกลิงก์เรียบร้อยแล้ว!\nสามารถนำไปส่งให้ลูกค้าเซ็นสัญญามัดจำได้เลยครับ');
+            }, function(err) {
+                alert('ไม่สามารถคัดลอกได้: ', err);
+            });
         }
     </script>
 </body>

@@ -26,7 +26,7 @@ from inventory.models import (
     Category, RawMaterialCategory
 )
 # 🌟 [NEW] เพิ่มการนำเข้า ProductionOrder เพื่อใช้นับจำนวนงานรอ PPO 🌟
-from manufacturing.models import BOM, ProductionOrder 
+from manufacturing.models import BOM, ProductionOrder
 
 # ------------------------------------------
 # 🛡️ ระบบนายทวาร (Gatekeeper) แบ่งสิทธิ์การทำงาน
@@ -265,8 +265,19 @@ def po_payment(request, po_id):
             else: po.payment_status = 'DEPOSIT'
             po.save()
 
-            messages.success(request, f"✅ บันทึกชำระเงิน {amount:,.2f} บาท พร้อมแนบหลักฐานสำเร็จ!")
-            return redirect('po_payment', po_id=po.id)
+            # 🌟 [NEW] เชื่อมโยงบัญชี: สร้างบันทึกรายจ่ายอัตโนมัติ ส่งไปแสดงที่ Dashboard บัญชี 🌟
+            from accounting.models import Expense
+            Expense.objects.create(
+                title=f"ทำจ่ายใบสั่งซื้อ #{po.code} (PV: {payment_record.reference_no})",
+                amount=amount,
+                date=payment_record.payment_date,
+                note=f"จ่ายให้ร้าน {po.supplier.name if po.supplier else ''} - {payment_record.note}"
+            )
+
+            messages.success(request, f"✅ บันทึกทำจ่ายเงิน {amount:,.2f} บาท พร้อมออก PV สำเร็จ! (ระบบลงบัญชีรายจ่ายให้อัตโนมัติแล้ว)")
+
+            # เมื่อจ่ายสำเร็จ ให้เด้งกลับไปที่หน้าศูนย์บัญชี เพื่อความต่อเนื่องในการทำงานของพนักงานบัญชี
+            return redirect('accounting_verification_hub', task_type='po_payments')
         else:
             messages.error(request, "❌ จำนวนเงินไม่ถูกต้อง หรือเกินยอดคงค้าง")
 

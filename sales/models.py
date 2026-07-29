@@ -5,6 +5,7 @@ from master_data.models import Customer
 from hr.models import Employee
 from inventory.models import Product
 from PIL import Image
+import secrets
 
 class POSOrder(models.Model):
     STATUS_CHOICES = [('PENDING', 'รอชำระเงิน'), ('PAID', 'ชำระเงินแล้ว'), ('CANCELLED', 'ยกเลิก')]
@@ -29,7 +30,6 @@ class POSOrder(models.Model):
     is_commission_calculated = models.BooleanField(default=False, verbose_name="คำนวณคอมฯแล้ว")
     created_at = models.DateTimeField(default=timezone.now, verbose_name="เวลาที่ขาย")
 
-    # 🌟 แก้ไขป้องกัน Error NoneType
     def __str__(self): 
         return str(self.code) if self.code else "ไม่มีเลขที่"
 
@@ -109,8 +109,17 @@ class Quotation(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     approved_by = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, blank=True, related_name='approved_quotations', verbose_name="ผู้อนุมัติ")
     approved_at = models.DateTimeField(null=True, blank=True, verbose_name="วันที่อนุมัติ")
+    
+    # 🌟 ฟิลด์ E-Signature สำหรับใบเสนอราคา
+    signature_token = models.CharField(max_length=64, blank=True, null=True, unique=True)
+    customer_signature = models.ImageField(upload_to='customer_signatures/%Y/%m/', null=True, blank=True, verbose_name="ลายเซ็นลูกค้า")
+    signature_date = models.DateTimeField(null=True, blank=True, verbose_name="เวลาที่ลูกค้าเซ็น")
 
-    # 🌟 แก้ไขป้องกัน Error NoneType
+    # 🌟 [NEW] ฟิลด์ E-Signature สำหรับสัญญามัดจำ 🌟
+    deposit_signature_token = models.CharField(max_length=64, blank=True, null=True, unique=True)
+    customer_deposit_signature = models.ImageField(upload_to='deposit_signatures_contract/%Y/%m/', null=True, blank=True, verbose_name="ลายเซ็นสัญญามัดจำ")
+    deposit_signature_date = models.DateTimeField(null=True, blank=True, verbose_name="เวลาที่เซ็นสัญญามัดจำ")
+
     def __str__(self): 
         return str(self.code) if self.code else "ไม่มีเลขที่ใบเสนอราคา"
 
@@ -124,7 +133,14 @@ class Quotation(models.Model):
         return gt - dep
 
     def save(self, *args, **kwargs):
+        if not self.signature_token:
+            self.signature_token = secrets.token_urlsafe(32)
+        # 🌟 สร้าง Token สำหรับลิงก์สัญญามัดจำ
+        if not self.deposit_signature_token:
+            self.deposit_signature_token = secrets.token_urlsafe(32)
+            
         super().save(*args, **kwargs)
+        
         if self.deposit_slip:
             try:
                 img = Image.open(self.deposit_slip.path)
@@ -132,7 +148,7 @@ class Quotation(models.Model):
                     output_size = (800, 800)
                     img.thumbnail(output_size)
                     img.save(self.deposit_slip.path, quality=85, optimize=True)
-            except Exception: pass
+            except Exception: pass    
 
 class QuotationItem(models.Model):
     quotation = models.ForeignKey(Quotation, related_name='items', on_delete=models.CASCADE)
@@ -170,7 +186,6 @@ class Invoice(models.Model):
     status = models.CharField(max_length=20, choices=[('UNPAID', 'ยังไม่ชำระ'), ('PAID', 'ชำระแล้ว'), ('PENDING', 'รอตรวจสอบ')], default='UNPAID', verbose_name="สถานะ")
     created_at = models.DateTimeField(auto_now_add=True)
 
-    # 🌟 [CRITICAL FIX] ป้องกัน Error TypeError: __str__ returned non-string (type NoneType) 🌟
     def __str__(self): 
         return str(self.code) if self.code else "ไม่มีเลขที่บิล"
 
@@ -248,9 +263,6 @@ class InvoicePayment(models.Model):
                     img.save(self.check_slip.path, quality=85, optimize=True)
             except Exception: pass
 
-# ==========================================
-# 🌟 [NEW] ตารางสำหรับระบบ CRM ลูกค้ามุ่งหวัง (Leads) 🌟
-# ==========================================
 class CustomerLead(models.Model):
     CHANNEL_CHOICES = [
         ('FACEBOOK', '🔵 Facebook'),

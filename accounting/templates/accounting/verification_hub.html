@@ -10,8 +10,8 @@
     }
     .slip-thumbnail:hover { transform: scale(1.2); box-shadow: 0 5px 15px rgba(0,0,0,0.2); z-index: 10; position: relative; }
     #slipModal .modal-backdrop { background-color: rgba(0,0,0,0.8); }
-    
-    .status-badge { 
+
+    .status-badge {
         font-size: 0.75rem; padding: 6px 12px; border-radius: 20px; font-weight: 600; letter-spacing: 0.3px;
         display: inline-flex; align-items: center; gap: 6px; background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba;
     }
@@ -22,7 +22,7 @@
         <h4 class="fw-bold text-dark"><i class="fas {{ icon }} me-2"></i>{{ title }}</h4>
         <a href="{% url 'accounting_dashboard' %}" class="btn btn-outline-secondary rounded-pill px-4 shadow-sm fw-bold"><i class="fas fa-arrow-left me-2"></i> กลับศูนย์บัญชาการ</a>
     </div>
-    
+
     <div class="card shadow-sm border-0 rounded-4 overflow-hidden">
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
@@ -30,7 +30,7 @@
                     <tr>
                         <th class="ps-4 py-3 fw-bold">เลขที่เอกสาร / วันที่</th>
                         <th class="py-3 fw-bold">ผู้ติดต่อ (ลูกค้า / ร้านค้า)</th>
-                        
+
                         {% if task_type == 'invoices' %}
                             <th class="py-3 fw-bold text-center">พนักงาน</th>
                             <th class="py-3 fw-bold text-end">ยอดสุทธิ (บาท)</th>
@@ -40,7 +40,7 @@
                             <th class="py-3 fw-bold text-center">ยอดเงินรอตรวจสอบ</th>
                             <th class="py-3 fw-bold text-center">ช่องทาง / หลักฐาน</th>
                         {% endif %}
-                        
+
                         <th class="py-3 fw-bold text-center">สถานะปัจจุบัน</th>
                         <th class="py-3 fw-bold text-center pe-4">ดำเนินการ</th>
                     </tr>
@@ -62,14 +62,14 @@
                             </div>
 
                             <div class="text-muted small mb-1" style="font-size: 0.75rem;">
-                                <i class="far fa-clock me-1"></i> 
+                                <i class="far fa-clock me-1"></i>
                                 {% if item.total_amount %}
                                     {{ item.created_at|date:"d/m/Y H:i" }}
                                 {% else %}
                                     {{ item.date|date:"d/m/Y" }}
                                 {% endif %}
                             </div>
-                            
+
                             {% if task_type == 'invoices' and item.quotation_ref %}
                                 <div class="small lh-sm" style="font-size: 0.7rem;"><span class="text-secondary opacity-75">QT:</span> {{ item.quotation_ref.code }}</div>
                                 {% for job in item.quotation_ref.production_orders.all %}
@@ -81,7 +81,7 @@
                                 {% endfor %}
                             {% endif %}
                         </td>
-                        
+
                         <td>
                             <div class="fw-bold text-dark text-truncate" style="max-width: 200px;">
                                 {% if task_type == 'po_payments' %}
@@ -135,7 +135,7 @@
                                         {% elif item.quotation_ref.deposit_method == 'CHECK' %}
                                             <i class="fas fa-money-check text-warning" title="เช็ค"></i>
                                         {% endif %}
-                                        
+
                                         {% if item.quotation_ref.deposit_slip %}
                                             <img src="{{ item.quotation_ref.deposit_slip.url }}" class="slip-thumbnail mx-1" style="width: 25px; height: 25px;" data-bs-toggle="modal" data-bs-target="#slipModal" onclick="document.getElementById('slipImageFull').src='{{ item.quotation_ref.deposit_slip.url }}'">
                                         {% endif %}
@@ -149,7 +149,7 @@
                                 {% if item.total_amount %}
                                     <div class="d-flex align-items-center justify-content-center gap-2 bg-light border rounded px-2 py-1 d-inline-flex">
                                         <span class="fw-bold text-dark" style="font-size: 0.75rem;">฿{{ item.total_amount|floatformat:2|intcomma }}</span>
-                                        
+
                                         {% if item.payment_method == 'TRANSFER' %}
                                             <i class="fas fa-mobile-alt text-info"></i>
                                             {% if item.transfer_slip %}
@@ -173,17 +173,17 @@
                                                 {% if pay.status == 'PENDING' %}
                                                     <div class="d-flex align-items-center gap-2 bg-light border rounded px-2 py-1">
                                                         <span class="fw-bold text-dark" style="font-size: 0.75rem;">฿{{ pay.amount|floatformat:2|intcomma }}</span>
-                                                        
+
                                                         {% if pay.payment_method == 'TRANSFER' %}<i class="fas fa-mobile-alt text-info"></i>
                                                         {% elif pay.payment_method == 'CASH' %}<i class="fas fa-money-bill-wave text-success"></i>
                                                         {% else %}<i class="fas fa-money-check text-warning"></i>{% endif %}
-                                                        
+
                                                         {% if pay.transfer_slip %}
                                                             <img src="{{ pay.transfer_slip.url }}" class="slip-thumbnail" loading="lazy" style="width: 25px; height: 25px;" data-bs-toggle="modal" data-bs-target="#slipModal" onclick="document.getElementById('slipImageFull').src='{{ pay.transfer_slip.url }}'">
                                                         {% elif pay.check_slip %}
                                                             <img src="{{ pay.check_slip.url }}" class="slip-thumbnail" loading="lazy" style="width: 25px; height: 25px;" data-bs-toggle="modal" data-bs-target="#slipModal" onclick="document.getElementById('slipImageFull').src='{{ pay.check_slip.url }}'">
                                                         {% endif %}
-                                                        
+
                                                         <i class="fas fa-circle text-warning" style="font-size: 8px;" title="รอตรวจ"></i>
                                                     </div>
                                                 {% endif %}
@@ -205,7 +205,7 @@
                                     {% endif %}
                                 </span>
                             </td>
-                            
+
                             <td class="text-center">
                                 <div class="d-flex align-items-center justify-content-center gap-2">
                                     {% if task_type == 'deposits' %}
@@ -216,11 +216,11 @@
                                         {% elif item.deposit_method == 'CHECK' %}
                                             <span class="badge bg-warning bg-opacity-10 text-warning border border-warning rounded-pill"><i class="fas fa-money-check me-1"></i> เช็คธนาคาร</span>
                                         {% endif %}
-                                        
+
                                         {% if item.deposit_slip %}
                                             <img src="{{ item.deposit_slip.url }}" class="slip-thumbnail border shadow-sm" loading="lazy" data-bs-toggle="modal" data-bs-target="#slipModal" onclick="document.getElementById('slipImageFull').src='{{ item.deposit_slip.url }}'" title="คลิกเพื่อดูหลักฐาน">
                                         {% endif %}
-                                        
+
                                     {% else %}
                                         <span class="text-muted small">-</span>
                                     {% endif %}
@@ -231,21 +231,27 @@
                         <td class="text-center">
                             <span class="status-badge"><i class="fas fa-hourglass-half"></i> รอตรวจสอบ/ทำจ่าย</span>
                         </td>
-                        
+
                         <td class="text-center pe-4">
-                            <form method="POST" action="{% url 'accounting_approve_transaction' task_type item.id %}">
-                                {% csrf_token %}
-                                <input type="hidden" name="doc_type" value="{% if item.total_amount %}pos{% else %}invoice{% endif %}">
-                                
-                                <!-- 🌟 [FIXED] เพิ่ม input ซ่อนสำหรับส่งค่าบอกระบบหลังบ้านว่าเป็นของน็อคดาวน์หรือโซล่าเซลล์ 🌟 -->
-                                {% if task_type == 'deposits' %}
-                                    <input type="hidden" name="doc_system" value="{{ item.system_type }}">
-                                {% endif %}
-                                
-                                <button type="submit" class="btn btn-sm btn-success rounded-pill px-3 shadow-sm fw-bold w-100" onclick="return confirm('ยืนยันความถูกต้อง และสร้างบันทึกรายรับ-รายจ่ายในระบบบัญชีใช่หรือไม่?');">
-                                    <i class="fas fa-check-circle me-1"></i> {% if task_type == 'po_payments' %}อนุมัติทำจ่าย{% else %}อนุมัติรับเงิน{% endif %}
-                                </button>
-                            </form>
+                            <!-- 🌟 [FIXED] แยกปุ่มทำจ่าย PO ให้วิ่งไปหน้าบันทึก PV ของฝั่งจัดซื้อแทนการตัดยอดออโต้ 🌟 -->
+                            {% if task_type == 'po_payments' %}
+                                <a href="{% url 'po_payment' item.id %}" class="btn btn-sm btn-primary rounded-pill px-3 shadow-sm fw-bold w-100">
+                                    <i class="fas fa-file-invoice-dollar me-1"></i> บันทึกทำจ่าย / PV
+                                </a>
+                            {% else %}
+                                <form method="POST" action="{% url 'accounting_approve_transaction' task_type item.id %}">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="doc_type" value="{% if item.total_amount %}pos{% else %}invoice{% endif %}">
+
+                                    {% if task_type == 'deposits' %}
+                                        <input type="hidden" name="doc_system" value="{{ item.system_type }}">
+                                    {% endif %}
+
+                                    <button type="submit" class="btn btn-sm btn-success rounded-pill px-3 shadow-sm fw-bold w-100" onclick="return confirm('ยืนยันความถูกต้อง และสร้างบันทึกรายรับในระบบบัญชีใช่หรือไม่?');">
+                                        <i class="fas fa-check-circle me-1"></i> อนุมัติรับเงิน
+                                    </button>
+                                </form>
+                            {% endif %}
                         </td>
                     </tr>
                     {% empty %}

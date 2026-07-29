@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <title>หนังสือยินยอมรับทราบการประเมินความเสียหายจากการจัดส่ง - {{ order.code }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Sarabun', sans-serif; background-color: #e9ecef; color: #000; font-size: 16px; line-height: 1.8; }
+        .a4-sheet { background: white; width: 21cm; min-height: 29.7cm; padding: 2cm; margin: 1.5cm auto; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+        .data-blank { border-bottom: 1px dotted #000; display: inline-block; padding: 0 10px; font-weight: bold; min-width: 150px; text-align: center; }
+        .check-box { width: 20px; height: 20px; border: 2px solid #000; display: inline-block; vertical-align: middle; margin-right: 10px; }
+        @media print { body { background-color: white; margin: 0; padding: 0; } .a4-sheet { width: 100%; margin: 0; padding: 0; box-shadow: none; } .no-print { display: none !important; } @page { size: A4; margin: 1cm; } }
+    </style>
+</head>
+<body>
+    <div class="bg-dark text-white py-3 no-print sticky-top shadow-sm">
+        <div class="container d-flex justify-content-between">
+            <h5 class="mb-0"><i class="fas fa-file-contract me-2"></i> หนังสือยินยอมความเสียหาย</h5>
+            <button class="btn btn-primary fw-bold px-4 rounded-pill" onclick="window.print()"><i class="fas fa-print me-2"></i> พิมพ์เอกสาร</button>
+        </div>
+    </div>
+
+    <div class="a4-sheet">
+        <!-- โลโก้ (จำลองตามภาพของคุณ) -->
+        <div class="text-center mb-4">
+            <h3 class="fw-bold" style="color: #2c3e50;">{{ company.name_th|default:"บริษัท นีด ช็อปปิ้ง จำกัด" }}</h3>
+            <h4 class="fw-bold mt-3">หนังสือยินยอมรับทราบการประเมินความเสียหายจากการจัดส่ง</h4>
+        </div>
+
+        <div class="d-flex justify-content-between mb-4">
+            <div>JOB. <span class="data-blank">{{ order.code }}</span></div>
+            <div>วันที่ <span class="data-blank">{{ order.delivery_date|date:"d/m/Y"|default:"........................" }}</span></div>
+        </div>
+
+        <!-- ส่วนที่ 1: สามารถส่งได้ -->
+        <h5 class="fw-bold text-center text-danger mb-3">ประเมินหน้างานแล้วว่า "สามารถนำส่งบ้านน็อคดาวน์ได้"</h5>
+        <div style="text-indent: 50px;" class="mb-2">
+            ข้าพเจ้า (ชื่อพนักงานขับรถ) <span class="data-blank">{{ order.transporter.driver_name|default:"................................" }}</span> 
+            รถหมายเลขทะเบียน <span class="data-blank">{{ order.transporter.vehicle_plate|default:"........................" }}</span>
+        </div>
+        <div class="mb-4">
+            ได้มีการประเมินพื้นที่หน้างานสำหรับการจัดส่งบ้านน็อคดาวน์แล้วว่า <span class="text-danger fw-bold">สามารถเข้าพื้นที่หน้างานได้</span> โดยที่ไม่เสียหายต่อตัวรถและตัวสินค้าบ้านน็อคดาวน์ของทาง {{ company.name_th|default:"บริษัท นีด ช็อปปิ้ง จำกัด" }} หากมีการเสียหายจะรับผิดชอบค่าเสียหายนี้ด้วยข้าพเจ้าเอง (พนักงานขับรถ)
+        </div>
+        
+        <div class="row mb-5">
+            <div class="col-6 offset-6 text-center">
+                ลงชื่อรับทราบ (พนักงานขับรถ)<br><br>
+                ....................................................................<br>
+                วันที่ ........ / ........ / ............
+            </div>
+        </div>
+        
+        <hr class="my-4 border-2">
+
+        <!-- ส่วนที่ 2: ไม่สามารถส่งได้ -->
+        <h5 class="fw-bold text-center text-danger mb-3">ประเมินหน้างานแล้วว่า "ไม่สามารถนำส่งบ้านน็อคดาวน์ได้"</h5>
+        <div style="text-indent: 50px;" class="mb-2">
+            ข้าพเจ้า (ชื่อพนักงานขับรถ) <span class="data-blank">{{ order.transporter.driver_name|default:"................................" }}</span> 
+            รถหมายเลขทะเบียน <span class="data-blank">{{ order.transporter.vehicle_plate|default:"........................" }}</span>
+        </div>
+        <div class="mb-2">
+            ได้มีการประเมินพื้นที่หน้างานสำหรับการจัดส่งบ้านน็อคดาวน์แล้วว่า <span class="text-danger fw-bold">ไม่สามารถเข้าพื้นที่หน้างานได้</span> เนื่องจาก
+        </div>
+        <div class="mb-2 border-bottom border-dark" style="height: 30px;"></div>
+        <div class="mb-4">
+            ซึ่งทำให้เกิดความเสียหายต่อตัวรถและตัวสินค้าบ้านน็อคดาวน์ ของทาง {{ company.name_th|default:"บริษัท นีด ช็อปปิ้ง จำกัด" }} ข้าพเจ้าขอไม่นำส่งสินค้าบ้านน็อคดาวน์ให้กับทาง คุณ <span class="data-blank">{{ order.customer_name|default:"................................" }}</span>
+        </div>
+
+        <div class="fw-bold text-center mb-3">
+            ข้าพเจ้า(ลูกค้า) เข้าใจและยินยอมในข้อตกลงในการประเมินหน้างานของพนักงานขนส่ง ยินยอมดังนี้
+        </div>
+
+        <div class="d-flex mb-3">
+            <div><div class="check-box"></div></div>
+            <div>
+                1. ข้าพเจ้าจะไม่ให้สินค้าบ้านน็อคดาวน์นำส่ง ให้นำกลับไปที่ {{ company.name_th|default:"บริษัท นีด ช็อปปิ้ง จำกัด" }} แล้ว ค่อยนัดวันส่งสินค้าใหม่ (เพื่อเคลียร์พื้นที่หน้างานก่อน) โดยจะชำระค่าขนส่ง รอบที่ 2 ใหม่ด้วยตนเอง
+            </div>
+        </div>
+        
+        <div class="d-flex mb-5">
+            <div><div class="check-box"></div></div>
+            <div>
+                2. ข้าพเจ้าจะยืนยันให้รถเข้าส่งบ้านน็อคดาวน์ในวันนี้เลย .............................. (ลงวันที่) โดยที่จะรับผิดชอบความเสียหายต่อตัวรถและตัวบ้านน็อคดาวน์เอง หากเกิดความเสียหายระหว่างการจัดส่งที่ทางพนักงานขับรถได้มีการประเมินแล้ว
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-6 text-center">
+                ลงชื่อรับทราบ (พนักงานขับรถ)<br><br>
+                ....................................................................<br>
+                วันที่ ........ / ........ / ............
+            </div>
+            <div class="col-6 text-center">
+                ลงชื่อรับทราบ (ลูกค้า)<br><br>
+                ....................................................................<br>
+                วันที่ ........ / ........ / ............
+            </div>
+        </div>
+
+    </div>
+</body>
+</html>
