@@ -8,3 +8,4 @@ openpyxl
 gunicorn>=21.2.0
 pandas
 whitenoise>=6.5.0
+pytz>=2023.3
