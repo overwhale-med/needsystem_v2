@@ -1,0 +1,147 @@
+{% extends 'core/base.html' %}
+{% load humanize %}
+{% load mathfilters %} {% block content %}
+<style>
+    .product-zoom-img {
+        width: 40px;
+        height: 40px;
+        object-fit: cover;
+        border-radius: 6px;
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        cursor: pointer;
+    }
+    .product-zoom-img:hover {
+        transform: scale(3.5);
+        box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+        z-index: 1050;
+        position: relative;
+    }
+</style>
+
+<div class="container-fluid py-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-end mb-4 gap-3">
+        <div>
+            <h3 class="fw-bold text-dark mb-1">{{ title }}</h3>
+            <p class="text-muted mb-0">จัดการข้อมูลรายการสินค้าและวัตถุดิบทั้งหมด</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{% url 'inventory_dashboard' %}" class="btn btn-outline-secondary rounded-pill px-4 fw-bold">
+                <i class="fas fa-arrow-left me-1"></i> กลับ Dashboard
+            </a>
+            <a href="{% url 'product_create' %}?type={{ p_type }}" class="btn btn-primary shadow-sm rounded-pill px-4 fw-bold">
+                <i class="fas fa-plus me-1"></i> เพิ่มรายการใหม่
+            </a>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0 rounded-4 mb-4">
+        <div class="card-body p-3">
+            <form method="GET" class="d-flex gap-2">
+                <input type="hidden" name="type" value="{{ p_type }}">
+                <div class="input-group border rounded-pill overflow-hidden w-50">
+                    <span class="input-group-text bg-white border-0 ps-3"><i class="fas fa-search text-muted"></i></span>
+                    <input type="text" name="q" class="form-control border-0 shadow-none" placeholder="ค้นหารหัส / ชื่อสินค้า / หมวดหมู่..." value="{{ search_query }}">
+                </div>
+                <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold">ค้นหา</button>
+                {% if search_query %}
+                    <a href="{% url 'product_list' %}?type={{ p_type }}" class="btn btn-light border rounded-circle" title="ล้างค่า"><i class="fas fa-times"></i></a>
+                {% endif %}
+            </form>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="bg-light text-secondary small text-uppercase">
+                    <tr>
+                        <th width="10%" class="ps-4 py-3">รหัสสินค้า</th>
+                        <th width="8%" class="text-center py-3">รูปภาพ</th>
+                        <th width="28%" class="py-3">ชื่อรายการ / หมวดหมู่</th>
+                        <th class="text-end py-3" width="12%">ราคา {% if p_type == 'FG' %}ขาย{% else %}ทุน{% endif %}</th>
+                        <th class="text-center py-3" width="12%">ยอดคงเหลือ</th>
+                        <th class="text-end py-3" width="12%">มูลค่ารวม</th> <th class="text-center py-3" width="8%">สถานะ</th>
+                        <th class="text-end pe-4 py-3" width="10%">จัดการ</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for p in page_obj %}
+                    <tr>
+                        <td class="fw-bold {% if p_type == 'FG' %}text-primary{% else %}text-dark{% endif %} ps-4">{{ p.code }}</td>
+
+                        <td class="text-center">
+                            {% if p.image %}
+                                <img src="{{ p.image.url }}" class="product-zoom-img" alt="{{ p.code }}">
+                            {% else %}
+                                <span class="text-muted small">-</span>
+                            {% endif %}
+                        </td>
+
+                        <td>
+                            <div class="fw-bold">{{ p.name }}</div>
+                            <small class="text-muted"><i class="fas fa-tags me-1"></i>{{ p.category.name|default:"ไม่ได้ระบุหมวดหมู่" }}</small>
+                        </td>
+
+                        <td class="text-end fw-bold">
+                            {% if p_type == 'FG' %}฿{{ p.sell_price|intcomma }}{% else %}฿{{ p.cost_price|intcomma }}{% endif %}
+                        </td>
+
+                        <td class="text-center">
+                            <span class="fs-5 fw-bold {% if p.stock_qty <= p.min_level %}text-danger{% else %}text-success{% endif %}">
+                                {{ p.stock_qty|intcomma }}
+                            </span>
+                            <small class="text-muted ms-1">{{ p.unit|default:"-" }}</small>
+                        </td>
+
+                        <td class="text-end fw-bold text-secondary">
+                            {% if p_type == 'FG' %}
+                                ฿{{ p.sell_price|mul:p.stock_qty|floatformat:2|intcomma }}
+                            {% else %}
+                                ฿{{ p.cost_price|mul:p.stock_qty|floatformat:2|intcomma }}
+                            {% endif %}
+                        </td>
+
+                        <td class="text-center">
+                            {% if p.stock_qty == 0 %}
+                                <span class="badge bg-danger rounded-pill px-3">หมด</span>
+                            {% elif p.stock_qty <= p.min_level %}
+                                <span class="badge bg-warning text-dark rounded-pill px-3">น้อย</span>
+                            {% else %}
+                                <span class="badge bg-success bg-opacity-10 text-success rounded-pill px-3">ปกติ</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end pe-4">
+                            <div class="btn-group shadow-sm rounded-3">
+                                <a href="{% url 'product_stock_card' p.id %}" class="btn btn-sm btn-white border text-info" title="ดูสต็อกการ์ด"><i class="fas fa-history"></i></a>
+
+                                <a href="{% url 'print_barcode' p.id %}" target="_blank" class="btn btn-sm btn-white border text-secondary" title="พิมพ์บาร์โค้ด"><i class="fas fa-barcode"></i></a>
+                                <a href="{% url 'product_update' p.id %}" class="btn btn-sm btn-white border text-primary" title="แก้ไข"><i class="fas fa-edit"></i></a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="8" class="text-center py-5 text-muted"><h4><i class="fas fa-box-open mb-3 opacity-25 fa-2x"></i></h4> ไม่พบรายการข้อมูล</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {% if page_obj.has_other_pages %}
+        <div class="card-footer bg-white py-3 border-top-0 d-flex justify-content-center">
+            <nav>
+                <ul class="pagination pagination-sm shadow-sm mb-0">
+                    {% if page_obj.has_previous %}
+                    <li class="page-item"><a class="page-link border-0 text-muted" href="?type={{ p_type }}&page={{ page_obj.previous_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}"><i class="fas fa-chevron-left"></i></a></li>
+                    {% endif %}
+                    <li class="page-item disabled"><span class="page-link border-0 text-dark fw-bold px-3">หน้า {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span></li>
+                    {% if page_obj.has_next %}
+                    <li class="page-item"><a class="page-link border-0 text-muted" href="?type={{ p_type }}&page={{ page_obj.next_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}"><i class="fas fa-chevron-right"></i></a></li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

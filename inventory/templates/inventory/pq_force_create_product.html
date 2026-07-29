@@ -1,0 +1,60 @@
+{% extends 'core/base.html' %}
+{% load humanize %}
+
+{% block content %}
+<div class="container-fluid py-4 px-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="text-center mb-4 mt-2">
+                <i class="fas fa-exclamation-triangle fa-4x text-warning mb-3"></i>
+                <h3 class="fw-bold text-dark">พบรายการสินค้าที่ยังไม่มีรหัสในระบบ!</h3>
+                <p class="text-muted">ใบสั่งซื้อต่างประเทศ <strong class="text-primary">{{ pq.po_number }}</strong> มีรายการที่คุณพิมพ์เพิ่มเอง (Manual)<br>กรุณาสร้างรหัสและผูกข้อมูลให้ครบถ้วนก่อนทำการรับสินค้าเข้าคลัง เพื่อความถูกต้องของสต็อกค่ะ</p>
+            </div>
+
+            <div class="card border-0 shadow-sm rounded-4 mb-4 border-start border-warning" style="border-left-width: 5px !important;">
+                <div class="card-header bg-white py-3 border-bottom px-4">
+                    <h6 class="mb-0 fw-bold text-dark"><i class="fas fa-list me-2 text-warning"></i>รายการที่ต้องสร้างรหัสใหม่</h6>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0 text-center">
+                            <thead class="bg-light">
+                                <tr>
+                                    <th width="15%" class="py-3">รูปภาพ</th>
+                                    <th width="45%" class="text-start py-3">รายละเอียดสินค้า (จากบิล PQ)</th>
+                                    <th width="15%" class="py-3">จำนวนที่จะเข้า</th>
+                                    <th width="25%" class="py-3">จัดการ</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in unlinked_items %}
+                                <tr>
+                                    <td>
+                                        {% if item.image %}
+                                            <img src="{{ item.image.url }}" height="50" class="rounded border shadow-sm" style="object-fit: cover; width:50px;">
+                                        {% else %}
+                                            <div class="text-muted small border rounded p-2 d-inline-block">No Img</div>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-start fw-bold text-danger">{{ item.description }}</td>
+                                    <td class="fw-bold fs-5">{{ item.quantity|floatformat:0|intcomma }}</td>
+                                    <td>
+                                        <a href="{% url 'product_create' %}?from_pq={{ pq.id }}&pq_item={{ item.id }}" class="btn btn-sm btn-primary rounded-pill px-3 fw-bold shadow-sm">
+                                            <i class="fas fa-magic me-1"></i> สร้างรหัสสินค้าเลย
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="text-center">
+                <a href="{% url 'pq_receive_list' %}" class="btn btn-light border rounded-pill px-5 fw-bold shadow-sm">กลับหน้ารายการรอรับ</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

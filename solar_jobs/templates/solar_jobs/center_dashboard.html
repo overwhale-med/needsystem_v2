@@ -1,0 +1,218 @@
+{% extends 'core/base.html' %}
+{% load humanize %}
+
+{% block content %}
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+
+<style>
+    body { background-color: #f8f9fa; }
+    .btn-gold { background: linear-gradient(135deg, #d4af37 0%, #aa8c2c 100%); color: #ffffff !important; border: none; }
+    .btn-gold:hover { background: linear-gradient(135deg, #aa8c2c 0%, #8c7324 100%); transform: translateY(-2px); box-shadow: 0 4px 8px rgba(212, 175, 55, 0.3) !important; }
+    
+    /* Kanban Board Styles */
+    .kanban-board {
+        display: flex;
+        overflow-x: auto;
+        padding-bottom: 20px;
+        gap: 20px;
+        align-items: flex-start;
+        min-height: 70vh;
+    }
+    .kanban-column {
+        background-color: #f4f5f7;
+        border-radius: 12px;
+        min-width: 320px;
+        max-width: 320px;
+        display: flex;
+        flex-direction: column;
+        border: 1px solid #e1e4e8;
+    }
+    .kanban-header {
+        padding: 15px 20px;
+        border-bottom: 2px solid transparent;
+        font-weight: 700;
+        color: #333;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .kanban-cards {
+        padding: 15px;
+        flex-grow: 1;
+        min-height: 150px; /* พื้นที่ว่างให้ลากการ์ดมาวางได้ */
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+    }
+    
+    /* Kanban Card Styles */
+    .kanban-card {
+        background-color: #ffffff;
+        border-radius: 10px;
+        padding: 15px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+        border: 1px solid #eaedf0;
+        border-left: 4px solid #ccc; /* สีเริ่มต้น */
+        cursor: grab;
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .kanban-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 8px 15px rgba(0,0,0,0.08);
+    }
+    .kanban-card:active { cursor: grabbing; }
+
+    /* สีแถบด้านซ้ายของการ์ดตามสถานะ */
+    .border-draft { border-left-color: #ffc107; }
+    .border-preparing { border-left-color: #0d6efd; }
+    .border-progress { border-left-color: #c5a059; }
+    .border-completed { border-left-color: #198754; }
+
+    /* ซ่อน Scrollbar แต่ยังเลื่อนได้ */
+    .kanban-board::-webkit-scrollbar { height: 8px; }
+    .kanban-board::-webkit-scrollbar-thumb { background-color: #ccc; border-radius: 4px; }
+</style>
+
+<div class="container-fluid py-4 px-4">
+    <div class="d-flex justify-content-between align-items-end mb-4">
+        <div>
+            <h4 class="fw-bold mb-1 text-dark"><i class="fas fa-network-wired text-success me-2"></i>กระดานปฏิบัติการ (Center Dashboard)</h4>
+            <p class="text-muted small mb-0">ลากและวางการ์ดเพื่ออัปเดตสถานะงานติดตั้งโซล่าเซลล์</p>
+        </div>
+        <div>
+            <a href="{% url 'solar_job_create' %}" class="btn btn-gold rounded-pill px-4 fw-bold shadow-sm">
+                <i class="fas fa-plus me-2"></i> สร้างงานด่วน
+            </a>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col"><div class="p-3 bg-white rounded-4 shadow-sm border border-warning border-opacity-25"><div class="text-muted small fw-bold">รอรับงาน</div><h3 class="text-warning mb-0">{{ draft_jobs }}</h3></div></div>
+        <div class="col"><div class="p-3 bg-white rounded-4 shadow-sm border border-primary border-opacity-25"><div class="text-muted small fw-bold">เตรียมของ/จัดทีม</div><h3 class="text-primary mb-0">{{ preparing_jobs }}</h3></div></div>
+        <div class="col"><div class="p-3 bg-white rounded-4 shadow-sm border border-info border-opacity-25"><div class="text-muted small fw-bold">กำลังติดตั้ง</div><h3 class="text-info mb-0">{{ in_progress_jobs }}</h3></div></div>
+        <div class="col"><div class="p-3 bg-white rounded-4 shadow-sm border border-danger border-opacity-25"><div class="text-muted small fw-bold">รายการตั้งเบิกรอตรวจ</div><h3 class="text-danger mb-0">{{ pending_expenses }}</h3></div></div>
+    </div>
+
+    <div class="kanban-board">
+        
+        <div class="kanban-column">
+            <div class="kanban-header" style="border-top: 4px solid #ffc107; border-top-left-radius: 12px; border-top-right-radius: 12px;">
+                <span><i class="fas fa-inbox text-warning me-2"></i> รอรับงาน (Draft)</span>
+            </div>
+            <div class="kanban-cards" id="col-draft" data-status="DRAFT">
+                {% for job in jobs %}
+                    {% if job.status == 'DRAFT' %}
+                    <div class="kanban-card border-draft" data-id="{{ job.id }}">
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="fw-bold text-dark">{{ job.code }}</span>
+                            <span class="badge bg-warning text-dark small">รอรับงาน</span>
+                        </div>
+                        <p class="small text-muted mb-2"><i class="fas fa-user me-1"></i> {{ job.customer.name|default:"ไม่ระบุลูกค้า" }}</p>
+                        <p class="small text-muted mb-3"><i class="fas fa-box me-1"></i> {{ job.package_sold.name|truncatechars:30 }}</p>
+                        <a href="{% url 'solar_job_manage' job.id %}" class="btn btn-sm btn-outline-secondary w-100 rounded-pill">จัดการงาน</a>
+                    </div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="kanban-column">
+            <div class="kanban-header" style="border-top: 4px solid #0d6efd; border-top-left-radius: 12px; border-top-right-radius: 12px;">
+                <span><i class="fas fa-tools text-primary me-2"></i> เตรียมของ (Preparing)</span>
+            </div>
+            <div class="kanban-cards" id="col-preparing" data-status="PREPARING">
+                {% for job in jobs %}
+                    {% if job.status == 'PREPARING' %}
+                    <div class="kanban-card border-preparing" data-id="{{ job.id }}">
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="fw-bold text-dark">{{ job.code }}</span>
+                            <span class="badge bg-primary small">เตรียมของ</span>
+                        </div>
+                        <p class="small text-muted mb-2"><i class="fas fa-user me-1"></i> {{ job.customer.name|default:"ไม่ระบุลูกค้า" }}</p>
+                        <p class="small text-primary mb-3 fw-bold"><i class="fas fa-users-cog me-1"></i> ทีม: {{ job.technician_team.name|default:"ยังไม่จัดทีม" }}</p>
+                        <a href="{% url 'solar_job_manage' job.id %}" class="btn btn-sm btn-outline-primary w-100 rounded-pill">เปิดดู/แก้ไข</a>
+                    </div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="kanban-column">
+            <div class="kanban-header" style="border-top: 4px solid #c5a059; border-top-left-radius: 12px; border-top-right-radius: 12px;">
+                <span><i class="fas fa-hard-hat text-gold me-2"></i> กำลังติดตั้ง (In Progress)</span>
+            </div>
+            <div class="kanban-cards" id="col-progress" data-status="IN_PROGRESS">
+                {% for job in jobs %}
+                    {% if job.status == 'IN_PROGRESS' %}
+                    <div class="kanban-card border-progress" data-id="{{ job.id }}">
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="fw-bold text-dark">{{ job.code }}</span>
+                            <span class="badge bg-gold small" style="background-color: #c5a059;">กำลังติดตั้ง</span>
+                        </div>
+                        <p class="small text-muted mb-2"><i class="fas fa-user me-1"></i> {{ job.customer.name|default:"ไม่ระบุลูกค้า" }}</p>
+                        <p class="small text-muted mb-3"><i class="far fa-calendar-alt me-1"></i> เริ่ม: {{ job.start_date|date:"d/m/Y"|default:"-" }}</p>
+                        <a href="{% url 'solar_job_manage' job.id %}" class="btn btn-sm btn-outline-warning w-100 rounded-pill" style="color: #c5a059; border-color: #c5a059;">อัปเดตงาน</a>
+                    </div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="kanban-column">
+            <div class="kanban-header" style="border-top: 4px solid #198754; border-top-left-radius: 12px; border-top-right-radius: 12px;">
+                <span><i class="fas fa-check-circle text-success me-2"></i> เสร็จสมบูรณ์ (Completed)</span>
+            </div>
+            <div class="kanban-cards" id="col-completed" data-status="COMPLETED">
+                {% for job in jobs %}
+                    {% if job.status == 'COMPLETED' %}
+                    <div class="kanban-card border-completed" data-id="{{ job.id }}">
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="fw-bold text-dark">{{ job.code }}</span>
+                            <span class="badge bg-success small">เสร็จสมบูรณ์</span>
+                        </div>
+                        <p class="small text-muted mb-3"><i class="fas fa-user me-1"></i> {{ job.customer.name|default:"ไม่ระบุลูกค้า" }}</p>
+                        <a href="{% url 'solar_job_manage' job.id %}" class="btn btn-sm btn-outline-success w-100 rounded-pill">ดูสรุปงาน</a>
+                    </div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        // ตั้งค่า SortableJS ให้กับทุกคอลัมน์
+        const columns = ['col-draft', 'col-preparing', 'col-progress', 'col-completed'];
+        
+        columns.forEach(colId => {
+            const el = document.getElementById(colId);
+            if(el) {
+                new Sortable(el, {
+                    group: 'kanban', // อนุญาตให้ลากข้ามคอลัมน์ในกลุ่มเดียวกันได้
+                    animation: 150,
+                    ghostClass: 'bg-light',
+                    onEnd: function (evt) {
+                        const itemEl = evt.item;  // การ์ดที่ถูกลาก
+                        const toEl = evt.to;      // คอลัมน์ที่ไปวาง
+                        
+                        const jobId = itemEl.getAttribute('data-id');
+                        const newStatus = toEl.getAttribute('data-status');
+                        
+                        // 🌟 ในขั้นตอนต่อไป เราจะเขียน API ยิงข้อมูลไปบันทึกในฐานข้อมูลตรงนี้ครับ
+                        console.log(`Job ID: ${jobId} ย้ายไปสถานะ: ${newStatus}`);
+                        
+                        // เปลี่ยนสีกรอบซ้ายมือตามคอลัมน์ใหม่ทันที
+                        itemEl.classList.remove('border-draft', 'border-preparing', 'border-progress', 'border-completed');
+                        if (newStatus === 'DRAFT') itemEl.classList.add('border-draft');
+                        else if (newStatus === 'PREPARING') itemEl.classList.add('border-preparing');
+                        else if (newStatus === 'IN_PROGRESS') itemEl.classList.add('border-progress');
+                        else if (newStatus === 'COMPLETED') itemEl.classList.add('border-completed');
+                    },
+                });
+            }
+        });
+    });
+</script>
+{% endblock %}

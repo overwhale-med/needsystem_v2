@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <title>Print Barcode - {{ product.code }}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700&family=Libre+Barcode+39+Text&display=swap" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Sarabun', sans-serif;
+            background: #eee; /* สีพื้นหลังตอนดูในจอ */
+        }
+        .page {
+            width: 210mm;
+            height: 297mm;
+            padding: 10mm;
+            margin: 10mm auto;
+            background: white;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            display: grid;
+            grid-template-columns: repeat(3, 1fr); /* 3 คอลัมน์ */
+            grid-template-rows: repeat(10, 1fr);    /* 10 แถว */
+            grid-gap: 5mm; /* ระยะห่างระหว่างดวง */
+            box-sizing: border-box;
+        }
+        .sticker {
+            border: 1px dashed #ddd; /* เส้นประช่วยเล็ง (จะซ่อนตอนพิมพ์) */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 5px;
+            text-align: center;
+            overflow: hidden;
+        }
+        .product-name {
+            font-size: 12px;
+            font-weight: bold;
+            margin-bottom: 2px;
+            max-width: 100%;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .price {
+            font-size: 14px;
+            font-weight: bold;
+            color: #333;
+        }
+        .barcode {
+            font-family: 'Libre Barcode 39 Text', cursive;
+            font-size: 40px; /* ขนาดบาร์โค้ด */
+            margin-top: -5px;
+            white-space: nowrap;
+        }
+        
+        /* ตั้งค่าตอนสั่งพิมพ์ */
+        @media print {
+            body { background: white; }
+            .page { 
+                margin: 0; 
+                box-shadow: none; 
+                width: 100%;
+                height: 100%;
+            }
+            .sticker { border: none; } /* ซ่อนเส้นขอบตอนพิมพ์จริง */
+            .no-print { display: none; }
+        }
+        
+        .btn-print {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 10px 20px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        .btn-print:hover { background: #0056b3; }
+    </style>
+</head>
+<body>
+
+    <button onclick="window.print()" class="btn-print no-print">🖨️ สั่งพิมพ์ (Print)</button>
+
+    <div class="page">
+        {% for i in sticker_range %}
+        <div class="sticker">
+            <div class="product-name">{{ product.name }}</div>
+            <div class="barcode">*{{ barcode_val }}*</div>
+            <div class="price">{{ product.sell_price|floatformat:0 }}.-</div>
+        </div>
+        {% endfor %}
+    </div>
+
+</body>
+</html>

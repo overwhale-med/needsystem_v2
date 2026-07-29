@@ -1,0 +1,233 @@
+{% extends 'core/base.html' %}
+{% load crispy_forms_tags %}
+
+{% block content %}
+<style>
+    #global-quota-input {
+        font-size: 3.5rem !important;
+        font-weight: 800 !important;
+        color: #0dcaf0 !important; 
+        background-color: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        padding: 0;
+        height: auto;
+    }
+    
+    .branch-name-input {
+        border: 1px solid transparent;
+        background: transparent;
+        border-radius: 6px;
+        transition: 0.3s;
+    }
+    .branch-name-input:focus, .branch-name-input:hover {
+        border-color: #86b7fe;
+        background: #fff;
+    }
+
+    .btn-delete-soft {
+        color: #dc3545;
+        background: #fff5f5;
+        border-radius: 8px;
+        transition: 0.2s;
+    }
+    .btn-delete-soft:hover {
+        background: #dc3545;
+        color: #fff;
+    }
+</style>
+
+<div class="container-fluid py-4 px-4">
+    
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h3 class="fw-bold text-dark mb-1"><i class="fas fa-building text-primary me-2"></i>{{ title }}</h3>
+            <p class="text-muted small mb-0">จัดการข้อมูลองค์กร และจำกัดโควตาการรับงานของแผนกผลิต</p>
+        </div>
+        <div>
+            <button type="submit" form="company-form" class="btn btn-primary rounded-pill px-5 fw-bold shadow-sm">
+                <i class="fas fa-save me-2"></i> บันทึกการตั้งค่า
+            </button>
+        </div>
+    </div>
+
+    <form method="POST" id="company-form" enctype="multipart/form-data">
+        {% csrf_token %}
+        <div class="row g-4">
+            
+            <div class="col-lg-7 col-xl-8">
+                <div class="card border-0 shadow-sm rounded-4 mb-4">
+                    <div class="card-header bg-white border-0 pt-4 pb-2 px-4">
+                        <h5 class="fw-bold m-0"><i class="fas fa-info-circle text-primary me-2"></i>ข้อมูลพื้นฐานองค์กร</h5>
+                    </div>
+                    <div class="card-body px-4 pb-4">
+                        <div class="row g-3">
+                            <div class="col-md-6">{{ form.name_th|as_crispy_field }}</div>
+                            <div class="col-md-6">{{ form.name_en|as_crispy_field }}</div>
+                            <div class="col-md-6">{{ form.tax_id|as_crispy_field }}</div>
+                            <div class="col-md-6">{{ form.branch|as_crispy_field }}</div>
+                            <div class="col-md-12">{{ form.address|as_crispy_field }}</div>
+                            
+                            <div class="col-md-12">{{ form.address_en|as_crispy_field }}</div>
+
+                            <div class="col-md-6">{{ form.phone|as_crispy_field }}</div>
+                            <div class="col-md-6">{{ form.email|as_crispy_field }}</div>
+                            <div class="col-md-12">{{ form.website|as_crispy_field }}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card border-0 shadow-sm rounded-4">
+                    <div class="card-body px-4 py-4">
+                        <h5 class="fw-bold mb-3"><i class="fas fa-images text-secondary me-2"></i>อัปโหลดรูปภาพ</h5>
+                        <hr class="opacity-10 mb-4">
+                        <div class="row g-3">
+                            <div class="col-md-4">{{ form.logo|as_crispy_field }}</div>
+                            <div class="col-md-4">{{ form.navbar_image|as_crispy_field }}</div>
+                            <div class="col-md-4">{{ form.login_image|as_crispy_field }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-5 col-xl-4">
+                <div class="card border-0 shadow-sm rounded-4 mb-4 bg-dark text-white overflow-hidden position-relative">
+                    <i class="fas fa-industry position-absolute opacity-10" style="font-size: 8rem; right: -20px; bottom: -20px;"></i>
+                    <div class="card-body text-center py-5 position-relative z-1">
+                        <p class="mb-1 text-uppercase fw-bold text-info tracking-wider small">โควตารับงานผลิต (รวมทั้งบริษัท)</p>
+                        <div class="d-flex justify-content-center align-items-center">
+                            {{ form.weekly_job_quota }}
+                        </div>
+                        <p class="small text-white-50 mb-0 mt-2">คำนวณอัตโนมัติจากผลรวมของทุกฐานผลิตด้านล่าง</p>
+                    </div>
+                </div>
+
+                <div class="card border-0 shadow-sm rounded-4">
+                    <div class="card-body p-4">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6 class="fw-bold text-dark mb-0"><i class="fas fa-sitemap text-warning me-2"></i>จัดการโควตารายสาขา</h6>
+                            <button type="button" class="btn btn-sm btn-outline-success rounded-pill fw-bold px-3 shadow-sm" id="add-branch-btn">
+                                <i class="fas fa-plus me-1"></i> เพิ่มสาขา
+                            </button>
+                        </div>
+                        
+                        <div class="bg-light rounded-3 p-3 mb-2">
+                            {{ branch_formset.management_form }}
+                            <table class="table table-borderless align-middle text-start mb-0" id="branch-table">
+                                <thead>
+                                    <tr class="border-bottom border-secondary border-opacity-25">
+                                        <th class="text-secondary small pb-2 ps-0">ชื่อฐานผลิต</th>
+                                        <th class="text-secondary small text-center pb-2" style="width: 90px;">โควตา</th>
+                                        <th class="text-secondary small text-center pb-2 pe-0" style="width: 40px;">ลบ</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="branch-tbody">
+                                    {% for b_form in branch_formset %}
+                                    <tr class="branch-row">
+                                        <td class="ps-0 py-2">
+                                            {{ b_form.id }}
+                                            <div class="branch-name-input">
+                                                {{ b_form.name }}
+                                            </div>
+                                        </td>
+                                        <td class="py-2 px-1">
+                                            {{ b_form.weekly_quota }}
+                                        </td>
+                                        <td class="pe-0 py-2 text-end">
+                                            <div class="d-none">{{ b_form.DELETE }}</div>
+                                            <button type="button" class="btn btn-sm btn-delete-soft border-0 delete-branch-btn">
+                                                <i class="fas fa-times"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="text-center">
+                            <small class="text-muted" style="font-size: 0.75rem;"><i class="fas fa-info-circle me-1"></i>ข้อมูลนี้จะอัปเดตไปยังหน้า Timeline ของฝ่ายขายทันที</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </form>
+
+    <table style="display: none;">
+        <tbody id="empty-branch-form">
+            <tr class="branch-row">
+                <td class="ps-0 py-2">
+                    {{ branch_formset.empty_form.id }}
+                    <div class="branch-name-input">
+                        {{ branch_formset.empty_form.name }}
+                    </div>
+                </td>
+                <td class="py-2 px-1">
+                    {{ branch_formset.empty_form.weekly_quota }}
+                </td>
+                <td class="pe-0 py-2 text-end">
+                    <div class="d-none">{{ branch_formset.empty_form.DELETE }}</div>
+                    <button type="button" class="btn btn-sm btn-delete-soft border-0 delete-branch-btn">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </td>
+            </tr>
+        </tbody>
+    </table>
+
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const globalQuotaInput = document.getElementById('global-quota-input');
+        const branchTbody = document.getElementById('branch-tbody');
+        const addBtn = document.getElementById('add-branch-btn');
+        const totalFormsInput = document.getElementById('id_form-TOTAL_FORMS');
+        const emptyFormTemplate = document.getElementById('empty-branch-form').innerHTML;
+
+        function calculateTotalQuota() {
+            let total = 0;
+            const quotaInputs = document.querySelectorAll('#branch-tbody .branch-row:not([style*="display: none"]) .branch-quota');
+            quotaInputs.forEach(function(input) {
+                const val = parseInt(input.value) || 0;
+                total += val;
+            });
+            globalQuotaInput.value = total;
+        }
+
+        document.getElementById('branch-table').addEventListener('input', function(e) {
+            if (e.target.classList.contains('branch-quota')) {
+                calculateTotalQuota();
+            }
+        });
+
+        addBtn.addEventListener('click', function() {
+            let formIdx = parseInt(totalFormsInput.value);
+            let newRowHtml = emptyFormTemplate.replace(/__prefix__/g, formIdx);
+            
+            branchTbody.insertAdjacentHTML('beforeend', newRowHtml);
+            totalFormsInput.value = formIdx + 1;
+            
+            const newInputs = branchTbody.querySelectorAll('.branch-row:last-child input[type="text"]');
+            if(newInputs.length > 0) newInputs[0].focus();
+        });
+
+        document.getElementById('branch-table').addEventListener('click', function(e) {
+            const deleteBtn = e.target.closest('.delete-branch-btn');
+            if (deleteBtn) {
+                const row = deleteBtn.closest('.branch-row');
+                const deleteCheckbox = row.querySelector('input[type="checkbox"][name$="-DELETE"]');
+                if (deleteCheckbox) {
+                    deleteCheckbox.checked = true;
+                }
+                row.style.display = 'none';
+                
+                calculateTotalQuota();
+            }
+        });
+
+        calculateTotalQuota();
+    });
+</script>
+{% endblock %}

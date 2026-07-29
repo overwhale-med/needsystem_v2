@@ -1,0 +1,234 @@
+{% extends 'core/base.html' %}
+{% load humanize %}
+
+{% block content %}
+<style>
+    /* 🌟 สไตล์ปุ่มและเอฟเฟกต์สีทองแบบพรีเมียม 🌟 */
+    .btn-gold { background: linear-gradient(135deg, #d4af37 0%, #aa8c2c 100%); color: #ffffff !important; border: none; transition: all 0.3s ease; }
+    .btn-gold:hover { background: linear-gradient(135deg, #aa8c2c 0%, #8c7324 100%); transform: translateY(-2px); box-shadow: 0 6px 12px rgba(212, 175, 55, 0.3) !important; }
+    
+    .form-control:focus, .form-select:focus { border-color: #d4af37; box-shadow: 0 0 0 0.25rem rgba(212, 175, 55, 0.25); }
+    .table-items th { background-color: #f8f9fa; font-weight: 600; color: #495057; border-bottom: 2px solid #dee2e6; }
+</style>
+
+<div class="container-fluid py-4 px-4">
+    <div class="d-flex justify-content-between align-items-end mb-4">
+        <div>
+            <h4 class="fw-bold mb-1 text-dark">
+                <i class="fas fa-edit text-warning me-2"></i>
+                {% if po %}แก้ไขใบสั่งซื้อ: <span class="text-primary">{{ po.code }}</span>{% else %}สร้างใบสั่งซื้อด่วน (Fast Track PO){% endif %}
+            </h4>
+            <p class="text-muted small mb-0">ระบบจัดซื้อโซล่าเซลล์ (Solar Purchasing)</p>
+        </div>
+        <a href="{% url 'solar_po_list' %}" class="btn btn-outline-secondary rounded-pill px-4 fw-bold shadow-sm"><i class="fas fa-arrow-left me-2"></i> กลับหน้ารายการ</a>
+    </div>
+
+    <form method="POST" enctype="multipart/form-data" id="poForm">
+        {% csrf_token %}
+        
+        <div class="row g-4">
+            <div class="col-lg-4 col-md-12">
+                <div class="card border-0 shadow-sm rounded-4 bg-white h-100">
+                    <div class="card-header bg-white py-3 border-bottom-0">
+                        <h6 class="fw-bold mb-0 text-dark"><i class="fas fa-store me-2 text-primary"></i>ข้อมูลผู้ขาย และกำหนดส่ง</h6>
+                    </div>
+                    <div class="card-body pt-0">
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold text-muted">1. เลือกร้านค้าในระบบ (ถ้ามี)</label>
+                            <select name="{{ form.supplier.name }}" class="form-select fw-bold text-dark">
+                                <option value="">-- เลือกร้านค้า --</option>
+                                {% for sup in suppliers %}
+                                    <option value="{{ sup.id }}" {% if form.supplier.value|stringformat:"s" == sup.id|stringformat:"s" %}selected{% endif %}>{{ sup.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold text-muted">2. หรือ พิมพ์ชื่อร้านค้า (สั่งด่วนนอกระบบ)</label>
+                            {{ form.supplier_name_free_text }}
+                        </div>
+                        <hr class="opacity-25">
+                        <div class="row g-2 mb-3">
+                            <div class="col-6">
+                                <label class="form-label small fw-bold text-muted">วันที่สั่งซื้อ</label>
+                                {{ form.date }}
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small fw-bold text-muted">กำหนดรับของ</label>
+                                {{ form.expected_date }}
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold text-muted">หมายเหตุ / เงื่อนไข</label>
+                            {{ form.note }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-8 col-md-12">
+                <div class="card border-0 shadow-sm rounded-4 bg-white h-100">
+                    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center border-bottom-0">
+                        <h6 class="fw-bold mb-0 text-dark"><i class="fas fa-boxes me-2 text-success"></i>รายการสั่งซื้อวัตถุดิบ</h6>
+                        <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3 fw-bold" id="add-item-btn">
+                            <i class="fas fa-plus me-1"></i> เพิ่มรายการ
+                        </button>
+                    </div>
+                    <div class="card-body pt-0">
+                        {{ formset.management_form }}
+                        <div class="table-responsive">
+                            <table class="table table-borderless table-items align-middle mb-0" id="items-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 45%;">สินค้า (รหัสคลัง / พิมพ์เอง)</th>
+                                        <th class="text-center" style="width: 15%;">จำนวน</th>
+                                        <th class="text-end" style="width: 20%;">ราคา/หน่วย</th>
+                                        <th class="text-end" style="width: 15%;">รวม (บาท)</th>
+                                        <th class="text-center" style="width: 5%;">ลบ</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="formset-body">
+                                    {% for item_form in formset %}
+                                    <tr class="item-row border-bottom">
+                                        <td>
+                                            {% for hidden in item_form.hidden_fields %}{{ hidden }}{% endfor %}
+                                            <select name="{{ item_form.product.html_name }}" class="form-select form-select-sm mb-1 fw-bold text-dark">
+                                                <option value="">-- เลือกจากคลัง --</option>
+                                                {% for p in products %}
+                                                    <option value="{{ p.id }}" {% if item_form.product.value|stringformat:"s" == p.id|stringformat:"s" %}selected{% endif %}>{{ p.name }}</option>
+                                                {% endfor %}
+                                            </select>
+                                            {{ item_form.item_name_free_text }}
+                                        </td>
+                                        <td>{{ item_form.quantity }}</td>
+                                        <td>{{ item_form.unit_cost }}</td>
+                                        <td class="text-end fw-bold text-primary row-total">0.00</td>
+                                        <td class="text-center">
+                                            {% if item_form.instance.pk %}
+                                                {{ item_form.DELETE }}
+                                            {% else %}
+                                                <button type="button" class="btn btn-sm btn-outline-danger border-0 remove-row-btn"><i class="fas fa-times"></i></button>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="d-flex justify-content-end mt-4">
+                            <div class="p-3 bg-light rounded-4 shadow-sm text-end" style="min-width: 250px;">
+                                <span class="text-muted small fw-bold text-uppercase">ยอดรวมสุทธิ (Grand Total)</span>
+                                <h3 class="fw-bold text-dark mb-0 mt-1" id="grand-total-text">฿0.00</h3>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="d-flex justify-content-end mt-4 gap-2">
+            <a href="{% url 'solar_po_list' %}" class="btn btn-light rounded-pill px-4 fw-bold shadow-sm text-secondary">ยกเลิก</a>
+            <button type="submit" class="btn btn-gold rounded-pill px-5 fw-bold shadow-sm fs-6">
+                <i class="fas fa-save me-2"></i> บันทึกใบสั่งซื้อ
+            </button>
+        </div>
+    </form>
+</div>
+
+<table style="display: none;">
+    <tbody id="empty-row-template">
+        <tr class="item-row border-bottom">
+            <td>
+                <select name="{{ formset.empty_form.product.html_name }}" class="form-select form-select-sm mb-1 fw-bold text-dark">
+                    <option value="">-- เลือกจากคลัง --</option>
+                    {% for p in products %}
+                        <option value="{{ p.id }}">{{ p.name }}</option>
+                    {% endfor %}
+                </select>
+                {{ formset.empty_form.item_name_free_text }}
+            </td>
+            <td>{{ formset.empty_form.quantity }}</td>
+            <td>{{ formset.empty_form.unit_cost }}</td>
+            <td class="text-end fw-bold text-primary row-total">0.00</td>
+            <td class="text-center">
+                <button type="button" class="btn btn-sm btn-outline-danger border-0 remove-row-btn"><i class="fas fa-times"></i></button>
+            </td>
+        </tr>
+    </tbody>
+</table>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const formsetBody = document.getElementById("formset-body");
+        const addBtn = document.getElementById("add-item-btn");
+        const totalFormsInput = document.getElementById("id_items-TOTAL_FORMS");
+        const grandTotalText = document.getElementById("grand-total-text");
+
+        // ฟังก์ชันคำนวณราคารวม
+        function calculateTotals() {
+            let grandTotal = 0;
+            const rows = formsetBody.querySelectorAll(".item-row");
+            
+            rows.forEach(row => {
+                // ข้ามแถวที่ถูกทำเครื่องหมายว่าลบ (กรณี Edit)
+                const deleteInput = row.querySelector("input[type='checkbox'][name$='-DELETE']");
+                if (deleteInput && deleteInput.checked) {
+                    row.style.display = 'none';
+                    return;
+                }
+
+                const qtyInput = row.querySelector("input[name$='-quantity']");
+                const costInput = row.querySelector("input[name$='-unit_cost']");
+                const totalTd = row.querySelector(".row-total");
+
+                if (qtyInput && costInput && totalTd) {
+                    const qty = parseFloat(qtyInput.value) || 0;
+                    const cost = parseFloat(costInput.value) || 0;
+                    const lineTotal = qty * cost;
+                    totalTd.innerText = lineTotal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                    grandTotal += lineTotal;
+                }
+            });
+
+            grandTotalText.innerText = '฿' + grandTotal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        }
+
+        // จับ Event เมื่อมีการพิมพ์หรือเปลี่ยนตัวเลข ให้คำนวณใหม่ทันที
+        formsetBody.addEventListener("input", function(e) {
+            if (e.target.tagName === "INPUT" && (e.target.name.includes("quantity") || e.target.name.includes("unit_cost"))) {
+                calculateTotals();
+            }
+        });
+
+        // จับ Event เมื่อติ๊กปุ่มลบ (Checkbox ของฟอร์ม Edit)
+        formsetBody.addEventListener("change", function(e) {
+            if (e.target.tagName === "INPUT" && e.target.name.includes("-DELETE")) {
+                calculateTotals();
+            }
+        });
+
+        // เพิ่มแถวใหม่ (Formset)
+        addBtn.addEventListener("click", function() {
+            const currentFormCount = parseInt(totalFormsInput.value);
+            const templateHtml = document.getElementById("empty-row-template").innerHTML;
+            const newRowHtml = templateHtml.replace(/__prefix__/g, currentFormCount);
+            
+            formsetBody.insertAdjacentHTML('beforeend', newRowHtml);
+            totalFormsInput.value = currentFormCount + 1;
+            calculateTotals();
+        });
+
+        // ลบแถว (สำหรับแถวที่เพิ่งเพิ่มใหม่ ยังไม่มี ID ในฐานข้อมูล)
+        formsetBody.addEventListener("click", function(e) {
+            if (e.target.closest(".remove-row-btn")) {
+                const row = e.target.closest(".item-row");
+                row.remove();
+                calculateTotals();
+            }
+        });
+
+        // คำนวณครั้งแรกตอนโหลดหน้าเว็บ
+        calculateTotals();
+    });
+</script>
+{% endblock %}

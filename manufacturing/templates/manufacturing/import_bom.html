@@ -1,0 +1,40 @@
+{% extends 'core/base.html' %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card border-0 shadow-lg rounded-4">
+                <div class="card-header bg-success text-white py-3 text-center">
+                    <h5 class="mb-0 fw-bold"><i class="fas fa-file-excel me-2"></i>นำเข้าสูตรผลิต (BOM) ผ่าน Excel</h5>
+                </div>
+                <div class="card-body p-4">
+                    <div class="alert alert-info small">
+                        <h6 class="fw-bold">📢 คำแนะนำการเตรียมไฟล์:</h6>
+                        <ul class="mb-0">
+                            <li>ไฟล์ต้องมีคอลัมน์ชื่อ: <strong>FG SKU</strong>, <strong>RM SKU</strong>, <strong>Quantity</strong></li>
+                            <li><strong>FG SKU:</strong> รหัสสินค้าบ้านน็อคดาวน์ (เช่น SST1)</li>
+                            <li><strong>RM SKU:</strong> รหัสวัตถุดิบ (เช่น PA01)</li>
+                            <li><strong>Quantity:</strong> จำนวนที่ใช้ต่อ 1 หลัง</li>
+                        </ul>
+                    </div>
+
+                    <form method="post" enctype="multipart/form-data">
+                        {% csrf_token %}
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">เลือกไฟล์ Excel (.xlsx)</label>
+                            <input type="file" name="excel_file" class="form-control" accept=".xlsx, .xls" required>
+                        </div>
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-success btn-lg fw-bold rounded-pill shadow-sm">
+                                <i class="fas fa-upload me-2"></i> เริ่มการนำเข้าข้อมูล
+                            </button>
+                            <a href="{% url 'inventory_dashboard' %}" class="btn btn-light text-muted rounded-pill">ยกเลิก</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

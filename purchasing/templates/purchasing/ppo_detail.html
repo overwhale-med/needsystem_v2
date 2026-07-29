@@ -1,0 +1,229 @@
+{% extends 'core/base.html' %}
+{% load humanize %} 
+
+{% block content %}
+<div class="container-fluid py-4 px-4">
+    <div class="d-flex justify-content-between align-items-end mb-4">
+        <div>
+            <h4 class="fw-bold mb-1 text-dark"><i class="fas fa-clipboard-list text-primary me-2"></i>รายละเอียดใบเตรียมสั่งซื้อ: <span class="text-success">{{ ppo.code }}</span></h4>
+            <p class="text-muted small mb-0">ระบบจัดสรรร้านค้าและแบ่งยอดสั่งซื้อวัตถุดิบ (Multi-sourcing)</p>
+        </div>
+        <div class="text-end">
+            <a href="{% url 'ppo_list' %}" class="btn btn-outline-secondary rounded-pill px-4 mb-2 shadow-sm">
+                <i class="fas fa-arrow-left me-2"></i> กลับหน้ารายการ
+            </a>
+            <div class="fw-bold text-dark bg-white rounded-pill px-4 py-2 border shadow-sm">
+                ยอดประเมินรวม: <span class="text-danger fs-5 ms-2">{{ grand_total|floatformat:2|intcomma }}</span> บาท
+            </div>
+        </div>
+    </div>
+
+    {% if created_pos %}
+    <div class="alert alert-success border border-success rounded-4 mb-4 shadow-sm">
+        <h6 class="fw-bold text-success mb-2"><i class="fas fa-check-circle me-2"></i>ใบสั่งซื้อ (PO) ที่สร้างจากรายการนี้แล้ว:</h6>
+        <div class="d-flex flex-wrap gap-2">
+            {% for po in created_pos %}
+                <a href="{% url 'po_edit' po.id %}" class="badge bg-white text-dark border border-success shadow-sm px-3 py-2 text-decoration-none hover-scale">
+                    <i class="fas fa-file-invoice text-success me-1"></i> {{ po.code }} <span class="opacity-50 mx-1">|</span> <span class="text-muted">{{ po.supplier.name|truncatechars:20 }}</span>
+                </a>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <form method="POST" id="ppoForm">
+        {% csrf_token %}
+        <input type="hidden" name="order_data" id="orderDataInput">
+        
+        <div class="card shadow-sm border-0 rounded-4 mb-4 overflow-hidden bg-white">
+            <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+                <h6 class="fw-bold mb-0 text-dark"><i class="fas fa-cubes text-primary me-2"></i>รายการวัตถุดิบที่ต้องการ</h6>
+                <button type="button" class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm" onclick="submitPOs()">
+                    <i class="fas fa-magic me-2"></i> สั่งสร้างใบสั่งซื้อ (PO) อัตโนมัติ
+                </button>
+            </div>
+            
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0" id="materialsTable">
+                    <thead class="bg-light small text-secondary text-uppercase">
+                        <tr>
+                            <th class="ps-4 py-3">วัตถุดิบ</th>
+                            <th class="text-center py-3">ต้องการรวม</th>
+                            <th class="text-center py-3">ค้างสั่งซื้อ</th>
+                            <th class="py-3" style="width: 150px;">ระบุยอดสั่งซื้อ</th>
+                            <th class="py-3" style="width: 250px;">ร้านค้า (Supplier)</th>
+                            <th class="py-3" style="width: 130px;">ราคา/หน่วย</th>
+                            <th class="text-end py-3">รวมเป็นเงิน</th>
+                            <th class="text-center pe-4 py-3">จัดการ</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in materials_list %}
+                        <tr class="material-row {% if item.remaining == 0 %}bg-light opacity-50{% endif %}" data-id="{{ item.id }}">
+                            <td class="ps-4">
+                                <div class="fw-bold text-dark">{{ item.name }}</div>
+                                <small class="text-muted">{{ item.code }}</small>
+                            </td>
+                            <td class="text-center fw-bold text-dark">{{ item.needed|floatformat:2|intcomma }}</td>
+                            <td class="text-center fw-bold {% if item.remaining > 0 %}text-danger{% else %}text-success{% endif %}">
+                                {{ item.remaining|floatformat:2|intcomma }}
+                                {% if item.remaining == 0 %}<i class="fas fa-check ms-1"></i>{% endif %}
+                            </td>
+                            
+                            <td>
+                                <input type="number" class="form-control text-center fw-bold text-primary order-qty border-primary" 
+                                       value="{{ item.remaining }}" min="0" step="0.01" oninput="calcRow(this)" 
+                                       {% if item.remaining == 0 %}disabled{% endif %}>
+                            </td>
+                            
+                            <td>
+                                <select class="form-select order-supplier border-primary" onchange="updateCost(this)" {% if item.remaining == 0 %}disabled{% endif %}>
+                                    <option value="">-- เลือกร้านค้า --</option>
+                                    
+                                    {% if item.suppliers %}
+                                        <optgroup label="ร้านค้าที่ผูกไว้">
+                                        {% for sup in item.suppliers %}
+                                            <option value="{{ sup.id }}" data-cost="{{ sup.cost }}" {% if sup.is_default %}selected{% endif %}>{{ sup.name }}</option>
+                                        {% endfor %}
+                                        </optgroup>
+                                    {% endif %}
+                                    
+                                    <optgroup label="รายชื่อร้านค้าทั้งหมด">
+                                        {% for sup in all_suppliers %}
+                                            <option value="{{ sup.id }}" data-cost="0">{{ sup.name }}</option>
+                                        {% endfor %}
+                                    </optgroup>
+                                </select>
+                            </td>
+                            
+                            <td>
+                                <input type="number" class="form-control text-end order-cost" 
+                                       value="{{ item.cost }}" min="0" step="0.01" oninput="calcRow(this)" 
+                                       {% if item.remaining == 0 %}disabled{% endif %}>
+                            </td>
+                            
+                            <td class="text-end fw-bold text-success fs-6 row-total">0.00</td>
+                            
+                            <td class="text-center pe-4">
+                                <button type="button" class="btn btn-sm btn-outline-info rounded-circle btn-split" onclick="splitRow(this)" {% if item.remaining == 0 %}disabled{% endif %} title="แบ่งสั่งร้านอื่น">
+                                    <i class="fas fa-plus"></i>
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-danger rounded-circle d-none btn-remove" onclick="removeRow(this)" title="ลบแถวนี้">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="8" class="text-center py-5 text-muted"><i class="fas fa-box-open fa-3x mb-3 opacity-25"></i><br>ไม่มีรายการวัตถุดิบ</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div class="card-footer bg-light py-3 border-top-0 text-end">
+                <button type="button" class="btn btn-primary rounded-pill px-5 fw-bold shadow-lg py-2" onclick="submitPOs()">
+                    <i class="fas fa-magic me-2"></i> สร้างใบสั่งซื้อ (PO) 
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<style>
+    .hover-scale { transition: transform 0.2s; }
+    .hover-scale:hover { transform: translateY(-3px); }
+    .form-control:disabled, .form-select:disabled { background-color: #f8f9fa; border-color: #e9ecef; }
+</style>
+
+<script>
+    // คำนวณยอดรวมตอนโหลดหน้าเว็บ
+    document.addEventListener("DOMContentLoaded", function() {
+        document.querySelectorAll('.order-qty').forEach(el => calcRow(el));
+    });
+
+    // อัปเดตราคาอัตโนมัติเมื่อเปลี่ยน Dropdown ร้านค้า
+    function updateCost(selectEl) {
+        const selectedOption = selectEl.options[selectEl.selectedIndex];
+        const cost = selectedOption.getAttribute('data-cost');
+        if (cost && parseFloat(cost) > 0) {
+            const row = selectEl.closest('tr');
+            row.querySelector('.order-cost').value = cost;
+            calcRow(selectEl);
+        }
+    }
+
+    // คำนวณยอดเงินรวม (จำนวน * ราคา)
+    function calcRow(el) {
+        const row = el.closest('tr');
+        const qty = parseFloat(row.querySelector('.order-qty').value) || 0;
+        const cost = parseFloat(row.querySelector('.order-cost').value) || 0;
+        row.querySelector('.row-total').innerText = (qty * cost).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    }
+
+    // ฟังก์ชันทำซ้ำบรรทัด (สำหรับการแบ่งสั่งหลายร้าน)
+    function splitRow(btn) {
+        const row = btn.closest('tr');
+        const newRow = row.cloneNode(true);
+        
+        // รีเซ็ตค่าในบรรทัดใหม่
+        newRow.querySelector('.order-qty').value = 0;
+        newRow.querySelector('.row-total').innerText = '0.00';
+        newRow.querySelector('.order-supplier').selectedIndex = 0;
+        
+        // สลับปุ่ม จัดการ ให้ลบได้
+        newRow.querySelector('.btn-split').classList.add('d-none');
+        newRow.querySelector('.btn-remove').classList.remove('d-none');
+        
+        row.parentNode.insertBefore(newRow, row.nextSibling);
+    }
+
+    // ลบบรรทัดที่แบ่งมา
+    function removeRow(btn) {
+        btn.closest('tr').remove();
+    }
+
+    // กดปุ่มบันทึก (รวบรวม JSON ส่งไปหลังบ้าน)
+    function submitPOs() {
+        let orderData = {};
+        let isValid = true;
+        let totalQtyToOrder = 0;
+
+        document.querySelectorAll('.material-row').forEach(row => {
+            let qty = parseFloat(row.querySelector('.order-qty').value) || 0;
+            
+            if (qty > 0) {
+                totalQtyToOrder += qty;
+                let supId = row.querySelector('.order-supplier').value;
+                let prodId = row.getAttribute('data-id');
+                let cost = parseFloat(row.querySelector('.order-cost').value) || 0;
+
+                if (!supId) {
+                    alert("⚠️ กรุณาเลือกร้านค้า สำหรับรายการที่ระบุจำนวนสั่งซื้อครับ");
+                    row.querySelector('.order-supplier').focus();
+                    row.classList.add('table-warning');
+                    setTimeout(() => row.classList.remove('table-warning'), 2000);
+                    isValid = false;
+                    return;
+                }
+
+                if (!orderData[supId]) orderData[supId] = [];
+                orderData[supId].push({id: prodId, qty: qty, cost: cost});
+            }
+        });
+
+        if (!isValid) return;
+        if (totalQtyToOrder === 0) {
+            alert("⚠️ กรุณาระบุจำนวนสั่งซื้ออย่างน้อย 1 รายการครับ");
+            return;
+        }
+
+        if(confirm("ยืนยันระบบจัดการรวบรวมร้านค้า และสร้างใบสั่งซื้อ (PO) โดยอัตโนมัติ?")) {
+            // ซ่อนปุ่มโชว์หมุนๆ
+            event.target.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> กำลังประมวลผล...';
+            event.target.disabled = true;
+            
+            document.getElementById('orderDataInput').value = JSON.stringify(orderData);
+            document.getElementById('ppoForm').submit();
+        }
+    }
+</script>
+{% endblock %}

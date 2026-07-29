@@ -1,0 +1,21 @@
+name: Deploy NEED System V2 to Production
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - closed
+
+jobs:
+  deploy:
+    # Trigger ONLY when Pull Request is merged into main
+    if: github.event.pull_request.merged == true
+    runs-on: self-hosted
+
+    steps:
+      - name: 🚀 Deploy Latest Code & Restart Container
+        run: |
+          cd /home/sarawut/services/needjc/NEED_System_V2
+          git pull origin main
+          docker compose up -d --build

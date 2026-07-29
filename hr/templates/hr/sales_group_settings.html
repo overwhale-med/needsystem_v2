@@ -1,0 +1,248 @@
+{% extends 'core/base.html' %}
+{% load humanize %}
+
+{% block content %}
+<div class="container-fluid py-4 px-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h3 class="fw-bold text-dark mb-0"><i class="fas fa-users-cog text-primary me-2"></i>ตั้งค่ากลุ่มและโครงสร้างคอมมิชชัน</h3>
+            <p class="text-muted small mb-0">จัดการกลุ่มงาน, เปอร์เซ็นต์ผลตอบแทน และกองทุนของทีม</p>
+        </div>
+        
+        <div class="d-flex gap-2">
+            <a href="{% url 'hr_executive_dashboard' %}" class="btn btn-outline-secondary rounded-pill shadow-sm fw-bold px-4 d-flex align-items-center">
+                <i class="fas fa-arrow-left me-2"></i> Dashboard
+            </a>
+            <button class="btn btn-primary rounded-pill shadow-sm fw-bold px-4 d-flex align-items-center" data-bs-toggle="modal" data-bs-target="#groupModal" onclick="openAddModal()">
+                <i class="fas fa-plus me-2"></i> สร้างกลุ่มใหม่
+            </button>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm rounded-4">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="bg-light text-secondary small text-uppercase">
+                        <tr>
+                            <th class="ps-4 py-3">ชื่อกลุ่ม / ทีม</th>
+                            <th class="py-3">ประเภท</th>
+                            <th class="py-3 text-center text-success">ค่าเหมาจ่าย/งาน (บ.)</th>
+                            <th class="py-3 text-center">คอมฯบริษัท</th>
+                            <th class="py-3 text-center text-success">ส่วนแบ่ง (แบ่งในกลุ่ม 100%)</th>
+                            <th class="py-3 text-center text-info">เข้ากองทุน</th>
+                            <th class="py-3 text-end">ยอดเงินกองทุนสะสม</th>
+                            <th class="pe-4 py-3 text-center">จัดการ</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for group in groups %}
+                        <tr>
+                            <td class="ps-4 fw-bold text-dark">{{ group.name }}</td>
+                            <td>
+                                {% if group.group_type == 'EXECUTIVE' %}<span class="badge bg-dark">ผู้บริหาร</span>
+                                {% elif group.group_type == 'TEAM' %}<span class="badge bg-primary">กลุ่มทำงาน</span>
+                                {% else %}<span class="badge bg-secondary">พนักงานอิสระ</span>{% endif %}
+                            </td>
+                            <td class="text-center fw-bold text-success">฿{{ group.flat_rate_amount|floatformat:2|intcomma }}</td>
+                            <td class="text-center fw-bold text-danger">{{ group.commission_rate }}%</td>
+                            <td class="text-center small text-muted">
+                                {% if group.group_type == 'TEAM' %}
+                                    <span class="text-success fw-bold" title="หัวหน้า">{{ group.share_leader }}%</span> / 
+                                    <span class="text-primary fw-bold" title="ระดับ 1">{{ group.share_level1 }}%</span> / 
+                                    <span class="text-warning fw-bold" title="ระดับ 2">{{ group.share_level2 }}%</span>
+                                {% elif group.group_type == 'EXECUTIVE' %}
+                                    <span class="text-success fw-bold">{{ group.share_exec1 }}%</span> / 
+                                    <span class="text-primary fw-bold">{{ group.share_exec2 }}%</span> / 
+                                    <span class="text-warning fw-bold">{{ group.share_exec3 }}%</span> / 
+                                    <span class="text-secondary fw-bold">{{ group.share_exec4 }}%</span> / 
+                                    <span class="text-dark fw-bold">{{ group.share_exec5 }}%</span>
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
+                            <td class="text-center fw-bold text-info">{{ group.share_fund }}%</td>
+                            <td class="text-end fw-bold fs-6">฿{{ group.fund_balance|floatformat:2|intcomma }}</td>
+                            <td class="pe-4 text-center">
+                                <div class="btn-group">
+                                    <button class="btn btn-sm btn-outline-primary" onclick="openEditModal({{ group.id }}, '{{ group.name }}', '{{ group.group_type }}', {{ group.commission_rate }}, {{ group.flat_rate_amount|default:0 }}, {{ group.share_leader }}, {{ group.share_level1 }}, {{ group.share_level2 }}, {{ group.share_exec1 }}, {{ group.share_exec2 }}, {{ group.share_exec3 }}, {{ group.share_exec4 }}, {{ group.share_exec5 }}, {{ group.share_fund }})"><i class="fas fa-pen"></i></button>
+                                    <form method="POST" class="d-inline" onsubmit="return confirm('ยืนยันการลบกลุ่มนี้?');">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="action" value="delete">
+                                        <input type="hidden" name="group_id" value="{{ group.id }}">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger"><i class="fas fa-trash"></i></button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="8" class="text-center py-4 text-muted">ยังไม่มีข้อมูลกลุ่ม</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="groupModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content border-0 rounded-4 shadow-lg">
+            <div class="modal-header bg-primary border-0 text-white rounded-top-4">
+                <h5 class="modal-title fw-bold" id="modalTitle"><i class="fas fa-layer-group me-2"></i>จัดการข้อมูลกลุ่ม</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{% url 'sales_group_settings' %}">
+                {% csrf_token %}
+                <input type="hidden" name="action" id="formAction" value="add">
+                <input type="hidden" name="group_id" id="formGroupId" value="">
+                
+                <div class="modal-body p-4">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">ชื่อกลุ่ม/ทีม <span class="text-danger">*</span></label>
+                            <input type="text" name="name" id="inpName" class="form-control" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">ประเภทกลุ่ม <span class="text-danger">*</span></label>
+                            <select name="group_type" id="inpType" class="form-select" onchange="toggleShares()" required>
+                                <option value="TEAM">กลุ่มทำงาน (Team)</option>
+                                <option value="EXECUTIVE">กลุ่มผู้บริหาร (Executive)</option>
+                                <option value="INDEPENDENT">พนักงานอิสระ (Independent)</option>
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold text-success">ค่าตอบแทนเหมาจ่าย (บาท/งาน)</label>
+                            <input type="number" step="0.01" name="flat_rate_amount" id="inpFlatRate" class="form-control border-success" placeholder="เช่น 150.00" value="0">
+                            <small class="text-muted">สำหรับทีมผลิต/ตรวจสอบแบบ (ใช้แทนค่าคอมฯ)</small>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold text-danger">ค่าคอมมิชชันจากยอดขายบริษัท (%)</label>
+                            <input type="number" step="0.01" name="commission_rate" id="inpComm" class="form-control" placeholder="เช่น 4.00" value="0" required>
+                            <small class="text-muted">สำหรับกลุ่มเซลส์/ผู้บริหาร</small>
+                        </div>
+                    </div>
+
+                    <div id="shareSection" class="mt-4 p-3 bg-light rounded border border-info border-opacity-25">
+                        <h6 class="fw-bold text-primary mb-3"><i class="fas fa-chart-pie me-1"></i> สัดส่วนการแบ่งเงินในกลุ่ม (รวมกันให้ได้ 100%)</h6>
+                        <div class="row g-3">
+                            <div class="col-md-3 team-field">
+                                <label class="form-label small fw-bold">ส่วนแบ่งหัวหน้า %</label>
+                                <input type="number" step="0.01" name="share_leader" id="inpLd" class="form-control text-center" value="0">
+                            </div>
+                            <div class="col-md-3 team-field">
+                                <label class="form-label small fw-bold">ระดับ 1 %</label>
+                                <input type="number" step="0.01" name="share_level1" id="inpL1" class="form-control text-center" value="0">
+                            </div>
+                            <div class="col-md-3 team-field">
+                                <label class="form-label small fw-bold">ระดับ 2 %</label>
+                                <input type="number" step="0.01" name="share_level2" id="inpL2" class="form-control text-center" value="0">
+                            </div>
+
+                            <div class="col-md-4 exec-field" style="display: none;">
+                                <label class="form-label small fw-bold">ผู้บริหารคนที่ 1 %</label>
+                                <input type="number" step="0.01" name="share_exec1" id="inpEx1" class="form-control text-center" value="0">
+                            </div>
+                            <div class="col-md-4 exec-field" style="display: none;">
+                                <label class="form-label small fw-bold">ผู้บริหารคนที่ 2 %</label>
+                                <input type="number" step="0.01" name="share_exec2" id="inpEx2" class="form-control text-center" value="0">
+                            </div>
+                            <div class="col-md-4 exec-field" style="display: none;">
+                                <label class="form-label small fw-bold">ผู้บริหารคนที่ 3 %</label>
+                                <input type="number" step="0.01" name="share_exec3" id="inpEx3" class="form-control text-center" value="0">
+                            </div>
+                            <div class="col-md-4 exec-field" style="display: none;">
+                                <label class="form-label small fw-bold">ผู้บริหารคนที่ 4 %</label>
+                                <input type="number" step="0.01" name="share_exec4" id="inpEx4" class="form-control text-center" value="0">
+                            </div>
+                            <div class="col-md-4 exec-field" style="display: none;">
+                                <label class="form-label small fw-bold">ผู้บริหารคนที่ 5 %</label>
+                                <input type="number" step="0.01" name="share_exec5" id="inpEx5" class="form-control text-center" value="0">
+                            </div>
+
+                            <div class="col-md-3" id="fundContainer">
+                                <label class="form-label small fw-bold text-info" id="fundLabel">เข้ากองทุนทีม %</label>
+                                <input type="number" step="0.01" name="share_fund" id="inpFund" class="form-control text-center border-info" value="0">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light border-0">
+                    <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">ยกเลิก</button>
+                    <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm">บันทึกข้อมูล</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    function toggleShares() {
+        const type = document.getElementById('inpType').value;
+        const section = document.getElementById('shareSection');
+        const teamFields = document.querySelectorAll('.team-field');
+        const execFields = document.querySelectorAll('.exec-field');
+        const fundLabel = document.getElementById('fundLabel');
+        const fundContainer = document.getElementById('fundContainer');
+        if (type === 'TEAM') {
+            section.style.display = 'block';
+            teamFields.forEach(el => el.style.display = 'block');
+            execFields.forEach(el => el.style.display = 'none');
+            fundContainer.className = 'col-md-3';
+            fundLabel.innerText = 'เข้ากองทุนทีม %';
+        } else if (type === 'EXECUTIVE') {
+            section.style.display = 'block';
+            teamFields.forEach(el => el.style.display = 'none');
+            execFields.forEach(el => el.style.display = 'block');
+            fundContainer.className = 'col-md-4';
+            fundLabel.innerText = 'เข้าสำรองบริหาร %';
+        } else {
+            section.style.display = 'none';
+        }
+    }
+
+    function openAddModal() {
+        document.getElementById('formAction').value = 'add';
+        document.getElementById('modalTitle').innerText = 'สร้างกลุ่มใหม่';
+        document.getElementById('inpName').value = '';
+        document.getElementById('inpType').value = 'TEAM';
+        document.getElementById('inpComm').value = '0';
+        document.getElementById('inpFlatRate').value = '0'; // 🌟
+        
+        document.getElementById('inpLd').value = '0';
+        document.getElementById('inpL1').value = '0';
+        document.getElementById('inpL2').value = '0';
+        document.getElementById('inpEx1').value = '0';
+        document.getElementById('inpEx2').value = '0';
+        document.getElementById('inpEx3').value = '0';
+        document.getElementById('inpEx4').value = '0';
+        document.getElementById('inpEx5').value = '0';
+        document.getElementById('inpFund').value = '0';
+        toggleShares();
+    }
+
+    function openEditModal(id, name, type, comm, flat, ld, l1, l2, ex1, ex2, ex3, ex4, ex5, fund) {
+        document.getElementById('formAction').value = 'edit';
+        document.getElementById('formGroupId').value = id;
+        document.getElementById('modalTitle').innerText = 'แก้ไขข้อมูลกลุ่ม';
+        document.getElementById('inpName').value = name;
+        document.getElementById('inpType').value = type;
+        document.getElementById('inpComm').value = comm;
+        document.getElementById('inpFlatRate').value = flat; // 🌟
+        
+        document.getElementById('inpLd').value = ld;
+        document.getElementById('inpL1').value = l1;
+        document.getElementById('inpL2').value = l2;
+        document.getElementById('inpEx1').value = ex1;
+        document.getElementById('inpEx2').value = ex2;
+        document.getElementById('inpEx3').value = ex3;
+        document.getElementById('inpEx4').value = ex4;
+        document.getElementById('inpEx5').value = ex5;
+        document.getElementById('inpFund').value = fund;
+        toggleShares();
+        new bootstrap.Modal(document.getElementById('groupModal')).show();
+    }
+</script>
+{% endblock %}

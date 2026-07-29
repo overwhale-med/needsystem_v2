@@ -1,0 +1,275 @@
+{% extends 'core/base.html' %}
+
+{% block content %}
+<style>
+    /* ปรับแต่งสวิตช์ให้ดูสวยทันสมัย */
+    .form-switch .form-check-input { width: 3em; height: 1.5em; cursor: pointer; }
+    .form-switch .form-check-input:checked { background-color: #1cc88a; border-color: #1cc88a; }
+
+    /* 🌟 [NEW] ทำให้กล่องแจ้งเตือนลอยอยู่กลางจอด้านบนเสมอ 🌟 */
+    #alert-message {
+        position: fixed;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 9999;
+        min-width: 350px;
+        text-align: center;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.15) !important;
+    }
+</style>
+
+<div class="container py-5">
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h3 class="fw-bold mb-0 text-dark"><i class="fas fa-user-cog text-primary me-2"></i>จัดการการเข้าถึงและผลตอบแทน</h3>
+            <p class="text-muted">รหัสพนักงาน: <span class="fw-bold text-success">{{ employee.emp_id }}</span></p>
+        </div>
+        <a href="{% url 'role_management' %}" class="btn btn-light rounded-pill border shadow-sm px-4">
+            <i class="fas fa-arrow-left me-2"></i>กลับหน้ารายชื่อ
+        </a>
+    </div>
+
+    <div id="alert-message" class="alert alert-success d-none shadow-sm rounded-pill py-2 mb-4" role="alert">
+        <i class="fas fa-check-circle me-2"></i> <span id="alert-text"></span>
+    </div>
+
+    {% if not employee.user %}
+        <div class="alert alert-warning border-0 shadow-sm rounded-4 p-5 text-center">
+            <i class="fas fa-exclamation-circle fa-4x text-warning mb-3 opacity-50"></i>
+            <h4 class="fw-bold">พนักงานท่านนี้ยังไม่มีบัญชีเข้าใช้งาน (Login)</h4>
+            <p>ระบบไม่สามารถกำหนดสิทธิ์หรือรีเซ็ตรหัสผ่านได้ กรุณาสร้างบัญชีผู้ใช้ในหน้าแก้ไขข้อมูลพนักงานก่อน</p>
+        </div>
+    {% else %}
+
+        <div class="row g-4">
+            <div class="col-lg-4">
+                <div class="card border-0 shadow-sm rounded-4 mb-4 text-center overflow-hidden">
+                    <div class="bg-primary bg-opacity-10 py-4">
+                        {% if employee.photo %}
+                            <img src="{{ employee.photo.url }}" class="rounded-circle shadow-sm border border-3 border-white" style="width: 100px; height: 100px; object-fit: cover;">
+                        {% else %}
+                            <div class="bg-white text-primary rounded-circle d-inline-flex align-items-center justify-content-center shadow-sm fs-1 fw-bold" style="width: 100px; height: 100px;">
+                                {{ employee.first_name|slice:":1" }}
+                            </div>
+                        {% endif %}
+                    </div>
+                    <div class="card-body p-4">
+                        <h5 class="fw-bold mb-0 text-dark">{{ employee.prefix }} {{ employee.first_name }} {{ employee.last_name }}</h5>
+                        <p class="text-muted small mb-3">{{ employee.position.title }} | {{ employee.department.name }}</p>
+
+                        <div class="bg-light rounded-3 p-2 mb-0">
+                            <small class="text-muted d-block fw-bold mb-1">Username เข้าระบบ:</small>
+                            <span class="fs-5 text-success fw-bold"><i class="fas fa-user-circle me-2"></i>{{ employee.user.username }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card border-0 shadow-sm rounded-4 border-start border-4 border-danger">
+                    <div class="card-header bg-white py-3 border-bottom-0">
+                        <h6 class="fw-bold text-danger m-0"><i class="fas fa-key me-2"></i>รีเซ็ตรหัสผ่าน (Reset Password)</h6>
+                    </div>
+                    <div class="card-body p-4 pt-0">
+                        <label class="form-label small text-muted fw-bold">ตั้งรหัสผ่านใหม่</label>
+                        <div class="input-group mb-3">
+                            <input type="password" id="new_password" class="form-control bg-light" placeholder="ระบุรหัสผ่านใหม่...">
+                            <button class="btn btn-outline-secondary" type="button" onclick="togglePasswordVisibility()">
+                                <i class="fas fa-eye" id="eye_icon"></i>
+                            </button>
+                        </div>
+                        <button class="btn btn-danger w-100 rounded-pill fw-bold shadow-sm" onclick="resetPassword('{{ employee.user.id }}')">
+                            <i class="fas fa-sync-alt me-1"></i> ยืนยันเปลี่ยนรหัสผ่าน
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-8">
+
+                <div class="card border-0 shadow-sm rounded-4 mb-4">
+                    <div class="card-header bg-white py-4 border-bottom">
+                        <h5 class="fw-bold m-0 text-dark"><i class="fas fa-toggle-on text-success me-2"></i>กำหนดสิทธิ์การเข้าถึงแต่ละเมนู</h5>
+                        <p class="text-muted small m-0 mt-1">เลื่อนสวิตช์เพื่อเปิด (ON) หรือปิด (OFF) การมองเห็นเมนูของพนักงานคนนี้</p>
+                    </div>
+                    <div class="card-body p-4">
+                        <div class="row g-4">
+                            {% for group in all_groups %}
+                            <div class="col-md-6">
+                                <div class="border rounded-3 p-3 d-flex justify-content-between align-items-center bg-light hover-shadow transition-all">
+                                    <div>
+                                        <h6 class="fw-bold mb-0 text-dark">{{ group.name }}</h6>
+                                        <small class="text-muted">อนุญาตสิทธิ์กลุ่ม {{ group.name }}</small>
+                                    </div>
+                                    <div class="form-check form-switch m-0 p-0 ps-5">
+                                        <input class="form-check-input" type="checkbox" role="switch"
+                                               onchange="toggleGroupAccess(this, '{{ employee.user.id }}', '{{ group.id }}')"
+                                               {% if group.id in user_groups %}checked{% endif %}>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card border-0 shadow-sm rounded-4 border-start border-4 border-warning">
+                    <div class="card-header bg-white py-4 border-bottom">
+                        <h5 class="fw-bold m-0 text-dark"><i class="fas fa-hand-holding-usd text-warning me-2"></i>โครงสร้างทีม & ผลตอบแทน</h5>
+                        <p class="text-muted small m-0 mt-1">เลือกสังกัดทีมและตำแหน่ง เพื่อรับส่วนแบ่งค่าคอมมิชชันและค่าตรวจแบบแปลน (Auto-Save)</p>
+                    </div>
+                    <div class="card-body p-4 bg-light rounded-bottom-4">
+                        <div class="row g-4">
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold text-dark">สังกัดทีม/กลุ่มผลตอบแทน (Group)</label>
+                                <select class="form-select border-warning" id="team_selector" onchange="autoAssignTeam('{{ employee.emp_id }}')">
+                                    <option value="">-- ไม่ระบุสังกัด (รอจัดสรร) --</option>
+                                    {% for group in sales_groups %}
+                                        <option value="{{ group.id }}" {% if employee.sales_group_id == group.id %}selected{% endif %}>
+                                            {{ group.name }} ({{ group.get_group_type_display }})
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold text-dark">บทบาทในทีมรับส่วนแบ่ง (Role %)</label>
+                                <select class="form-select border-warning" id="role_selector" onchange="autoAssignTeam('{{ employee.emp_id }}')">
+                                    {% for code, name in roles %}
+                                        <option value="{{ code }}" {% if employee.group_role == code %}selected{% endif %}>
+                                            {{ name }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    {% endif %}
+</div>
+
+<script>
+    // แสดง/ซ่อน แจ้งเตือน
+    function showAlert(msg, isSuccess) {
+        const box = document.getElementById('alert-message');
+        box.className = isSuccess ? 'alert alert-success shadow-sm rounded-pill py-2 mb-4' : 'alert alert-danger shadow-sm rounded-pill py-2 mb-4';
+        box.innerHTML = isSuccess ? `<i class="fas fa-check-circle me-2"></i> ${msg}` : `<i class="fas fa-exclamation-triangle me-2"></i> ${msg}`;
+        box.classList.remove('d-none');
+        setTimeout(() => box.classList.add('d-none'), 3000);
+    }
+
+    // 🌟 1. ฟังก์ชันเปิด/ปิด สิทธิ์แบบเรียลไทม์ 🌟
+    let isToggling = false;
+    function toggleGroupAccess(checkboxElement, userId, groupId) {
+        if (isToggling) { checkboxElement.checked = !checkboxElement.checked; return; }
+        isToggling = true;
+        const actionType = checkboxElement.checked ? 'add' : 'remove';
+        checkboxElement.disabled = true;
+
+        fetch("{% url 'api_toggle_user_group' %}", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: `user_id=${userId}&group_id=${groupId}&action=${actionType}`
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === 'success') {
+                const actMsg = checkboxElement.checked ? 'เปิดสิทธิ์การเข้าถึง' : 'ปิดสิทธิ์การเข้าถึง';
+                showAlert(`${actMsg} เรียบร้อยแล้ว ระบบกำลังรีเฟรช...`, true);
+                setTimeout(() => {
+                    checkboxElement.disabled = false;
+                    window.location.href = window.location.pathname;
+                }, 1000);
+            } else {
+                showAlert('เกิดข้อผิดพลาด: ' + data.message, false);
+                checkboxElement.checked = !checkboxElement.checked;
+                checkboxElement.disabled = false;
+                isToggling = false;
+            }
+        }).catch(err => {
+            console.error(err);
+            showAlert('เกิดข้อผิดพลาดในการเชื่อมต่อ', false);
+            checkboxElement.checked = !checkboxElement.checked;
+            checkboxElement.disabled = false;
+            isToggling = false;
+        });
+    }
+
+    // 🌟 2. ฟังก์ชันรีเซ็ตรหัสผ่าน 🌟
+    function resetPassword(userId) {
+        const newPass = document.getElementById('new_password').value.trim();
+        if(newPass.length < 6) {
+            alert('⚠️ ไม่สามารถเปลี่ยนได้! รหัสผ่านต้องมีความยาวอย่างน้อย 6 ตัวอักษรขึ้นไปค่ะ');
+            return;
+        }
+
+        if(confirm('ยืนยันการตั้งรหัสผ่านใหม่ใช่หรือไม่?')) {
+            fetch("{% url 'api_reset_password' %}", {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: `user_id=${userId}&new_password=${encodeURIComponent(newPass)}`
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    alert('✅ รีเซ็ตรหัสผ่านสำเร็จเรียบร้อยแล้ว!');
+                    document.getElementById('new_password').value = '';
+                } else {
+                    alert('❌ เกิดข้อผิดพลาด: ' + data.message);
+                }
+            });
+        }
+    }
+
+    // ฟังก์ชันโชว์รูปดวงตา (แสดงรหัสผ่าน)
+    function togglePasswordVisibility() {
+        const input = document.getElementById('new_password');
+        const icon = document.getElementById('eye_icon');
+        if (input.type === "password") {
+            input.type = "text";
+            icon.classList.remove("fa-eye");
+            icon.classList.add("fa-eye-slash");
+        } else {
+            input.type = "password";
+            icon.classList.remove("fa-eye-slash");
+            icon.classList.add("fa-eye");
+        }
+    }
+
+    // 🌟 3. [NEW] ฟังก์ชัน Auto-Save สำหรับกำหนดโครงสร้างทีม 🌟
+    function autoAssignTeam(empId) {
+        const groupId = document.getElementById('team_selector').value;
+        const role = document.getElementById('role_selector').value;
+
+        fetch("{% url 'api_assign_to_team' %}", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: `emp_id=${empId}&group_id=${groupId}&role=${role}`
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                // 🌟 เปลี่ยนมาใช้ alert() เด้งกลางจอชัวร์ 100% 🌟
+                alert(data.message);
+            } else {
+                alert('❌ บันทึกข้อมูลทีมไม่สำเร็จ: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('❌ เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์');
+        });
+    }
+</script>
+{% endblock %}

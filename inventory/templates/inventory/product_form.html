@@ -1,0 +1,238 @@
+{% extends 'core/base.html' %}
+{% load crispy_forms_tags %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-10 col-lg-8">
+            <div class="card border-0 shadow-lg rounded-4 overflow-hidden">
+                <div class="card-header bg-primary text-white py-3">
+                    <h5 class="mb-0 fw-bold">
+                        <i class="fas fa-box-open me-2"></i>
+                        {% if p_type == 'RM' %}เพิ่มวัตถุดิบ{% else %}เพิ่มสินค้า{% endif %}
+                    </h5>
+                </div>
+                <div class="card-body p-4 p-md-5">
+                    <form method="post" enctype="multipart/form-data">
+                        {% csrf_token %}
+                        <div class="d-none">{{ form.product_type|as_crispy_field }}</div>
+
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-3">{{ form.code|as_crispy_field }}</div>
+                            <div class="col-md-6">{{ form.name|as_crispy_field }}</div>
+                            <div class="col-md-3">{{ form.unit|as_crispy_field }}</div>
+                        </div>
+
+                        <div class="row g-3 mb-3">
+                            <div class="{% if p_type == 'RM' %}col-md-4{% else %}col-md-12{% endif %}">
+                                {{ form.category|as_crispy_field }}
+                            </div>
+                            {% if p_type == 'RM' %}
+                            <div class="col-md-4">
+                                <label class="form-label">หมวดหมู่วัตถุดิบ (แผนก)</label>
+                                <div class="input-group">
+                                    {{ form.rm_category }}
+                                    <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#rmCategoryModal">+</button>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">หมวดหมู่ย่อย</label>
+                                <div class="input-group">
+                                    {{ form.sub_category }}
+                                    <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#subCategoryModal">+</button>
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
+
+                        {% if p_type == 'RM' %}
+                        <div class="row g-3 mb-3">
+                             <div class="col-md-12">
+                                <label class="form-label text-primary fw-bold">ร้านค้า/ผู้จำหน่าย</label>
+                                <div class="input-group">
+                                    {{ form.supplier }}
+                                    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#supplierModal">
+                                        <i class="fas fa-plus me-1"></i> เพิ่มร้านค้าใหม่
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        <div class="row g-3 mb-3 p-3 bg-light rounded-3 border">
+                            <div class="col-md-4">{{ form.cost_price|as_crispy_field }}</div>
+                            {% if p_type == 'FG' %}
+                            <div class="col-md-4">{{ form.sell_price|as_crispy_field }}</div>
+                            {% endif %}
+                            <div class="col-md-4">{{ form.min_level|as_crispy_field }}</div>
+                        </div>
+
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-6">{{ form.image|as_crispy_field }}</div>
+                            {% if p_type == 'FG' %}
+                            <div class="col-md-6">{{ form.standard_blueprint|as_crispy_field }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="mb-4">{{ form.is_active|as_crispy_field }}</div>
+
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary btn-lg fw-bold rounded-pill shadow-sm">
+                                <i class="fas fa-save me-2"></i> บันทึกข้อมูล
+                            </button>
+                            <a href="{% url 'product_create' %}" class="btn btn-outline-secondary btn-lg fw-bold rounded-pill shadow-sm">
+                                <i class="fas fa-times me-2"></i> ยกเลิก
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="subCategoryModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <div class="modal-header border-bottom-0"><h5 class="modal-title fw-bold text-primary">เพิ่มหมวดหมู่ย่อย</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body"><input type="text" id="newSubCategoryName" class="form-control form-control-lg" placeholder="ชื่อหมวดหมู่ย่อย..."></div>
+            <div class="modal-footer border-top-0"><button type="button" id="btnSaveSubCategory" class="btn btn-primary rounded-pill px-4">บันทึก</button></div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="rmCategoryModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <div class="modal-header border-bottom-0"><h5 class="modal-title fw-bold text-primary">เพิ่มแผนกวัตถุดิบ</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body"><input type="text" id="newRmCategoryName" class="form-control form-control-lg" placeholder="ชื่อแผนก..."></div>
+            <div class="modal-footer border-top-0"><button type="button" id="btnSaveRmCategory" class="btn btn-primary rounded-pill px-4">บันทึก</button></div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="supplierModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <div class="modal-header border-bottom-0 bg-light rounded-top">
+                <h5 class="modal-title fw-bold text-primary"><i class="fas fa-store me-2"></i>เพิ่มร้านค้าใหม่</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="small fw-bold">ชื่อบริษัท/ร้านค้า*</label>
+                        <input type="text" id="newSupplierName" class="form-control" placeholder="ระบุชื่อร้านค้า">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="small fw-bold">เลขประจำตัวผู้เสียภาษี</label>
+                        <input type="text" id="newSupplierTax" class="form-control" placeholder="Tax ID 13 หลัก">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="small fw-bold">ชื่อผู้ติดต่อ</label>
+                        <input type="text" id="newSupplierContact" class="form-control" placeholder="ชื่อพนักงานขาย/ผู้ประสานงาน">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="small fw-bold">เบอร์โทรศัพท์</label>
+                        <input type="text" id="newSupplierPhone" class="form-control" placeholder="เช่น 081-XXXXXXX">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="small fw-bold">อีเมล</label>
+                        <input type="email" id="newSupplierEmail" class="form-control" placeholder="ตัวอย่าง sales@company.com">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="small fw-bold">เครดิตเทอม (วัน)</label>
+                        <input type="number" id="newSupplierCredit" class="form-control" placeholder="0" value="0">
+                    </div>
+                    <div class="col-md-12">
+                        <label class="small fw-bold">ที่อยู่ร้านค้า</label>
+                        <textarea id="newSupplierAddress" class="form-control" rows="2" placeholder="ระบุที่อยู่จัดส่งเอกสาร"></textarea>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-top-0">
+                <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">ยกเลิก</button>
+                <button type="button" id="btnSaveSupplier" class="btn btn-primary rounded-pill px-4 shadow-sm fw-bold">บันทึกข้อมูลร้านค้า</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        // Save Sub Category
+        document.getElementById('btnSaveSubCategory').addEventListener('click', function() {
+            const name = document.getElementById('newSubCategoryName').value.trim();
+            if(!name) return;
+            fetch('{% url "ajax_add_sub_category" %}', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value },
+                body: JSON.stringify({name: name})
+            }).then(res => res.json()).then(data => {
+                if(data.success) {
+                    const select = document.getElementById('id_sub_category');
+                    select.add(new Option(data.name, data.id, true, true));
+                    bootstrap.Modal.getInstance(document.getElementById('subCategoryModal')).hide();
+                }
+            });
+        });
+
+        // Save RM Category
+        document.getElementById('btnSaveRmCategory').addEventListener('click', function() {
+            const name = document.getElementById('newRmCategoryName').value.trim();
+            if(!name) return;
+            fetch('{% url "ajax_add_rm_category" %}', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value },
+                body: JSON.stringify({name: name})
+            }).then(res => res.json()).then(data => {
+                if(data.success) {
+                    const select = document.getElementById('id_rm_category');
+                    select.add(new Option(data.name, data.id, true, true));
+                    bootstrap.Modal.getInstance(document.getElementById('rmCategoryModal')).hide();
+                }
+            });
+        });
+
+        // ✨ [UPDATED SCRIPT] Save Supplier (ส่งข้อมูลครบทุกฟิลด์)
+        document.getElementById('btnSaveSupplier').addEventListener('click', function() {
+            const supplierData = {
+                name: document.getElementById('newSupplierName').value.trim(),
+                tax_id: document.getElementById('newSupplierTax').value.trim(),
+                contact_name: document.getElementById('newSupplierContact').value.trim(),
+                phone: document.getElementById('newSupplierPhone').value.trim(),
+                email: document.getElementById('newSupplierEmail').value.trim(),
+                credit_term: document.getElementById('newSupplierCredit').value,
+                address: document.getElementById('newSupplierAddress').value.trim()
+            };
+
+            if(!supplierData.name) {
+                alert('กรุณากรอกชื่อร้านค้า');
+                return;
+            }
+
+            fetch('{% url "ajax_add_supplier" %}', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value },
+                body: JSON.stringify(supplierData)
+            }).then(res => res.json()).then(data => {
+                if(data.success) {
+                    const select = document.getElementById('id_supplier');
+                    select.add(new Option(data.name, data.id, true, true));
+                    bootstrap.Modal.getInstance(document.getElementById('supplierModal')).hide();
+                    
+                    // ล้างข้อมูลใน Modal หลังบันทึก
+                    document.getElementById('newSupplierName').value = '';
+                    document.getElementById('newSupplierTax').value = '';
+                    document.getElementById('newSupplierContact').value = '';
+                    document.getElementById('newSupplierPhone').value = '';
+                    document.getElementById('newSupplierEmail').value = '';
+                    document.getElementById('newSupplierCredit').value = '0';
+                    document.getElementById('newSupplierAddress').value = '';
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            });
+        });
+    });
+</script>
+{% endblock %}

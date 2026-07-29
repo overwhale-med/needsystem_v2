@@ -1,0 +1,186 @@
+{% extends 'core/base.html' %}
+
+{% block content %}
+<div class="container-xxl py-4 px-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+
+            {% if form.errors %}
+            <div class="alert alert-danger shadow-sm rounded-3 mb-4">
+                <i class="fas fa-exclamation-triangle me-2"></i> กรุณากรอกข้อมูลให้ครบถ้วน
+            </div>
+            {% endif %}
+
+            <div class="card shadow-lg border-0 rounded-4">
+                <div class="card-header bg-primary text-white py-3 d-flex justify-content-between align-items-center rounded-top-4">
+                    <h5 class="mb-0 fw-bold"><i class="fas fa-file-invoice me-2"></i>สร้างใบเสนอราคาใหม่</h5>
+                </div>
+
+                <div class="card-body p-4">
+                    <form method="post" autocomplete="off">
+                        {% csrf_token %}
+
+                        <input type="hidden" name="customer_id" id="id_customer_id_hidden">
+
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">วันที่เอกสาร</label>
+                                {{ form.date }}
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">ยืนยันราคาถึงวันที่</label>
+                                {{ form.valid_until }}
+                            </div>
+                        </div>
+
+                        <hr class="text-muted opacity-25">
+
+                        <div class="mb-4 p-4 bg-white rounded-4 border shadow-sm">
+                            <div class="d-flex justify-content-between align-items-end mb-2">
+                                <div>
+                                    <span class="fw-bold text-primary h6 mb-0">
+                                        <i class="fas fa-search me-1"></i> ค้นหาลูกค้าจากฐานข้อมูล
+                                    </span>
+                                    <span class="text-muted small ms-3">
+                                        <i class="fas fa-info-circle text-info me-1"></i> พิมพ์คำค้นหาแล้วกดปุ่ม "ค้นหา" เพื่อดึงข้อมูล
+                                    </span>
+                                </div>
+                                <a href="{% url 'customer_create' %}?next={% url 'quotation_create' %}" class="btn btn-sm btn-outline-primary rounded-pill fw-bold px-3 shadow-sm">
+                                    <i class="fas fa-user-plus me-1"></i> เพิ่มลูกค้าใหม่
+                                </a>
+                            </div>
+
+                            <div class="input-group">
+                                <span class="input-group-text bg-light border-end-0 text-muted"><i class="fas fa-search"></i></span>
+                                <input type="text" id="search_input" class="form-control border-start-0 ps-0" placeholder="พิมพ์ชื่อ, รหัส, หรือเบอร์โทรลูกค้า..." autocomplete="off">
+                                <button class="btn btn-primary px-4 fw-bold" type="button" id="btn_search">ค้นหา</button>
+                            </div>
+                            <div id="search_results" class="list-group mt-2 shadow-sm" style="display: none; max-height: 300px; overflow-y: auto;"></div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">ชื่อลูกค้า / บริษัท <span class="text-danger">*</span></label>
+                            <input type="text" name="customer_name" id="id_customer_name"
+                                   class="form-control {% if form.customer_name.errors %}is-invalid{% endif %}"
+                                   value="{{ form.customer_name.value|default:'' }}"
+                                   required placeholder="ระบุชื่อลูกค้า...">
+                            {% if form.customer_name.errors %}
+                                <div class="invalid-feedback">{{ form.customer_name.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">เลขผู้เสียภาษี (ถ้ามี)</label>
+                                {{ form.customer_tax_id }}
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">เบอร์โทรศัพท์</label>
+                                {{ form.customer_phone }}
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">ที่อยู่</label>
+                            {{ form.customer_address }}
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">หมายเหตุ</label>
+                            {{ form.note }}
+                        </div>
+
+                        <div class="d-flex justify-content-between pt-3 border-top">
+                            <a href="{% url 'quotation_list' %}" class="btn btn-light text-muted fw-bold rounded-pill px-4">ยกเลิก</a>
+                            <button type="submit" class="btn btn-success px-5 py-2 shadow fw-bold rounded-pill">
+                                <i class="fas fa-save me-2"></i> บันทึกและไปต่อ <i class="fas fa-arrow-right ms-2"></i>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<link href="https://cdn.jsdelivr.net/npm/@ttskch/select2-bootstrap4-theme@x.x.x/dist/select2-bootstrap4.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="https://npmcdn.com/flatpickr/dist/l10n/th.js"></script>
+<script>
+    $(document).ready(function() {
+        flatpickr(".datepicker", { dateFormat: "d/m/Y", locale: "th", allowInput: true });
+        $('#btn_search').click(function() { performSearch(); });
+        $('#search_input').keypress(function(e) { if(e.which == 13) { e.preventDefault(); performSearch(); } });
+
+        function performSearch() {
+            var query = $('#search_input').val();
+            var $results = $('#search_results');
+            var $btn = $('#btn_search');
+            if (!query) { alert("กรุณาพิมพ์คำค้นหาก่อนครับ"); return; }
+            
+            $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> กำลังหา...');
+            $results.html('').show();
+            
+            $.ajax({
+                url: "{% url 'api_search_customer' %}",
+                data: { 'q': query },
+                success: function(data) {
+                    $btn.prop('disabled', false).html('ค้นหา');
+                    if (data.results.length > 0) {
+                        $.each(data.results, function(index, cus) {
+                            // ✅ ตรวจสอบว่ามีค่าไหม ถ้าไม่มีให้เป็นค่าว่าง (กัน undefined)
+                            var tax = cus.tax_id ? cus.tax_id : '';
+                            var phone = cus.phone ? cus.phone : '';
+                            
+                            var item = `<a href="#" class="list-group-item list-group-item-action p-3 customer-item"
+                                        data-id="${cus.id}"
+                                        data-name="${cus.name}"
+                                        data-tax="${tax}" 
+                                        data-phone="${phone}"
+                                        data-address="${cus.address}">
+                                        <div class="d-flex w-100 justify-content-between">
+                                            <h6 class="mb-1 fw-bold text-primary">${cus.name}</h6>
+                                            <small class="text-muted">${cus.code}</small>
+                                        </div>
+                                        <p class="mb-1 small text-muted"><i class="fas fa-map-marker-alt me-1"></i> ${cus.address}</p>
+                                        </a>`;
+                            $results.append(item);
+                        });
+                    } else { 
+                        $results.append('<div class="list-group-item text-center text-muted py-3">ไม่พบข้อมูลลูกค้า</div>');
+                    }
+                },
+                error: function() { 
+                    $btn.prop('disabled', false).html('ค้นหา');
+                    alert('เกิดข้อผิดพลาดในการเชื่อมต่อ'); 
+                }
+            });
+        }
+
+        $(document).on('click', '.customer-item', function(e) {
+            e.preventDefault();
+            // ✅ ใช้ data(...) ดึงค่าที่เตรียมไว้
+            $('#id_customer_name').val($(this).data('name'));
+            $('#id_customer_tax_id').val($(this).data('tax'));
+            $('#id_customer_phone').val($(this).data('phone'));
+            $('#id_customer_address').val($(this).data('address'));
+
+            var custId = $(this).data('id');
+            $('#id_customer_id_hidden').val(custId);
+
+            $('#search_results').hide();
+            $('#search_input').val('');
+        });
+    });
+</script>
+<style>
+    .select2-container--bootstrap4 .select2-selection--single { height: 38px !important; }
+    .select2-container--bootstrap4 .select2-selection--single .select2-selection__rendered { line-height: 36px; padding-left: 12px; }
+    .datepicker { background-color: #fff !important; cursor: pointer; }
+    .is-invalid { border-color: #dc3545 !important; background-image: none !important; }
+</style>
+{% endblock %}

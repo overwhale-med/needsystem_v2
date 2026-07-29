@@ -1,0 +1,148 @@
+{% extends 'core/base.html' %}
+{% load static %}
+{% load humanize %}
+
+{% block content %}
+<style>
+    .zoom-hover-img {
+        width: 45px;
+        height: 45px;
+        object-fit: cover;
+        border-radius: 8px;
+        transition: all 0.3s ease-in-out;
+        position: relative;
+        z-index: 1;
+        cursor: zoom-in;
+    }
+    
+    /* เมื่อเอาเมาส์ชี้ ให้ขยายภาพ 3.5 เท่า และเด้งมาอยู่ด้านหน้าสุด */
+    .zoom-hover-img:hover {
+        transform: scale(3.5);
+        z-index: 1050;
+        box-shadow: 0 15px 35px rgba(0,0,0,0.3) !important;
+        border-radius: 4px;
+    }
+
+    /* กล่องสำหรับกรณีไม่มีรูปภาพ */
+    .no-img-box {
+        width: 45px;
+        height: 45px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background-color: #f8f9fa;
+        color: #adb5bd;
+    }
+</style>
+
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="fw-bold mb-1 text-dark">
+                <i class="fas fa-clipboard-check text-primary me-2"></i>รายละเอียดสูตรผลิต (BOM)
+            </h4>
+            <p class="text-muted small mb-0">โครงสร้างส่วนประกอบและต้นทุนสำหรับ <span class="fw-bold text-dark">{{ bom.product.name }}</span></p>
+        </div>
+        <div>
+            <a href="{% url 'print_master_bom' bom.pk %}" target="_blank" class="btn btn-info rounded-pill px-4 me-2 shadow-sm fw-bold text-white"><i class="fas fa-print me-1"></i> พิมพ์สูตร</a>
+            <a href="{% url 'bom_edit' bom.pk %}" class="btn btn-warning rounded-pill px-4 me-2 shadow-sm fw-bold text-dark"><i class="fas fa-edit me-1"></i> แก้ไขสูตร</a>
+            <a href="{% url 'bom_list' %}" class="btn btn-outline-secondary rounded-pill px-4"><i class="fas fa-arrow-left me-2"></i> กลับหน้ารวม</a>
+        </div>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <div class="col-md-8">
+            <div class="card shadow-sm border-0 rounded-4 h-100 border-start border-5 border-primary">
+                <div class="card-body p-4">
+                    <div class="row">
+                        <div class="col-sm-3 text-center mb-3 mb-sm-0">
+                            {% if bom.product.image %}
+                                <img src="{{ bom.product.image.url }}" alt="{{ bom.product.name }}" class="img-fluid rounded-3 shadow-sm" style="max-height: 100px; object-fit: cover;">
+                            {% else %}
+                                <div class="bg-light rounded-3 d-flex align-items-center justify-content-center h-100 shadow-sm" style="min-height: 100px;">
+                                    <i class="fas fa-home fa-3x text-secondary opacity-50"></i>
+                                </div>
+                            {% endif %}
+                        </div>
+                        <div class="col-sm-9">
+                            <span class="badge bg-primary text-white mb-2 px-3 rounded-pill shadow-sm">สินค้าสำเร็จรูป (FG)</span>
+                            <h5 class="fw-bold text-dark mb-1">{{ bom.product.code }} - {{ bom.product.name }}</h5>
+                            <p class="text-muted small mb-2"><i class="fas fa-tag me-1"></i> ชื่อสูตร: {{ bom.name }}</p>
+                            <p class="text-muted small mb-0"><i class="fas fa-info-circle me-1"></i> หมายเหตุ: {{ bom.note|default:"-" }}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card shadow-sm border-0 rounded-4 h-100 bg-dark text-white text-center d-flex justify-content-center align-items-center p-4">
+                <p class="mb-1 text-white-50 small text-uppercase tracking-wider">ประมาณการต้นทุน (ต่อ 1 หลัง)</p>
+                <h2 class="fw-bold text-warning mb-0 fs-1">฿ {{ total_cost|floatformat:"2"|intcomma }}</h2>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0 rounded-4 overflow-visible"> 
+        <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+            <h6 class="fw-bold mb-0 text-dark"><i class="fas fa-cubes text-secondary me-2"></i>รายการวัตถุดิบ (Raw Materials)</h6>
+            <span class="badge bg-light text-dark border px-3 py-2 rounded-pill">รวม {{ items.count }} รายการ</span>
+        </div>
+        <div class="table-responsive" style="overflow-x: visible;"> 
+            <table class="table table-hover align-middle mb-0">
+                <thead class="bg-light text-secondary" style="font-size: 0.85rem; text-transform: uppercase;">
+                    <tr>
+                        <th class="ps-4 py-3 border-0" style="width: 5%;">#</th>
+                        <th class="py-3 border-0" style="width: 35%;">รหัส / ชื่อวัตถุดิบ</th>
+                        <th class="py-3 border-0" style="width: 20%;">สั่งจากร้านค้า</th>
+                        <th class="py-3 border-0 text-center" style="width: 15%;">จำนวนที่ใช้</th>
+                        <th class="py-3 border-0 text-end" style="width: 10%;">ต้นทุน/หน่วย</th>
+                        <th class="pe-4 py-3 border-0 text-end" style="width: 15%;">ราคารวม</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in items %}
+                    <tr>
+                        <td class="ps-4 text-muted">{{ forloop.counter }}</td>
+                        <td>
+                            <div class="d-flex align-items-center">
+                                <div class="me-3">
+                                    {% if item.raw_material.image %}
+                                        <img src="{{ item.raw_material.image.url }}" class="zoom-hover-img border shadow-sm" alt="{{ item.raw_material.name }}">
+                                    {% else %}
+                                        <div class="no-img-box border shadow-sm">
+                                            <i class="fas fa-box"></i>
+                                        </div>
+                                    {% endif %}
+                                </div>
+                                <div>
+                                    <div class="fw-bold text-dark">{{ item.raw_material.name }}</div>
+                                    <small class="text-muted">{{ item.raw_material.code }}</small>
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            {% if item.raw_material.supplier %}
+                                <span class="badge bg-info text-dark rounded-pill px-2"><i class="fas fa-store me-1"></i> {{ item.raw_material.supplier.name }}</span>
+                            {% else %}
+                                <span class="text-muted small fst-italic">- ไม่ได้ระบุ -</span>
+                             {% endif %}
+                        </td>
+                        <td class="text-center fw-bold text-primary fs-6">{{ item.quantity|floatformat:"-2"|intcomma }} {{ item.raw_material.unit|default:"" }}</td>
+                        <td class="text-end text-muted">{{ item.raw_material.cost_price|floatformat:"2"|intcomma }}</td>
+                        <td class="pe-4 text-end fw-bold text-dark">{{ item.calculated_total_cost|floatformat:"2"|intcomma }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center py-5 text-muted">
+                            <i class="fas fa-folder-open fa-3x mb-3 text-light"></i><br>
+                            ยังไม่มีรายการวัตถุดิบในสูตรนี้
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

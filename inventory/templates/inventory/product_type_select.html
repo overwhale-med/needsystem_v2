@@ -1,0 +1,98 @@
+{% extends 'core/base.html' %}
+{% load static %}
+
+{% block content %}
+<style>
+    .hover-lift { transition: all 0.3s ease; }
+    .hover-lift:hover { transform: translateY(-10px); box-shadow: 0 15px 30px rgba(0,0,0,0.1) !important; cursor: pointer; }
+
+    .tool-link {
+        transition: all 0.2s;
+        border: 1px solid #e0e0e0;
+    }
+    .tool-link:hover {
+        background-color: #f8f9fa;
+        border-color: #0d6efd;
+        transform: scale(1.02);
+    }
+</style>
+
+<div class="container py-5" style="max-width: 900px;">
+    <div class="text-center mb-5">
+        <h3 class="fw-bold text-dark mb-2"><i class="fas fa-cubes text-primary me-2"></i>เพิ่มข้อมูลคลังสินค้าใหม่</h3>
+        <p class="text-muted">กรุณาเลือกประเภทของข้อมูลที่คุณต้องการสร้าง หรือเลือกใช้เครื่องมือนำเข้าข้อมูลจำนวนมาก</p>
+    </div>
+
+    <div class="row justify-content-center g-4">
+        <div class="col-md-5">
+            <a href="{% url 'product_create' %}?type=FG" class="text-decoration-none">
+                <div class="card border-0 shadow-sm h-100 rounded-4 text-center p-5 hover-lift border-top border-5 border-primary">
+                    <div class="mb-4">
+                        <div class="d-inline-flex align-items-center justify-content-center bg-primary rounded-circle" style="width: 100px; height: 100px;">
+                            <i class="fas fa-cubes text-white" style="font-size: 3.5rem;"></i>
+                        </div>
+                    </div>
+                    <h4 class="fw-bold text-dark mb-1">สินค้าสำเร็จรูป (FG)</h4>
+                    <p class="text-muted small mb-0">แบบบ้านน็อคดาวน์ หรือสินค้าที่ประกอบเสร็จพร้อมขาย</p>
+                </div>
+            </a>
+        </div>
+
+        <div class="col-md-5">
+            <a href="{% url 'product_create' %}?type=RM" class="text-decoration-none">
+                <div class="card border-0 shadow-sm h-100 rounded-4 text-center p-5 hover-lift border-top border-5 border-warning">
+                    <div class="mb-4">
+                        <div class="d-inline-flex align-items-center justify-content-center bg-warning bg-opacity-10 rounded-circle" style="width: 100px; height: 100px;">
+                            <i class="fas fa-toolbox text-warning" style="font-size: 3.5rem;"></i>
+                        </div>
+                    </div>
+                    <h4 class="fw-bold text-dark mb-1">วัตถุดิบ (RM)</h4>
+                    <p class="text-muted small mb-0">วัสดุก่อสร้าง อุปกรณ์ หรือชิ้นส่วนที่ต้องสั่งซื้อจากร้านค้า</p>
+                </div>
+            </a>
+        </div>
+    </div>
+
+    <div class="mt-5 pt-4">
+        <div class="text-center mb-4">
+            <h5 class="fw-bold text-muted text-uppercase small" style="letter-spacing: 1px;">ต้องการนำเข้าข้อมูลจำนวนมาก?</h5>
+            <hr class="mx-auto" style="width: 50px; border-top: 3px solid #dee2e6;">
+        </div>
+
+        <div class="row g-3 justify-content-center">
+            <div class="col-md-5">
+                <a href="{% url 'import_rm_excel' %}" class="text-decoration-none">
+                    <div class="bg-white p-3 rounded-4 shadow-sm tool-link d-flex align-items-center">
+                        <div class="bg-success bg-opacity-10 text-success p-2 rounded-3 me-3">
+                            <i class="fas fa-file-excel fa-lg"></i>
+                        </div>
+                        <div>
+                            <div class="fw-bold text-dark small">นำเข้าวัตถุดิบ (Excel)</div>
+                            <div class="text-muted" style="font-size: 0.7rem;">อัปโหลดรายชื่อ RM ผ่านไฟล์ .xlsx</div>
+                        </div>
+                    </div>
+                </a>
+            </div>
+            <div class="col-md-5">
+                <a href="{% url 'import_product_images' %}" class="text-decoration-none">
+                    <div class="bg-white p-3 rounded-4 shadow-sm tool-link d-flex align-items-center">
+                        <div class="bg-info bg-opacity-10 text-info p-2 rounded-3 me-3">
+                            <i class="fas fa-images fa-lg"></i>
+                        </div>
+                        <div>
+                            <div class="fw-bold text-dark small">นำเข้ารูปภาพวัตถุดิบ</div>
+                            <div class="text-muted" style="font-size: 0.7rem;">จับคู่รูปภาพกับรหัสสินค้าอัตโนมัติ</div>
+                        </div>
+                    </div>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="text-center mt-5">
+        <a href="{% url 'inventory_dashboard' %}" class="btn btn-light border rounded-pill px-4 shadow-sm text-muted">
+            <i class="fas fa-arrow-left me-2"></i> กลับหน้าคลังสินค้า
+        </a>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,107 @@
+{% extends 'core/base.html' %}
+{% load humanize %}
+{% block content %}
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3 class="fw-bold text-dark m-0"><i class="fas fa-store text-warning me-2"></i>{{ supplier.name }}</h3>
+        <a href="{% url 'supplier_list' %}" class="btn btn-light border rounded-pill px-4 fw-bold shadow-sm"><i class="fas fa-arrow-left me-1"></i> กลับทำเนียบ</a>
+    </div>
+
+    <ul class="nav nav-pills mb-4 gap-2" id="supplierTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active rounded-pill px-4 fw-bold shadow-sm" id="info-tab" data-bs-toggle="tab" data-bs-target="#info" type="button" role="tab"><i class="fas fa-info-circle me-1"></i> ข้อมูลบริษัท</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link rounded-pill px-4 fw-bold shadow-sm text-dark bg-white border" id="products-tab" data-bs-toggle="tab" data-bs-target="#products" type="button" role="tab"><i class="fas fa-box-open me-1 text-primary"></i> แคตตาล็อกวัตถุดิบ</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link rounded-pill px-4 fw-bold shadow-sm text-dark bg-white border" id="history-tab" data-bs-toggle="tab" data-bs-target="#history" type="button" role="tab"><i class="fas fa-chart-line me-1 text-success"></i> ไทม์ไลน์ประวัติราคา</button>
+        </li>
+    </ul>
+
+    <div class="tab-content" id="supplierTabsContent">
+        <div class="tab-pane fade show active" id="info" role="tabpanel">
+            <div class="card border-0 shadow-sm rounded-4 p-4 p-md-5">
+                <h5 class="fw-bold mb-4 border-bottom pb-2 text-primary">ข้อมูลการติดต่อและจัดส่ง</h5>
+                <div class="row g-4 text-muted">
+                    <div class="col-md-6">
+                        <small class="text-uppercase fw-bold text-secondary">เลขประจำตัวผู้เสียภาษี</small>
+                        <div class="fs-5 text-dark mt-1">{{ supplier.tax_id|default:"-" }}</div>
+                    </div>
+                    <div class="col-md-6">
+                        <small class="text-uppercase fw-bold text-secondary">เครดิตเทอม (Credit Term)</small>
+                        <div class="fs-5 text-dark mt-1">{{ supplier.credit_term }} วัน</div>
+                    </div>
+                    <div class="col-md-6">
+                        <small class="text-uppercase fw-bold text-secondary">เบอร์โทรศัพท์ (ผู้ติดต่อ)</small>
+                        <div class="fs-5 text-dark mt-1">{{ supplier.phone|default:"-" }} <small>({{ supplier.contact_name|default:"-" }})</small></div>
+                    </div>
+                    <div class="col-md-6">
+                        <small class="text-uppercase fw-bold text-secondary">อีเมล</small>
+                        <div class="fs-5 text-dark mt-1">{{ supplier.email|default:"-" }}</div>
+                    </div>
+                    <div class="col-12">
+                        <small class="text-uppercase fw-bold text-secondary">ที่อยู่จัดส่ง / วางบิล</small>
+                        <div class="fs-6 text-dark mt-1 bg-light p-3 rounded-3 border">{{ supplier.address|default:"ยังไม่มีข้อมูลที่อยู่" }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-pane fade" id="products" role="tabpanel">
+            <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle m-0">
+                        <thead class="bg-light text-muted small">
+                            <tr>
+                                <th class="py-3 px-4">รหัสวัตถุดิบ (ของเรา)</th>
+                                <th>ชื่อวัตถุดิบ</th>
+                                <th>รหัสอ้างอิงของร้านนี้</th>
+                                <th class="text-end px-4">ราคาทุนที่ตกลงไว้</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in supplied_products %}
+                            <tr>
+                                <td class="px-4"><span class="badge bg-secondary">{{ item.product.code }}</span></td>
+                                <td class="fw-bold text-dark">{{ item.product.name }}</td>
+                                <td>{{ item.supplier_part_no|default:"-" }}</td>
+                                <td class="text-end px-4 text-primary fw-bold fs-5">฿{{ item.cost_price|floatformat:2|intcomma }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="4" class="text-center text-muted py-5">ยังไม่มีรายการวัตถุดิบที่ผูกไว้กับซัพพลายเออร์เจ้านี้</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-pane fade" id="history" role="tabpanel">
+            <div class="card border-0 shadow-sm rounded-4 p-4 p-md-5">
+                <h5 class="fw-bold mb-4 text-success">ไทม์ไลน์การปรับราคา</h5>
+                <div class="timeline position-relative ps-4" style="border-left: 2px solid #e9ecef;">
+                    {% for hist in price_history %}
+                    <div class="mb-4 position-relative">
+                        <div class="position-absolute bg-success rounded-circle" style="width: 12px; height: 12px; left: -21px; top: 5px;"></div>
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <h6 class="fw-bold mb-0 text-dark">{{ hist.product.name }}</h6>
+                            <small class="text-muted bg-light px-2 py-1 rounded">{{ hist.updated_at|date:"d M Y, H:i" }}</small>
+                        </div>
+                        <div class="bg-light border rounded-3 p-3 mt-2 d-inline-block">
+                            ปรับราคาจาก 
+                            <span class="text-danger text-decoration-line-through mx-2">฿{{ hist.old_price|floatformat:2|intcomma }}</span> 
+                            <i class="fas fa-arrow-right text-muted"></i> 
+                            <span class="text-success fw-bold fs-5 mx-2">฿{{ hist.new_price|floatformat:2|intcomma }}</span>
+                        </div>
+                        <div class="mt-2 small text-muted"><i class="fas fa-user-edit me-1"></i>อัปเดตโดย: {{ hist.updated_by.first_name|default:hist.updated_by.username }}</div>
+                    </div>
+                    {% empty %}
+                    <div class="text-center text-muted py-4">ไม่พบประวัติการปรับขึ้นลงราคาจากร้านค้านี้</div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

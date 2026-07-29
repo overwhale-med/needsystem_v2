@@ -1,0 +1,115 @@
+{% extends 'core/base.html' %}
+{% load static %}
+
+{% block content %}
+<style>
+    /* --- CSS สำหรับ Interactive Tree --- */
+    .tree-container { max-width: 1000px; margin: 0 auto; padding: 40px; font-family: 'Sarabun', sans-serif; }
+    .tree-list { list-style: none; padding-left: 20px; position: relative; }
+    .tree-list ul {
+        list-style: none; padding-left: 30px; border-left: 2px dashed #ccc;
+        margin-left: 10px; display: none;
+    }
+    .tree-list ul.active { display: block; animation: fadeIn 0.3s ease-in-out; }
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(-10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    .tree-item { margin: 10px 0; position: relative; }
+    .tree-item::before {
+        content: ''; position: absolute; top: 25px; left: -32px;
+        width: 30px; height: 2px; background: #ccc;
+    }
+    .is-root::before { display: none; }
+    .is-root > ul { border-left: 2px dashed #ccc; margin-left: 25px; }
+
+    .node-card {
+        display: inline-flex; align-items: center; background: #fff;
+        border: 1px solid #e3e6f0; border-radius: 12px; padding: 8px 15px;
+        text-decoration: none; color: #5a5c69; transition: all 0.2s;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05); min-width: 280px; position: relative; cursor: pointer;
+    }
+    .node-card:hover { transform: translateX(5px); border-color: #4e73df; box-shadow: 0 5px 15px rgba(78, 115, 223, 0.15); }
+
+    .toggle-btn {
+        width: 24px; height: 24px; background: #4e73df; color: white;
+        border-radius: 50%; display: flex; align-items: center; justify-content: center;
+        font-size: 14px; position: absolute; right: -12px; top: 50%; transform: translateY(-50%);
+        z-index: 10; cursor: pointer; transition: all 0.2s; border: 2px solid #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    .toggle-btn:hover { background: #2e59d9; transform: translateY(-50%) scale(1.1); }
+    .toggle-btn.rotated { background: #e74a3b; transform: translateY(-50%) rotate(45deg); }
+
+    .rank-director { border-left: 4px solid #e74a3b; }
+    .rank-manager { border-left: 4px solid #f6c23e; }
+    .rank-supervisor { border-left: 4px solid #4e73df; }
+    .rank-member { border-left: 4px solid #1cc88a; }
+
+    .node-img { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; margin-right: 12px; border: 2px solid #f8f9fa; }
+</style>
+
+<div class="container py-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h3 class="fw-bold mb-0 text-dark"><i class="fas fa-sitemap text-success me-2"></i>แผนผังองค์กร (Organization Chart)</h3>
+            <p class="text-muted small">โครงสร้างสายบังคับบัญชา และการแนะนำทีมงาน</p>
+        </div>
+        <div class="d-flex gap-2">
+            <button onclick="expandAll()" class="btn btn-sm btn-outline-success rounded-pill px-3">
+                <i class="fas fa-expand-arrows-alt me-1"></i> กางทั้งหมด
+            </button>
+            <button onclick="collapseAll()" class="btn btn-sm btn-outline-secondary rounded-pill px-3">
+                <i class="fas fa-compress-arrows-alt me-1"></i> ย่อทั้งหมด
+            </button>
+            <a href="{% url 'network_tree' %}" class="btn btn-sm btn-primary rounded-pill px-3 shadow-sm">
+                <i class="fas fa-chart-pie me-1"></i> ไปศูนย์บัญชาการผลตอบแทน
+            </a>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm rounded-4 bg-light">
+        <div class="card-body p-5 overflow-auto" style="min-height: 500px;">
+            <ul class="tree-list m-0 p-0">
+                {% for root in root_employees %}
+                    {% include "hr/includes/tree_node_vertical.html" with node=root is_root=True %}
+                {% empty %}
+                    <div class="text-center py-5 text-muted">
+                        <i class="fas fa-users-slash fa-3x mb-3 opacity-25"></i>
+                        <p>ยังไม่มีข้อมูลโครงสร้างทีม</p>
+                    </div>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+</div>
+
+<script>
+    function toggleNode(btn) {
+        const nextUl = btn.closest('li').querySelector('ul');
+        if (nextUl) {
+            nextUl.classList.toggle('active');
+            btn.classList.toggle('rotated');
+            const icon = btn.querySelector('i');
+            if(nextUl.classList.contains('active')){
+                icon.classList.remove('fa-plus'); icon.classList.add('fa-times');
+            } else {
+                icon.classList.remove('fa-times'); icon.classList.add('fa-plus');
+            }
+        }
+    }
+
+    function expandAll() {
+        document.querySelectorAll('.tree-list ul').forEach(ul => ul.classList.add('active'));
+        document.querySelectorAll('.toggle-btn').forEach(btn => {
+            btn.classList.add('rotated'); btn.innerHTML = '<i class="fas fa-times"></i>';
+        });
+    }
+
+    function collapseAll() {
+        document.querySelectorAll('.tree-list ul').forEach(ul => ul.classList.remove('active'));
+        document.querySelectorAll('.toggle-btn').forEach(btn => {
+            btn.classList.remove('rotated'); btn.innerHTML = '<i class="fas fa-plus"></i>';
+        });
+    }
+</script>
+{% endblock %}

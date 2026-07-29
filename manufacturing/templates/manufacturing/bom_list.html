@@ -1,0 +1,145 @@
+{% extends 'core/base.html' %}
+{% load static %}
+{% load humanize %}
+
+{% block content %}
+<style>
+    /* เอฟเฟกต์สีทองสำหรับปุ่มควบคุม */
+    .btn-gold-hover {
+        transition: all 0.2s ease-in-out;
+    }
+    .btn-gold-hover:hover {
+        color: #c5a059 !important;
+        border-color: #c5a059 !important;
+        background-color: #fffdf4 !important;
+        transform: translateY(-1px);
+    }
+</style>
+
+<div class="container-fluid px-4 py-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-end mb-4 gap-3">
+        <div>
+            <h4 class="fw-bold mb-1 text-dark">
+                <i class="fas fa-clipboard-list text-primary me-2"></i>จัดการสูตรผลิต (BOM)
+            </h4>
+            <p class="text-muted small mb-0">รายการสูตรผลิตและโครงสร้างวัตถุดิบสำหรับสินค้าสำเร็จรูป (FG)</p>
+        </div>
+        
+        <div class="d-flex gap-2">
+            <a href="{% url 'inventory_dashboard' %}" class="btn btn-outline-secondary rounded-pill shadow-sm px-4 fw-bold">
+                <i class="fas fa-arrow-left me-2"></i>กลับหน้าแรก
+            </a>
+            <a href="{% url 'import_bom_excel' %}" class="btn btn-outline-success rounded-pill shadow-sm px-4 fw-bold">
+                <i class="fas fa-file-excel me-2"></i>นำเข้าด้วย Excel
+            </a>
+            <a href="{% url 'bom_create' %}" class="btn btn-primary rounded-pill shadow-sm px-4 fw-bold">
+                <i class="fas fa-plus me-2"></i>สร้างสูตรผลิตใหม่
+            </a>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0 rounded-4 overflow-hidden bg-white">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="bg-light text-secondary" style="font-size: 0.85rem; text-transform: uppercase;">
+                    <tr>
+                        <th class="ps-4 py-3 border-0" style="width: 10%;">รหัสสินค้า (FG)</th>
+                        <th class="py-3 border-0" style="width: 23%;">ชื่อแบบบ้าน / สินค้า</th>
+                        <th class="py-3 border-0 text-end" style="width: 11%;">ค่าแรงประกอบ</th>
+                        <th class="py-3 border-0 text-end" style="width: 11%;">ต้นทุนวัตถุดิบ</th>
+                        <th class="py-3 border-0 text-end" style="width: 11%;">ราคาขาย</th>
+                        <th class="py-3 border-0 text-center" style="width: 11%;">จำนวนรายการ</th>
+                        <th class="py-3 border-0 text-end text-primary fw-bold" style="width: 13%;"><i class="fas fa-chart-line me-1"></i>กำไร(ประมาณ)</th>
+                        <th class="pe-4 py-3 border-0 text-center" style="width: 10%;">จัดการ</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for bom in boms %}
+                    <tr>
+                        <td class="ps-4 fw-bold text-primary">{{ bom.product.code }}</td>
+                        <td>
+                            <div class="fw-bold text-dark">{{ bom.product.name }}</div>
+                            <small class="text-muted">
+                                <i class="fas fa-tags me-1"></i>
+                                {% if bom.product.category %}{{ bom.product.category.name }}{% else %}ไม่มีหมวดหมู่{% endif %}
+                            </small>
+                        </td>
+                        <td class="text-end fw-bold text-info">
+                            ฿ {{ bom.labor_cost|default:"0.00"|floatformat:"2"|intcomma }}
+                        </td>
+                        <td class="text-end fw-bold text-danger">
+                            ฿ {{ bom.total_rm_cost|default:"0.00"|floatformat:"2"|intcomma }}
+                        </td>
+                        <td class="text-end fw-bold text-success">
+                            ฿ {{ bom.product.sell_price|default:"0.00"|floatformat:"2"|intcomma }}
+                        </td>
+                        <td class="text-center">
+                            <span class="badge bg-warning text-dark rounded-pill px-3 py-2 shadow-sm">{{ bom.item_count }} รายการ</span>
+                        </td>
+                        <td class="text-end fw-bold {% if bom.estimated_profit < 0 %}text-danger{% else %}text-success{% endif %}">
+                            ฿ {{ bom.estimated_profit|default:"0.00"|floatformat:"2"|intcomma }}
+                        </td>
+                        <td class="pe-4 text-center">
+                            <div class="btn-group shadow-sm rounded-pill bg-white">
+                                <button type="button" class="btn btn-sm btn-white border text-secondary btn-gold-hover" title="บันทึกค่าแรงประกอบ" data-bs-toggle="modal" data-bs-target="#laborCostModal{{ bom.pk }}">
+                                    <i class="fas fa-coins text-warning"></i>
+                                </button>
+                                <a href="{% url 'bom_detail' bom.pk %}" class="btn btn-sm btn-white border text-primary" title="ดูรายละเอียด">
+                                    <i class="fas fa-search"></i>
+                                </a>
+                                <a href="{% url 'bom_edit' bom.pk %}" class="btn btn-sm btn-white border text-warning" title="แก้ไข">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+
+                    <div class="modal fade" id="laborCostModal{{ bom.pk }}" tabindex="-1" aria-hidden="true">
+                        <div class="modal-dialog modal-dialog-centered">
+                            <div class="modal-content rounded-4 border-0 shadow">
+                                <div class="modal-header bg-light border-bottom-0 py-3">
+                                    <h5 class="modal-title fw-bold text-dark"><i class="fas fa-coins text-warning me-2"></i>บันทึกค่าแรงประกอบ</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                </div>
+                                <form method="POST" action="{% url 'update_bom_labor_cost' bom.pk %}">
+                                    {% csrf_token %}
+                                    <div class="modal-body p-4 text-start">
+                                        <div class="mb-3">
+                                            <label class="form-label text-muted small fw-bold">แบบบ้าน / สินค้าสำเร็จรูป (FG)</label>
+                                            <input type="text" class="form-control bg-white fw-bold" value="{{ bom.product.code }} - {{ bom.product.name }}" readonly>
+                                        </div>
+                                        <div>
+                                            <label class="form-label text-dark small fw-bold">ระบุค่าแรงประกอบ (บาท) <span class="text-danger">*</span></label>
+                                            <input type="number" name="labor_cost" step="0.01" min="0" class="form-control form-control-lg text-end text-primary fw-bold" placeholder="0.00" value="{{ bom.labor_cost|floatformat:2 }}" onfocus="this.select()" required>
+                                        </div>
+                                    </div>
+                                    <div class="modal-footer border-top-0 bg-white py-3">
+                                        <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">ยกเลิก</button>
+                                        <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm">บันทึกข้อมูล</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" class="text-center py-5 text-muted">
+                            <i class="fas fa-folder-open fa-3x mb-3 text-light"></i><br>
+                            ยังไม่มีข้อมูลสูตรผลิตในระบบ<br>
+                            <div class="d-flex justify-content-center gap-2 mt-4">
+                                <a href="{% url 'import_bom_excel' %}" class="btn btn-sm btn-outline-success rounded-pill px-4 fw-bold">
+                                    <i class="fas fa-file-excel me-1"></i> นำเข้าผ่าน Excel
+                                </a>
+                                <a href="{% url 'bom_create' %}" class="btn btn-sm btn-primary rounded-pill px-4 fw-bold">
+                                    <i class="fas fa-plus me-1"></i> สร้างสูตรด้วยตนเอง
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

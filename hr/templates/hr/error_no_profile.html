@@ -1,0 +1,36 @@
+{% extends 'core/base.html' %}
+
+{% block content %}
+<div class="container d-flex flex-column align-items-center justify-content-center" style="min-height: 80vh;">
+
+    <div class="bg-danger bg-opacity-10 p-5 rounded-circle mb-4 shadow-sm">
+        <i class="fas fa-user-slash text-danger" style="font-size: 5rem;"></i>
+    </div>
+
+    <h1 class="fw-bold text-dark mb-2">ไม่พบข้อมูลพนักงาน</h1>
+    <p class="text-muted fs-5 text-center" style="max-width: 600px;">
+        บัญชีผู้ใช้ <strong>{{ request.user.username }}</strong> นี้ ยังไม่ได้ถูกเชื่อมต่อกับข้อมูลพนักงานในระบบ HR
+    </p>
+
+    <div class="card bg-light border-0 p-4 mt-3 mb-4 rounded-4 text-start" style="max-width: 500px;">
+        <h5 class="fw-bold"><i class="fas fa-wrench me-2"></i>วิธีแก้ไข (สำหรับ Admin)</h5>
+        <ol class="mb-0 ps-3">
+            <li class="mb-2">ไปที่เมนู <strong>ผู้ดูแลระบบ (Admin)</strong> > <strong>HR</strong> > <strong>พนักงาน</strong></li>
+            <li class="mb-2">เลือกชื่อพนักงานของคุณ (หรือกด +Add เพิ่มใหม่)</li>
+            <li>ตรงช่อง <strong>User Account</strong> ให้เลือกบัญชีนี้ <u>({{ request.user.username }})</u> แล้วกด Save</li>
+        </ol>
+    </div>
+
+    <a href="/" class="btn btn-secondary rounded-pill px-4 py-2">
+        <i class="fas fa-arrow-left me-2"></i>กลับหน้าหลัก
+    </a>
+    <br>
+
+    {% if user.is_superuser %}
+    <a href="/admin/hr/employee/" class="btn btn-primary rounded-pill px-4 py-2 ms-2">
+        <i class="fas fa-external-link-alt me-2"></i>ไปจัดการข้อมูลเดี๋ยวนี้
+    </a>
+    {% endif %}
+
+</div>
+{% endblock %}

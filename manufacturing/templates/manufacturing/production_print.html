@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <title>ใบสั่งผลิต / ใบควบคุมโครงการ {{ po.code }}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Sarabun', sans-serif; background: #525659; margin: 0; padding: 20px; font-size: 14px; color: #333; }
+        .page { width: 210mm; min-height: 297mm; padding: 15mm 20mm; margin: 0 auto; background: white; box-shadow: 0 0 10px rgba(0,0,0,0.5); position: relative; }
+        
+        /* หัวเอกสาร */
+        .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #2c3e50; padding-bottom: 15px; margin-bottom: 15px; }
+        .header h1 { margin: 0; color: #2c3e50; font-size: 24px; text-transform: uppercase; }
+        .header h2 { margin: 5px 0 0 0; color: #e74c3c; font-size: 22px; }
+        
+        /* กล่องข้อมูล */
+        .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px; }
+        .info-box { border: 1px solid #bdc3c7; padding: 10px; border-radius: 6px; background-color: #f8f9fa; }
+        .info-row { display: flex; justify-content: space-between; margin-bottom: 5px; border-bottom: 1px dashed #ddd; padding-bottom: 3px; }
+        .info-row:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+        .note-box { border: 1px dashed #e74c3c; padding: 10px; border-radius: 6px; background-color: #fff1f0; margin-bottom: 15px; }
+
+        /* ตารางทั่วไป */
+        table { width: 100%; border-collapse: collapse; margin-bottom: 15px; font-size: 13px; }
+        th, td { border: 1px solid #34495e; padding: 8px 10px; }
+        th { background-color: #ecf0f1; text-align: left; font-weight: bold; color: #2c3e50; }
+        .text-center { text-align: center; }
+        .checkbox-cell { width: 30px; text-align: center; font-size: 16px; font-weight: bold; }
+        
+        /* ส่วนลายเซ็นด้านล่าง */
+        .signature-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 30px; text-align: center; font-size: 12px; }
+        .sig-box { border-top: 1px solid #333; padding-top: 10px; margin-top: 40px; }
+
+        /* ปุ่มพิมพ์ */
+        .btn-print { position: fixed; top: 20px; right: 20px; padding: 12px 25px; background: #2980b9; color: white; border: none; cursor: pointer; border-radius: 50px; text-decoration: none; font-size: 16px; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        .btn-print:hover { background: #3498db; }
+        
+        @media print { 
+            body { background: white; padding: 0; } 
+            .page { margin: 0; box-shadow: none; border: none; padding: 10mm; } 
+            .no-print { display: none; } 
+            .page { page-break-after: always; }
+        }
+    </style>
+</head>
+<body>
+    <a href="javascript:window.print()" class="btn-print no-print">🖨️ พิมพ์ใบสั่งผลิต</a>
+
+    <div class="page">
+        <div class="header">
+            <div>
+                <h1 style="color: #333;">{{ company.name_th|default:"NEED System Co.,Ltd." }}</h1>
+                <p style="margin: 5px 0 0 0; color: #7f8c8d;">ใบควบคุมโครงการและสั่งผลิต (Master Project Traveler)</p>
+            </div>
+            <div style="text-align: right;">
+                <p style="margin: 0; font-size: 12px; color: #7f8c8d;">เลขที่เอกสาร (JOB NO.)</p>
+                <h2>{{ po.code }}</h2>
+            </div>
+        </div>
+
+        <div class="info-grid">
+            <div class="info-box">
+                <div class="info-row"><span>แบบบ้านที่ผลิต:</span> <strong>{{ po.product.name }}</strong></div>
+                <div class="info-row"><span>รหัสสินค้า:</span> <strong>{{ po.product.code }}</strong></div>
+                <div class="info-row"><span>ทีมช่างผู้รับผิดชอบ:</span> <strong>{{ po.production_team.name|default:"...................................." }}</strong></div>
+                <div class="info-row"><span>ผู้ควบคุมงาน:</span> <strong>{{ po.responsible_person.first_name|default:"...................................." }}</strong></div>
+            </div>
+            <div class="info-box">
+                <div class="info-row"><span>ชื่อลูกค้า / สถานที่:</span> <strong>{{ po.customer_name|default:"..........................................." }}</strong></div>
+                <div class="info-row"><span>พนักงานขาย:</span> <strong>{{ po.salesperson.name|default:"-" }} (สาขา: {{ po.branch.name|default:"-" }})</strong></div>
+                <div class="info-row"><span>วันที่เริ่มผลิต:</span> <strong>{{ po.start_date|date:"d/m/Y" }}</strong></div>
+                <div class="info-row"><span>กำหนดส่งมอบ:</span> <strong style="color: #e74c3c;">{{ po.delivery_date|date:"d/m/Y"|default:"ยังไม่ระบุ" }}</strong></div>
+            </div>
+        </div>
+
+        {% if po.note %}
+        <div class="note-box">
+            <strong><i class="fas fa-exclamation-triangle"></i> หมายเหตุ / คำสั่งพิเศษ:</strong> {{ po.note }}
+        </div>
+        {% endif %}
+
+        <h4 style="margin: 15px 0 5px 0; color: #2c3e50;">📦 1. การเบิกจ่ายวัตถุดิบ (Material Issue)</h4>
+        <table>
+            <tr>
+                <td class="checkbox-cell">[ &nbsp; &nbsp; ]</td>
+                <td><strong>ตรวจสอบและจ่ายวัตถุดิบเข้า JOB นี้ครบถ้วน ตามสูตรการผลิต (BOM)</strong></td>
+                <td width="380" style="padding: 12px 15px;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 12px;">
+                        <span>ผู้จ่าย: .................................................</span>
+                        <span>วันที่ ......./......./.......</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between;">
+                        <span>ผู้รับ: &nbsp;&nbsp;.................................................</span>
+                        <span>วันที่ ......./......./.......</span>
+                    </div>
+                </td>
+            </tr>
+        </table>
+
+        <h4 style="margin: 15px 0 5px 0; color: #2c3e50;">🔨 2. การควบคุมงานผลิตและส่งมอบ (Production & Delivery Workflow)</h4>
+        <table>
+            <thead>
+                <tr>
+                    <th width="40" class="text-center">ผ่าน</th>
+                    <th>ขั้นตอนการปฏิบัติงาน (Process)</th>
+                    <th width="150">วันที่แล้วเสร็จ (Date)</th>
+                    <th width="200">ผู้ตรวจสอบ / หัวหน้าช่าง (Sign)</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="checkbox-cell">[ &nbsp; ]</td>
+                    <td><strong>แผนกโครงสร้าง</strong> (Foundation & Structure)</td>
+                    <td>...... / ...... / ............</td>
+                    <td></td>
+                </tr>
+                <tr>
+                    <td class="checkbox-cell">[ &nbsp; ]</td>
+                    <td><strong>แผนกประกอบ</strong> (Assembly & Finishing)</td>
+                    <td>...... / ...... / ............</td>
+                    <td></td>
+                </tr>
+                <tr>
+                    <td class="checkbox-cell">[ &nbsp; ]</td>
+                    <td><strong>แผนกตรวจ QC ก่อนส่ง</strong> (Quality Control)</td>
+                    <td>...... / ...... / ............</td>
+                    <td></td>
+                </tr>
+                <tr>
+                    <td class="checkbox-cell">[ &nbsp; ]</td>
+                    <td><strong>แผนกส่งมอบลูกค้า</strong> (Customer Delivery)</td>
+                    <td>...... / ...... / ............</td>
+                    <td></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h4 style="margin: 15px 0 5px 0; color: #2c3e50;">💰 3. การตรวจสอบการรับ-จ่ายเงิน (Financial Control)</h4>
+        <table>
+            <thead>
+                <tr>
+                    <th width="40" class="text-center">ผ่าน</th>
+                    <th>รายการ (Transaction)</th>
+                    <th width="150">จำนวนเงิน (Amount)</th>
+                    <th width="120">วันที่ (Date)</th>
+                    <th width="150">ผู้ตรวจสอบ (Verified by)</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="checkbox-cell">[ &nbsp; ]</td>
+                    <td><strong>การรับเงินค่าสินค้า</strong> (จากลูกค้า)</td>
+                    <td class="text-center">.................................. บาท</td>
+                    <td>....../....../........</td>
+                    <td></td>
+                </tr>
+                <tr>
+                    <td class="checkbox-cell">[ &nbsp; ]</td>
+                    <td><strong>การจ่ายค่าช่าง / ผู้รับเหมา</strong></td>
+                    <td class="text-center">.................................. บาท</td>
+                    <td>....../....../........</td>
+                    <td></td>
+                </tr>
+                <tr>
+                    <td class="checkbox-cell">[ &nbsp; ]</td>
+                    <td><strong>การจ่ายค่าขนส่ง</strong></td>
+                    <td class="text-center">.................................. บาท</td>
+                    <td>....../....../........</td>
+                    <td></td>
+                </tr>
+                <tr>
+                    <td class="checkbox-cell">[ &nbsp; ]</td>
+                    <td>อื่นๆ: ................................................................</td>
+                    <td class="text-center">.................................. บาท</td>
+                    <td>....../....../........</td>
+                    <td></td>
+                </tr>
+                <tr>
+                    <td class="checkbox-cell">[ &nbsp; ]</td>
+                    <td>อื่นๆ: ................................................................</td>
+                    <td class="text-center">.................................. บาท</td>
+                    <td>....../....../........</td>
+                    <td></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="signature-grid">
+            <div>
+                <div class="sig-box">
+                    ผู้ออกใบสั่งซื้อวัตถุดิบ (PO Issuer)<br><br>
+                    วันที่: ........ / ........ / ............
+                </div>
+            </div>
+            <div>
+                <div class="sig-box">
+                    ผู้รับวัตถุดิบตามใบสั่งซื้อ (PO Receiver)<br><br>
+                    วันที่: ........ / ........ / ............
+                </div>
+            </div>
+            <div>
+                <div class="sig-box">
+                    ผู้จ่ายวัตถุดิบตาม JOB (Issuer)<br><br>
+                    วันที่: ........ / ........ / ............
+                </div>
+            </div>
+            <div>
+                <div class="sig-box">
+                    ผู้รับวัตถุดิบตาม JOB (Builder)<br><br>
+                    วันที่: ........ / ........ / ............
+                </div>
+            </div>
+        </div>
+        
+    </div>
+</body>
+</html>

@@ -1,0 +1,289 @@
+{% extends 'core/base.html' %}
+
+{% block content %}
+<div class="container py-5">
+
+    <div class="row justify-content-center">
+        <div class="col-12">
+
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h3 class="fw-bold text-dark mb-0">
+                    <i class="fas fa-user-plus text-primary me-2"></i> {{ title }}
+                </h3>
+                <nav aria-label="breadcrumb">
+                    <ol class="breadcrumb mb-0 small">
+                        <li class="breadcrumb-item"><a href="{% url 'customer_list' %}" class="text-decoration-none text-muted">ฐานข้อมูลลูกค้า</a></li>
+                        <li class="breadcrumb-item active" aria-current="page">{{ title }}</li>
+                    </ol>
+                </nav>
+            </div>
+
+            <div class="card shadow-sm border-0 rounded-4">
+                <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+                    <span class="fw-bold text-primary"><i class="fas fa-info-circle me-2"></i>กรอกข้อมูลลูกค้า</span>
+                    <a href="{% url 'customer_list' %}" class="btn btn-light btn-sm rounded-pill text-muted">
+                        <i class="fas fa-times me-1"></i> ยกเลิก
+                    </a>
+                </div>
+
+                <div class="card-body p-4">
+                    <form method="POST">
+                        {% csrf_token %}
+
+                        {% if form.non_field_errors %}
+                        <div class="alert alert-danger rounded-3 mb-4">
+                            <i class="fas fa-exclamation-triangle me-2"></i> {{ form.non_field_errors.0 }}
+                        </div>
+                        {% endif %}
+
+                        <h6 class="fw-bold text-dark border-bottom pb-2 mb-3">
+                            <i class="fas fa-building me-2 text-warning"></i>ข้อมูลองค์กร
+                        </h6>
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-3">
+                                <label class="small fw-bold text-muted mb-1">รหัสลูกค้า</label>
+                                <input type="text" class="form-control bg-light" value="{{ form.instance.code|default:'สร้างอัตโนมัติ' }}" readonly>
+                            </div>
+                            <div class="col-md-5">
+                                <label class="small fw-bold text-muted mb-1">ชื่อลูกค้า / บริษัท <span class="text-danger">*</span></label>
+                                {{ form.name }}
+                                {% if form.name.errors %}
+                                    <div class="text-danger small mt-1"><i class="fas fa-exclamation-circle me-1"></i>{{ form.name.errors.0 }}</div>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-4">
+                                <label class="small fw-bold text-muted mb-1">สาขา</label>
+                                {{ form.branch }}
+                            </div>
+                            <div class="col-md-4">
+                                <label class="small fw-bold text-muted mb-1">เลขผู้เสียภาษี</label>
+                                {{ form.tax_id }}
+                                {% if form.tax_id.errors %}
+                                    <div class="text-danger small mt-1"><i class="fas fa-exclamation-circle me-1"></i>{{ form.tax_id.errors.0 }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <h6 class="fw-bold text-dark border-bottom pb-2 mb-3">
+                            <i class="fas fa-address-book me-2 text-success"></i>ข้อมูลการติดต่อ
+                        </h6>
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-6">
+                                <label class="small fw-bold text-muted mb-1">ชื่อผู้ติดต่อ</label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-light"><i class="fas fa-user text-muted"></i></span>
+                                    {{ form.contact_person }}
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="small fw-bold text-muted mb-1">เบอร์โทรศัพท์</label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-light"><i class="fas fa-phone text-muted"></i></span>
+                                    {{ form.phone }}
+                                </div>
+                                {% if form.phone.errors %}
+                                    <div class="text-danger small mt-1"><i class="fas fa-exclamation-circle me-1"></i>{{ form.phone.errors.0 }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="bg-light p-4 rounded-3 mb-4 border">
+                            <h6 class="fw-bold text-dark mb-3">
+                                <i class="fas fa-map-marker-alt me-2 text-danger"></i>ที่อยู่สำหรับจัดส่ง
+                            </h6>
+
+                            <div class="mb-3">
+                                <label class="small fw-bold text-muted mb-1">ที่อยู่ (เลขที่/หมู่บ้าน/ถนน)</label>
+                                {{ form.address }}
+                            </div>
+
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="small fw-bold text-muted mb-1">จังหวัด</label>
+                                    <select name="province" id="select_province" class="form-control form-select" data-default="{{ form.instance.province|default:'' }}">
+                                        <option value="">-- เลือกจังหวัด --</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="small fw-bold text-muted mb-1">อำเภอ/เขต</label>
+                                    <select name="district" id="select_amphure" class="form-control form-select" data-default="{{ form.instance.district|default:'' }}">
+                                        <option value="">-- เลือกอำเภอ --</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="small fw-bold text-muted mb-1">ตำบล/แขวง</label>
+                                    <select name="sub_district" id="select_tambon" class="form-control form-select" data-default="{{ form.instance.sub_district|default:'' }}">
+                                        <option value="">-- เลือกตำบล --</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="small fw-bold text-muted mb-1">รหัสไปรษณีย์</label>
+                                    {{ form.zip_code }}
+                                </div>
+                            </div>
+
+                            <div class="mt-3">
+                                <label class="small fw-bold text-muted mb-1">📍 พิกัด GPS / Google Maps Link</label>
+                                <div class="input-group">
+                                    {{ form.location }}
+                                    <button type="button" class="btn btn-info text-white" onclick="getLocation()" title="ดึงพิกัดปัจจุบัน">
+                                        <i class="fas fa-crosshairs"></i>
+                                    </button>
+                                    <a href="#" id="link_map" target="_blank" class="btn btn-secondary" title="เปิดดูแผนที่">
+                                        <i class="fas fa-map-marked-alt"></i>
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="d-flex align-items-center justify-content-between pt-2">
+                            <div class="form-check form-switch">
+                                {{ form.is_active }}
+                                <label class="form-check-label ms-2 fw-bold text-dark" for="id_is_active">สถานะใช้งาน (Active)</label>
+                            </div>
+
+                            <button type="submit" class="btn btn-success btn-lg shadow-sm px-5 fw-bold rounded-pill">
+                                <i class="fas fa-save me-2"></i> บันทึกข้อมูล
+                            </button>
+                        </div>
+
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // 1. Script ดึง GPS
+    function getLocation() {
+        const locInput = document.getElementById('input_location');
+        if (navigator.geolocation) {
+            locInput.value = "กำลังค้นหาพิกัด...";
+            navigator.geolocation.getCurrentPosition(showPosition, showError);
+        } else { alert("Browser ไม่รองรับ Geolocation"); }
+    }
+    function showPosition(pos) {
+        const lat = pos.coords.latitude;
+        const long = pos.coords.longitude;
+        const link = `http://googleusercontent.com/maps.google.com/?q=${lat},${long}`;
+        document.getElementById('input_location').value = link;
+        updateMapLink(link);
+    }
+    function showError(error) { alert("ไม่สามารถดึงพิกัดได้: " + error.message); }
+    function updateMapLink(link) {
+        const btn = document.getElementById('link_map');
+        if(link) {
+            btn.href = link;
+            btn.classList.remove('btn-secondary'); btn.classList.add('btn-primary');
+        }
+    }
+
+    // 2. Script จังหวัด-อำเภอ-ตำบล (✅ แก้ไขใหม่: โหลดข้อมูลเดิมอัตโนมัติ)
+    document.addEventListener('DOMContentLoaded', function() {
+        const provSelect = document.getElementById('select_province');
+        const ampSelect = document.getElementById('select_amphure');
+        const tamSelect = document.getElementById('select_tambon');
+        const zipInput = document.getElementById('input_zipcode');
+
+        // อ่านค่าเดิมจาก data-default (ถ้ามี)
+        const defaultProv = provSelect.dataset.default;
+        const defaultAmp = ampSelect.dataset.default;
+        const defaultTam = tamSelect.dataset.default;
+
+        // 🟢 1. โหลดจังหวัดทั้งหมด
+        fetch("{% url 'get_provinces' %}")
+            .then(r => r.json())
+            .then(data => {
+                data.forEach(p => {
+                    let opt = new Option(p.name_th, p.name_th);
+                    opt.dataset.id = p.id;
+                    provSelect.add(opt);
+                });
+
+                // ✅ ถ้ามีค่าเดิม -> เลือกจังหวัดนั้น -> แล้วโหลดอำเภอต่อ
+                if (defaultProv) {
+                    provSelect.value = defaultProv;
+                    // หา ID ของจังหวัดที่เลือก เพื่อไปโหลดอำเภอ
+                    const selectedOpt = Array.from(provSelect.options).find(o => o.value === defaultProv);
+                    if (selectedOpt) {
+                        loadAmphures(selectedOpt.dataset.id, defaultAmp, defaultTam);
+                    }
+                }
+            });
+
+        // ฟังก์ชันโหลดอำเภอ (แยกออกมาเพื่อให้เรียกใช้ซ้ำได้)
+        function loadAmphures(provId, selectedAmp = null, nextTam = null) {
+            ampSelect.innerHTML = '<option value="">-- เลือกอำเภอ --</option>';
+            tamSelect.innerHTML = '<option value="">-- เลือกตำบล --</option>';
+            
+            fetch(`{% url 'get_amphures' %}?province_id=${provId}`)
+                .then(r => r.json())
+                .then(data => {
+                    data.forEach(a => {
+                        let opt = new Option(a.name_th, a.name_th);
+                        opt.dataset.id = a.id;
+                        ampSelect.add(opt);
+                    });
+
+                    // ✅ ถ้ามีค่าเดิม -> เลือกอำเภอนั้น -> แล้วโหลดตำบลต่อ
+                    if (selectedAmp) {
+                        ampSelect.value = selectedAmp;
+                        const selectedOpt = Array.from(ampSelect.options).find(o => o.value === selectedAmp);
+                        if (selectedOpt) {
+                            loadTambons(selectedOpt.dataset.id, nextTam);
+                        }
+                    }
+                });
+        }
+
+        // ฟังก์ชันโหลดตำบล
+        function loadTambons(ampId, selectedTam = null) {
+            tamSelect.innerHTML = '<option value="">-- เลือกตำบล --</option>';
+            
+            fetch(`{% url 'get_tambons' %}?amphure_id=${ampId}`)
+                .then(r => r.json())
+                .then(data => {
+                    data.forEach(t => {
+                        let opt = new Option(t.name_th, t.name_th);
+                        opt.dataset.zip = t.zip_code;
+                        tamSelect.add(opt);
+                    });
+
+                    // ✅ ถ้ามีค่าเดิม -> เลือกตำบลนั้น
+                    if (selectedTam) {
+                        tamSelect.value = selectedTam;
+                    }
+                });
+        }
+
+        // Event Listeners (สำหรับการเลือกใหม่ด้วยมือ)
+        provSelect.addEventListener('change', function() {
+            const selectedOption = this.options[this.selectedIndex];
+            if (selectedOption.dataset.id) {
+                loadAmphures(selectedOption.dataset.id);
+            } else {
+                ampSelect.innerHTML = '<option value="">-- เลือกอำเภอ --</option>';
+                tamSelect.innerHTML = '<option value="">-- เลือกตำบล --</option>';
+            }
+        });
+
+        ampSelect.addEventListener('change', function() {
+            const selectedOption = this.options[this.selectedIndex];
+            if (selectedOption.dataset.id) {
+                loadTambons(selectedOption.dataset.id);
+            } else {
+                tamSelect.innerHTML = '<option value="">-- เลือกตำบล --</option>';
+            }
+        });
+
+        tamSelect.addEventListener('change', function() {
+            const opt = this.options[this.selectedIndex];
+            if(opt.dataset.zip) zipInput.value = opt.dataset.zip;
+        });
+        
+        // Init Map Link
+        updateMapLink(document.getElementById('input_location').value);
+    });
+</script>
+{% endblock %}

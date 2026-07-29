@@ -1,0 +1,35 @@
+{% extends 'core/base.html' %}
+{% block content %}
+<div class="container py-5">
+    <div class="mb-4">
+        <h3 class="fw-bold text-dark"><i class="fas fa-tools text-primary me-2"></i>เครื่องมือจัดการคลังสินค้า</h3>
+        <p class="text-muted">รวมฟังก์ชันการนำเข้าข้อมูลและอัปเดตรูปภาพจำนวนมาก</p>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-md-6">
+            <a href="{% url 'import_rm_excel' %}" class="card border-0 shadow-sm rounded-4 text-decoration-none h-100 p-4 d-flex align-items-center flex-row hover-shadow">
+                <div class="bg-success bg-opacity-10 text-success p-3 rounded-circle me-3"><i class="fas fa-file-excel fa-2x"></i></div>
+                <div>
+                    <h5 class="fw-bold text-dark mb-1">นำเข้าวัตถุดิบ (Excel)</h5>
+                    <p class="text-muted small mb-0">อัปโหลดรายชื่อวัตถุดิบพร้อมรหัสสินค้าผ่านไฟล์ Excel</p>
+                </div>
+            </a>
+        </div>
+        <div class="col-md-6">
+            <a href="{% url 'import_product_images' %}" class="card border-0 shadow-sm rounded-4 text-decoration-none h-100 p-4 d-flex align-items-center flex-row hover-shadow">
+                <div class="bg-warning bg-opacity-10 text-warning p-3 rounded-circle me-3"><i class="fas fa-file-image fa-2x"></i></div>
+                <div>
+                    <h5 class="fw-bold text-dark mb-1">นำเข้ารูปภาพวัตถุดิบ</h5>
+                    <p class="text-muted small mb-0">จับคู่ไฟล์รูปภาพกับรหัสสินค้า (SKU) จำนวนมาก</p>
+                </div>
+            </a>
+        </div>
+    </div>
+    
+    <div class="mt-4">
+        <a href="{% url 'product_list' %}?type=RM" class="btn btn-outline-secondary rounded-pill px-4"><i class="fas fa-arrow-left me-1"></i> กลับคลังวัตถุดิบ</a>
+    </div>
+</div>
+<style>.hover-shadow:hover { box-shadow: 0 .5rem 1rem rgba(0,0,0,.15)!important; }</style>
+{% endblock %}

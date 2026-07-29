@@ -1,0 +1,62 @@
+{% extends 'core/base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="container py-4" style="max-width: 800px;">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="fw-bold mb-1 text-dark">
+                <i class="fas fa-store text-primary me-2"></i>{{ title }}
+            </h4>
+        </div>
+        <a href="{% url 'supplier_list' %}" class="btn btn-outline-secondary rounded-pill px-4"><i class="fas fa-arrow-left me-2"></i> กลับ</a>
+    </div>
+
+    <div class="card shadow-sm border-0 rounded-4">
+        <div class="card-body p-4 p-md-5">
+            <form method="POST">
+                {% csrf_token %}
+                
+                <h5 class="fw-bold text-dark border-bottom pb-2 mb-4"><i class="fas fa-info-circle me-2 text-secondary"></i>ข้อมูลทั่วไป</h5>
+                
+                <div class="row g-3 mb-4">
+                    <div class="col-md-12">
+                        <label class="form-label text-muted small fw-bold">ชื่อร้านค้า / บริษัท <span class="text-danger">*</span></label>
+                        {{ form.name }}
+                        {% if form.name.errors %}<div class="text-danger small mt-1">{{ form.name.errors }}</div>{% endif %}
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label text-muted small fw-bold">เลขประจำตัวผู้เสียภาษี</label>
+                        {{ form.tax_id }}
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label text-muted small fw-bold">เบอร์โทรศัพท์</label>
+                        {{ form.phone }}
+                        {% if form.phone.errors %}<div class="text-danger small mt-1">{{ form.phone.errors }}</div>{% endif %}
+                    </div>
+                    <div class="col-md-12">
+                        <label class="form-label text-muted small fw-bold">ชื่อผู้ติดต่อ (Contact Name)</label>
+                        {{ form.contact_name }}
+                    </div>
+                </div>
+
+                <h5 class="fw-bold text-dark border-bottom pb-2 mb-4 mt-5"><i class="fas fa-map-marker-alt me-2 text-secondary"></i>ที่อยู่</h5>
+
+                <div class="row g-3">
+                    <div class="col-12">
+                        <label class="form-label text-muted small fw-bold">ที่อยู่ (Address)</label>
+                        {{ form.address }}
+                    </div>
+                </div>
+
+                <div class="mt-5 text-end border-top pt-4">
+                    <a href="{% url 'supplier_list' %}" class="btn btn-light border px-4 rounded-pill me-2">ยกเลิก</a>
+                    <button type="submit" class="btn btn-success px-5 rounded-pill fw-bold shadow-sm">
+                        <i class="fas fa-save me-2"></i> บันทึกข้อมูล
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

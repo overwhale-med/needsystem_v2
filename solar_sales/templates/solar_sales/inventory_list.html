@@ -1,0 +1,174 @@
+{% extends 'core/base.html' %}
+{% load humanize %}
+
+{% block content %}
+<style>
+    .btn-gold { background: linear-gradient(135deg, #d4af37 0%, #aa8c2c 100%); color: #ffffff !important; border: none; }
+    .btn-gold:hover { background: linear-gradient(135deg, #aa8c2c 0%, #8c7324 100%); transform: translateY(-2px); box-shadow: 0 4px 8px rgba(212, 175, 55, 0.3) !important; }
+    .nav-tabs .nav-link { color: #6c757d; font-weight: 600; border: none; border-bottom: 3px solid transparent; padding: 12px 20px; }
+    .nav-tabs .nav-link.active { color: #c5a059; border-bottom: 3px solid #c5a059; background: transparent; }
+    .nav-tabs .nav-link:hover:not(.active) { border-bottom: 3px solid #e9ecef; }
+</style>
+
+<div class="container-fluid py-4 px-4">
+    <div class="d-flex justify-content-between align-items-end mb-4">
+        <div>
+            <h4 class="fw-bold mb-1 text-dark"><i class="fas fa-boxes text-gold me-2"></i>คลังสินค้าโซล่าเซลล์ (Solar Inventory)</h4>
+            <p class="text-muted small mb-0">จัดการฐานข้อมูลแพ็กเกจและอุปกรณ์เสริม (รูปแบบวันที่: dd/mm/yyyy)</p>
+        </div>
+        <div class="d-flex gap-2 align-items-center">
+            <!-- ปุ่มเปิด Pop-up อัปโหลด Excel -->
+            <button type="button" class="btn btn-outline-success rounded-pill px-4 fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#importExcelModal">
+                <i class="fas fa-file-excel me-1"></i> นำเข้าด้วย Excel
+            </button>
+            <div class="vr mx-1 d-none d-md-block"></div>
+            <a href="{% url 'solar_product_create' %}?type=FG" class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm">
+                <i class="fas fa-plus me-1"></i> เพิ่มแพ็กเกจ (FG)
+            </a>
+            <a href="{% url 'solar_product_create' %}?type=RM" class="btn btn-secondary rounded-pill px-4 fw-bold shadow-sm">
+                <i class="fas fa-plus me-1"></i> เพิ่มอุปกรณ์เสริม (RM)
+            </a>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm rounded-4 bg-white overflow-hidden">
+        <div class="card-header bg-white pt-3 pb-0 border-bottom">
+            <ul class="nav nav-tabs mb-0" id="inventoryTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="fg-tab" data-bs-toggle="tab" data-bs-target="#fg-pane" type="button" role="tab">
+                        <i class="fas fa-solar-panel me-1"></i> แพ็กเกจหลัก (FG)
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="rm-tab" data-bs-toggle="tab" data-bs-target="#rm-pane" type="button" role="tab">
+                        <i class="fas fa-tools me-1"></i> อุปกรณ์เสริม (RM)
+                    </button>
+                </li>
+            </ul>
+        </div>
+
+        <div class="card-body p-0">
+            <div class="tab-content" id="inventoryTabsContent">
+
+                <div class="tab-pane fade show active" id="fg-pane" role="tabpanel" tabindex="0">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="bg-light text-secondary small">
+                                <tr>
+                                    <th class="ps-4 py-3 border-0">รหัส / สถานะ</th>
+                                    <th class="py-3 border-0">ชื่อแพ็กเกจ (FG)</th>
+                                    <th class="py-3 border-0">หมวดหมู่</th>
+                                    <th class="text-end py-3 border-0">ราคาขาย (บาท)</th>
+                                    <th class="text-center pe-4 py-3 border-0">จัดการ</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in fg_products %}
+                                <tr class="border-bottom {% if not item.is_active %}opacity-50 bg-light{% endif %}">
+                                    <td class="ps-4 py-3">
+                                        <div class="fw-bold text-dark">{{ item.code }}</div>
+                                        {% if item.is_active %}
+                                            <span class="badge bg-success small">เปิดใช้งาน</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary small">ปิดใช้งาน</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="py-3 fw-bold text-primary">{{ item.name }}</td>
+                                    <td class="py-3"><span class="badge bg-light text-dark border">{{ item.category.name|default:"-" }}</span></td>
+                                    <td class="py-3 text-end fw-bold text-success">฿{{ item.sell_price|floatformat:2|intcomma }}</td>
+                                    <td class="py-3 text-center pe-4">
+                                        <a href="{% url 'solar_product_edit' item.id %}" class="btn btn-sm btn-outline-secondary rounded-pill px-3">แก้ไข</a>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr><td colspan="5" class="text-center py-5 text-muted">ไม่มีข้อมูลแพ็กเกจในระบบ</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="rm-pane" role="tabpanel" tabindex="0">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="bg-light text-secondary small">
+                                <tr>
+                                    <th class="ps-4 py-3 border-0">รหัส / สถานะ</th>
+                                    <th class="py-3 border-0">ชื่ออุปกรณ์ (RM)</th>
+                                    <th class="py-3 border-0">หมวดหมู่</th>
+                                    <th class="text-end py-3 border-0">ราคาทุน</th>
+                                    <th class="text-end py-3 border-0">ราคาขาย</th>
+                                    <th class="text-center py-3 border-0">คงเหลือ</th>
+                                    <th class="text-center pe-4 py-3 border-0">จัดการ</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in rm_products %}
+                                <tr class="border-bottom {% if not item.is_active %}opacity-50 bg-light{% endif %}">
+                                    <td class="ps-4 py-3">
+                                        <div class="fw-bold text-dark">{{ item.code }}</div>
+                                        {% if item.is_active %}
+                                            <span class="badge bg-success small">เปิดใช้งาน</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary small">ปิดใช้งาน</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="py-3 fw-bold text-secondary">{{ item.name }}</td>
+                                    <td class="py-3"><span class="badge bg-light text-dark border">{{ item.rm_category.name|default:"-" }}</span></td>
+                                    <td class="py-3 text-end text-muted">฿{{ item.cost_price|floatformat:2|intcomma }}</td>
+                                    <td class="py-3 text-end fw-bold text-success">฿{{ item.sell_price|floatformat:2|intcomma }}</td>
+                                    <td class="py-3 text-center fw-bold {% if item.stock_qty <= item.min_level %}text-danger{% else %}text-dark{% endif %}">
+                                        {{ item.stock_qty|floatformat:2|intcomma }} {{ item.unit|default:"ชิ้น" }}
+                                    </td>
+                                    <td class="py-3 text-center pe-4">
+                                        <a href="{% url 'solar_product_edit' item.id %}" class="btn btn-sm btn-outline-secondary rounded-pill px-3">แก้ไข</a>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr><td colspan="7" class="text-center py-5 text-muted">ไม่มีข้อมูลอุปกรณ์เสริมในระบบ</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 🛠️ MODAL นำเข้า EXCEL -->
+<div class="modal fade" id="importExcelModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title fw-bold"><i class="fas fa-file-excel me-2"></i> นำเข้าข้อมูลคลังสินค้า (Excel)</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form action="{% url 'solar_inventory_import' %}" method="POST" enctype="multipart/form-data">
+                {% csrf_token %}
+                <div class="modal-body p-4">
+                    <p class="text-muted small mb-3">กรุณาดาวน์โหลดไฟล์เทมเพลต กรอกข้อมูลให้ครบถ้วน แล้วนำมาอัปโหลดกลับเข้าระบบครับ</p>
+
+                    <div class="text-center mb-4">
+                        <a href="{% url 'solar_inventory_download_template' %}" class="btn btn-outline-success btn-sm rounded-pill px-4 fw-bold">
+                            <i class="fas fa-download me-1"></i> 1. ดาวน์โหลดไฟล์ต้นแบบ
+                        </a>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold text-dark"><i class="fas fa-upload me-1"></i> 2. อัปโหลดไฟล์ที่กรอกข้อมูลแล้ว (.xlsx)</label>
+                        <input class="form-control" type="file" name="excel_file" accept=".xlsx" required>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light border-0">
+                    <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">ยกเลิก</button>
+                    <button type="submit" class="btn btn-success rounded-pill px-4 fw-bold shadow-sm">
+                        <i class="fas fa-check me-1"></i> เริ่มนำเข้าข้อมูล
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

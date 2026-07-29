@@ -1,0 +1,574 @@
+{% extends 'core/base.html' %}
+{% load humanize %}
+
+{% block content %}
+<script type="text/javascript" src="https://cdn.jsdelivr.net/jquery/latest/jquery.min.js"></script>
+<script type="text/javascript" src="https://cdn.jsdelivr.net/momentjs/latest/moment.min.js"></script>
+<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.min.js"></script>
+<link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css" />
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+
+<style>
+    body { background-color: #f4f7fa; font-family: 'Sarabun', sans-serif; }
+    .flatpickr-input { background-color: #fff !important; cursor: pointer; font-size: 0.85rem; }
+
+    /* 🌟 สไตล์การ์ดและตารางแบบพรีเมียม 🌟 */
+    .premium-card { border: none; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.03); background: #fff; overflow: visible !important; }
+    
+    .table-hover tbody tr { transition: background-color 0.2s ease; border-bottom: 1px solid #f0f2f5; position: relative; }
+    .table-hover tbody tr:hover, .table-hover tbody tr:focus-within { background-color: #fcfdfd !important; z-index: 50; }
+
+    @media (min-width: 992px) {
+        .table-responsive { overflow: visible !important; }
+    }
+
+    /* 🌟 สไตล์ปุ่มและ Badge 🌟 */
+    .btn-primary-action { padding: 6px 16px; font-size: 0.85rem; font-weight: 600; letter-spacing: 0.3px; transition: all 0.2s; }
+    .btn-primary-action:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+
+    .badge-soft { padding: 5px 10px; font-weight: 600; border-radius: 6px; font-size: 0.75rem; letter-spacing: 0.3px; }
+    .badge-soft-success { background-color: rgba(46, 204, 113, 0.1); color: #27ae60; border: 1px solid rgba(46, 204, 113, 0.2); }
+    .badge-soft-warning { background-color: rgba(241, 196, 15, 0.1); color: #d35400; border: 1px solid rgba(241, 196, 15, 0.2); }
+    .badge-soft-info { background-color: rgba(13, 202, 240, 0.1); color: #087990; border: 1px solid rgba(13, 202, 240, 0.2); }
+    .badge-soft-secondary { background-color: rgba(108, 117, 125, 0.1); color: #495057; border: 1px solid rgba(108, 117, 125, 0.2); }
+    .badge-soft-danger { background-color: rgba(220, 53, 69, 0.1); color: #c82333; border: 1px solid rgba(220, 53, 69, 0.2); }
+
+    /* 🌟 Dropdown Menu 🌟 */
+    .dropdown-menu { border-radius: 10px; border: 1px solid rgba(0,0,0,0.05); padding: 8px 0; }
+    .dropdown-item { font-size: 0.85rem; padding: 8px 20px; font-weight: 500; transition: background 0.1s; }
+    .dropdown-item:hover { background-color: #f8f9fa; color: #0d6efd; }
+
+    .progress-rounded { border-radius: 10px; background-color: #e9ecef; box-shadow: inset 0 1px 2px rgba(0,0,0,.05); cursor: pointer; }
+    .popover-header { background-color: #2c3e50; color: white; font-weight: bold; font-family: 'Sarabun', sans-serif;}
+    .popover-body { font-size: 0.85rem; font-family: 'Sarabun', sans-serif;}
+
+    /* 🌟 สไตล์แถบค้นหาแบบแคปซูล (Pill-shaped Search Bar) 🌟 */
+    .search-pill-container {
+        display: flex; align-items: center; background-color: #f8f9fa; border: 1px solid #ced4da;
+        border-radius: 50px; padding: 4px 8px; box-shadow: inset 0 1px 2px rgba(0,0,0,0.05);
+    }
+    .search-pill-input {
+        border: none; background: transparent; box-shadow: none; outline: none;
+        width: 100%; padding: 6px 12px; font-size: 0.85rem; cursor: pointer;
+    }
+    .search-pill-icon { color: #6c757d; padding-left: 10px; }
+    .search-pill-btn {
+        background-color: #212529; color: white; border: none; border-radius: 50px;
+        width: 35px; height: 35px; display: flex; align-items: center; justify-content: center;
+        transition: all 0.2s ease;
+    }
+    .search-pill-btn:hover { background-color: #000; transform: scale(1.05); }
+    .hidden-date { display: none; }
+</style>
+
+<div class="container-fluid py-4 px-4">
+    <div class="row justify-content-center">
+        <div class="col-12">
+
+            <div class="d-flex justify-content-between align-items-end mb-4">
+                <div>
+                    <h3 class="fw-bold mb-1 text-dark"><i class="fas fa-file-invoice text-primary me-2"></i>รายการใบเสนอราคา</h3>
+                    <p class="text-muted small mb-0">จัดการเอกสารเสนอราคาและการติดตามงานผลิตอย่างเป็นระบบ</p>
+                </div>
+                <div class="d-flex gap-2">
+                    <a href="{% url 'sales_dashboard' %}" class="btn btn-light border shadow-sm rounded-pill px-4 fw-bold text-muted d-flex align-items-center">
+                        <i class="fas fa-arrow-left me-2"></i> Dashboard
+                    </a>
+                    <a href="{% url 'quotation_create' %}" class="btn btn-primary shadow-sm rounded-pill px-4 fw-bold d-flex align-items-center">
+                        <i class="fas fa-plus me-2"></i> สร้างใบเสนอราคาใหม่
+                    </a>
+                </div>
+            </div>
+
+            <div class="premium-card mb-4">
+                <div class="card-body p-3">
+                    <form method="GET" class="row g-2 align-items-center">
+
+                        <div class="{% if is_manager or is_supervisor %}col-md-2{% else %}col-md-3{% endif %}">
+                            <div class="input-group bg-light rounded-pill overflow-hidden border">
+                                <span class="input-group-text bg-transparent border-0 ps-3"><i class="fas fa-search text-muted"></i></span>
+                                <input type="text" name="q" class="form-control bg-transparent border-0 shadow-none" style="font-size: 0.85rem;" placeholder="เลขที่ / ลูกค้า..." value="{{ search_query|default:'' }}">
+                            </div>
+                        </div>
+
+                        {% if is_manager or is_supervisor %}
+                        <div class="col-md-2">
+                            <div class="input-group bg-light rounded-pill overflow-hidden border">
+                                <span class="input-group-text bg-transparent border-0 ps-3"><i class="fas fa-map-marker-alt text-muted"></i></span>
+                                <select name="branch" class="form-select bg-transparent border-0 shadow-none" style="font-size: 0.85rem; cursor: pointer;">
+                                    <option value="" {% if not branch_filter %}selected{% endif %}>ทุกสาขา</option>
+                                    {% for dept in departments %}
+                                        <option value="{{ dept.id }}" {% if branch_filter == dept.id|stringformat:"s" %}selected{% endif %}>{{ dept.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        <div class="col-md-2">
+                            <div class="input-group bg-light rounded-pill overflow-hidden border">
+                                <span class="input-group-text bg-transparent border-0 ps-3"><i class="fas fa-filter text-muted"></i></span>
+                                <select name="status" class="form-select bg-transparent border-0 shadow-none" style="font-size: 0.85rem; cursor: pointer;">
+                                    <option value="" {% if not status_filter %}selected{% endif %}>สถานะเอกสาร</option>
+                                    <option value="DRAFT" {% if status_filter == 'DRAFT' %}selected{% endif %}>รออนุมัติ</option>
+                                    <option value="APPROVED" {% if status_filter == 'APPROVED' %}selected{% endif %}>อนุมัติแล้ว</option>
+                                    <option value="PENDING_CLOSING" {% if status_filter == 'PENDING_CLOSING' %}selected{% endif %}>รอรับมัดจำ</option>
+                                    <option value="CONVERTED" {% if status_filter == 'CONVERTED' %}selected{% endif %}>เปิดบิลแล้ว</option>
+                                    <!-- 🌟 [NEW] เพิ่มสถานะยกเลิกให้กรองหาได้ 🌟 -->
+                                    <option value="CANCELLED" {% if status_filter == 'CANCELLED' %}selected{% endif %}>ยกเลิก</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="col-md-2">
+                            <div class="input-group bg-light rounded-pill overflow-hidden border">
+                                <span class="input-group-text bg-transparent border-0 ps-3"><i class="fas fa-industry text-muted"></i></span>
+                                <select name="prod_status" class="form-select bg-transparent border-0 shadow-none" style="font-size: 0.85rem; cursor: pointer;">
+                                    <option value="" {% if not prod_status_filter %}selected{% endif %}>สถานะผลิต</option>
+                                    <option value="NEW_JOB" {% if prod_status_filter == 'NEW_JOB' %}selected{% endif %}>รอจ่ายงาน</option>
+                                    <option value="IN_PROGRESS_5" {% if prod_status_filter == 'IN_PROGRESS_5' %}selected{% endif %}>กำลังผลิต</option>
+                                    <option value="COMPLETED" {% if prod_status_filter == 'COMPLETED' %}selected{% endif %}>ผลิตเสร็จสิ้น</option>
+                                    <option value="CLOSED" {% if prod_status_filter == 'CLOSED' %}selected{% endif %}>ปิดจ๊อบแล้ว</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="{% if is_manager or is_supervisor %}col-md-3{% else %}col-md-4{% endif %}">
+                            <div class="search-pill-container" style="background-color: #f8f9fa; border: 1px solid #ced4da;">
+                                <i class="far fa-calendar-alt search-pill-icon"></i>
+                                <input type="text" id="reportrange" class="search-pill-input" placeholder="เลือกช่วงวันที่..." readonly>
+                                <button type="submit" class="search-pill-btn" title="ค้นหา">
+                                    <i class="fas fa-search"></i>
+                                </button>
+                            </div>
+
+                            <input type="text" name="start_date" id="start_date" class="hidden-date" value="{{ date_start|default:'' }}">
+                            <input type="text" name="end_date" id="end_date" class="hidden-date" value="{{ date_end|default:'' }}">
+                        </div>
+
+                        <div class="col-md-1 d-flex justify-content-end align-items-center">
+                            {% if search_query or status_filter or prod_status_filter or date_start or branch_filter %}
+                                <a href="{% url 'quotation_list' %}" class="btn btn-outline-danger rounded-circle d-flex align-items-center justify-content-center" style="width: 38px; height: 38px;" title="ล้างค่า"><i class="fas fa-redo-alt"></i></a>
+                            {% endif %}
+                        </div>
+
+                    </form>
+                </div>
+            </div>
+
+            <div class="premium-card">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0 border-0">
+                        <thead class="text-secondary small text-uppercase" style="background-color: #f8f9fc; border-bottom: 2px solid #eef2f7;">
+                            <tr>
+                                <th class="ps-4 py-3 fw-bold" style="width: 25%;">ข้อมูลเอกสาร / ลูกค้า</th>
+                                <th class="py-3 fw-bold" style="width: 20%;">พนักงานขาย / สาขา</th>
+                                <th class="py-3 fw-bold" style="width: 25%;">สถานะดำเนินการ / ฝ่ายผลิต</th>
+                                <th class="text-end py-3 fw-bold" style="width: 15%;">ยอดสุทธิ (บาท)</th>
+                                <th class="text-end pe-4 py-3 fw-bold" style="width: 15%;">จัดการ</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for qt in page_obj %}
+                            <tr>
+                                <td class="ps-4 py-3">
+                                    <div class="d-flex align-items-center mb-1">
+                                        <span class="fw-bold text-dark fs-6 me-2">{{ qt.code }}</span>
+                                        <span class="text-muted" style="font-size: 0.75rem;"><i class="far fa-clock me-1"></i>{{ qt.date|date:"d/m/Y" }}</span>
+                                    </div>
+
+                                    {% with job=qt.production_orders.first %}
+                                        {% if job %}
+                                            <div class="mb-2">
+                                                <span class="badge bg-light text-dark border border-secondary border-opacity-25 shadow-sm" style="font-size: 0.7rem; letter-spacing: 0.5px;">
+                                                    <i class="fas fa-clipboard-list text-secondary me-1"></i>{{ job.code }}
+                                                </span>
+                                            </div>
+                                        {% endif %}
+                                    {% endwith %}
+
+                                    <div class="text-primary fw-bold mt-2" style="font-size: 0.9rem;">
+                                        <i class="fas fa-user-circle me-1 opacity-75"></i> {{ qt.customer_name }}
+                                    </div>
+                                    {% if qt.customer_phone %}
+                                        <div class="text-muted mt-1" style="font-size: 0.75rem;"><i class="fas fa-phone-alt me-1 opacity-50"></i>{{ qt.customer_phone }}</div>
+                                    {% endif %}
+                                </td>
+
+                                <td class="py-3">
+                                    <div class="d-flex align-items-center mb-1">
+                                        <div class="rounded-circle d-flex align-items-center justify-content-center me-2 text-white fw-bold shadow-sm" style="width: 35px; height: 35px; font-size: 14px; background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);">
+                                            {{ qt.employee.first_name|slice:":1" }}
+                                        </div>
+                                        <div>
+                                            <div class="text-dark fw-bold" style="font-size: 0.9rem;">{{ qt.employee.first_name|default:"ไม่ระบุ" }}</div>
+                                            <div class="text-muted" style="font-size: 0.75rem;"><i class="fas fa-map-marker-alt opacity-50 me-1"></i>{{ qt.employee.department.name|default:"สำนักงานใหญ่" }}</div>
+                                        </div>
+                                    </div>
+
+                                    {% with job=qt.production_orders.first %}
+                                        {% if job %}
+                                            <div class="text-danger fw-bold mt-2" style="font-size: 0.75rem; margin-left: 43px;">
+                                                <i class="fas fa-truck opacity-75 me-1"></i>นัดส่ง: {{ job.delivery_date|date:"d/m/Y"|default:"-" }}
+                                            </div>
+                                        {% endif %}
+                                    {% endwith %}
+                                </td>
+
+                                <td class="py-3">
+                                    <div class="d-flex flex-column align-items-start gap-1">
+                                        <div class="d-flex align-items-center gap-2 mb-1">
+                                            {% if qt.status == 'APPROVED' %}
+                                                {% if not qt.is_deposit_paid %}
+                                                    <span class="badge-soft badge-soft-warning"><i class="fas fa-hourglass-half me-1"></i>รอรับมัดจำ</span>
+                                                {% elif qt.is_deposit_paid and not qt.is_deposit_verified %}
+                                                    <span class="badge-soft badge-soft-secondary"><i class="fas fa-user-clock me-1"></i>รอตรวจมัดจำ</span>
+                                                {% else %}
+                                                    <span class="badge-soft badge-soft-success"><i class="fas fa-check-circle me-1"></i>อนุมัติแล้ว</span>
+                                                {% endif %}
+                                            {% elif qt.status == 'CONVERTED' %}
+                                                <span class="badge-soft badge-soft-info"><i class="fas fa-file-invoice-dollar me-1"></i>เปิดบิลแล้ว</span>
+                                            {% elif qt.status == 'CANCELLED' %}
+                                                <span class="badge-soft badge-soft-danger"><i class="fas fa-ban me-1"></i>ยกเลิก</span>
+                                            {% elif qt.status == 'DRAFT' %}
+                                                <span class="badge-soft badge-soft-secondary"><i class="fas fa-file-alt me-1"></i>รออนุมัติ</span>
+                                            {% endif %}
+
+                                            {% with job=qt.production_orders.first %}
+                                                {% if job and job.is_onsite %}
+                                                    <span class="badge bg-danger text-white rounded-pill px-2 py-1 shadow-sm" style="font-size: 0.7rem;" title="ช่างประกอบที่หน้างาน"><i class="fas fa-hard-hat me-1"></i>ประกอบหน้างาน</span>
+                                                {% endif %}
+                                            {% endwith %}
+                                        </div>
+
+                                        {% with job=qt.production_orders.first %}
+                                            {% if job %}
+                                                <div class="bg-light rounded p-2 border border-secondary border-opacity-10 w-100 mt-1">
+                                                    <div class="d-flex flex-wrap align-items-center gap-3" style="font-size: 0.7rem;">
+                                                        <div><i class="fas fa-industry text-primary opacity-75 me-1"></i><span class="fw-bold text-dark">{{ job.branch.name|default:"กองกลาง" }}</span></div>
+                                                        <div><i class="fas fa-users-cog text-warning opacity-75 me-1"></i><span class="fw-bold text-dark">{{ job.production_team.name|default:"ไม่ระบุทีม" }}</span></div>
+                                                    </div>
+                                                </div>
+
+                                                {% if job.status in 'IN_PROGRESS,COMPLETED,WAITING_QC,REWORK' and not job.is_closed %}
+                                                    <div class="w-100 mt-2 pe-3" tabindex="0" data-bs-toggle="popover" title="ความคืบหน้าการผลิต" data-bs-content="{% for d in job.completed_departments.all %}<i class='fas fa-check-circle text-success me-1'></i> {{ d.name }}<br>{% empty %}<span class='text-muted'>ยังไม่เริ่มดำเนินการ</span>{% endfor %}" data-bs-html="true">
+                                                        <div class="d-flex justify-content-between text-muted" style="font-size: 0.65rem;">
+                                                            <span>ความคืบหน้าผลิต</span>
+                                                            <span class="fw-bold">{{ job.progress_percentage }}%</span>
+                                                        </div>
+                                                        <div class="progress progress-rounded mt-1 shadow-sm" style="height: 6px;">
+                                                            <div class="progress-bar {% if job.progress_percentage == 100 %}bg-success{% else %}bg-primary{% endif %}" role="progressbar" style="width: {{ job.progress_percentage }}%;"></div>
+                                                        </div>
+                                                    </div>
+                                                {% endif %}
+                                            {% endif %}
+                                        {% endwith %}
+                                    </div>
+                                </td>
+
+                                <td class="text-end py-3">
+                                    <h6 class="fw-bold mb-1 {% if qt.status == 'CANCELLED' %}text-decoration-line-through text-muted{% else %}text-dark{% endif %}" style="letter-spacing: 0.5px;">
+                                        ฿{{ qt.grand_total|floatformat:2|intcomma }}
+                                    </h6>
+
+                                    {% if qt.status == 'CONVERTED' %}
+                                        <div class="text-success fw-bold" style="font-size: 0.75rem;"><i class="fas fa-check-circle me-1"></i>ชำระครบแล้ว</div>
+                                    {% elif qt.balance_due > 0 and qt.status != 'CANCELLED' and qt.status != 'DRAFT' %}
+                                        <div class="text-danger fw-bold" style="font-size: 0.75rem;">ค้างชำระ: ฿{{ qt.balance_due|floatformat:2|intcomma }}</div>
+                                    {% elif qt.deposit_amount > 0 and qt.status != 'CANCELLED' %}
+                                        <div class="text-success fw-bold" style="font-size: 0.75rem;">มัดจำแล้ว: ฿{{ qt.deposit_amount|floatformat:2|intcomma }}</div>
+                                    {% endif %}
+                                </td>
+
+                                <td class="text-end pe-4 py-3">
+                                    <div class="d-flex justify-content-end align-items-center gap-2">
+                                        
+                                        {% if qt.status != 'CANCELLED' %}
+                                        
+                                            {% if is_manager and qt.status == 'DRAFT' %}
+                                                <a href="{% url 'quotation_approve' qt.id %}" class="btn btn-success btn-primary-action rounded-pill text-white" onclick="return confirm('ยืนยันการอนุมัติเอกสารนี้?');"><i class="fas fa-check-circle me-1"></i> อนุมัติ</a>
+                                            
+                                            {% elif qt.status == 'APPROVED' and not qt.is_deposit_paid %}
+                                                <button class="btn btn-warning btn-primary-action rounded-pill text-dark" data-bs-toggle="modal" data-bs-target="#depositModal{{ qt.id }}"><i class="fas fa-hand-holding-usd me-1"></i> รับมัดจำ</button>
+                                            
+                                            {% elif qt.status == 'APPROVED' and qt.is_deposit_paid and not qt.is_deposit_verified %}
+                                                <span class="btn btn-secondary btn-primary-action rounded-pill text-white" style="cursor: not-allowed; opacity: 0.8;"><i class="fas fa-user-clock me-1"></i> รอตรวจสอบรับเงินมัดจำ</span>
+                                            
+                                            {% elif qt.status == 'APPROVED' and qt.is_deposit_paid and qt.is_deposit_verified and not qt.production_orders.all %}
+                                                <button class="btn btn-info btn-primary-action rounded-pill text-dark" data-bs-toggle="modal" data-bs-target="#produceModal{{ qt.id }}"><i class="fas fa-industry me-1"></i> สั่งผลิต</button>
+                                                
+                                            {% elif qt.status == 'APPROVED' and qt.production_orders.all %}
+                                                {% with job=qt.production_orders.first %}
+                                                    {% if job and job.status == 'COMPLETED' %}
+                                                        <a href="{% url 'convert_quote_to_invoice' qt.id %}" class="btn btn-primary-action rounded-pill text-white" style="background-color: #6f42c1; border-color: #6f42c1;" onclick="return confirm('เปิดบิลขายจากใบเสนอราคานี้ใช่หรือไม่?');"><i class="fas fa-file-invoice-dollar me-1"></i> เปิดบิลขาย</a>
+                                                    {% else %}
+                                                        <span class="btn btn-secondary btn-primary-action rounded-pill text-white" style="cursor: not-allowed; opacity: 0.7;"><i class="fas fa-cogs me-1"></i> กำลังดำเนินการผลิต</span>
+                                                    {% endif %}
+                                                {% endwith %}
+
+                                            {% elif qt.status == 'CONVERTED' %}
+                                                {% with job=qt.production_orders.first %}
+                                                    {% if job and job.delivery_status and job.delivery_status.name == 'จัดส่งเรียบร้อย' %}
+                                                        <span class="btn btn-success btn-primary-action rounded-pill text-white" style="cursor: not-allowed; opacity: 0.9;"><i class="fas fa-check-circle me-1"></i> จัดส่งสินค้าเรียบร้อย</span>
+                                                    {% elif job %}
+                                                        <span class="btn btn-warning btn-primary-action rounded-pill text-dark" style="cursor: not-allowed; opacity: 0.9;"><i class="fas fa-truck-loading me-1"></i> รอจัดส่งสินค้า</span>
+                                                    {% endif %}
+                                                {% endwith %}
+                                            {% endif %}
+                                            
+                                        {% else %}
+                                            <span class="badge bg-danger bg-opacity-10 text-danger rounded-pill px-3 py-2 fw-bold border border-danger"><i class="fas fa-ban me-1"></i> ยกเลิกแล้ว</span>
+                                        {% endif %}
+
+                                        <div class="dropdown">
+                                            <button class="btn btn-light rounded-circle shadow-sm border d-flex align-items-center justify-content-center" type="button" data-bs-toggle="dropdown" data-bs-boundary="window" style="width: 35px; height: 35px;">
+                                                <i class="fas fa-ellipsis-v text-secondary"></i>
+                                            </button>
+                                            <ul class="dropdown-menu dropdown-menu-end shadow border-0 mt-2">
+                                                <li><a class="dropdown-item py-2" href="{% url 'quotation_edit' qt.id %}">
+                                                    <i class="fas {% if qt.status != 'DRAFT' %}fa-eye text-primary{% else %}fa-pen text-primary{% endif %} me-2" style="width: 16px;"></i> {% if qt.status != 'DRAFT' %}ดูรายละเอียดเอกสาร{% else %}แก้ไขเอกสาร{% endif %}
+                                                </a></li>
+
+                                                {% if qt.status != 'CANCELLED' %}
+                                                    <li><hr class="dropdown-divider opacity-50"></li>
+                                                    <li><h6 class="dropdown-header text-muted small text-uppercase fw-bold pb-0">เอกสารสิ่งพิมพ์</h6></li>
+                                                    <li><a class="dropdown-item py-2" href="{% url 'quotation_print' qt.id %}" target="_blank"><i class="fas fa-print text-secondary me-2" style="width: 16px;"></i> พิมพ์ใบเสนอราคา</a></li>
+                                                    <li><a class="dropdown-item py-2" href="{% url 'print_deposit_contract' qt.id %}" target="_blank"><i class="fas fa-file-signature text-warning me-2" style="width: 16px;"></i> พิมพ์สัญญามัดจำ</a></li>
+                                                {% endif %}
+
+                                                <li><hr class="dropdown-divider opacity-50"></li>
+                                                <li><a class="dropdown-item py-2 text-info" href="{% url 'quotation_clone' qt.id %}" onclick="return confirm('ต้องการคัดลอกสร้างฉบับใหม่ใช่หรือไม่?');"><i class="fas fa-copy me-2" style="width: 16px;"></i> คัดลอกสร้างฉบับใหม่</a></li>
+
+                                                {% if qt.status in 'DRAFT,APPROVED' %}
+                                                    <li><a class="dropdown-item py-2 text-danger" href="{% url 'quotation_cancel' qt.id %}" onclick="return confirm('⚠️ ยืนยันการยกเลิกเอกสารนี้?');"><i class="fas fa-ban me-2" style="width: 16px;"></i> ยกเลิกเอกสาร</a></li>
+                                                {% endif %}
+                                            </ul>
+                                        </div>
+
+                                    </div>
+                                </td>
+                            </tr>
+
+                            {% if qt.status == 'APPROVED' and not qt.is_deposit_paid %}
+                            <div class="modal fade" id="depositModal{{ qt.id }}" tabindex="-1">
+                                <div class="modal-dialog modal-dialog-centered">
+                                    <div class="modal-content border-0 rounded-4 shadow-lg text-start">
+                                        <div class="modal-header bg-warning border-0">
+                                            <h5 class="modal-title fw-bold text-dark"><i class="fas fa-hand-holding-usd me-2"></i>บันทึกรับเงินมัดจำ ({{ qt.code }})</h5>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                        </div>
+                                        <form method="POST" action="{% url 'record_deposit' qt.id %}" enctype="multipart/form-data">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                            <div class="modal-body p-4">
+                                                <div class="alert alert-info py-2 small mb-4">
+                                                    <i class="fas fa-info-circle me-1"></i> ยอดสุทธิ: <strong>{{ qt.grand_total|floatformat:2|intcomma }} บาท</strong>
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label class="form-label fw-bold text-muted">ยอดมัดจำที่ได้รับ (บาท)</label>
+                                                    <input type="text" name="deposit_amount" class="form-control form-control-lg text-end fw-bold text-primary deposit-input" value="" autocomplete="off" required>
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label class="form-label fw-bold text-muted">วันที่รับเงิน</label>
+                                                    <input type="text" name="deposit_date" class="form-control datepicker" value="{% now 'Y-m-d' %}" required>
+                                                </div>
+
+                                                <div class="mb-3">
+                                                    <label class="form-label fw-bold text-muted">ช่องทางรับเงิน</label>
+                                                    <select name="deposit_method" class="form-select deposit-method-select" onchange="changeUploadText(this)">
+                                                        <option value="TRANSFER">โอนเงินเข้าบัญชี</option>
+                                                        <option value="CASH">เงินสด</option>
+                                                        <option value="CHECK">เช็คธนาคาร</option>
+                                                    </select>
+                                                </div>
+
+                                                <div class="mb-2 bg-light p-3 rounded-3 border border-warning border-opacity-50">
+                                                    <label class="form-label fw-bold text-dark upload-label"><i class="fas fa-receipt text-primary me-1"></i> อัปโหลดสลิปโอนเงิน <span class="text-danger">*</span></label>
+                                                    <input type="file" name="deposit_slip" class="form-control deposit-file-input border-warning" accept="image/*" required>
+                                                    <div class="form-text text-danger small mt-2 fw-bold upload-warning-text"><i class="fas fa-exclamation-triangle"></i> บังคับ: กรุณาแนบสลิปโอนเงิน/ภาพถ่ายรับเงินสด/ภาพเช็คธนาคาร</div>
+                                                </div>
+                                            </div>
+                                            <div class="modal-footer bg-light border-0">
+                                                <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">ยกเลิก</button>
+                                                <button type="submit" class="btn btn-warning rounded-pill px-4 fw-bold shadow-sm text-dark" onclick="return confirm('ยืนยันรับมัดจำ?\nยอดนี้จะถูกนำไปหักในใบเสร็จรับเงิน')">บันทึกยอดมัดจำ</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endif %}
+
+                            {% if qt.status == 'APPROVED' and qt.is_deposit_paid and qt.is_deposit_verified and not qt.production_orders.all %}
+                            <div class="modal fade" id="produceModal{{ qt.id }}" tabindex="-1">
+                                <div class="modal-dialog modal-dialog-centered">
+                                    <div class="modal-content border-0 rounded-4 shadow-lg text-start">
+                                        <div class="modal-header bg-info border-0">
+                                            <h5 class="modal-title fw-bold text-dark"><i class="fas fa-industry me-2"></i>กำหนดเป้าหมายสั่งผลิต ({{ qt.code }})</h5>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                        </div>
+                                        <form method="POST" action="{% url 'create_job_order' qt.id %}">
+                                            {% csrf_token %}
+                                            <div class="modal-body p-4">
+                                                <div class="mb-3">
+                                                    <label class="form-label fw-bold text-muted">วันที่กำหนดจัดส่งสินค้า (Target Date) <span class="text-danger">*</span></label>
+                                                    <input type="text" name="target_date" class="form-control datepicker" placeholder="เลือกวันที่ (dd/mm/yyyy)" value="{{ qt.auto_delivery_date|date:'Y-m-d' }}" required>
+                                                    <div class="form-text text-success fw-bold mt-2" style="font-size: 0.8rem;"><i class="fas fa-magic"></i> ระบบคำนวณวันจัดส่งอัตโนมัติตามคิวงานปัจจุบัน</div>
+                                                </div>
+
+                                                <div class="card bg-danger bg-opacity-10 border border-danger rounded-3 mb-3">
+                                                    <div class="card-body p-3">
+                                                        <div class="form-check form-switch d-flex align-items-center">
+                                                            <input class="form-check-input" type="checkbox" name="is_onsite" id="is_onsite_{{ qt.id }}" style="transform: scale(1.5); margin-right: 15px;">
+                                                            <label class="form-check-label fw-bold text-danger ms-2" for="is_onsite_{{ qt.id }}" style="cursor: pointer;">
+                                                                <i class="fas fa-hard-hat me-1"></i> ช่างต้องไปประกอบหน้างาน (On-site)
+                                                            </label>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div class="alert alert-light py-2 small mb-0 border"><i class="fas fa-info-circle me-1"></i> ใบสั่งผลิตจะถูกสร้างและส่งไปยังแผนกวางแผนทันที</div>
+                                            </div>
+                                            <div class="modal-footer bg-light border-0">
+                                                <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">ยกเลิก</button>
+                                                <button type="submit" class="btn btn-info rounded-pill px-4 fw-bold shadow-sm text-dark">ยืนยันส่งสั่งผลิต</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endif %}
+
+                            {% empty %}
+                            <tr><td colspan="5" class="text-center py-5"><div class="text-muted"><i class="fas fa-folder-open fa-3x mb-3 opacity-25"></i><br>ยังไม่มีเอกสารใบเสนอราคาในระบบ</div></td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                {% if page_obj.has_other_pages %}
+                <div class="card-footer bg-white py-3 border-top d-flex justify-content-center">
+                    <nav>
+                        <ul class="pagination pagination-sm shadow-sm mb-0">
+                            {% if page_obj.has_previous %}
+                            <li class="page-item"><a class="page-link border-0 text-muted" href="?page={{ page_obj.previous_page_number }}&q={{ search_query|default:'' }}&status={{ status_filter|default:'' }}&prod_status={{ prod_status_filter|default:'' }}&start_date={{ date_start|default:'' }}&end_date={{ date_end|default:'' }}&branch={{ branch_filter|default:'' }}"><i class="fas fa-chevron-left"></i></a></li>
+                            {% endif %}
+                            <li class="page-item disabled"><span class="page-link border-0 text-dark fw-bold px-3">หน้า {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span></li>
+                            {% if page_obj.has_next %}
+                            <li class="page-item"><a class="page-link border-0 text-muted" href="?page={{ page_obj.next_page_number }}&q={{ search_query|default:'' }}&status={{ status_filter|default:'' }}&prod_status={{ prod_status_filter|default:'' }}&start_date={{ date_start|default:'' }}&end_date={{ date_end|default:'' }}&branch={{ branch_filter|default:'' }}"><i class="fas fa-chevron-right"></i></a></li>
+                            {% endif %}
+                        </ul>
+                    </nav>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script>
+    function changeUploadText(selectElement) {
+        const form = selectElement.closest('form');
+        if (!form) return;
+
+        const uploadLabel = form.querySelector('.upload-label');
+        const warningText = form.querySelector('.upload-warning-text');
+        if (selectElement.value === 'TRANSFER') {
+            uploadLabel.innerHTML = '<i class="fas fa-receipt text-primary me-1"></i> อัปโหลดสลิปโอนเงิน <span class="text-danger">*</span>';
+            warningText.innerHTML = '<i class="fas fa-exclamation-triangle"></i> บังคับ: กรุณาแนบสลิปโอนเงิน';
+        } else if (selectElement.value === 'CASH') {
+            uploadLabel.innerHTML = '<i class="fas fa-money-bill-wave text-success me-1"></i> อัปโหลดรูปภาพรับเงินสด <span class="text-danger">*</span>';
+            warningText.innerHTML = '<i class="fas fa-exclamation-triangle"></i> บังคับ: กรุณาแนบรูปถ่ายขณะรับเงินสด';
+        } else if (selectElement.value === 'CHECK') {
+            uploadLabel.innerHTML = '<i class="fas fa-money-check text-info me-1"></i> อัปโหลดรูปหน้าเช็คธนาคาร <span class="text-danger">*</span>';
+            warningText.innerHTML = '<i class="fas fa-exclamation-triangle"></i> บังคับ: กรุณาแนบรูปถ่ายเช็คธนาคาร';
+        }
+    }
+
+    document.addEventListener("DOMContentLoaded", function() {
+        // ใช้ Flatpickr เฉพาะสำหรับช่อง input ที่อยู่ใน Modal (รับมัดจำ/สั่งผลิต)
+        flatpickr(".datepicker", { dateFormat: "Y-m-d", altInput: true, altFormat: "d/m/Y", allowInput: true });
+
+        document.querySelectorAll('.deposit-input').forEach(function(input) {
+            input.addEventListener('blur', function() {
+                if (this.value.trim() === '') return;
+                let val = parseFloat(this.value.replace(/,/g, ''));
+                if (!isNaN(val)) {
+                    this.value = val.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                } else {
+                    this.value = '';
+                }
+            });
+            input.addEventListener('focus', function() {
+                let val = this.value.replace(/,/g, '');
+                if (val === '0.00' || val === '0') this.value = '';
+                else this.value = val;
+            });
+        });
+
+        // 🌟 Initialize Popover สำหรับ Progress Bar 🌟
+        var popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'))
+        var popoverList = popoverTriggerList.map(function (popoverTriggerEl) {
+            return new bootstrap.Popover(popoverTriggerEl, {trigger: 'hover focus'})
+        });
+
+        if (typeof jQuery !== 'undefined') {
+            $('.modal').on('hidden.bs.modal', function () {
+                const form = $(this).find('form')[0];
+                if(form) {
+                    form.reset();
+                    $(this).find('.deposit-method-select').trigger('change');
+                }
+            });
+        }
+    });
+
+    // 🌟 สคริปต์ Date Range Picker สำหรับแถบค้นหา 🌟
+    $(function() {
+        var start = moment("{{ date_start|default:'' }}", "YYYY-MM-DD");
+        var end = moment("{{ date_end|default:'' }}", "YYYY-MM-DD");
+
+        function cb(start, end) {
+            if(start && end) {
+                $('#reportrange').val(start.format('DD/MM/YYYY') + ' - ' + end.format('DD/MM/YYYY'));
+                $('#start_date').val(start.format('YYYY-MM-DD'));
+                $('#end_date').val(end.format('YYYY-MM-DD'));
+            }
+        }
+
+        $('#reportrange').daterangepicker({
+            startDate: start,
+            endDate: end,
+            ranges: {
+               'วันนี้': [moment(), moment()],
+               'เมื่อวาน': [moment().subtract(1, 'days'), moment().subtract(1, 'days')],
+               'ช่วง 7 วันก่อนหน้า': [moment().subtract(6, 'days'), moment()],
+               'ช่วง 30 วันก่อนหน้า': [moment().subtract(29, 'days'), moment()],
+               'ช่วง 3 เดือนก่อนหน้า': [moment().subtract(3, 'months'), moment()], // 🌟 [NEW] เพิ่มตัวเลือก 3 เดือนก่อนหน้า 🌟
+               'เดือนนี้': [moment().startOf('month'), moment().endOf('month')],
+               '1 เดือนก่อนหน้า': [moment().subtract(1, 'month').startOf('month'), moment().subtract(1, 'month').endOf('month')]
+            },
+            locale: {
+                format: 'DD/MM/YYYY',
+                separator: ' - ',
+                applyLabel: 'ตกลง',
+                cancelLabel: 'ยกเลิก',
+                fromLabel: 'จาก',
+                toLabel: 'ถึง',
+                customRangeLabel: 'กำหนดเอง',
+                weekLabel: 'ส',
+                daysOfWeek: ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'],
+                monthNames: ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'],
+                firstDay: 1
+            }
+        }, cb);
+
+        $('#reportrange').on('apply.daterangepicker', function(ev, picker) {
+            cb(picker.startDate, picker.endDate);
+        });
+
+        cb(start, end);
+    });
+</script>
+{% endblock %}

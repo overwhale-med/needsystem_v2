@@ -1,0 +1,203 @@
+{% extends 'core/base.html' %}
+{% load humanize %}
+
+{% block content %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<style>
+    .flatpickr-calendar { font-family: 'Sarabun', sans-serif; }
+    .slip-thumbnail { width: 45px; height: 45px; object-fit: cover; cursor: pointer; border: 1px solid #dee2e6; transition: transform 0.2s; }
+    .slip-thumbnail:hover { transform: scale(1.1); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+    #slipModal .modal-backdrop { background-color: rgba(0,0,0,0.8); }
+</style>
+
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-end mb-4">
+        <div>
+            <h4 class="fw-bold mb-1 text-dark"><i class="fas fa-money-check-alt text-success me-2"></i>บันทึกการชำระเงิน (Payment)</h4>
+            <p class="text-muted small mb-0">อ้างอิงใบสั่งซื้อ: <span class="fw-bold text-primary">{{ po.code }}</span> | ร้านค้า: {{ po.supplier.name }}</p>
+        </div>
+        <a href="{% url 'po_list' %}" class="btn btn-outline-secondary rounded-pill px-4 fw-bold"><i class="fas fa-arrow-left me-2"></i> กลับหน้ารายการ</a>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-7">
+            <div class="card shadow-sm border-0 rounded-4">
+                <div class="card-header bg-white border-bottom py-3">
+                    <h6 class="fw-bold mb-0 text-dark"><i class="fas fa-edit me-2"></i>รายละเอียดการจ่ายเงิน</h6>
+                </div>
+                <div class="card-body p-4">
+                    {% if balance > 0 %}
+
+                    <form method="POST" id="payment-form" enctype="multipart/form-data">
+                        {% csrf_token %}
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label text-muted small fw-bold">วันที่ชำระเงิน</label>
+                                <input type="text" name="payment_date" class="form-control datepicker bg-white" placeholder="เลือกวันที่" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label text-muted small fw-bold">ช่องทางการชำระ</label>
+                                <select name="payment_method" id="payment-method-select" class="form-select">
+                                    <option value="โอนเงินผ่านธนาคาร">โอนเงินผ่านธนาคาร</option>
+                                    <option value="เงินสด">เงินสด</option>
+                                    <option value="เช็ค">เช็คธนาคาร</option>
+                                </select>
+                            </div>
+
+                            <div class="col-md-12">
+                                <label class="form-label text-muted small fw-bold">ยอดเงินที่ต้องการชำระ (บาท) <span class="text-danger">*</span></label>
+                                <input type="text" name="amount" id="payment-amount" class="form-control form-control-lg border-success text-success fw-bold bg-white shadow-sm" value="{{ balance|floatformat:2|intcomma }}" required>
+                                <small class="text-muted">จ่ายมัดจำ หรือ จ่ายเต็มจำนวน (ระบบดึงยอดคงค้างมาให้แล้ว)</small>
+                            </div>
+
+                            <div class="col-md-12" id="slip-upload-container">
+                                <label class="form-label text-muted small fw-bold"><i class="fas fa-file-invoice me-1"></i>อัปโหลดสลิปโอนเงิน / หลักฐาน</label>
+                                <input type="file" name="slip_image" class="form-control bg-light" accept="image/*">
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label text-muted small fw-bold">เลขที่ใบสำคัญจ่าย/ PV no. <span class="text-danger">*</span></label>
+                                <input type="text" name="reference_no" class="form-control border-primary" placeholder="ระบุเลขที่ PV..." required>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <label class="form-label text-muted small fw-bold">หมายเหตุ (ถ้ามี)</label>
+                                <input type="text" name="note" class="form-control" placeholder="ระบุหมายเหตุ...">
+                            </div>
+
+                            <div class="col-12 mt-4 text-end">
+                                <button type="submit" class="btn btn-success rounded-pill px-5 shadow-sm fw-bold">
+                                    <i class="fas fa-save me-2"></i> บันทึกชำระเงิน
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                    {% else %}
+                    <div class="text-center py-5">
+                        <i class="fas fa-check-circle fa-4x text-success mb-3"></i>
+                        <h4 class="fw-bold text-success">ชำระเงินครบถ้วนแล้ว</h4>
+                        <p class="text-muted">ใบสั่งซื้อนี้ไม่มียอดหนี้คงค้าง</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-5">
+            <div class="card shadow-sm border-0 rounded-4 mb-4" style="background-color: #f8f9fa;">
+                <div class="card-body p-4">
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="text-muted fw-bold">ยอดจัดซื้อทั้งหมด:</span>
+                        <span class="fw-bold">{{ po.total_amount|floatformat:2|intcomma }} บาท</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="text-muted fw-bold">ชำระแล้วสะสม:</span>
+                        <span class="fw-bold text-success">{{ total_paid|floatformat:2|intcomma }} บาท</span>
+                    </div>
+                    <hr>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span class="text-dark fw-bold fs-5">ยอดคงค้าง:</span>
+                        <span class="fw-bold fs-3 {% if balance > 0 %}text-danger{% else %}text-success{% endif %}">{{ balance|floatformat:2|intcomma }} บาท</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm border-0 rounded-4 overflow-hidden">
+                <div class="card-header bg-white border-bottom py-3">
+                    <h6 class="fw-bold mb-0 text-dark"><i class="fas fa-history me-2"></i>ประวัติการชำระเงิน</h6>
+                </div>
+                <div class="list-group list-group-flush">
+                    {% for p in payments %}
+                    <div class="list-group-item p-3">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="fw-bold text-success"><i class="fas fa-check-circle me-1"></i> {{ p.amount|floatformat:2|intcomma }} บาท</span>
+                            <small class="text-muted">{{ p.payment_date|date:"d/m/Y" }}</small>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-end mt-2">
+                            <div class="small text-muted">
+                                <i class="fas fa-wallet me-1"></i> {{ p.payment_method }}
+                                {% if p.reference_no %}<br><span class="text-primary fw-bold">PV: {{ p.reference_no }}</span>{% endif %}
+                            </div>
+
+                            {% if p.slip_image %}
+                            <div>
+                                <img src="{{ p.slip_image.url }}" class="rounded slip-thumbnail"
+                                     data-bs-toggle="modal" data-bs-target="#slipModal"
+                                     onclick="document.getElementById('slipImageFull').src='{{ p.slip_image.url }}'"
+                                     title="คลิกเพื่อขยายดูสลิป">
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="p-4 text-center text-muted small">ยังไม่มีประวัติการชำระเงิน</div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="slipModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content bg-transparent border-0">
+            <div class="modal-header border-0 pb-0 justify-content-end">
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close" style="filter: invert(1);"></button>
+            </div>
+            <div class="modal-body text-center pt-0">
+                <img id="slipImageFull" src="" class="img-fluid rounded-3 shadow-lg" style="max-height: 80vh; object-fit: contain;">
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="https://npmcdn.com/flatpickr/dist/l10n/th.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        flatpickr(".datepicker", {
+            altInput: true,
+            altFormat: "d/m/Y",
+            dateFormat: "Y-m-d",
+            locale: "th",
+            defaultDate: "today"
+        });
+
+        const amountInput = document.getElementById('payment-amount');
+        const paymentForm = document.getElementById('payment-form');
+        const methodSelect = document.getElementById('payment-method-select');
+        const slipContainer = document.getElementById('slip-upload-container');
+
+        // ซ่อน-โชว์ ช่องอัปโหลดสลิปอัตโนมัติ
+        if (methodSelect && slipContainer) {
+            methodSelect.addEventListener('change', function() {
+                if (this.value === 'โอนเงินผ่านธนาคาร') {
+                    slipContainer.classList.remove('d-none');
+                } else {
+                    slipContainer.classList.add('d-none');
+                }
+            });
+            if (methodSelect.value !== 'โอนเงินผ่านธนาคาร') {
+                slipContainer.classList.add('d-none');
+            }
+        }
+
+        if (amountInput) {
+            amountInput.addEventListener('change', function(e) {
+                let val = parseFloat(e.target.value.replace(/,/g, ''));
+                if (!isNaN(val)) {
+                    e.target.value = val.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                }
+            });
+        }
+
+        if (paymentForm) {
+            paymentForm.addEventListener('submit', function() {
+                if (amountInput && amountInput.value) {
+                    amountInput.value = amountInput.value.replace(/,/g, '');
+                }
+            });
+        }
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,75 @@
+{% extends 'core/base.html' %}
+{% block content %}
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-end mb-4 border-bottom pb-3">
+        <div>
+            <h3 class="fw-bold text-dark mb-1"><i class="fas fa-address-book text-warning me-2"></i>ทำเนียบซัพพลายเออร์</h3>
+            <p class="text-muted small mb-0">ค้นหาและจัดการข้อมูลผู้ขายทั้งหมดในระบบ</p>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm rounded-4 mb-4 bg-white p-3">
+        <form method="GET" class="row g-2 align-items-center">
+            
+            <div class="col-md-5">
+                <input type="text" name="q" class="form-control form-control-sm shadow-none bg-light" value="{{ query }}" placeholder="ค้นหาชื่อร้าน, รหัส, ชื่อเซลส์, หรือเบอร์โทร...">
+            </div>
+
+            <div class="col-md-3">
+                <select name="category" class="form-select form-select-sm shadow-none bg-light border-0">
+                    <option value="">-- กรองด้วยหมวดหมู่สินค้า --</option>
+                    {% for cat in categories %}
+                        <option value="{{ cat.id }}" {% if selected_cat == cat.id|stringformat:"s" %}selected{% endif %}>{{ cat.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="col-md-3">
+                <select name="rm_category" class="form-select form-select-sm shadow-none bg-light border-0">
+                    <option value="">-- กรองด้วยแผนกวัตถุดิบ --</option>
+                    {% for rm_cat in rm_categories %}
+                        <option value="{{ rm_cat.id }}" {% if selected_rm_cat == rm_cat.id|stringformat:"s" %}selected{% endif %}>{{ rm_cat.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="col-md-1 d-grid">
+                <button type="submit" class="btn btn-warning btn-sm rounded-pill fw-bold shadow-sm text-dark"><i class="fas fa-search me-1"></i> ค้นหา</button>
+            </div>
+
+            {% if query or selected_cat or selected_rm_cat %}
+            <div class="col-12 mt-2">
+                <a href="{% url 'supplier_list' %}" class="text-danger small text-decoration-none"><i class="fas fa-times-circle me-1"></i>ล้างการค้นหาทั้งหมด</a>
+            </div>
+            {% endif %}
+
+        </form>
+    </div>
+
+    <div class="row g-4">
+        {% for sup in suppliers %}
+        <div class="col-md-6 col-lg-4">
+            <div class="card shadow-sm border-light h-100 rounded-4 overflow-hidden">
+                <div class="bg-warning bg-opacity-10 py-2 px-3 border-bottom border-warning border-opacity-25 d-flex justify-content-between">
+                    <span class="badge bg-warning text-dark rounded-pill">{{ sup.code }}</span>
+                </div>
+                <div class="card-body p-4">
+                    <h5 class="fw-bold text-dark mb-3">{{ sup.name }}</h5>
+                    <div class="mb-2 text-muted small"><i class="fas fa-user-tie me-2 text-primary"></i>ผู้ติดต่อ: <strong>{{ sup.contact_name|default:"-" }}</strong></div>
+                    <div class="mb-3 text-muted small"><i class="fas fa-phone-alt me-2 text-success"></i>เบอร์โทร: <strong>{{ sup.phone|default:"-" }}</strong></div>
+                    
+                    <a href="{% url 'supplier_detail' sup.id %}" class="btn btn-outline-warning text-dark w-100 rounded-pill fw-bold btn-sm mt-2">
+                        <i class="fas fa-search-plus me-1"></i> ดูโปรไฟล์เชิงลึก
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% empty %}
+        <div class="col-12 text-center text-muted py-5">
+            <i class="fas fa-box-open fa-3x mb-3 opacity-25"></i>
+            <p>ไม่พบข้อมูลซัพพลายเออร์ที่ค้นหา</p>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

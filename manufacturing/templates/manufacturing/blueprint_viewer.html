@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>แบบแปลน: {{ order.code }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    
+    <style>
+        body, html { min-height: 100%; margin: 0; padding: 0; background-color: #525659; font-family: 'Sarabun', sans-serif; }
+        
+        /* 🌟 แถบเมนูสำหรับหน้าจอ (Screen) 🌟 */
+        .main-info-bar { background-color: #ffffff; padding: 12px 20px; border-bottom: 3px solid #dc3545; box-shadow: 0 4px 10px rgba(0,0,0,0.15); z-index: 10; position: sticky; top: 0; }
+        .info-box { padding: 0 15px; border-right: 1px solid #dee2e6; }
+        .info-box:last-child { border-right: none; }
+
+        /* 🌟 การจัดหน้าจอสำหรับแสดงรูป PDF บนเว็บ 🌟 */
+        #pdf-render-container { display: flex; flex-direction: column; align-items: center; padding: 20px; gap: 20px; }
+        
+        .pdf-page-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+        }
+
+        .print-only-header { display: none; }
+
+        canvas {
+            max-width: 100%;
+            height: auto;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+            background-color: white;
+        }
+
+        /* ==========================================
+           🌟 CSS ควบคุมการพิมพ์ (ออกแบบใหม่ให้พรีเมียม) 🌟 
+           ========================================== */
+        @media print {
+            @page { margin: 8mm; }
+            body, html { background-color: #fff; margin: 0; padding: 0; height: auto !important; }
+            
+            .main-info-bar { display: none !important; }
+            #pdf-render-container { display: block; padding: 0; gap: 0; }
+            
+            .pdf-page-wrapper {
+                page-break-after: always;
+                break-after: page;
+                height: 100vh;
+                display: flex;
+                flex-direction: column;
+                justify-content: flex-start;
+                align-items: center;
+                box-sizing: border-box;
+                padding-bottom: 5mm;
+            }
+            .pdf-page-wrapper:last-child { page-break-after: auto; break-after: auto; }
+
+            /* 🌟 ตาราง Title Block แบบวิศวกรรม 🌟 */
+            .print-only-header { 
+                display: flex !important; 
+                width: 100%; 
+                border: 2px solid #000; /* กรอบหนาด้านนอก */
+                margin-bottom: 15px; 
+                background-color: #fff;
+                box-sizing: border-box;
+            }
+
+            .print-box {
+                padding: 6px 10px;
+                border-right: 1px solid #000; /* เส้นคั่นแต่ละช่อง */
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+            }
+            .print-box:last-child {
+                border-right: none;
+            }
+
+            .print-label {
+                font-size: 10px;
+                font-weight: 600;
+                color: #444;
+                margin-bottom: 2px;
+                text-transform: uppercase;
+            }
+
+            .print-value {
+                font-size: 14px;
+                font-weight: 700;
+                color: #000;
+                line-height: 1.2;
+            }
+
+            /* 🌟 ไฮไลต์ให้ใหญ่พิเศษ 🌟 */
+            .print-value.large {
+                font-size: 22px;
+                font-weight: 900;
+            }
+            .print-value.medium {
+                font-size: 18px;
+                font-weight: 800;
+                color: #0d6efd; /* ลองใส่สีน้ำเงินให้รหัสแบบบ้านดูเด่นขึ้นเวลาพิมพ์สี */
+            }
+
+            canvas {
+                box-shadow: none;
+                width: auto;
+                max-width: 100%;
+                /* ลบความสูงของหัวกระดาษออกแบบเป๊ะๆ */
+                max-height: calc(100vh - 90px); 
+                object-fit: contain; 
+                page-break-inside: avoid;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="main-info-bar d-flex flex-wrap justify-content-between align-items-center">
+        <div class="d-flex align-items-center flex-grow-1 overflow-auto">
+            <div class="info-box ps-0">
+                <span class="text-muted small fw-bold d-block"><i class="fas fa-clipboard-list me-1"></i> เลขที่ JOB</span>
+                <span class="fw-bold text-danger fs-5">{{ order.code }}</span>
+            </div>
+            <div class="info-box">
+                <span class="text-muted small fw-bold d-block"><i class="fas fa-home me-1"></i> รหัสแบบบ้าน</span>
+                <span class="fw-bold text-dark">{{ order.product.code }}</span>
+            </div>
+            <div class="info-box">
+                <span class="text-muted small fw-bold d-block"><i class="fas fa-user-circle me-1"></i> ลูกค้า</span>
+                <span class="fw-bold text-dark">{{ order.customer_name|default:"-" }}</span>
+            </div>
+            <div class="info-box">
+                <span class="text-muted small fw-bold d-block"><i class="fas fa-user-tie me-1"></i> พนักงานขาย</span>
+                <span class="fw-bold text-dark">{{ order.salesperson.name|default:"-" }}</span>
+            </div>
+            <div class="info-box">
+                <span class="text-muted small fw-bold d-block"><i class="fas fa-users-cog me-1"></i> ทีมผลิต</span>
+                <span class="fw-bold text-dark">{{ order.production_team.name|default:"-" }}</span>
+            </div>
+            <div class="info-box border-0">
+                <span class="text-muted small fw-bold d-block"><i class="fas fa-flag-checkered me-1"></i> กำหนดเสร็จ</span>
+                <span class="fw-bold text-danger">{{ order.delivery_date|date:"d/m/Y"|default:"-" }}</span>
+            </div>
+        </div>
+        
+        <div class="ms-3 d-flex gap-2">
+            <button onclick="window.print()" class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm" id="printBtn" disabled>
+                <i class="fas fa-spinner fa-spin me-1" id="printIcon"></i> กำลังประมวลผล...
+            </button>
+            <button onclick="window.close()" class="btn btn-outline-secondary rounded-pill px-4 fw-bold shadow-sm bg-white">
+                <i class="fas fa-times me-1"></i> ปิด
+            </button>
+        </div>
+    </div>
+
+    <div id="pdf-render-container">
+        {% if not order.blueprint_file %}
+            <div class="d-flex justify-content-center align-items-center text-white flex-column mt-5 w-100">
+                <i class="fas fa-file-excel fa-4x text-warning mb-3"></i>
+                <h4>ไม่พบไฟล์แบบแปลนในระบบ</h4>
+            </div>
+        {% endif %}
+    </div>
+
+    <template id="print-header-template">
+        <div class="print-only-header">
+            <div class="print-box" style="width: 22%;">
+                <span class="print-label">เลขที่ใบสั่งผลิต (JOB NO.)</span>
+                <span class="print-value large">{{ order.code }}</span>
+            </div>
+            <div class="print-box" style="width: 18%;">
+                <span class="print-label">รหัสแบบบ้าน (MODEL)</span>
+                <span class="print-value medium">{{ order.product.code }}</span>
+            </div>
+            <div class="print-box" style="width: 22%;">
+                <span class="print-label">ชื่อลูกค้า (CUSTOMER)</span>
+                <span class="print-value">{{ order.customer_name|default:"-" }}</span>
+            </div>
+            <div class="print-box" style="width: 14%;">
+                <span class="print-label">เซลล์ (SALES)</span>
+                <span class="print-value">{{ order.salesperson.name|default:"-" }}</span>
+            </div>
+            <div class="print-box" style="width: 12%;">
+                <span class="print-label">ทีมผลิต (TEAM)</span>
+                <span class="print-value">{{ order.production_team.name|default:"-" }}</span>
+            </div>
+            <div class="print-box" style="width: 12%;">
+                <span class="print-label">กำหนดเสร็จ (DUE)</span>
+                <span class="print-value">{{ order.delivery_date|date:"d/m/Y"|default:"-" }}</span>
+            </div>
+        </div>
+    </template>
+
+    {% if order.blueprint_file %}
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+
+        const url = '{{ order.blueprint_file.url }}';
+        const container = document.getElementById('pdf-render-container');
+        const printBtn = document.getElementById('printBtn');
+        const printIcon = document.getElementById('printIcon');
+        const printHeaderTemplate = document.getElementById('print-header-template').innerHTML;
+
+        pdfjsLib.getDocument(url).promise.then(function(pdf) {
+            const totalPages = pdf.numPages;
+            let pagesRendered = 0;
+
+            for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+                pdf.getPage(pageNum).then(function(page) {
+                    
+                    const pageWrapper = document.createElement('div');
+                    pageWrapper.className = 'pdf-page-wrapper';
+                    
+                    // แปะหัวตารางลงไป
+                    pageWrapper.innerHTML = printHeaderTemplate;
+
+                    const scale = 2.0; 
+                    const viewport = page.getViewport({ scale: scale });
+
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    canvas.height = viewport.height;
+                    canvas.width = viewport.width;
+
+                    const renderContext = {
+                        canvasContext: ctx,
+                        viewport: viewport
+                    };
+
+                    page.render(renderContext).promise.then(function() {
+                        pageWrapper.appendChild(canvas);
+                        container.appendChild(pageWrapper);
+                        
+                        pagesRendered++;
+                        if (pagesRendered === totalPages) {
+                            printBtn.disabled = false;
+                            printIcon.className = "fas fa-print me-1";
+                            printBtn.innerHTML = '<i class="fas fa-print me-1"></i> พิมพ์แบบแปลน';
+                        }
+                    });
+                });
+            }
+        }).catch(function(error) {
+            console.error('Error loading PDF:', error);
+            container.innerHTML = '<h4 class="text-white mt-5">เกิดข้อผิดพลาดในการโหลดแบบแปลน</h4>';
+        });
+    </script>
+    {% endif %}
+</body>
+</html>

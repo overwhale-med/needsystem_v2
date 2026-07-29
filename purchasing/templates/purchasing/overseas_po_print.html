@@ -1,0 +1,253 @@
+{% load humanize i18n %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Purchase Order - {{ po.po_number|default:po.pi_number }}</title>
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        body { background-color: #525659; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #333; margin: 0; padding: 0;}
+        
+        /* 🌟 โครงสร้างกระดาษ A4 สำหรับแสดงบนหน้าจอเว็บ 🌟 */
+        .page-a4 {
+            background-color: #ffffff;
+            width: 210mm;
+            min-height: 297mm;
+            margin: 20px auto;
+            padding: 10mm 15mm; 
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            box-sizing: border-box;
+            position: relative;
+        }
+
+        .po-header { margin-bottom: 15px; } 
+        /* ดันให้ตารางมีความสูงระดับหนึ่งเพื่อรักษาสัดส่วน 50% */
+        .po-body { min-height: 120mm; margin-bottom: 15px; } 
+        .po-footer { margin-top: auto; }
+
+        /* 🌟 โครงสร้างสำหรับเครื่องปริ้นท์และ PDF (แก้ปัญหาเบราว์เซอร์บีบตัวหนังสือ) 🌟 */
+        @media print {
+            @page {
+                size: A4 portrait;
+                margin: 10mm 15mm; /* กำหนดขอบกระดาษในระดับเครื่องปริ้นท์ */
+            }
+            body { 
+                background-color: #ffffff; 
+                -webkit-print-color-adjust: exact; 
+                print-color-adjust: exact; 
+            }
+            .page-a4 { 
+                width: 100%; 
+                height: auto !important; 
+                min-height: auto !important; /* ปลดล็อคความสูง ห้าม Chrome บีบอัดเด็ดขาด */
+                margin: 0; 
+                padding: 0; 
+                box-shadow: none; 
+                border: none; 
+                page-break-after: always; 
+            }
+            .no-print { display: none !important; }
+        }
+
+        .table-items th { background-color: #f1f3f5 !important; font-size: 0.75rem; padding: 6px; border-bottom: 2px solid #dee2e6; color: #495057; text-transform: uppercase;}
+        .table-items td { font-size: 0.8rem; vertical-align: middle; padding: 6px; border-bottom: 1px solid #dee2e6; }
+        .img-item { max-width: 50px; max-height: 50px; object-fit: contain; border-radius: 4px; border: 1px solid #eee; padding: 2px; }
+        
+        /* 🌟 ลบ border-top ออก และเพิ่มระยะห่างด้านบนให้กว้างขึ้น 🌟 */
+        .signature-box { text-align: center; margin-top: 30px; }
+        
+        .section-title { font-size: 0.7rem; text-transform: uppercase; font-weight: bold; color: #6c757d; border-bottom: 1px solid #dee2e6; padding-bottom: 3px; margin-bottom: 5px; letter-spacing: 0.5px;}
+        
+        /* จัดกล่องข้อความให้รองรับการขึ้นบรรทัดใหม่แบบธรรมชาติ ป้องกันอักษรแบน */
+        .address-text { white-space: normal; word-wrap: break-word; line-height: 1.6; display: block; }
+    </style>
+</head>
+<body>
+
+    <div class="text-center py-3 no-print sticky-top bg-dark border-bottom">
+        <button class="btn btn-primary rounded-pill px-4 fw-bold me-2 shadow-sm" onclick="window.print()">
+            <i class="fas fa-print me-2"></i> Print Document (PDF)
+        </button>
+        <button class="btn btn-light rounded-pill px-4 fw-bold shadow-sm" onclick="window.close()">
+            Close
+        </button>
+    </div>
+
+    <div class="page-a4">
+        
+        <div class="po-header">
+            <div class="row mb-3 pb-2 border-bottom border-2 border-dark align-items-start">
+                <div class="col-7">
+                    <div class="d-flex align-items-center mb-2">
+                        {% if company.logo %}
+                            <img src="{{ company.logo.url }}" alt="Logo" style="max-height: 45px; margin-right: 10px;">
+                        {% else %}
+                            <div class="bg-primary text-white d-flex align-items-center justify-content-center fw-bold rounded me-3 print-exact" style="width: 40px; height: 40px; font-size: 1.2rem;">
+                                {{ company.name_en|default:company.name_th|default:"CO"|slice:":2"|upper }}
+                            </div>
+                        {% endif %}
+                        <div class="mt-1">
+                            <h6 class="fw-bold mb-0 text-dark" style="letter-spacing: 0.5px;">{{ company.name_en|default:company.name_th|default:"YOUR COMPANY NAME" }}</h6>
+                            <div class="text-muted" style="font-size: 0.65rem;">TAX ID: {{ company.tax_id|default:"-" }}</div>
+                        </div>
+                    </div>
+                    <div class="text-muted address-text" style="font-size: 0.65rem; max-width: 95%;">
+                        {{ company.address_en|default:company.address|default:"-" }}<br>
+                        Tel: {{ company.phone|default:"-" }} | Email: {{ company.email|default:"-" }}
+                    </div>
+                </div>
+                
+                <div class="col-5 text-end mt-1">
+                    <h5 class="fw-bold text-primary mb-2 print-exact" style="letter-spacing: 1px;">PURCHASE ORDER</h5>
+                    <table class="table table-sm table-borderless text-end mb-0" style="font-size: 0.7rem;">
+                        <tr><td class="text-muted py-0">PO Number:</td><td class="fw-bold py-0">{{ po.po_number|default:"-" }}</td></tr>
+                        <tr><td class="text-muted py-0">Ref PI No.:</td><td class="fw-bold text-secondary py-0">{{ po.pi_number|default:"-" }}</td></tr>
+                        <tr>
+                            <td class="text-muted py-0">PO Date:</td>
+                            <td class="fw-bold py-0">
+                                {% language 'en' %}
+                                {{ po.po_date|date:"d M Y" }}
+                                {% endlanguage %}
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-7">
+                    <div class="p-2 bg-light rounded border print-exact h-100">
+                        <div class="section-title">Vendor / Supplier</div>
+                        <h6 class="fw-bold mb-1" style="font-size: 0.75rem;">{{ po.supplier.name|default:po.supplier_name }}</h6>
+                        {% if po.supplier %}
+                            <div class="address-text" style="font-size: 0.7rem; color: #555;">
+                                {{ po.supplier.address|default:"-" }}<br>
+                                Country: {{ po.supplier.country|default:"-" }}<br>
+                                Contact: {{ po.supplier.contact_name|default:"-" }}<br>
+                                Tel: {{ po.supplier.phone|default:"-" }} | Email: {{ po.supplier.email|default:"-" }}
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="col-5">
+                    <div class="p-2 bg-light rounded border print-exact h-100 d-flex flex-column justify-content-center">
+                        <div class="section-title">Shipping Details</div>
+                        <table class="table table-sm table-borderless mb-0" style="font-size: 0.75rem;">
+                            <tr>
+                                <td class="text-muted py-1 align-top" style="width: 110px;">Port of Discharge:</td>
+                                <td class="fw-bold text-danger py-1 align-top">{{ po.ship_to_port|default:"-" }}</td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted py-1 align-top">ETA:</td>
+                                <td class="fw-bold text-dark py-1 align-top">
+                                    {% language 'en' %}
+                                    {{ po.eta_date|date:"d M Y"|default:"TBA" }}
+                                    {% endlanguage %}
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="po-body">
+            <table class="table table-items text-center mb-0 border">
+                <thead>
+                    <tr class="print-exact">
+                        <th width="5%" class="text-center border-end">No.</th>
+                        <th width="15%" class="text-center border-end">Image</th>
+                        <th width="40%" class="text-start border-end">Description</th>
+                        <th width="10%" class="text-center border-end">Qty</th>
+                        <th width="15%" class="text-end border-end">Unit Price</th>
+                        <th width="15%" class="text-end">Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in po.overseas_items.all %}
+                    <tr>
+                        <td class="text-muted border-end">{{ forloop.counter }}</td>
+                        <td class="border-end">
+                            {% if item.image %}
+                                <img src="{{ item.image.url }}" class="img-item shadow-sm">
+                            {% elif item.product and item.product.image %}
+                                <img src="{{ item.product.image.url }}" class="img-item shadow-sm">
+                            {% else %}
+                                <div class="text-muted" style="font-size: 0.6rem; padding: 4px; border: 1px dashed #ddd; border-radius: 4px;">No Image</div>
+                            {% endif %}
+                        </td>
+                        <td class="text-start border-end">
+                            <div class="fw-bold" style="font-size: 0.75rem;">{{ item.description }}</div>
+                        </td>
+                        <td class="fw-bold border-end" style="font-size: 0.75rem;">{{ item.quantity|floatformat:0|intcomma }}</td>
+                        <td class="text-end border-end" style="font-size: 0.75rem;">{{ item.unit_price|floatformat:2|intcomma }}</td>
+                        <td class="text-end fw-bold text-dark" style="font-size: 0.75rem;">{{ item.total_price|floatformat:2|intcomma }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="py-5 text-muted" style="font-size: 0.8rem;">
+                            -- No items found --
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="po-footer">
+            
+            <div class="row align-items-start mb-4">
+                <div class="col-7">
+                    <div class="section-title border-0 mb-1">Remarks / Note</div>
+                    <div class="p-2 border rounded text-muted address-text" style="font-size: 0.75rem; min-height: 60px; background-color: #f8f9fa;">
+                        {{ po.item_description|default:"-"|linebreaksbr }}
+                    </div>
+                </div>
+                <div class="col-5">
+                    <table class="table table-borderless table-sm mb-0 border rounded print-exact">
+                        <tr class="border-bottom print-exact" style="background-color: #f8f9fa;">
+                            <td class="py-1 px-2 fw-bold text-end" style="font-size: 0.8rem;">TOTAL AMOUNT:</td>
+                            <td class="py-1 px-2 fw-bold text-end fs-6 text-primary print-exact" style="width: 50%;">{{ po.total_amount|floatformat:2|intcomma }}</td>
+                        </tr>
+                        <tr>
+                            <td class="py-1 px-2 text-end text-muted" style="font-size: 0.7rem; padding-top: 6px;">Deposit Paid:</td>
+                            <td class="py-1 px-2 text-end fw-bold text-success" style="font-size: 0.75rem; padding-top: 6px;">{{ po.deposit_amount|floatformat:2|intcomma }}</td>
+                        </tr>
+                        <tr>
+                            <td class="py-1 px-2 text-end text-muted" style="font-size: 0.7rem; padding-bottom: 6px;">Balance Due:</td>
+                            <td class="py-1 px-2 text-end fw-bold text-danger" style="font-size: 0.75rem; padding-bottom: 6px;">{{ po.balance_amount|floatformat:2|intcomma }}</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+
+            <div class="row mt-5 pt-4">
+                <div class="col-4">
+                    <div class="signature-box">
+                        <p class="mb-0 fw-bold" style="font-size: 0.8rem;">{{ po.buyer.first_name|default:".........................................." }}</p>
+                        <p class="text-muted mb-0" style="font-size: 0.65rem;">Prepared By / Buyer</p>
+                    </div>
+                </div>
+                <div class="col-4">
+                    <div class="signature-box">
+                        <p class="mb-0 fw-bold" style="font-size: 0.8rem;">..........................................</p>
+                        <p class="text-muted mb-0" style="font-size: 0.65rem;">Authorized Signature</p>
+                    </div>
+                </div>
+                <div class="col-4">
+                    <div class="signature-box">
+                        <p class="mb-0 fw-bold" style="font-size: 0.8rem;">..........................................</p>
+                        <p class="text-muted mb-0" style="font-size: 0.65rem;">Accepted By (Supplier)</p>
+                    </div>
+                </div>
+            </div>
+            
+        </div>
+
+    </div>
+</body>
+</html>

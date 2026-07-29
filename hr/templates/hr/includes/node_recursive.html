@@ -1,0 +1,26 @@
+<li>
+    <a href="#" class="node-card">
+        {% if node.photo %}
+            <img src="{{ node.photo.url }}" class="node-img">
+        {% else %}
+            <div class="node-img d-inline-flex align-items-center justify-content-center bg-secondary text-white" style="font-size: 20px;">
+                {{ node.first_name|slice:":1" }}
+            </div>
+        {% endif %}
+        
+        <div class="fw-bold">{{ node.first_name }} {{ node.last_name }}</div>
+        <div class="small text-muted">{{ node.position.title|default:"-" }}</div>
+        
+        <span class="rank-badge rank-{{ node.business_rank|default:'member' }}">
+            {{ node.business_rank|default:'Member' }}
+        </span>
+    </a>
+
+    {% if node.downlines.all %}
+        <ul>
+            {% for child in node.downlines.all %}
+                {% include "hr/includes/node_recursive.html" with node=child %}
+            {% endfor %}
+        </ul>
+    {% endif %}
+</li>

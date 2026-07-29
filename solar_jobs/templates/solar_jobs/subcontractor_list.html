@@ -1,0 +1,63 @@
+{% extends 'core/base.html' %}
+{% block content %}
+<div class="container-fluid py-4 px-4">
+    <div class="d-flex justify-content-between align-items-end mb-4">
+        <div>
+            <h4 class="fw-bold mb-1 text-dark"><i class="fas fa-users-cog text-primary me-2"></i>ฐานข้อมูลทีมช่างรับเหมา</h4>
+            <p class="text-muted small mb-0">จัดการรายชื่อผู้รับเหมาและทีมติดตั้งโซล่าเซลล์</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{% url 'solar_center_dashboard' %}" class="btn btn-outline-secondary rounded-pill px-4 fw-bold shadow-sm">
+                <i class="fas fa-arrow-left me-2"></i> กลับหน้า Center
+            </a>
+            <a href="{% url 'subcontractor_create' %}" class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm">
+                <i class="fas fa-plus-circle me-2"></i> เพิ่มทีมช่างใหม่
+            </a>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0 rounded-4 bg-white overflow-hidden">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="bg-light text-secondary small text-uppercase">
+                    <tr>
+                        <th class="ps-4 py-3 border-0">ชื่อทีมรับเหมา / บริษัท</th>
+                        <th class="py-3 border-0">หัวหน้าช่าง</th>
+                        <th class="py-3 border-0">เบอร์ติดต่อ</th>
+                        <th class="py-3 border-0 text-center">สถานะ</th>
+                        <th class="pe-4 py-3 border-0 text-center">จัดการ</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for team in teams %}
+                    <tr>
+                        <td class="ps-4 fw-bold text-dark">{{ team.name }}</td>
+                        <td>{{ team.leader_name|default:"-" }}</td>
+                        <td><i class="fas fa-phone-alt text-muted me-1 small"></i> {{ team.phone|default:"-" }}</td>
+                        <td class="text-center">
+                            {% if team.is_active %}
+                                <span class="badge bg-success rounded-pill px-3 shadow-sm">เปิดรับงาน</span>
+                            {% else %}
+                                <span class="badge bg-secondary rounded-pill px-3 shadow-sm">งดรับงาน</span>
+                            {% endif %}
+                        </td>
+                        <td class="pe-4 text-center">
+                            <a href="{% url 'subcontractor_edit' team.id %}" class="btn btn-sm btn-outline-primary rounded-pill px-3 fw-bold">
+                                <i class="fas fa-edit me-1"></i> แก้ไข
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="text-center py-5 text-muted">
+                            <i class="fas fa-folder-open fa-3x mb-3 opacity-25"></i>
+                            <h5 class="fw-bold">ยังไม่มีข้อมูลทีมช่างรับเหมา</h5>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

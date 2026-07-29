@@ -1,0 +1,103 @@
+{% extends 'core/base.html' %}
+{% load humanize %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-end mb-4">
+        <div>
+            <h4 class="fw-bold mb-1 text-dark"><i class="fas fa-clipboard-check text-success me-2"></i>ตรวจรับสินค้าเข้าคลัง (GR)</h4>
+            <p class="text-muted small mb-0">อ้างอิงจากใบสั่งซื้อ: <span class="text-primary fw-bold">{{ po.code }}</span></p>
+        </div>
+        <a href="{% url 'po_receive_list' %}" class="btn btn-outline-secondary rounded-pill px-4"><i class="fas fa-arrow-left me-2"></i> ยกเลิก</a>
+    </div>
+
+    <form method="POST">
+        {% csrf_token %}
+        
+        <div class="card shadow-sm border-0 rounded-4 mb-4 bg-light">
+            <div class="card-body p-4 row g-3">
+                <div class="col-md-6">
+                    <label class="form-label text-muted small fw-bold">ร้านค้า (Supplier)</label>
+                    <input type="text" class="form-control bg-white" value="{{ po.supplier.name }}" readonly>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label text-muted small fw-bold">เลขที่ใบส่งของ / อ้างอิง <span class="text-danger">*</span></label>
+                    <input type="text" name="doc_reference" class="form-control" placeholder="เช่น ทะเบียนรถ, DO-1234" required>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label text-muted small fw-bold">หมายเหตุ (ถ้ามี)</label>
+                    <input type="text" name="doc_note" class="form-control" placeholder="สภาพกล่อง ฯลฯ">
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm border-0 rounded-4 overflow-hidden mb-5">
+            <div class="card-header bg-white border-bottom py-3">
+                <h6 class="fw-bold mb-0 text-dark"><i class="fas fa-list-ol me-2"></i>รายการสินค้าที่ต้องรับ</h6>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="bg-light text-secondary" style="font-size: 0.85rem; text-transform: uppercase;">
+                        <tr>
+                            <th class="ps-4 py-3 border-0">รหัส/ชื่อวัตถุดิบ</th>
+                            <th class="py-3 border-0 text-center">สั่งซื้อไปทั้งหมด</th>
+                            <th class="py-3 border-0 text-center">รับแล้วสะสม</th>
+                            <th class="py-3 border-0 text-center text-danger">ค้างรับอีก</th>
+                            <th class="pe-4 py-3 border-0 text-center" style="width: 200px; background-color: #f0fdf4;">จำนวนที่รับครั้งนี้ <i class="fas fa-pencil-alt ms-1"></i></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in po.items.all %}
+                        <tr>
+                            <td class="ps-4">
+                                <div class="fw-bold text-dark">{{ item.product.code }}</div>
+                                <small class="text-muted">{{ item.product.name }}</small>
+                            </td>
+                            <td class="text-center fw-bold">{{ item.quantity|floatformat:"-2"|intcomma }}</td>
+                            <td class="text-center">
+                                {% if item.received_qty > 0 %}
+                                    <span class="badge bg-info text-dark">{{ item.received_qty|floatformat:"-2"|intcomma }}</span>
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            
+                            <td class="text-center fw-bold text-danger">
+                                <script>
+                                    // 🌟 ใช้ parseFloat เพื่อให้รองรับทศนิยม 🌟
+                                    var qty_{{ item.id }} = parseFloat("{{ item.quantity|stringformat:'f' }}") || 0;
+                                    var rec_{{ item.id }} = parseFloat("{{ item.received_qty|stringformat:'f' }}") || 0;
+                                    var remain_{{ item.id }} = qty_{{ item.id }} - rec_{{ item.id }};
+                                    
+                                    // ตัดศูนย์ต่อท้ายให้ดูสวยงาม (เช่น 0.50 -> 0.5)
+                                    var display_remain_{{ item.id }} = remain_{{ item.id }} % 1 === 0 ? remain_{{ item.id }} : remain_{{ item.id }}.toFixed(2);
+                                    document.write(display_remain_{{ item.id }});
+                                </script>
+                            </td>
+
+                            <td class="pe-4">
+                                <script>
+                                    if(remain_{{ item.id }} <= 0) {
+                                        document.write('<div class="badge bg-success w-100 py-2"><i class="fas fa-check-circle me-1"></i> รับครบแล้ว</div>');
+                                        document.write('<input type="hidden" name="qty_{{ item.id }}" value="0">');
+                                    } else {
+                                        // 🌟 เพิ่ม onfocus="this.select()" ตรงนี้ค่ะ 🌟
+                                        document.write('<input type="number" name="qty_{{ item.id }}" class="form-control border-success border-2 text-center text-success fw-bold bg-white shadow-sm" min="0" max="' + remain_{{ item.id }} + '" step="0.01" value="0" onfocus="this.select()">');
+                                    }
+                                </script>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div class="card-footer bg-white py-3 border-top-0 d-flex justify-content-between align-items-center">
+                <small class="text-danger fw-bold"><i class="fas fa-exclamation-triangle me-1"></i> กรุณาตรวจสอบจำนวนของจริงเทียบกับใบส่งของก่อนบันทึก</small>
+                <button type="submit" class="btn btn-success btn-lg rounded-pill px-5 shadow fw-bold">
+                    <i class="fas fa-save me-2"></i> บันทึกรับสินค้าเข้าคลัง
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}

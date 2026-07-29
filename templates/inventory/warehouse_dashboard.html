@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ภาพรวมคลังสินค้า | NEED System</title>
+
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;600&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --accent-color: #3498db;
+            --bg-color: #F5F7FA;
+            --card-bg: #FFFFFF;
+        }
+
+        body {
+            font-family: 'Prompt', sans-serif;
+            background-color: var(--bg-color);
+            overflow-x: hidden;
+        }
+
+        /* Sidebar สวยๆ */
+        #sidebar-wrapper {
+            min-height: 100vh;
+            margin-left: -15rem;
+            transition: margin 0.25s ease-out;
+            background-color: var(--card-bg);
+            box-shadow: 2px 0 10px rgba(0,0,0,0.05);
+        }
+
+        #sidebar-wrapper .sidebar-heading {
+            padding: 1.5rem 1.25rem;
+            font-size: 1.2rem;
+            color: var(--primary-color);
+            text-align: center;
+        }
+
+        #sidebar-wrapper .list-group {
+            width: 15rem;
+        }
+
+        #page-content-wrapper {
+            min-width: 100vw;
+        }
+
+        body.toggled #sidebar-wrapper {
+            margin-left: 0;
+        }
+
+        /* การ์ด KPI ดูแพง */
+        .premium-card {
+            border: none;
+            border-radius: 15px;
+            transition: all 0.3s;
+        }
+
+        .premium-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1) !important;
+        }
+
+        .rounded-full {
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* ปรับแต่ง Navbar */
+        .navbar-light .navbar-nav .nav-link {
+            color: var(--primary-color);
+        }
+
+        /* โลโก้ใน Sidebar */
+        .sidebar-logo {
+            max-width: 180px;
+            height: auto;
+            display: block;
+            margin: 0 auto;
+        }
+
+        @media (min-width: 768px) {
+            #sidebar-wrapper {
+                margin-left: 0;
+            }
+
+            #page-content-wrapper {
+                min-width: 0;
+                width: 100%;
+            }
+
+            body.toggled #sidebar-wrapper {
+                margin-left: -15rem;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="d-flex" id="wrapper">
+
+        <div class="border-end" id="sidebar-wrapper">
+            <div class="sidebar-heading fw-bold">
+                <img src="/media/company/logo_icon.png" alt="NEED System" class="sidebar-logo">
+            </div>
+            <div class="list-group list-group-flush my-3">
+                <a href="#" class="list-group-item list-group-item-action bg-transparent text-primary fw-bold border-0">
+                    <i class="fas fa-tachometer-alt me-2"></i>ภาพรวมระบบ
+                </a>
+                <a href="{% url 'inventory_dashboard' %}" class="list-group-item list-group-item-action bg-transparent text-dark border-0">
+                    <i class="fas fa-box me-2"></i>รายการสินค้า
+                </a>
+                <a href="{% url 'stock_in' %}" class="list-group-item list-group-item-action bg-transparent text-dark border-0">
+                    <i class="fas fa-exchange-alt me-2"></i>รับเข้า / เบิกออก
+                </a>
+            </div>
+        </div>
+
+        <div id="page-content-wrapper">
+            <nav class="navbar navbar-expand-lg navbar-light bg-transparent py-4 px-4">
+                <div class="d-flex align-items-center">
+                    <i class="fas fa-align-left text-primary fs-4 me-3" id="menu-toggle" style="cursor: pointer;"></i>
+                    <h2 class="fs-2 m-0 text-dark fw-bold">ภาพรวมคลังสินค้า</h2>
+                </div>
+
+                <div class="collapse navbar-collapse" id="navbarSupportedContent">
+                    <ul class="navbar-nav ms-auto mb-2 mb-lg-0">
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle fw-bold" href="#" role="button" data-bs-toggle="dropdown">
+                                <i class="fas fa-user-circle me-2"></i>คุณเจนี่ (Admin)
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </nav>
+
+            <div class="container-fluid px-4">
+                <div class="row g-3 my-2">
+                    <div class="col-md-3">
+                        <div class="p-4 bg-white shadow-sm d-flex justify-content-between align-items-center premium-card">
+                            <div>
+                                <h3 class="fs-2 fw-bold">{{ total_items }}</h3>
+                                <p class="fs-6 text-muted mb-0">สินค้าทั้งหมด</p>
+                            </div>
+                            <div class="rounded-full bg-light text-primary">
+                                <i class="fas fa-boxes fs-4"></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-3">
+                        <div class="p-4 bg-white shadow-sm d-flex justify-content-between align-items-center premium-card">
+                            <div>
+                                <h3 class="fs-2 fw-bold text-success">{{ inbound_today }}</h3>
+                                <p class="fs-6 text-muted mb-0">รับเข้าวันนี้</p>
+                            </div>
+                            <div class="rounded-full bg-light text-success">
+                                <i class="fas fa-arrow-down fs-4"></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-3">
+                        <div class="p-4 bg-white shadow-sm d-flex justify-content-between align-items-center premium-card">
+                            <div>
+                                <h3 class="fs-2 fw-bold text-primary">{{ outbound_today }}</h3>
+                                <p class="fs-6 text-muted mb-0">เบิกออกวันนี้</p>
+                            </div>
+                            <div class="rounded-full bg-light text-primary">
+                                <i class="fas fa-truck fs-4"></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-3">
+                        <div class="p-4 bg-white shadow-sm d-flex justify-content-between align-items-center premium-card">
+                            <div>
+                                <h3 class="fs-2 fw-bold text-danger">{{ low_stock }}</h3>
+                                <p class="fs-6 text-muted mb-0">สินค้าใกล้หมด</p>
+                            </div>
+                            <div class="rounded-full bg-light text-danger">
+                                <i class="fas fa-exclamation-triangle fs-4"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row my-5">
+                    <div class="col-lg-8">
+                        <div class="bg-white p-4 rounded shadow-sm premium-card">
+                            <h4 class="mb-4">การเคลื่อนไหวสต็อก (7 วันล่าสุด)</h4>
+                            <canvas id="stockChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="col-lg-4">
+                        <div class="bg-white p-4 rounded shadow-sm premium-card">
+                             <h4 class="mb-4">กิจกรรมล่าสุด</h4>
+                             <ul class="list-group list-group-flush" id="activityList">
+                                 {% for activity in recent_activity %}
+                                 <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <div>
+                                        {% if activity.movement_type == 'IN' %}
+                                            <span class="fw-bold text-success">📥 รับเข้า: {{ activity.product.name }}</span>
+                                        {% else %}
+                                            <span class="fw-bold text-primary">📤 เบิกออก: {{ activity.product.name }}</span>
+                                        {% endif %}
+                                        <br>
+                                        <small class="text-muted">
+                                            <i class="far fa-clock me-1"></i>{{ activity.created_at|date:"d/m/Y H:i" }}
+                                            โดย {{ activity.created_by.first_name }}
+                                        </small>
+                                    </div>
+                                    <span class="badge rounded-pill {% if activity.movement_type == 'IN' %}bg-success{% else %}bg-primary{% endif %}">
+                                        {{ activity.quantity }}
+                                    </span>
+                                 </li>
+                                 {% empty %}
+                                 <li class="list-group-item text-center text-muted">ยังไม่มีรายการวันนี้</li>
+                                 {% endfor %}
+                             </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        // Toggle Sidebar
+        var el = document.getElementById("wrapper");
+        var toggleButton = document.getElementById("menu-toggle");
+
+        toggleButton.onclick = function () {
+            el.classList.toggle("toggled");
+        };
+
+        // Mock Data for Chart
+        const ctx = document.getElementById('stockChart').getContext('2d');
+        const myChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: ['14/01/2026', '15/01/2026', '16/01/2026', '17/01/2026', '18/01/2026', '19/01/2026', '20/01/2026'],
+                datasets: [{
+                    label: 'ยอดรับเข้า (Inbound)',
+                    data: [12, 19, 3, 5, 2, 3, 45],
+                    borderColor: '#2ecc71',
+                    tension: 0.4
+                },
+                {
+                    label: 'ยอดเบิกออก (Outbound)',
+                    data: [5, 12, 10, 8, 15, 6, 12],
+                    borderColor: '#3498db',
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { position: 'top' },
+                }
+            }
+        });
+    </script>
+</body>
+</html>

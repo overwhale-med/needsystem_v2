@@ -1,0 +1,379 @@
+{% extends 'core/base.html' %}
+{% load humanize %}
+
+{% block content %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+
+<div class="container-fluid py-4 px-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h3 class="fw-bold mb-0 text-dark"><i class="fas fa-truck text-danger me-2"></i>กระดานจัดส่งสินค้า (Logistics)</h3>
+            <p class="text-muted small">บริหารคิวรถ จองรถล่วงหน้า และตั้งเบิกค่าขนส่ง</p>
+        </div>
+    </div>
+
+    <div class="row g-3">
+        <!-- คอลัมน์ที่ 1: รอคิวรถ / รอนัดหมาย -->
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm rounded-4 bg-light overflow-hidden">
+                <div class="card-header bg-primary text-white py-3 border-0">
+                    <h6 class="fw-bold mb-0"><i class="fas fa-clock me-2"></i>รอคิวรถ / รอนัดหมาย ({{ col1_pending|length }})</h6>
+                </div>
+                <div class="card-body p-2" style="min-height: 600px;">
+                    {% for order in col1_pending %}
+                    <div class="card border-0 shadow-sm rounded-3 mb-2 {% if order.is_onsite %}border-start border-4 border-danger{% endif %}">
+                        <div class="card-body p-3">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="fw-bold text-primary fs-5"><i class="fas fa-clipboard-list me-1"></i>{{ order.code }}</span>
+                                {% if order.is_onsite %}
+                                <span class="badge bg-danger pulse-animation"><i class="fas fa-hard-hat me-1"></i>ประกอบหน้างาน</span>
+                                {% elif order.status == 'WAITING_QC' %}
+                                <span class="badge bg-warning text-dark">กำลังตรวจ QC</span>
+                                {% else %}
+                                <span class="badge bg-success">ผลิตเสร็จแล้ว</span>
+                                {% endif %}
+                            </div>
+
+                            <!-- 🌟 [FIXED] ใช้ตัวแปร actual_balance ที่ดึงค่ามาจาก Invoice แล้ว 🌟 -->
+                            {% if order.actual_balance > 0 %}
+                                <div class="bg-danger bg-opacity-10 text-danger py-1 px-2 mb-2 mt-1 rounded-3 small fw-bold shadow-sm d-flex align-items-center pulse-animation" style="font-size: 0.7rem; border-left: 4px solid #dc3545;">
+                                    <i class="fas fa-exclamation-triangle fa-lg me-2"></i> 
+                                    <div>
+                                        ระวัง! ลูกค้ายอดชำระไม่ครบ<br>
+                                        <span class="text-dark fw-normal">ยอดค้าง: ฿{{ order.actual_balance|floatformat:2|intcomma }} (โปรดสอบถามเซลส์ก่อนส่ง)</span>
+                                    </div>
+                                </div>
+                            {% endif %}
+
+                            <h6 class="fw-bold text-dark mb-1">{{ order.product.name }}</h6>
+                            <p class="text-muted small mb-1"><i class="fas fa-map-marker-alt text-danger"></i> ลูกค้า: {{ order.customer_name|default:"-" }}</p>
+                            
+                            <p class="text-muted small mb-1"><i class="fas fa-user-tie text-info"></i> เซลส์: {{ order.salesperson.name|default:"ไม่ระบุ" }} ({{ order.branch.name|default:"สำนักงานใหญ่" }})</p>
+                            <p class="text-muted small mb-1"><i class="fas fa-calendar-alt text-secondary"></i> เปิด JOB: {{ order.start_date|date:"d/m/Y" }}</p>
+                            
+                            <div class="bg-light rounded p-2 mt-2 mb-3 border border-secondary border-opacity-10">
+                                <div class="small text-dark mb-1">
+                                    <i class="fas fa-building text-primary opacity-75"></i> รับตู้ที่: 
+                                    {% if order.is_onsite %}
+                                        <span class="text-danger fw-bold">พื้นที่หน้างาน</span>
+                                    {% else %}
+                                        {{ order.branch.name|default:"กองกลาง" }}
+                                    {% endif %}
+                                </div>
+                                <div class="small text-dark">
+                                    <i class="fas fa-users text-warning text-darken opacity-75"></i> ช่างประกอบ: {{ order.production_team.name|default:"ไม่ระบุ" }}
+                                </div>
+                            </div>
+                            
+                            <button class="btn btn-sm btn-primary w-100 rounded-pill fw-bold" data-bs-toggle="modal" data-bs-target="#assignModal{{ order.id }}">
+                                <i class="fas fa-truck-loading me-1"></i> จ่ายงาน / จองรถ
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="modal fade" id="assignModal{{ order.id }}" tabindex="-1">
+                        <div class="modal-dialog modal-dialog-centered">
+                            <div class="modal-content rounded-4 border-0">
+                                <div class="modal-header bg-primary text-white border-0">
+                                    <h5 class="modal-title fw-bold">ระบุทีมขนส่งสำหรับ {{ order.code }}</h5>
+                                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                                </div>
+                                <form method="POST" action="{% url 'process_logistics' order.id %}">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="action" value="assign_truck">
+                                    <div class="modal-body p-4">
+                                        <div class="d-flex justify-content-between align-items-end mb-2">
+                                            <label class="form-label fw-bold mb-0">เลือกทีมขนส่ง / ทะเบียนรถ</label>
+                                            <button type="button" class="btn btn-sm btn-outline-success rounded-pill" onclick="openAddTransporterModal()"><i class="fas fa-plus"></i> เพิ่มรถใหม่</button>
+                                        </div>
+                                        <select name="transporter" id="transporterSelect{{ order.id }}" class="form-select mb-3" required>
+                                            <option value="">-- โปรดเลือก --</option>
+                                            {% for t in transporters %}
+                                            <option value="{{ t.id }}">{{ t.name }} ({{ t.vehicle_plate }})</option>
+                                            {% endfor %}
+                                        </select>
+                                        
+                                        <label class="form-label fw-bold">วันที่รถเข้าจัดส่งสินค้า <span class="text-danger">*</span></label>
+                                        <input type="text" name="delivery_date" class="form-control mb-3 datepicker bg-white" placeholder="คลิกเพื่อเลือกวันที่" value="{{ order.delivery_date|date:'Y-m-d' }}" required>
+
+                                        <label class="form-label fw-bold">ระบุค่าจ้างขนส่งสำหรับงานนี้ (บาท) <span class="text-danger">*</span></label>
+                                        <input type="number" step="0.01" name="delivery_fee" class="form-control form-control-lg text-primary fw-bold" placeholder="เช่น 1500" required>
+                                    </div>
+                                    <div class="modal-footer bg-light border-0">
+                                        <button type="submit" class="btn btn-primary px-4 rounded-pill fw-bold">ยืนยันจองรถ</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="text-center py-5 text-muted opacity-50">ไม่มีงานค้างนัดหมาย</div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- คอลัมน์ที่ 2: กำลังนำส่ง -->
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm rounded-4 bg-light overflow-hidden">
+                <div class="card-header bg-warning py-3 border-0">
+                    <h6 class="fw-bold mb-0 text-dark"><i class="fas fa-truck-moving me-2"></i>กำลังนำส่ง ({{ col2_delivering|length }})</h6>
+                </div>
+                <div class="card-body p-2" style="min-height: 600px;">
+                    {% for order in col2_delivering %}
+                    <div class="card border-0 shadow-sm rounded-3 mb-2 border-start border-4 {% if order.is_onsite %}border-danger{% else %}border-warning{% endif %}">
+                        <div class="card-body p-3">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="fw-bold text-warning text-darken fs-5" style="color: #d39e00;"><i class="fas fa-clipboard-list me-1"></i>{{ order.code }}</span>
+                                {% if order.is_onsite %}
+                                <span class="badge bg-danger pulse-animation"><i class="fas fa-hard-hat me-1"></i>ประกอบหน้างาน</span>
+                                {% else %}
+                                <span class="badge bg-warning text-dark">{{ order.transporter.vehicle_plate }}</span>
+                                {% endif %}
+                            </div>
+
+                            <!-- 🌟 [FIXED] ใช้ตัวแปร actual_balance ที่ดึงค่ามาจาก Invoice แล้ว 🌟 -->
+                            {% if order.actual_balance > 0 %}
+                                <div class="bg-danger bg-opacity-10 text-danger py-1 px-2 mb-2 mt-1 rounded-3 small fw-bold shadow-sm d-flex align-items-center pulse-animation" style="font-size: 0.7rem; border-left: 4px solid #dc3545;">
+                                    <i class="fas fa-exclamation-triangle fa-lg me-2"></i> 
+                                    <div>
+                                        ระวัง! ลูกค้ายอดชำระไม่ครบ<br>
+                                        <span class="text-dark fw-normal">ยอดค้าง: ฿{{ order.actual_balance|floatformat:2|intcomma }} (โปรดสอบถามเซลส์ก่อนส่ง)</span>
+                                    </div>
+                                </div>
+                            {% endif %}
+
+                            <h6 class="fw-bold text-dark mb-1">{{ order.product.name }}</h6>
+                            
+                            <p class="text-muted small mb-1"><i class="fas fa-map-marker-alt text-danger"></i> ลูกค้า: {{ order.customer_name|default:"-" }}</p>
+                            <p class="text-muted small mb-1"><i class="fas fa-user-tie text-info"></i> เซลส์: {{ order.salesperson.name|default:"ไม่ระบุ" }} ({{ order.branch.name|default:"สำนักงานใหญ่" }})</p>
+                            
+                            <div class="bg-light rounded p-2 mt-2 mb-2 border border-secondary border-opacity-10">
+                                <div class="small text-dark mb-1">
+                                    <i class="fas fa-building text-primary opacity-75"></i> รับตู้ที่: 
+                                    {% if order.is_onsite %}
+                                        <span class="text-danger fw-bold">พื้นที่หน้างาน</span>
+                                    {% else %}
+                                        {{ order.branch.name|default:"กองกลาง" }}
+                                    {% endif %}
+                                </div>
+                                <div class="small text-dark">
+                                    <i class="fas fa-users text-warning text-darken opacity-75"></i> ช่างประกอบ: {{ order.production_team.name|default:"ไม่ระบุ" }}
+                                </div>
+                            </div>
+
+                            <div class="mt-3 border-top pt-2">
+                                <p class="text-primary small mb-1 fw-bold"><i class="fas fa-truck"></i> ทีมขนส่ง: {{ order.transporter.name|default:"ไม่ระบุ" }}</p>
+                                <p class="text-muted small mb-1"><i class="fas fa-user-check"></i> คนขับรถ: <span class="fw-bold">{{ order.transporter.driver_name|default:"-" }}</span></p>
+                                <p class="text-danger small mb-1 fw-bold"><i class="fas fa-calendar-check"></i> ส่งวันที่: {{ order.delivery_date|date:"d/m/Y"|default:"ยังไม่ระบุ" }}</p>
+                                <p class="text-dark small fw-bold mb-2">ค่าจ้างงานนี้: <span class="text-danger fs-6">฿{{ order.delivery_fee|floatformat:2|intcomma }}</span></p>
+                            </div>
+
+                            <div class="d-flex gap-2 mb-3">
+                                <a href="{% url 'print_delivery_note' order.id %}" target="_blank" class="btn btn-sm btn-outline-secondary w-100">
+                                    <i class="fas fa-print"></i> พิมพ์ใบส่งมอบ
+                                </a>
+                            </div>
+
+                            <form method="POST" action="{% url 'process_logistics' order.id %}" enctype="multipart/form-data" class="bg-white p-2 rounded border">
+                                {% csrf_token %}
+                                <input type="hidden" name="action" value="update_status">
+                                <label class="small fw-bold text-muted mb-1">อัปเดตสถานะ:</label>
+                                <select name="delivery_status" class="form-select form-select-sm mb-2" required>
+                                    <option value="">-- เลือกสถานะ --</option>
+                                    {% for s in delivery_statuses %}
+                                    <option value="{{ s.id }}" {% if order.delivery_status_id == s.id %}selected{% endif %}>{{ s.name }}</option>
+                                    {% endfor %}
+                                </select>
+                                <label class="small fw-bold text-danger mb-1 mt-1"><i class="fas fa-camera"></i> แนบรูปลายเซ็นลูกค้า (เพื่อปิดงาน):</label>
+                                <input type="file" name="proof_of_delivery" class="form-control form-control-sm mb-2" accept="image/*">
+                                <button type="submit" class="btn btn-sm btn-success w-100 fw-bold">บันทึกอัปเดต</button>
+                            </form>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- คอลัมน์ที่ 3: ส่งมอบสำเร็จ / รอตั้งเบิก -->
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm rounded-4 bg-light overflow-hidden">
+                <div class="card-header bg-success text-white py-3 border-0">
+                    <h6 class="fw-bold mb-0"><i class="fas fa-check-double me-2"></i>ส่งมอบสำเร็จ / รอตั้งเบิก</h6>
+                </div>
+                <div class="card-body p-2" style="min-height: 600px;">
+                    
+                    <form method="POST" action="{% url 'create_logistics_claim' %}">
+                        {% csrf_token %}
+                        {% for order in col3_delivered %}
+                            {% if not order.logistics_claim %}
+                            <div class="card border-0 shadow-sm rounded-3 mb-2 border-start border-4 {% if order.is_onsite %}border-danger{% else %}border-success{% endif %}">
+                                <div class="card-body p-3">
+                                    <div class="d-flex align-items-start gap-2">
+                                        <div class="pt-1">
+                                            <input class="form-check-input m-0 shadow-sm border-secondary" type="checkbox" name="job_ids" value="{{ order.id }}" id="job{{ order.id }}" style="transform: scale(1.3); cursor: pointer;">
+                                        </div>
+                                        <label class="w-100 mb-0" for="job{{ order.id }}" style="cursor: pointer;">
+                                            <div class="d-flex justify-content-between align-items-center">
+                                                <span class="fw-bold text-success fs-5"><i class="fas fa-clipboard-list me-1"></i>{{ order.code }}</span>
+                                                {% if order.is_onsite %}
+                                                <span class="badge bg-danger text-white border" style="font-size: 0.65rem;">ประกอบหน้างาน</span>
+                                                {% else %}
+                                                <span class="badge bg-light text-dark border">{{ order.transporter.vehicle_plate }}</span>
+                                                {% endif %}
+                                            </div>
+
+                                            <!-- 🌟 [FIXED] ใช้ตัวแปร actual_balance ที่ดึงค่ามาจาก Invoice แล้ว 🌟 -->
+                                            {% if order.actual_balance > 0 %}
+                                                <div class="bg-danger bg-opacity-10 text-danger py-1 px-2 mb-2 mt-1 rounded-3 small fw-bold shadow-sm d-flex align-items-center" style="font-size: 0.7rem; border-left: 4px solid #dc3545;">
+                                                    <i class="fas fa-exclamation-triangle fa-lg me-2"></i> 
+                                                    <div>
+                                                        ส่งมอบแล้ว แต่ลูกค้ายอดชำระไม่ครบ!<br>
+                                                        <span class="text-dark fw-normal">ยอดค้าง: ฿{{ order.actual_balance|floatformat:2|intcomma }}</span>
+                                                    </div>
+                                                </div>
+                                            {% endif %}
+                                            
+                                            <p class="text-muted small mb-0 mt-1"><i class="fas fa-map-marker-alt"></i> ลค: {{ order.customer_name|default:"-" }}</p>
+                                            <p class="text-muted small mb-0"><i class="fas fa-truck"></i> ทีมขนส่ง: {{ order.transporter.name }}</p>
+                                            
+                                            <div class="bg-white rounded p-2 mt-2 mb-1 border border-secondary border-opacity-10">
+                                                <div class="small text-dark mb-1">
+                                                    <i class="fas fa-building text-primary opacity-75"></i> รับตู้ที่: 
+                                                    {% if order.is_onsite %}
+                                                        <span class="text-danger fw-bold">พื้นที่หน้างาน</span>
+                                                    {% else %}
+                                                        {{ order.branch.name|default:"กองกลาง" }}
+                                                    {% endif %}
+                                                </div>
+                                                <div class="small text-dark">
+                                                    <i class="fas fa-users text-warning text-darken opacity-75"></i> ช่างประกอบ: {{ order.production_team.name|default:"ไม่ระบุ" }}
+                                                </div>
+                                            </div>
+                                            <p class="text-dark small fw-bold mb-0 mt-1">ค่าจ้างงานนี้: <span class="text-danger fs-6">฿{{ order.delivery_fee|floatformat:2|intcomma }}</span></p>
+                                        </label>
+                                    </div>
+                                    {% if order.proof_of_delivery %}
+                                    <div class="mt-2 text-end">
+                                        <a href="{{ order.proof_of_delivery.url }}" target="_blank" class="badge bg-info text-decoration-none"><i class="fas fa-image"></i> ดูรูปเซ็นรับ</a>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% endif %}
+                        {% endfor %}
+                        
+                        <div class="sticky-bottom bg-light p-2 mt-3 border-top">
+                            <button type="submit" class="btn btn-warning w-100 fw-bold rounded-pill shadow-sm" onclick="return confirm('ยืนยันสร้างใบตั้งเบิกค่าขนส่งสำหรับงานที่เลือก?');">
+                                <i class="fas fa-file-invoice-dollar me-2"></i> สร้างใบขอเบิกค่าขนส่ง
+                            </button>
+                        </div>
+                    </form>
+                    
+                    <div class="mt-4 text-center">
+                        <a href="{% url 'logistics_claim_history' %}" class="btn btn-outline-secondary w-100 rounded-pill"><i class="fas fa-history me-1"></i> ดูประวัติใบเบิกค่าขนส่งทั้งหมด</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="addTransporterModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content rounded-4 border-0">
+            <div class="modal-header bg-success text-white border-0">
+                <h5 class="modal-title fw-bold"><i class="fas fa-plus-circle me-2"></i>ขึ้นทะเบียนรถรับจ้าง / บริษัทขนส่งใหม่</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <form id="transporterForm">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="small fw-bold">ชื่อบริษัทขนส่ง / ชื่อผู้รับจ้าง <span class="text-danger">*</span></label>
+                            <input type="text" id="t_name" class="form-control" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="small fw-bold">ชื่อคนขับรถ</label>
+                            <input type="text" id="t_driver" class="form-control">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="small fw-bold">ทะเบียนรถ</label>
+                            <input type="text" id="t_plate" class="form-control">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="small fw-bold">เลขที่บัญชีธนาคาร (สำหรับโอนเงิน)</label>
+                            <input type="text" id="t_bank" class="form-control" placeholder="เช่น กสิกรไทย 123-4-56789-0">
+                        </div>
+                        <div class="col-md-12">
+                            <label class="small fw-bold">ที่อยู่</label>
+                            <textarea id="t_address" class="form-control" rows="2"></textarea>
+                        </div>
+                        <div class="col-md-12">
+                            <label class="small fw-bold text-danger"><i class="far fa-id-card"></i> แนบรูปใบขับขี่ / บัตรประชาชน (ถ้ามี)</label>
+                            <input type="file" id="t_image" class="form-control" accept="image/*">
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer bg-light border-0">
+                <button type="button" class="btn btn-secondary rounded-pill" data-bs-dismiss="modal">ยกเลิก</button>
+                <button type="button" class="btn btn-success rounded-pill px-4" onclick="saveTransporter()">บันทึกข้อมูลรถ</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        flatpickr(".datepicker", { dateFormat: "Y-m-d", altInput: true, altFormat: "d/m/Y", allowInput: true });
+    });
+
+    function openAddTransporterModal() {
+        var myModal = new bootstrap.Modal(document.getElementById('addTransporterModal'));
+        myModal.show();
+    }
+
+    function saveTransporter() {
+        const name = document.getElementById('t_name').value;
+        if(!name) { alert('กรุณาระบุชื่อผู้รับจ้าง'); return; }
+
+        let formData = new FormData();
+        formData.append('name', name);
+        formData.append('driver_name', document.getElementById('t_driver').value);
+        formData.append('vehicle_plate', document.getElementById('t_plate').value);
+        formData.append('bank_account', document.getElementById('t_bank').value);
+        formData.append('address', document.getElementById('t_address').value);
+        
+        let imageFile = document.getElementById('t_image').files[0];
+        if(imageFile) { formData.append('id_card_image', imageFile); }
+
+        fetch("{% url 'ajax_add_transporter_full' %}", {
+            method: 'POST',
+            headers: { 'X-CSRFToken': '{{ csrf_token }}' },
+            body: formData
+        })
+        .then(res => res.json())
+        .then(data => {
+            if(data.success) {
+                location.reload();
+            } else {
+                alert('เกิดข้อผิดพลาดในการบันทึกข้อมูล');
+            }
+        }).catch(err => console.log(err));
+    }
+</script>
+
+<style>
+    .pulse-animation {
+        animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+        0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7); }
+        70% { transform: scale(1.05); box-shadow: 0 0 0 10px rgba(220, 53, 69, 0); }
+        100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(220, 53, 69, 0); }
+    }
+</style>
+{% endblock %}

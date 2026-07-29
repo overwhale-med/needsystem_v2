@@ -1,0 +1,159 @@
+{% extends 'core/base.html' %}
+{% load humanize %}
+
+{% block content %}
+<style>
+    .status-badge { font-size: 0.75rem; padding: 6px 12px; border-radius: 20px; font-weight: 600; }
+    .status-pending { background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
+    .status-paid { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+    .slip-thumbnail { width: 35px; height: 35px; object-fit: cover; border-radius: 6px; cursor: pointer; transition: transform 0.2s; border: 1px solid #dee2e6; }
+    .slip-thumbnail:hover { transform: scale(1.2); box-shadow: 0 5px 15px rgba(0,0,0,0.2); z-index: 10; position: relative; }
+    #slipModal .modal-backdrop { background-color: rgba(0,0,0,0.8); }
+</style>
+
+<div class="container-fluid py-4 px-4">
+    <div class="row justify-content-center">
+        <div class="col-12"> 
+            
+            <div class="d-flex justify-content-between align-items-end mb-4">
+                <div>
+                    <h4 class="fw-bold mb-1 text-dark"><i class="fas fa-hand-holding-usd text-info me-2"></i>รายการใบรับเงินมัดจำ</h4>
+                    <p class="text-muted small mb-0">ตรวจสอบสลิปและยืนยันยอดเงินมัดจำเข้าบัญชี</p>
+                </div>
+                <a href="{% url 'sales_dashboard' %}" class="btn btn-outline-secondary rounded-pill px-4 text-uppercase">
+                    <i class="fas fa-arrow-left me-2"></i> Dashboard
+                </a>
+            </div>
+
+            <div class="card shadow-sm border-0 rounded-4 mb-4">
+                <div class="card-body p-2">
+                    <form method="GET" class="row g-1 align-items-center">
+                        <div class="col-md-4">
+                            <div class="input-group border-0 bg-light rounded-3 px-2">
+                                <span class="input-group-text bg-transparent border-0 text-muted"><i class="fas fa-search"></i></span>
+                                <input type="text" name="q" class="form-control border-0 bg-transparent shadow-none" placeholder="ค้นหาเลขที่ใบเสนอราคา, ชื่อลูกค้า..." value="{{ search_query|default:'' }}">
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="input-group border-0 bg-light rounded-3 px-2">
+                                <span class="input-group-text bg-transparent border-0 text-muted"><i class="fas fa-filter"></i></span>
+                                <select name="status" class="form-select border-0 bg-transparent shadow-none" style="cursor: pointer;">
+                                    <option value="" {% if not status_filter %}selected{% endif %}>สถานะทั้งหมด</option>
+                                    <option value="PENDING" {% if status_filter == 'PENDING' %}selected{% endif %}>รอตรวจสอบ</option>
+                                    <option value="VERIFIED" {% if status_filter == 'VERIFIED' %}selected{% endif %}>ตรวจสอบแล้ว</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-3 d-flex gap-1">
+                            <button type="submit" class="btn btn-info text-white w-100 rounded-3 fw-bold">ค้นหา</button>
+                            {% if search_query or status_filter %}
+                                <a href="{% url 'deposit_list' %}" class="btn btn-light rounded-3 border" title="รีเซ็ต"><i class="fas fa-undo"></i></a>
+                            {% endif %}
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card shadow-sm border-0 rounded-4 overflow-hidden">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="bg-light text-secondary" style="font-size: 0.8rem; text-transform: uppercase;">
+                            <tr>
+                                <th class="ps-4 py-3 fw-bold border-bottom-0">อ้างอิงเอกสาร</th>
+                                <th class="py-3 fw-bold border-bottom-0">วันที่มัดจำ</th>
+                                <th class="py-3 fw-bold border-bottom-0">ลูกค้า</th>
+                                <th class="py-3 fw-bold border-bottom-0 text-end">ยอดมัดจำที่รับ</th>
+                                <th class="py-3 fw-bold border-bottom-0 text-center">ช่องทาง</th>
+                                <th class="py-3 fw-bold border-bottom-0 text-center">สถานะ</th>
+                                <th class="py-3 fw-bold border-bottom-0 text-center" style="width: 12%;">ตรวจสอบยอด</th>
+                                <th class="pe-4 py-3 fw-bold border-bottom-0 text-center" style="width: 10%;">ใบรับเงิน</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for qt in page_obj %}
+                            <tr>
+                                <td class="ps-4">
+                                    <a href="{% url 'quotation_edit' qt.id %}" class="fw-bold text-decoration-none" style="font-family: 'Courier New', monospace;">{{ qt.code }}</a>
+                                </td>
+                                <td class="text-muted small"><i class="far fa-calendar-alt me-1"></i> {{ qt.deposit_date|date:"d/m/Y" }}</td>
+                                <td>
+                                    <div class="fw-bold text-dark text-truncate" style="max-width: 180px;">{{ qt.customer_name }}</div>
+                                </td>
+                                <td class="text-end fw-bold text-success fs-6">{{ qt.deposit_amount|intcomma }}</td>
+                                <td class="text-center">
+                                    <div class="d-flex align-items-center justify-content-center gap-2">
+                                        {% if qt.deposit_method == 'TRANSFER' %}
+                                            <span class="badge bg-info bg-opacity-10 text-info border border-info rounded-pill"><i class="fas fa-mobile-alt me-1"></i> โอนเงิน</span>
+                                            {% if qt.deposit_slip %}
+                                                <img src="{{ qt.deposit_slip.url }}" class="slip-thumbnail" loading="lazy" onclick="showSlipModal('{{ qt.deposit_slip.url }}')" title="คลิกเพื่อดูสลิป">
+                                            {% endif %}
+                                        {% elif qt.deposit_method == 'CASH' %}
+                                            <span class="badge bg-success bg-opacity-10 text-success border border-success rounded-pill"><i class="fas fa-money-bill-wave me-1"></i> เงินสด</span>
+                                        {% elif qt.deposit_method == 'CHECK' %}
+                                            <span class="badge bg-warning bg-opacity-10 text-warning border border-warning rounded-pill"><i class="fas fa-money-check me-1"></i> เช็คธนาคาร</span>
+                                            {% if qt.deposit_slip %}
+                                                <img src="{{ qt.deposit_slip.url }}" class="slip-thumbnail" loading="lazy" onclick="showSlipModal('{{ qt.deposit_slip.url }}')" title="คลิกเพื่อดูรูปเช็ค">
+                                            {% endif %}
+                                        {% else %}
+                                            <span class="text-muted small">{{ qt.deposit_method }}</span>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                                <td class="text-center">
+                                    {% if qt.is_deposit_verified %}
+                                         <span class="status-badge status-paid"><i class="fas fa-check-double"></i> ตรวจสอบแล้ว</span>
+                                    {% else %}
+                                         <span class="status-badge status-pending"><i class="fas fa-search-dollar"></i> รอตรวจสอบ</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center">
+                                    {% if not qt.is_deposit_verified %}
+                                         {% if user.is_superuser or 'บัญชี' in user.employee.department.name|default:'' or 'Accounting' in user.employee.department.name|default:'' %}
+                                            <a href="{% url 'verify_deposit' qt.id %}" class="btn btn-sm btn-warning text-dark fw-bold border-0 px-3 shadow-sm w-100" onclick="return confirm('ยืนยันยอดเงินมัดจำเข้าบัญชีแล้ว?');">
+                                                <i class="fas fa-check me-1"></i> ยืนยันยอด
+                                            </a>
+                                         {% else %}
+                                            <span class="text-muted small">-</span>
+                                         {% endif %}
+                                    {% else %}
+                                         <span class="text-muted small">-</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center pe-4">
+                                    <a href="{% url 'deposit_print' qt.id %}" target="_blank" class="btn btn-sm btn-white border text-secondary shadow-sm" title="พิมพ์ใบรับเงินมัดจำ">
+                                        <i class="fas fa-print"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                            {% empty %}
+                                <tr><td colspan="8" class="text-center py-5 text-muted"><i class="fas fa-hand-holding-usd fa-3x mb-3 opacity-25"></i><br>ยังไม่มีรายการมัดจำ</td></tr>
+                            {% endfor %}
+                        </tbody>
+                     </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="slipModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content bg-transparent border-0">
+            <div class="modal-header border-0 pb-0 justify-content-end">
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" style="filter: invert(1);"></button>
+            </div>
+            <div class="modal-body text-center pt-0">
+                <img id="slipImageFull" src="" class="img-fluid rounded-3 shadow-lg" style="max-height: 80vh; object-fit: contain;">
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function showSlipModal(imageUrl) {
+        document.getElementById('slipImageFull').src = imageUrl;
+        var slipModal = new bootstrap.Modal(document.getElementById('slipModal'));
+        slipModal.show();
+    }
+</script>
+{% endblock %}

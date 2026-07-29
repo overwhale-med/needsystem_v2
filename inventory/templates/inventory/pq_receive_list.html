@@ -1,0 +1,69 @@
+{% extends 'core/base.html' %}
+{% load humanize %}
+
+{% block content %}
+<div class="container-fluid py-4 px-4">
+    <div class="d-flex justify-content-between align-items-end mb-4">
+        <div>
+            <h4 class="fw-bold mb-1 text-dark"><i class="fas fa-ship text-primary me-2"></i>รับสินค้าจากต่างประเทศ (GR-PQ)</h4>
+            <p class="text-muted small mb-0">รายการใบสั่งซื้อต่างประเทศที่ชำระเงินแล้วและรอรับสินค้าเข้าคลัง</p>
+        </div>
+        <a href="{% url 'inventory_dashboard' %}" class="btn btn-outline-secondary rounded-pill px-4 fw-bold"><i class="fas fa-arrow-left me-2"></i> กลับหน้าคลังสินค้า</a>
+    </div>
+
+    <div class="card border-0 shadow-sm rounded-4 overflow-hidden bg-white">
+        <div class="table-responsive">
+            <table class="table table-hover text-center mb-0 align-middle">
+                <thead class="bg-light">
+                    <tr>
+                        <th width="15%" class="text-start ps-4 py-3">PQ No. / PI No.</th>
+                        <th width="25%" class="text-start py-3">ร้านค้าต่างประเทศ</th>
+                        <th width="15%" class="py-3">วันที่คาดว่าจะถึง (ETA)</th>
+                        <th width="15%" class="py-3">ยอดรวม (THB)</th>
+                        <th width="15%" class="py-3">สถานะ</th>
+                        <th width="15%" class="py-3">จัดการ</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for po in pos %}
+                    <tr>
+                        <td class="text-start ps-4">
+                            <div class="fw-bold text-primary">{{ po.po_number }}</div>
+                            <div class="small text-muted">PI: {{ po.pi_number|default:"-" }}</div>
+                        </td>
+                        <td class="text-start fw-bold text-dark">{{ po.supplier.name|default:po.supplier_name }}</td>
+                        <td>
+                            {% if po.eta_date %}
+                                <span class="fw-bold text-danger">{{ po.eta_date|date:"d/m/Y" }}</span>
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td class="fw-bold">{{ po.total_amount|floatformat:2|intcomma }}</td>
+                        <td>
+                            {% if po.status == 'FULLY_PAID' %}
+                                <span class="badge bg-success rounded-pill px-3">ชำระครบแล้ว</span>
+                            {% elif po.status == 'DEPOSITED' %}
+                                <span class="badge bg-warning text-dark rounded-pill px-3">มัดจำแล้ว</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{% url 'pq_receive_process' po.id %}" class="btn btn-sm btn-primary rounded-pill fw-bold shadow-sm px-3">
+                                <i class="fas fa-box-open me-1"></i> ดำเนินการรับของ
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="py-5 text-muted">
+                            <i class="fas fa-check-circle fa-3x mb-3 text-success opacity-25"></i><br>
+                            <span class="fs-5">ไม่มีใบสั่งซื้อต่างประเทศที่รอรับของในขณะนี้</span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

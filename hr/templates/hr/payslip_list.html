@@ -1,0 +1,63 @@
+{% extends 'core/base.html' %}
+{% load humanize %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h3 class="fw-bold mb-0 text-dark"><i class="fas fa-file-invoice-dollar text-primary me-2"></i>ประวัติสลิปเงินเดือน</h3>
+            <p class="text-muted">รายการเงินเดือนย้อนหลังทั้งหมด</p>
+        </div>
+        <a href="{% url 'employee_dashboard' %}" class="btn btn-light border rounded-pill shadow-sm">
+            <i class="fas fa-arrow-left me-2"></i>กลับหน้าหลัก
+        </a>
+    </div>
+
+    <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="bg-light">
+                    <tr>
+                        <th class="ps-4 py-3">งวดเดือน</th>
+                        <th class="text-end">รายรับรวม</th>
+                        <th class="text-end">รายการหัก</th>
+                        <th class="text-end text-success fw-bold">เงินได้สุทธิ</th>
+                        <th class="text-center">สถานะ</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for slip in payslips %}
+                    <tr>
+                        <td class="ps-4 py-3">
+                            <span class="fw-bold text-primary">{{ slip.get_month_display }} {{ slip.year }}</span>
+                            <br><small class="text-muted">โอนเมื่อ: {{ slip.payment_date|date:"d M Y"|default:"-" }}</small>
+                        </td>
+                        <td class="text-end">{{ slip.base_salary|add:slip.ot_pay|add:slip.bonus|intcomma }}</td>
+                        <td class="text-end text-danger">-{{ slip.tax|add:slip.social_security|add:slip.leave_deduction|intcomma }}</td>
+                        <td class="text-end text-success fw-bold h5 mb-0">{{ slip.net_salary|intcomma }}</td>
+                        <td class="text-center">
+                            <span class="badge bg-success bg-opacity-10 text-success rounded-pill px-3">จ่ายแล้ว</span>
+                        </td>
+                        <td class="text-end pe-4">
+                            <a href="{% url 'payslip_detail' slip.id %}" class="btn btn-sm btn-outline-primary rounded-pill">
+                                <i class="fas fa-search me-1"></i> ดูรายละเอียด
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center py-5">
+                            <div class="opacity-50">
+                                <i class="fas fa-folder-open fa-3x mb-3 text-secondary"></i>
+                                <p>ยังไม่มีประวัติสลิปเงินเดือนในขณะนี้</p>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

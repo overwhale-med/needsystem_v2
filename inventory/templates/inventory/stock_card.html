@@ -1,0 +1,107 @@
+{% extends 'core/base.html' %}
+{% load humanize %}
+
+{% block content %}
+<div class="container-fluid py-4 px-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-end mb-4 gap-3">
+        <div>
+            <h3 class="fw-bold text-dark mb-1"><i class="fas fa-history text-info me-2"></i>สต็อกการ์ด (Stock Card)</h3>
+            <p class="text-muted mb-0">ประวัติความเคลื่อนไหว รับเข้า-เบิกออก ของสินค้า/วัตถุดิบ</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{% url 'product_list' %}?type={{ product.product_type }}" class="btn btn-outline-secondary rounded-pill px-4 fw-bold shadow-sm">
+                <i class="fas fa-arrow-left me-1"></i> กลับหน้ารายการ
+            </a>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0 rounded-4 mb-4 bg-white border-start border-4 border-info">
+        <div class="card-body p-4">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <span class="badge bg-light text-dark border mb-2">{{ product.get_product_type_display|default:product.product_type }}</span>
+                    <h4 class="fw-bold text-dark mb-1"><span class="text-primary me-2">[{{ product.code }}]</span>{{ product.name }}</h4>
+                    <p class="text-muted mb-0"><i class="fas fa-tags me-1"></i> หมวดหมู่: {{ product.category.name|default:"ไม่มีหมวดหมู่" }}</p>
+                </div>
+                <div class="col-md-4 text-end">
+                    <div class="bg-light p-3 rounded-3 d-inline-block text-center border">
+                        <span class="d-block small text-muted fw-bold text-uppercase mb-1">ยอดคงเหลือปัจจุบัน</span>
+                        <h3 class="mb-0 fw-bold {% if product.stock_qty <= product.min_level %}text-danger{% else %}text-success{% endif %}">
+                            {{ product.stock_qty|floatformat:2|intcomma }} <small class="fs-6 text-dark">{{ product.unit|default:"" }}</small>
+                        </h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="bg-light text-secondary small text-uppercase border-bottom border-2">
+                    <tr>
+                        <th width="15%" class="ps-4 py-3">วัน/เวลา</th>
+                        <th width="15%" class="py-3">เลขที่เอกสาร</th>
+                        <th width="20%" class="py-3">รายละเอียด / อ้างอิง</th>
+                        <th class="text-center py-3 text-success" width="10%">รับเข้า (IN)</th>
+                        <th class="text-center py-3 text-danger" width="10%">เบิกออก (OUT)</th>
+                        <th class="text-end py-3 text-primary" width="15%">ยอดคงเหลือ (Balance)</th>
+                        <th class="text-center pe-4 py-3" width="15%">ผู้บันทึก</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in page_obj %}
+                    <tr>
+                        <td class="ps-4 text-muted small">{{ item.date|date:"d/m/Y H:i" }}</td>
+                        <td class="fw-bold text-dark">{{ item.doc_no }}</td>
+                        <td>
+                            <div class="text-dark" style="font-size: 0.9rem;">{{ item.description|truncatechars:40 }}</div>
+                            {% if item.reference != '-' %}
+                                <small class="text-muted"><i class="fas fa-link me-1"></i>อ้างอิง: {{ item.reference }}</small>
+                            {% endif %}
+                        </td>
+                        
+                        <td class="text-center fw-bold text-success fs-6">
+                            {% if item.in_qty %}+{{ item.in_qty|floatformat:2|intcomma }}{% else %}-{% endif %}
+                        </td>
+                        
+                        <td class="text-center fw-bold text-danger fs-6">
+                            {% if item.out_qty %}-{{ item.out_qty|floatformat:2|intcomma }}{% else %}-{% endif %}
+                        </td>
+                        
+                        <td class="text-end pe-3 fw-bold text-primary fs-5 bg-light bg-opacity-50">
+                            {{ item.balance|floatformat:2|intcomma }}
+                        </td>
+                        
+                        <td class="text-center pe-4 text-muted small"><i class="fas fa-user-circle me-1"></i>{{ item.user }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="text-center py-5 text-muted">
+                            <i class="fas fa-clipboard-list fa-3x mb-3 opacity-25"></i>
+                            <h6 class="fw-bold">ยังไม่มีประวัติความเคลื่อนไหวของสินค้านี้</h6>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {% if page_obj.has_other_pages %}
+        <div class="card-footer bg-white py-3 border-top-0 d-flex justify-content-center">
+            <nav>
+                <ul class="pagination pagination-sm shadow-sm mb-0">
+                    {% if page_obj.has_previous %}
+                    <li class="page-item"><a class="page-link border-0 text-muted" href="?page={{ page_obj.previous_page_number }}"><i class="fas fa-chevron-left"></i></a></li>
+                    {% endif %}
+                    <li class="page-item disabled"><span class="page-link border-0 text-dark fw-bold px-3">หน้า {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span></li>
+                    {% if page_obj.has_next %}
+                    <li class="page-item"><a class="page-link border-0 text-muted" href="?page={{ page_obj.next_page_number }}"><i class="fas fa-chevron-right"></i></a></li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

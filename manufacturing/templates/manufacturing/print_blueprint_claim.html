@@ -1,0 +1,132 @@
+{% load humanize %}
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ใบขออนุมัติเบิกค่าตอบแทน - {{ claim.code }}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        * { box-sizing: border-box; -webkit-print-color-adjust: exact !important; color-adjust: exact !important; }
+        body { font-family: 'Sarabun', sans-serif; background-color: #e2e8f0; margin: 0; padding: 0; color: #111; }
+        @page { size: A4; margin: 10mm; }
+        .a4-page { width: 210mm; min-height: 297mm; padding: 15mm 20mm; margin: 20px auto; background: white; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        @media print { body { background: none; } .a4-page { margin: 0; box-shadow: none; width: 100%; padding: 5mm 10mm; } .no-print { display: none !important; } }
+        .header-table { width: 100%; border-bottom: 2px solid #ccc; padding-bottom: 10px; margin-bottom: 20px; }
+        .header-table td { vertical-align: top; }
+        .company-name { font-size: 20pt; font-weight: 700; color: #000; margin-bottom: 5px; }
+        .company-details { font-size: 11pt; color: #444; line-height: 1.4; }
+        .doc-title { font-size: 18pt; font-weight: 700; color: #2563eb; text-align: right; }
+        .doc-subtitle { font-size: 14pt; font-weight: 600; color: #333; text-align: right; margin-bottom: 10px; }
+        .doc-meta { font-size: 11pt; text-align: right; line-height: 1.5; }
+        .intro-text { font-size: 12pt; line-height: 1.8; margin-bottom: 15px; }
+        .data-table { width: 100%; border-collapse: collapse; margin-bottom: 30px; font-size: 11pt; }
+        .data-table th, .data-table td { border: 1px solid #000; padding: 10px 8px; vertical-align: middle; }
+        .data-table th { background-color: #f8fafc !important; text-align: center; font-weight: 700; }
+        .text-center { text-align: center; } .text-right { text-align: right; } .text-blue { color: #2563eb; font-weight: bold; }
+        .baht-text { font-style: italic; font-weight: bold; text-align: center; }
+        .sig-table { width: 100%; margin-top: 30px; border-collapse: collapse; }
+        .sig-table td { width: 33.33%; text-align: center; padding-bottom: 40px; }
+        .sig-line { border-bottom: 1px solid #000; width: 80%; margin: 0 auto 10px auto; display: inline-block; height: 35px; }
+        .sig-name { font-size: 11pt; margin-bottom: 3px; font-weight: 500; }
+        .sig-label { font-size: 11pt; color: #555; }
+        .toolbar { position: fixed; top: 15px; right: 15px; z-index: 1000; }
+        .btn-print { background: #2563eb; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; font-size: 12pt; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+    </style>
+</head>
+<body>
+    <div class="toolbar no-print"><button onclick="window.print()" class="btn-print"><i class="fas fa-print me-2"></i> พิมพ์เอกสาร</button></div>
+    <div class="a4-page">
+        <table class="header-table">
+            <tr>
+                <td style="width: 60%;">
+                    <div class="company-name">{{ company.name_th|default:"[ยังไม่ได้ตั้งชื่อบริษัท (ไทย)]" }}</div>
+                    <div class="company-details">{{ company.address|default:"-" }}<br>เลขประจำตัวผู้เสียภาษี: {{ company.tax_id|default:"-" }}<br>โทร: {{ company.phone|default:"-" }}</div>
+                </td>
+                <td style="width: 40%;">
+                    <div class="doc-title">ใบขอเบิกค่าตอบแทน</div><div class="doc-subtitle">(ตรวจสอบแบบแปลน)</div>
+                    <div class="doc-meta"><strong>เลขที่เอกสาร:</strong> {{ claim.code }}<br><strong>วันที่ตั้งเบิก:</strong> {{ claim.created_at|date:"d/m/Y" }}</div>
+                </td>
+            </tr>
+        </table>
+
+        <div class="intro-text">
+            <strong>ทีมผู้ขอเบิก:</strong> <u>{{ claim.employee.sales_group.name|default:"ไม่มีสังกัดทีม" }}</u><br>
+            มีความประสงค์ขออนุมัติเบิกจ่ายค่าตอบแทนจากการตรวจสอบแบบแปลนและโครงสร้างวัตถุดิบ (BOM) จำนวน <strong>{{ claim.total_jobs }}</strong> งาน ตามรายการบิลดังต่อไปนี้:
+        </div>
+
+        <table class="data-table">
+            <thead>
+                <tr><th style="width: 10%;">ลำดับ</th><th style="width: 30%;">เลขที่ JOB</th><th style="width: 40%;">ชื่อลูกค้า</th><th style="width: 20%;">วันที่ตรวจสอบ</th></tr>
+            </thead>
+            <tbody>
+                {% for job in jobs %}
+                <tr><td class="text-center">{{ forloop.counter }}</td><td class="text-center fw-bold">{{ job.code }}</td><td>{{ job.customer_name|default:"-" }}</td><td class="text-center">{{ job.blueprint_approved_at|date:"d/m/Y" }}</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <h5 style="font-weight: bold; font-size: 13pt; margin-bottom: 10px;">รายการสรุปส่วนแบ่งค่าตอบแทนในทีม:</h5>
+        <table class="data-table">
+            <thead>
+                <tr><th>ลำดับ</th><th>รายชื่อผู้รับเงิน</th><th>ตำแหน่งในทีม</th><th>สัดส่วน (%)</th><th>ยอดเงินสุทธิ (บาท)</th></tr>
+            </thead>
+            <tbody>
+                {% for split in claim.splits.all %}
+                <tr>
+                    <td class="text-center">{{ forloop.counter }}</td>
+                    <td>{{ split.employee.first_name }} {{ split.employee.last_name }}</td>
+                    <td class="text-center">{{ split.role_name }}</td>
+                    <td class="text-center">{{ split.percentage }}%</td>
+                    <td class="text-right fw-bold text-blue">{{ split.amount|floatformat:2|intcomma }}</td>
+                </tr>
+                {% endfor %}
+
+                {% if fund_amount > 0 %}
+                <tr>
+                    <td class="text-center">*</td>
+                    <td><strong>เงินสะสมกองทุนสำรองของทีม</strong></td>
+                    <td class="text-center text-muted">หักเข้ากองทุนกลุ่ม</td>
+                    <td class="text-center text-info fw-bold">{{ fund_percentage|floatformat:2 }}%</td>
+                    <td class="text-right fw-bold text-info">{{ fund_amount|floatformat:2|intcomma }}</td>
+                </tr>
+                {% endif %}
+
+                <tr>
+                    <td colspan="3" class="baht-text">( {{ amount_text }} )</td>
+                    <td class="text-center fw-bold">รวมทั้งสิ้น</td>
+                    <td class="text-right text-blue" style="font-size: 14pt;">{{ claim.total_amount|floatformat:2|intcomma }}</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <table class="sig-table">
+            <tr>
+                {% for split in claim.splits.all %}
+                <td>
+                    <div class="sig-line"></div>
+                    <div class="sig-name">( <strong>{{ split.employee.first_name }} {{ split.employee.last_name }}</strong> )</div>
+                    <div class="sig-label">ผู้รับเงิน ({{ split.role_name }})</div>
+                </td>
+                {% if forloop.counter|divisibleby:3 and not forloop.last %}</tr><tr>{% endif %}
+                {% endfor %}
+            </tr>
+        </table>
+
+        <table class="sig-table">
+            <tr>
+                <td style="width: 50%;">
+                    <div class="sig-line"></div><div class="sig-name">( .............................................................. )</div><div class="sig-label">ผู้ตรวจสอบ / หัวหน้าแผนก</div>
+                </td>
+                <td style="width: 50%;">
+                    <div class="sig-line"></div><div class="sig-name">( .............................................................. )</div><div class="sig-label">ผู้อนุมัติจ่าย / บัญชี</div>
+                </td>
+            </tr>
+        </table>
+        <div style="font-size: 8pt; color: #999; margin-top: 20px;">พิมพ์โดยระบบ ERP เมื่อวันที่: {% now "d/m/Y H:i" %}</div>
+    </div>
+</body>
+</html>

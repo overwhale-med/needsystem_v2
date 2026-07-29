@@ -1,0 +1,100 @@
+{% extends 'core/base.html' %}
+{% load humanize %}
+
+{% block content %}
+<style>
+    .btn-gold { background: linear-gradient(135deg, #d4af37 0%, #aa8c2c 100%); color: #ffffff !important; border: none; }
+    .btn-gold:hover { background: linear-gradient(135deg, #aa8c2c 0%, #8c7324 100%); transform: translateY(-2px); box-shadow: 0 4px 8px rgba(212, 175, 55, 0.3) !important; }
+</style>
+
+<div class="container-fluid py-4 px-4">
+    <div class="d-flex justify-content-between align-items-end mb-4">
+        <div>
+            <h4 class="fw-bold mb-1 text-dark"><i class="fas fa-file-invoice-dollar text-warning me-2"></i>รายการตั้งเบิกค่าใช้จ่าย (Solar Expenses)</h4>
+            <p class="text-muted small mb-0">ระบบจัดการค่าเดินทาง และค่าแรงช่างสำหรับงานโซล่าเซลล์</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{% url 'solar_center_dashboard' %}" class="btn btn-outline-secondary rounded-pill px-4 fw-bold shadow-sm">
+                <i class="fas fa-arrow-left me-2"></i> กลับ Center
+            </a>
+            <a href="{% url 'solar_expense_create' %}" class="btn btn-gold rounded-pill px-4 fw-bold shadow-sm">
+                <i class="fas fa-plus-circle me-2"></i> สร้างรายการเบิก
+            </a>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0 rounded-4 bg-white overflow-hidden">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="bg-light text-secondary small text-uppercase">
+                    <tr>
+                        <th class="ps-4 py-3 border-0">วันที่เบิก / เลขที่งาน</th>
+                        <th class="py-3 border-0">ผู้ตั้งเบิก</th>
+                        <th class="py-3 border-0">รายการ</th>
+                        <th class="py-3 border-0 text-end">จำนวนเงิน</th>
+                        <th class="py-3 border-0 text-center">สถานะ</th>
+                        <th class="pe-4 py-3 border-0 text-center">จัดการ</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for exp in expenses %}
+                    <tr>
+                        <td class="ps-4">
+                            <div class="small text-muted mb-1"><i class="far fa-calendar-alt me-1"></i>{{ exp.created_at|date:"d/m/Y" }}</div>
+                            <div class="fw-bold text-primary">{{ exp.job.code }}</div>
+                        </td>
+                        <td>
+                            <div class="fw-bold">{{ exp.requester.first_name|default:"-" }}</div>
+                            <div class="small text-muted">{{ exp.requester.department.name|default:"-" }}</div>
+                        </td>
+                        <td>
+                            <div class="fw-bold text-dark">{{ exp.get_expense_type_display }}</div>
+                            <div class="small text-muted text-truncate" style="max-width: 200px;">{{ exp.description }}</div>
+                        </td>
+                        <td class="text-end fw-bold fs-6 text-dark">
+                            ฿{{ exp.amount|floatformat:2|intcomma }}
+                        </td>
+                        <td class="text-center">
+                            {% if exp.status == 'PENDING' %}
+                                <span class="badge bg-warning text-dark rounded-pill px-3 shadow-sm"><i class="fas fa-clock me-1"></i> รอตรวจสอบ</span>
+                            {% elif exp.status == 'APPROVED' %}
+                                <span class="badge bg-success rounded-pill px-3 shadow-sm"><i class="fas fa-check me-1"></i> อนุมัติแล้ว</span>
+                            {% else %}
+                                <span class="badge bg-danger rounded-pill px-3 shadow-sm"><i class="fas fa-times me-1"></i> ไม่อนุมัติ</span>
+                            {% endif %}
+                        </td>
+                        <td class="pe-4 text-center">
+                            <div class="d-flex justify-content-center gap-2">
+                                {% if exp.receipt_image %}
+                                    <a href="{{ exp.receipt_image.url }}" target="_blank" class="btn btn-sm btn-outline-info rounded-circle shadow-sm" title="ดูสลิป/ใบเสร็จ"><i class="fas fa-image"></i></a>
+                                {% endif %}
+                                
+                                {% if is_accounting and exp.status == 'PENDING' %}
+                                <form method="POST" action="{% url 'solar_expense_approve' exp.id %}" style="display:inline;">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="action" value="approve">
+                                    <button type="submit" class="btn btn-sm btn-outline-success rounded-circle shadow-sm" title="อนุมัติจ่ายเงิน" onclick="return confirm('ยืนยันการอนุมัติจ่ายเงินจำนวน ฿{{ exp.amount|floatformat:2|intcomma }} ใช่หรือไม่?');"><i class="fas fa-check"></i></button>
+                                </form>
+                                <form method="POST" action="{% url 'solar_expense_approve' exp.id %}" style="display:inline;">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="action" value="reject">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger rounded-circle shadow-sm" title="ไม่อนุมัติ" onclick="return confirm('ยืนยันการปฏิเสธรายการเบิกนี้ ใช่หรือไม่?');"><i class="fas fa-times"></i></button>
+                                </form>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center py-5 text-muted">
+                            <i class="fas fa-wallet fa-3x mb-3 opacity-25"></i>
+                            <h5 class="fw-bold">ยังไม่มีรายการเบิกค่าใช้จ่าย</h5>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

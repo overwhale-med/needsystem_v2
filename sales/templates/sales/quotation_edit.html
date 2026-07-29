@@ -1,0 +1,626 @@
+{% extends 'core/base.html' %}
+{% load humanize %}
+
+{% block content %}
+<div class="container-xxl py-4 px-4">
+
+    {% if qt.status != 'DRAFT' %}
+    <div class="alert {% if qt.status == 'CANCELLED' %}alert-secondary{% elif qt.status == 'REJECTED' %}alert-warning{% else %}alert-danger{% endif %} shadow-sm border-0 rounded-4 mb-4 d-flex align-items-center p-3">
+        <i class="fas {% if qt.status == 'CANCELLED' %}fa-ban text-secondary{% elif qt.status == 'REJECTED' %}text-warning{% else %}text-danger{% endif %} fa-2x me-3"></i>
+        <div>
+            <h6 class="mb-1 fw-bold {% if qt.status == 'CANCELLED' %}text-secondary{% elif qt.status == 'REJECTED' %}text-warning{% else %}text-danger{% endif %}">
+                เอกสารถูกล็อก ({% if qt.status == 'CANCELLED' %}ยกเลิกแล้ว{% elif qt.status == 'APPROVED' %}อนุมัติแล้ว{% elif qt.status == 'REJECTED' %}ไม่อนุมัติ{% else %}เปิดบิลแล้ว{% endif %})
+            </h6>
+            <small class="text-dark">เอกสารนี้ถูกล็อกระบบแล้ว ไม่อนุญาตให้แก้ไขข้อมูลใดๆ</small>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="fw-bold text-dark mb-1" style="font-size: 1.5rem;">
+                <i class="fas fa-edit text-primary me-2"></i>{% if qt.status != 'DRAFT' %}รายละเอียดใบเสนอราคา{% else %}แก้ไขใบเสนอราคา{% endif %}
+            </h4>
+            <div class="text-muted" style="font-size: 0.9rem;">
+                เลขที่: <span class="text-danger fw-bold">{{ qt.code }}</span> | วันที่: {{ qt.date|date:"d/m/Y" }}
+            </div>
+        </div>
+        <div>
+            <a href="{% url 'quotation_list' %}" class="btn btn-light border shadow-sm rounded-pill px-3 btn-sm fw-bold"><i class="fas fa-chevron-left me-1"></i> กลับ</a>
+            <a href="{% url 'quotation_clone' qt.id %}" class="btn btn-info shadow-sm rounded-pill px-3 ms-2 btn-sm fw-bold text-white"><i class="fas fa-copy me-1"></i> คัดลอกสร้างใบใหม่</a>
+            
+            {% if qt.status != 'CANCELLED' %}
+            <a href="{% url 'quotation_print' qt.id %}" target="_blank" class="btn btn-primary shadow-sm rounded-pill px-4 ms-2 btn-sm fw-bold"><i class="fas fa-print me-1"></i> พิมพ์ / ตัวอย่าง</a>
+            {% endif %}
+            
+            {% if qt.status == 'DRAFT' or qt.status == 'APPROVED' %}
+            <a href="{% url 'quotation_cancel' qt.id %}" class="btn btn-outline-danger shadow-sm rounded-pill px-4 ms-2 btn-sm fw-bold" onclick="return confirm('⚠️ คุณแน่ใจหรือไม่ว่าต้องการยกเลิกใบเสนอราคาใบนี้?\n(หากยกเลิกแล้วจะถือเป็นโมฆะทันที)');">
+                <i class="fas fa-times-circle me-1"></i> ยกเลิกใบนี้
+            </a>
+            {% endif %}
+
+            {% if qt.status == 'APPROVED' %}
+            <button type="button" class="btn btn-success shadow-sm rounded-pill px-4 ms-2 btn-sm fw-bold" onclick="$('#productionModal').modal('show');">
+                <i class="fas fa-industry me-1"></i> สั่งผลิต
+            </button>
+            {% endif %}
+            
+            {% if qt.status == 'PRODUCTION' or qt.status == 'COMPLETED' %}
+            <span class="badge bg-success fs-6 px-3 py-2 ms-2 rounded-pill shadow-sm">
+                <i class="fas fa-industry me-1"></i> ส่งเข้าผลิตแล้ว
+            </span>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-lg-4">
+            <div class="card shadow-sm border-0 rounded-3 h-100">
+                <div class="card-header bg-white py-3 border-bottom">
+                    <h6 class="m-0 fw-bold text-primary"><i class="fas fa-address-card me-2"></i>ข้อมูลลูกค้า</h6>
+                </div>
+                <div class="card-body bg-light bg-opacity-10 p-3">
+                    <div class="mb-2">
+                        <label class="text-muted fw-bold custom-label">ชื่อลูกค้า / บริษัท</label>
+                        <input type="text" class="form-control custom-input bg-white" value="{{ qt.customer_name }}" readonly>
+                    </div>
+                    <div class="mb-2">
+                        <label class="text-muted fw-bold custom-label">เบอร์โทรศัพท์</label>
+                        <input type="text" class="form-control custom-input bg-white" value="{{ qt.customer_phone|default:'-' }}" readonly>
+                    </div>
+                    <div class="mb-2">
+                        <label class="text-muted fw-bold custom-label">ที่อยู่</label>
+                        <textarea class="form-control custom-input bg-white" rows="3" readonly>{{ qt.customer_address }}</textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-8">
+            
+            {% if qt.status == 'DRAFT' %}
+            <div class="d-flex justify-content-center gap-3 mb-4">
+                <button type="button" class="btn btn-outline-primary rounded-pill px-4 py-2 fw-bold shadow-sm border-2" onclick="$('#box-main-product').slideDown(); $('#box-upsale').slideUp();">
+                    <i class="fas fa-home me-2"></i>+ เพิ่มสินค้าหลัก
+                </button>
+                <button type="button" class="btn btn-outline-warning text-dark rounded-pill px-4 py-2 fw-bold shadow-sm border-2" onclick="$('#box-upsale').slideDown(); $('#box-main-product').slideUp();">
+                    <i class="fas fa-tools me-2"></i>+ เพิ่มของแถม/ปรับเปลี่ยน
+                </button>
+            </div>
+
+            <div id="box-main-product" class="card border-primary border-2 border-bottom-0 border-end-0 border-start-0 shadow-sm mb-4" style="display: none;">
+                <div class="card-body p-4 bg-light"> 
+                    <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom border-secondary border-opacity-25">
+                        <h6 class="fw-bold text-dark m-0"><span class="badge bg-primary me-2"><i class="fas fa-home"></i></span> เลือกสินค้าหลัก</h6>
+                        <button type="button" class="btn-close" onclick="$('#box-main-product').slideUp();"></button>
+                    </div>
+                    <form method="post" autocomplete="off" class="smart-form">
+                        {% csrf_token %}
+                        <input type="hidden" name="add_item" value="true">
+                        <input type="hidden" name="product_id" id="input_product_id" value=""> 
+
+                        <div class="row g-2 mb-3">
+                            <div class="col-md-4">
+                                <label class="text-dark fw-bold small mb-1">กรองตามหมวดหมู่</label> 
+                                <select id="main_category_selector" class="form-select form-select-sm select2">
+                                    <option value="">-- ทั้งหมด --</option>
+                                    {% for cat in main_categories %}
+                                        <option value="{{ cat.id }}">{{ cat.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-8">
+                                <label class="text-dark fw-bold small mb-1">เลือกสินค้า</label> 
+                                <select id="product_selector" class="form-select form-select-sm select2">
+                                    <option value="">-- กรุณาเลือกหมวดหมู่ก่อน --</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="row g-2 align-items-end">
+                            <div class="col-md-5"> 
+                                <label class="text-dark fw-bold small mb-1">ชื่อที่จะโชว์ในบิล *</label> 
+                                <input type="text" name="item_name" id="input_name" class="form-control form-control-sm border-dark border-opacity-25" required autocomplete="off">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="text-dark fw-bold small mb-1">ราคา/หน่วย</label> 
+                                <input type="text" name="price" id="input_price" class="form-control form-control-sm text-end number-format border-dark border-opacity-25" required autocomplete="off">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="text-dark fw-bold small mb-1">จำนวน</label> 
+                                <input type="text" name="quantity" class="form-control form-control-sm text-center number-only border-dark border-opacity-25" value="1" required autocomplete="off">
+                            </div>
+                            <div class="col-md-2"> 
+                                <button type="submit" class="btn btn-dark text-white btn-sm w-100 fw-bold shadow-sm"><i class="fas fa-check me-1"></i> บันทึก</button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div id="box-upsale" class="card border-warning border-2 border-bottom-0 border-end-0 border-start-0 shadow-sm mb-4" style="display: none;">
+                <div class="card-body p-4 bg-light"> 
+                    <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom border-secondary border-opacity-25">
+                        <h6 class="fw-bold text-dark m-0"><span class="badge bg-warning text-dark me-2"><i class="fas fa-tools"></i></span> เลือกของสั่งเพิ่ม (Upsale)</h6>
+                        <button type="button" class="btn-close" onclick="$('#box-upsale').slideUp();"></button>
+                    </div>
+                    <form method="post" autocomplete="off" class="smart-form">
+                        {% csrf_token %}
+                        <input type="hidden" name="add_upsale" value="true">
+
+                        <div class="row g-2 mb-3">
+                            <div class="col-md-4">
+                                <label class="text-dark fw-bold small mb-1">หมวดหมู่งานเสริม</label> 
+                                <select id="upsale_category_selector" class="form-select form-select-sm select2">
+                                    <option value="">-- ทั้งหมด --</option>
+                                    {% for cat in upsale_categories %}
+                                        <option value="{{ cat.id }}">{{ cat.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-8">
+                                <label class="text-dark fw-bold small mb-1">เลือกรายการ (อ้างอิงราคาจากแคตตาล็อก)</label> 
+                                <select id="upsale_item_selector" class="form-select form-select-sm select2-tags">
+                                    <option value="">-- พิมพ์หา หรือ เลือกรายการ --</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="row g-2 align-items-end">
+                            <div class="col-md-5"> 
+                                <label class="text-dark fw-bold small mb-1">ชื่อที่จะโชว์ในบิล *</label> 
+                                <input type="text" name="upsale_desc" id="input_upsale_desc" class="form-control form-control-sm border-dark border-opacity-25" required autocomplete="off">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="text-dark fw-bold small mb-1">ราคา/หน่วย</label> 
+                                <input type="text" name="upsale_price" id="upsale_price" class="form-control form-control-sm text-end number-format border-dark border-opacity-25" required autocomplete="off">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="text-dark fw-bold small mb-1">จำนวน</label> 
+                                <input type="text" name="upsale_qty" class="form-control form-control-sm text-center number-only border-dark border-opacity-25" value="1" required autocomplete="off">
+                            </div>
+                            <div class="col-md-2"> 
+                                <button type="submit" class="btn btn-dark text-white btn-sm w-100 fw-bold shadow-sm"><i class="fas fa-check me-1"></i> บันทึก</button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            {% endif %}
+
+            <div class="card shadow-sm border-0 rounded-3">
+                <div class="card-header py-3 bg-white">
+                    <h6 class="m-0 fw-bold text-dark"><i class="fas fa-list me-2"></i>รายการในใบเสนอราคา</h6>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="bg-light text-secondary small text-uppercase">
+                            <tr>
+                                <th class="ps-4 text-center" style="width: 5%;">ลำดับ</th>
+                                <th style="width: 15%;">รหัสสินค้า</th>
+                                <th style="width: 30%;">สินค้า / รายการ</th>
+                                <th class="text-center" style="width: 10%;">จำนวน</th>
+                                <th class="text-end" style="width: 15%;">ราคา/หน่วย</th>
+                                <th class="text-end pe-4" style="width: 15%;">รวมเงิน</th>
+                                {% if qt.status == 'DRAFT' %}<th style="width: 10%;" class="text-center">ลบ</th>{% endif %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in qt.items.all %}
+                            <tr>
+                                <td class="ps-4 text-center fw-bold text-muted">{{ forloop.counter }}</td>
+                                <td class="text-secondary fw-bold">{{ item.product.code|default:"-" }}</td>
+                                <td class="fw-bold text-primary">{{ item.item_name }}</td>
+                                <td class="text-center"><span class="badge bg-light text-dark border px-3">{{ item.quantity|floatformat:0 }}</span></td>
+                                <td class="text-end">{{ item.unit_price|floatformat:2|intcomma }}</td>
+                                <td class="text-end pe-4 fw-bold text-primary">{{ item.amount|floatformat:2|intcomma }}</td>
+                                {% if qt.status == 'DRAFT' %}
+                                <td class="text-center">
+                                    <a href="{% url 'delete_item' item.id %}" class="text-danger" onclick="return confirm('ลบสินค้านี้?')"><i class="fas fa-trash-alt"></i></a>
+                                </td>
+                                {% endif %}
+                            </tr>
+                            {% endfor %}
+
+                            {% for u in qt.upsales.all %}
+                            <tr class="bg-warning bg-opacity-10">
+                                <td class="ps-4 text-center fw-bold text-muted">{{ qt.items.all|length|add:forloop.counter }}</td>
+                                <td><span class="badge bg-light text-muted border rounded-pill px-2">งานเสริม</span></td>
+                                <td class="fw-bold text-dark">{{ u.description }}</td>
+                                <td class="text-center"><span class="badge bg-white text-dark border px-3">{{ u.quantity|floatformat:0 }}</span></td>
+                                <td class="text-end">{{ u.unit_price|floatformat:2|intcomma }}</td>
+                                <td class="text-end pe-4 fw-bold text-dark">{{ u.total_price|floatformat:2|intcomma }}</td>
+                                {% if qt.status == 'DRAFT' %}
+                                <td class="text-center">
+                                    <form method="POST" class="d-inline">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="delete_upsale" value="true">
+                                        <input type="hidden" name="upsale_id" value="{{ u.id }}">
+                                        <button type="submit" class="btn btn-link text-danger p-0" onclick="return confirm('ลบรายการเพิ่มเติมนี้?')"><i class="fas fa-trash-alt"></i></button>
+                                    </form>
+                                </td>
+                                {% endif %}
+                            </tr>
+                            {% endfor %}
+
+                            {% if not qt.items.all and not qt.upsales.all %}
+                            <tr>
+                                <td colspan="{% if qt.status == 'DRAFT' %}7{% else %}6{% endif %}" class="text-center py-5">
+                                    <i class="fas fa-shopping-basket fa-2x mb-3 text-muted opacity-25"></i>
+                                    <p class="small mb-0 text-muted">ยังไม่มีรายการสินค้า</p>
+                                </td>
+                            </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="card-footer bg-white p-3">
+                    <form method="post" autocomplete="off" class="smart-form">
+                        {% csrf_token %}
+                        <div class="row">
+                            <div class="col-lg-7 border-end pe-lg-4 pb-3 pb-lg-0">
+                                
+                                <div class="bg-success bg-opacity-10 border border-success border-opacity-25 rounded p-3 mb-3">
+                                    <label class="text-success fw-bold small mb-2"><i class="fas fa-truck-moving me-1"></i> ระบบประเมินและคำนวณค่าจัดส่งอัตโนมัติ</label>
+                                    <div class="row g-2 mb-2">
+                                        <div class="col-md-4">
+                                            <select name="shipping_origin" id="shipping_origin" class="form-select form-select-sm border-success" {% if qt.status != 'DRAFT' %}disabled{% endif %}>
+                                                <option value="">-- สาขาต้นทาง --</option>
+                                                <option value="บางพระ" {% if qt.shipping_origin == 'บางพระ' %}selected{% endif %}>บางพระ</option>
+                                                <option value="นครปฐม" {% if qt.shipping_origin == 'นครปฐม' %}selected{% endif %}>นครปฐม</option>
+                                                <option value="อยุธยา" {% if qt.shipping_origin == 'อยุธยา' %}selected{% endif %}>อยุธยา</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <select id="shipping_region" class="form-select form-select-sm border-success" {% if qt.status != 'DRAFT' %}disabled{% endif %}>
+                                                <option value="">-- เลือกภาค --</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <select name="shipping_province" id="shipping_province" class="form-select form-select-sm select2 border-success" {% if qt.status != 'DRAFT' %}disabled{% endif %}>
+                                                <option value="">-- ระบุจังหวัดปลายทาง --</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex gap-3 mt-3">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" name="shipping_is_island" id="shipping_is_island" {% if qt.shipping_is_island %}checked{% endif %} {% if qt.status != 'DRAFT' %}disabled{% endif %}>
+                                            <label class="form-check-label fw-bold text-dark small" style="font-size: 11px;">พื้นที่เกาะ (ต้องข้ามเรือ)</label>
+                                        </div>
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" name="shipping_is_oversize" id="shipping_is_oversize" {% if qt.shipping_is_oversize %}checked{% endif %} {% if qt.status != 'DRAFT' %}disabled{% endif %}>
+                                            <label class="form-check-label fw-bold text-dark small" style="font-size: 11px;">ความยาวตู้เกิน 3.7 x 2.8m (+1,000฿)</label>
+                                        </div>
+                                    </div>
+                                    <div id="shipping_alert" class="alert alert-danger py-2 px-3 mt-2 mb-0 d-none fw-bold shadow-sm" style="font-size: 11px;">
+                                        <i class="fas fa-exclamation-triangle me-1"></i> พื้นที่ 3 จังหวัดชายแดน หรือ ข้ามเกาะ: ไม่มีเรทราคาตายตัว กรุณาส่งพิกัดให้ฝ่ายขนส่งประเมิน แล้วระบุค่าขนส่งด้วยตนเองในช่องด้านขวามือ
+                                    </div>
+                                </div>
+
+                                <label class="text-primary fw-bold small mb-1"><i class="fas fa-file-invoice-dollar me-1"></i> เงื่อนไขการชำระเงิน (Payment Terms):</label>
+                                <textarea name="payment_terms" class="form-control form-control-sm mb-3" rows="3" {% if qt.status != 'DRAFT' %}readonly{% endif %}>{{ qt.payment_terms|default:"-ชำระเงินมัดจำ 50% ของยอดรวมเพื่อยืนยันการสั่งซื้อ ส่วนที่เหลือชำระก่อนการจัดส่ง" }}</textarea>
+                                
+                                <label class="text-primary fw-bold small mb-1"><i class="fas fa-pen me-1"></i> หมายเหตุ / เงื่อนไข (Note):</label>
+                                <textarea name="note" class="form-control form-control-sm mb-2" rows="2" {% if qt.status != 'DRAFT' %}readonly{% endif %}>{{ qt.note|default:"-ไม่มี-" }}</textarea>
+                                
+                                {% if qt.status == 'DRAFT' %}
+                                <button type="submit" name="update_info" class="btn btn-outline-primary btn-sm shadow-sm rounded-pill px-3 mt-1">
+                                    <i class="fas fa-sync-alt me-1"></i> บันทึกหมายเหตุ/เงื่อนไข/ค่าจัดส่ง
+                                </button>
+                                {% endif %}
+                            </div>
+
+                            <div class="col-lg-5 ps-lg-4 d-flex flex-column justify-content-center">
+                                <table class="table table-sm table-borderless mb-0">
+                                    <tr class="border-bottom">
+                                        <td class="text-end text-muted align-middle pb-2">รวมราคาสินค้า:</td>
+                                        <td class="text-end pb-2 fw-bold text-dark">{{ item_total|floatformat:2|intcomma }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="text-end text-muted align-middle pt-2">หักส่วนลด:</td>
+                                        <td class="pt-2 text-end">
+                                            <input type="text" name="discount" id="live_discount" value="{% if qt.discount > 0 %}{{ qt.discount }}{% endif %}" class="form-control form-control-sm text-end d-inline-block text-danger number-format" style="width: 110px;" placeholder="0.00" autocomplete="off" {% if qt.status != 'DRAFT' %}readonly{% endif %}>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td class="text-end text-muted align-middle">ค่าจัดส่ง:</td>
+                                        <td class="text-end">
+                                            <input type="text" name="shipping_cost" id="live_shipping" value="{% if qt.shipping_cost > 0 %}{{ qt.shipping_cost }}{% endif %}" class="form-control form-control-sm text-end d-inline-block number-format fw-bold text-success" style="width: 110px;" placeholder="0.00" autocomplete="off" readonly>
+                                        </td>
+                                    </tr>
+                                    <tr class="border-top">
+                                        <td class="text-end text-muted small pt-2">ราคาสินค้าก่อนภาษี:</td>
+                                        <td class="text-end fw-bold small pt-2" id="live_subtotal">{{ qt.subtotal|floatformat:2|intcomma }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="text-end text-muted small">VAT 7%:</td>
+                                        <td class="text-end text-danger small" id="live_tax">{{ qt.tax_amount|floatformat:2|intcomma }}</td>
+                                    </tr>
+                                    <tr class="border-top border-dark border-2">
+                                        <td class="text-end align-middle pt-2"><span class="fw-bold text-dark fs-6">ยอดรวมสุทธิ:</span></td>
+                                        <td class="text-end pt-2"><span class="fw-bold text-dark fs-5" id="live_grand_total">฿{{ qt.grand_total|floatformat:2|intcomma }}</span></td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+
+                        {% if qt.status == 'DRAFT' %}
+                        <div class="mt-4 pt-3 border-top text-end">
+                            <button type="submit" name="finish_quote" class="btn btn-success btn-lg shadow rounded-pill px-5 fw-bold" onclick="return confirm('ยืนยันสร้างใบเสนอราคานี้ เสร็จสมบูรณ์ใช่หรือไม่?');">
+                                <i class="fas fa-check-circle me-2"></i> สร้างใบเสนอราคา (เสร็จสิ้น)
+                            </button>
+                        </div>
+                        {% endif %}
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="productionModal" tabindex="-1" role="dialog" aria-labelledby="productionModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <div class="modal-header bg-success text-white border-0 rounded-top-4">
+                <h5 class="modal-title fw-bold" id="productionModalLabel"><i class="fas fa-industry me-2"></i>ยืนยันส่งออเดอร์สั่งผลิต</h5>
+                <button type="button" class="close text-white" onclick="$('#productionModal').modal('hide');" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form method="POST" action="{% url 'create_job_order' qt.id %}">
+                {% csrf_token %}
+                <div class="modal-body p-4">
+                    <p class="mb-3 text-muted">กำลังจะส่งใบเสนอราคาเลขที่ <strong>{{ qt.code }}</strong> ไปยังแผนกผลิต กรุณาตรวจสอบความถูกต้องก่อนกดยืนยัน:</p>
+                    
+                    <div class="card bg-danger bg-opacity-10 border border-danger rounded-3 mb-3">
+                        <div class="card-body p-3">
+                            <div class="form-check form-switch d-flex align-items-center">
+                                <input class="form-check-input" type="checkbox" name="is_onsite" id="is_onsite" style="transform: scale(1.5); margin-right: 15px;">
+                                <label class="form-check-label fw-bold text-danger ms-2" for="is_onsite" style="cursor: pointer;">
+                                    <i class="fas fa-hard-hat me-1"></i> ช่างต้องไปประกอบหน้างาน (On-site)
+                                </label>
+                            </div>
+                            <small class="d-block text-muted mt-2 ms-4 ps-2">
+                                * หากติ๊กเลือก ระบบจะแจ้งเตือนให้แผนกจัดส่งเริ่มจองรถทันที และจะข้ามขั้นตอนการผลิต/QC ในโรงงาน
+                            </small>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light border-0 rounded-bottom-4">
+                    <button type="button" class="btn btn-secondary rounded-pill px-4" onclick="$('#productionModal').modal('hide');">ยกเลิก</button>
+                    <button type="submit" class="btn btn-success rounded-pill px-4 fw-bold">ยืนยันและส่งสั่งผลิต</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<link href="https://cdn.jsdelivr.net/npm/@ttskch/select2-bootstrap4-theme@x.x.x/dist/select2-bootstrap4.min.css" rel="stylesheet">
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+<script>
+    const productsData = {{ products_json|safe }};
+    const upsalesData = {{ upsales_json|safe }};
+    
+    // 🌟 นำเข้าข้อมูลภาค-จังหวัด และเรทราคา จาก Backend 🌟
+    const regionsData = {{ regions_json|safe }};
+    const shippingRates = {{ shipping_rates_json|safe }};
+    const riskProvinces = ['นราธิวาส', 'ปัตตานี', 'ยะลา'];
+    
+    // ค่าเริ่มต้นถ้าเคยบันทึกจังหวัดเอาไว้แล้ว
+    const savedProvince = "{{ qt.shipping_province|default:'' }}";
+
+    $(document).ready(function() {
+        $('.select2').select2({ theme: 'bootstrap4', width: '100%' });
+        $('.select2-tags').select2({ theme: 'bootstrap4', width: '100%', tags: true });
+
+        // --- ส่วนจัดการ สินค้าหลัก & Upsales ---
+        function populateMainProducts(catId) {
+            let html = '<option value="">-- เลือกสินค้า --</option>';
+            productsData.forEach(p => {
+                if(!catId || p.category_id == catId) {
+                    html += `<option value="${p.id}" data-name="${p.name}" data-price="${p.sell_price}">${p.code} : ${p.name}</option>`;
+                }
+            });
+            $('#product_selector').html(html).trigger('change');
+        }
+        populateMainProducts(''); 
+
+        $('#main_category_selector').change(function() { populateMainProducts($(this).val()); });
+
+        $('#product_selector').change(function() {
+            var selectedOption = $(this).find(':selected');
+            if(selectedOption.val()) {
+                $('#input_product_id').val(selectedOption.val());
+                $('#input_name').val(selectedOption.data('name'));
+                $('#input_price').val(formatNumber(selectedOption.data('price')));
+            } else {
+                $('#input_product_id, #input_name, #input_price').val('');
+            }
+        });
+
+        function populateUpsales(catId) {
+            let html = '<option value="">-- พิมพ์หา หรือ เลือกรายการ --</option>';
+            upsalesData.forEach(u => {
+                if(!catId || u.category_id == catId) {
+                    html += `<option value="${u.name}" data-price="${u.default_price}">${u.name}</option>`;
+                }
+            });
+            $('#upsale_item_selector').html(html).trigger('change');
+        }
+        populateUpsales('');
+        
+        $('#upsale_category_selector').change(function() { populateUpsales($(this).val()); });
+        
+        $('#upsale_item_selector').change(function() {
+            var selectedOption = $(this).find(':selected');
+            var price = selectedOption.data('price');
+            var name = selectedOption.val();
+            if(name) {
+                $('#input_upsale_desc').val(name);
+                if(price !== undefined) { $('#upsale_price').val(formatNumber(price)); }
+            } else {
+                $('#input_upsale_desc').val('');
+                $('#upsale_price').val('');
+            }
+        });
+
+        // 🌟 --- ส่วนจัดการ: เลือกภาค -> คัดกรองจังหวัด --- 🌟
+        
+        // 1. โหลดรายชื่อภาคเข้า Dropdown
+        let regionHtml = '<option value="">-- เลือกภาค --</option>';
+        Object.keys(regionsData).forEach(region => {
+            regionHtml += `<option value="${region}">${region}</option>`;
+        });
+        $('#shipping_region').html(regionHtml);
+
+        // 2. ฟังก์ชันสาดรายชื่อจังหวัดลง Dropdown ตามภาคที่เลือก
+        function populateProvinces(selectedRegion, autoSelectProv = '') {
+            let provHtml = '<option value="">-- ระบุจังหวัดปลายทาง --</option>';
+            if (selectedRegion && regionsData[selectedRegion]) {
+                regionsData[selectedRegion].forEach(prov => {
+                    let isSelected = (prov === autoSelectProv) ? 'selected' : '';
+                    provHtml += `<option value="${prov}" ${isSelected}>${prov}</option>`;
+                });
+            }
+            $('#shipping_province').html(provHtml).trigger('change');
+        }
+
+        // 3. ดักจับตอนที่เซลส์กดเปลี่ยน "ภาค"
+        $('#shipping_region').change(function() {
+            populateProvinces($(this).val());
+        });
+
+        // 4. กรณีเปิดหน้ามา แล้วเคยเซฟ "จังหวัด" ไว้แล้ว ให้ระบบค้นหาอัตโนมัติว่าจังหวัดนี้อยู่ภาคไหน
+        if (savedProvince) {
+            let foundRegion = '';
+            for (const [region, provinces] of Object.entries(regionsData)) {
+                if (provinces.includes(savedProvince)) {
+                    foundRegion = region;
+                    break;
+                }
+            }
+            if (foundRegion) {
+                $('#shipping_region').val(foundRegion);
+                populateProvinces(foundRegion, savedProvince);
+            }
+        }
+
+        // 🌟 --- ส่วนจัดการ: คำนวณค่าจัดส่งอัตโนมัติ --- 🌟
+        function calculateSmartShipping() {
+            let origin = $('#shipping_origin').val();
+            let province = $('#shipping_province').val();
+            let isIsland = $('#shipping_is_island').is(':checked');
+            let isOversize = $('#shipping_is_oversize').is(':checked');
+
+            let shippingInput = $('#live_shipping');
+            let alertBox = $('#shipping_alert');
+
+            // 🌟 [UPDATE] ค่าเริ่มต้นคือ ล็อกไม่ให้พิมพ์
+            {% if qt.status == 'DRAFT' %}
+            shippingInput.prop('readonly', true);
+            {% endif %}
+
+            // 1. ถ้ายังระบุพิกัดไม่ครบ ให้กลับไปสถานะเริ่มต้น (ล็อกไว้)
+            if (!origin || !province) {
+                return;
+            }
+
+            // 2. เช็กเงื่อนไขพิเศษ (ข้ามเกาะ หรือ 3 จังหวัดชายแดน) -> ปลดล็อก
+            if (isIsland || riskProvinces.includes(province)) {
+                alertBox.removeClass('d-none');
+                {% if qt.status == 'DRAFT' %}
+                shippingInput.prop('readonly', false); // ปลดล็อกให้พิมพ์เองได้
+                {% endif %}
+                shippingInput.removeClass('text-success').addClass('text-danger');
+            } else {
+                alertBox.addClass('d-none');
+                shippingInput.removeClass('text-danger').addClass('text-success');
+
+                // 3. ค้นหาราคาจากตารางไขว้ (Matrix) ในหน่วยความจำ
+                let rate = shippingRates.find(r => r.origin === origin && r.province === province);
+                if (rate) {
+                    let price = rate.price;
+                    if (isOversize) price += 1000; // บวกค่าตู้พิเศษ 1000 บาท
+                    
+                    {% if qt.status == 'DRAFT' %}
+                    shippingInput.val(formatNumber(price));
+                    shippingInput.prop('readonly', true); // ล็อกไว้อัตโนมัติ
+                    calculateLiveTotals();
+                    {% endif %}
+                } else {
+                    // ไม่มีในฐานข้อมูลก็ล็อกไว้ เป็น 0.00
+                    {% if qt.status == 'DRAFT' %}
+                    shippingInput.val('0.00');
+                    shippingInput.prop('readonly', true); // ล็อกไว้
+                    calculateLiveTotals();
+                    {% endif %}
+                }
+            }
+        }
+
+        // 🌟 [UPDATE] เรียกให้เช็กสถานะการล็อก 1 ครั้งตอนเปิดหน้ามาเลย
+        {% if qt.status == 'DRAFT' %}
+        $('#shipping_origin, #shipping_province, #shipping_is_island, #shipping_is_oversize').on('change', calculateSmartShipping);
+        calculateSmartShipping(); 
+        {% endif %}
+
+
+        // --- ฟังก์ชันเรื่องตัวเลข และคำนวณยอดรวม ---
+        function formatNumber(num) {
+            if (!num || isNaN(num)) return '';
+            return parseFloat(num).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        }
+        function unformatNumber(str) {
+            if (!str) return 0;
+            return parseFloat(str.toString().replace(/,/g, '')) || 0;
+        }
+
+        $('.number-format').on('blur', function() {
+            let val = unformatNumber(this.value);
+            if (val === 0 && !$(this).prop('required')) { this.value = ''; } 
+            else { this.value = formatNumber(val); }
+        }).on('focus', function() {
+            let val = unformatNumber(this.value);
+            this.value = val === 0 ? '' : val;
+        }).on('input', function() {
+            this.value = this.value.replace(/[^0-9.]/g, '');
+            calculateLiveTotals();
+        });
+
+        $('.number-only').on('input', function() { this.value = this.value.replace(/[^0-9]/g, ''); });
+        
+        $('.number-format').each(function() {
+            if (this.value && this.value !== '0.00') { this.value = formatNumber(unformatNumber(this.value)); } 
+            else if (!$(this).prop('required')) { this.value = ''; }
+        });
+
+        const baseItemTotal = {{ item_total|default:0 }};
+        function calculateLiveTotals() {
+            let shipping = unformatNumber($('#live_shipping').val());
+            let discount = unformatNumber($('#live_discount').val());
+            
+            let grandTotal = (baseItemTotal + shipping) - discount;
+            if (grandTotal < 0) grandTotal = 0;
+            let subtotal = grandTotal / 1.07;
+            let taxAmount = grandTotal - subtotal;
+            
+            $('#live_subtotal').text(formatNumber(subtotal));
+            $('#live_tax').text(formatNumber(taxAmount));
+            $('#live_grand_total').text('฿' + formatNumber(grandTotal));
+        }
+
+        $('.smart-form').on('submit', function() {
+            $(this).find('.number-format').each(function() {
+                if(this.value) { this.value = this.value.replace(/,/g, ''); }
+            });
+            // ปลดล็อก select ก่อน Submit เพื่อให้ส่งค่าไปเซฟได้
+            $(this).find('select').prop('disabled', false); 
+        });
+
+    });
+</script>
+{% endblock %}

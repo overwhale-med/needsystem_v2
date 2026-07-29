@@ -1,0 +1,192 @@
+{% load humanize %}
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>สัญญาจะซื้อจะขายและวางเงินมัดจำ - {{ qt.code }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        @page {
+            size: A4;
+            margin: 10mm 15mm;
+        }
+        body {
+            font-family: 'Sarabun', sans-serif;
+            color: #000;
+            background: #eee;
+            font-size: 15px;
+            line-height: 1.6;
+        }
+        .page-a4 {
+            width: 210mm; min-height: 297mm; background: white;
+            margin: 20px auto; padding: 20mm 15mm; box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+
+        .text-indent { text-indent: 40px; }
+        .text-indent-double { text-indent: 80px; }
+
+        .editable-textarea {
+            width: 100%; border: 1px dashed #ccc; padding: 8px;
+            font-family: 'Sarabun', sans-serif; font-size: 15px;
+            resize: vertical; background-color: #fcfcfc; border-radius: 4px;
+        }
+
+        @media print {
+            body { background: white; margin: 0; padding: 0; }
+            .page-a4 { box-shadow: none; margin: 0; width: 100%; padding: 15mm; }
+            .d-print-none { display: none !important; }
+            .editable-textarea {
+                border: none !important; background-color: transparent !important;
+                resize: none !important; padding: 0 !important; overflow: hidden !important;
+            }
+            * { -webkit-print-color-adjust: exact !important; color-adjust: exact !important; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="text-center mt-4 d-print-none mb-3">
+        <div class="alert alert-info d-inline-block shadow-sm">
+            <i class="fas fa-info-circle me-2"></i> <strong>Tips:</strong> คุณสามารถคลิกที่ข้อความใน <b>"ข้อ 5. อื่นๆ"</b> เพื่อพิมพ์เงื่อนไขเพิ่มเติมได้ (ขอบกล่องจะหายไปตอนกดปริ้นท์)
+        </div><br>
+        <button onclick="window.print()" class="btn btn-primary btn-lg rounded-pill shadow"><i class="fas fa-print me-2"></i> พิมพ์เอกสาร</button>
+        <button onclick="window.close()" class="btn btn-secondary btn-lg rounded-pill shadow ms-2">ปิดหน้าต่าง</button>
+    </div>
+
+    <div class="page-a4">
+
+        <div class="d-flex justify-content-center align-items-center mb-4">
+            <div class="pe-4 text-center" style="width: 25%;">
+                {% if company.logo %}
+                    <img src="{{ company.logo.url }}" alt="Logo" style="max-height: 80px; max-width: 100%; object-fit: contain;">
+                {% else %}
+                    <h3 class="fw-bold mb-0" style="color: #4b8b9b;">NEED</h3>
+                {% endif %}
+            </div>
+            <div style="border-left: 2px solid #000; height: 90px; margin: 0 15px;"></div>
+            <div class="ps-3" style="width: 75%;">
+                <h5 class="fw-bold mb-2">{{ company.name|default:"บริษัท นีด ช็อปปิ้ง จำกัด" }}</h5>
+                <p class="mb-0" style="font-size: 14px; line-height: 1.4;">{{ company.address|default:"10/10 หมู่ 10 ตำบลบางพระ อำเภอศรีราชา จังหวัดชลบุรี 20110" }}</p>
+                <p class="mb-0" style="font-size: 14px; line-height: 1.4;">โทร: {{ company.phone|default:"033-1666-99" }} &nbsp; Email: {{ company.email|default:"needshopping.acc@gmail.com" }}</p>
+                <p class="mb-0" style="font-size: 14px; line-height: 1.4;">เลขประจำตัวผู้เสียภาษีอากร: {{ company.tax_id|default:"0205563029342" }} (สำนักงานใหญ่)</p>
+            </div>
+        </div>
+
+        <h5 class="fw-bold text-center mb-3">สัญญาจะซื้อจะขายและวางเงินมัดจำตู้สำนักงานสำเร็จรูป</h5>
+
+        <div class="text-end mb-3">
+            <p class="mb-1">เลขที่สัญญา: <strong>{{ qt.code }}</strong></p>
+            <p class="mb-0">วันที่: <strong>{% now "d / m / Y" %}</strong></p>
+        </div>
+
+        <p class="text-indent" style="text-align: justify;">
+            สัญญาฉบับนี้ทำขึ้นระหว่าง <strong>{{ company.name|default:"บริษัท นีด ช็อปปิ้ง จำกัด" }}</strong> เลขทะเบียนนิติบุคคล <strong>{{ company.tax_id|default:"0205563029342" }}</strong> ตั้งอยู่เลขที่ {{ company.address|default:"10/10 หมู่ที่ 10 ตำบลบางพระ อำเภอศรีราชา จังหวัดชลบุรี" }} โดยมี <strong>นางสาวเบญจณัฎฐ์ ชัยทัศธนโชค</strong> เป็นกรรมการผู้มีอำนาจลงนาม ซึ่งต่อไปในสัญญานี้เรียกว่า <strong>“ผู้จะขาย”</strong> ฝ่ายหนึ่ง กับ
+        </p>
+        <p class="text-indent mb-3" style="text-align: justify;">
+            <strong>บริษัท/คุณ {{ qt.customer_name|default:"........................................................................" }}</strong>
+            เอกสารเลขที่ <strong>{{ qt.customer_tax_id|default:"........................................................" }}</strong>
+            ที่อยู่ {{ qt.customer_address|default:"..................................................................................................................." }} ซึ่งต่อไปในสัญญานี้เรียกว่า <strong>“ผู้จะซื้อ”</strong> อีกฝ่ายหนึ่ง
+        </p>
+
+        <p class="text-indent fw-bold mb-2">คู่สัญญาทั้งสองฝ่ายตกลงทำสัญญาจะซื้อจะขาย ตู้สำนักงานสำเร็จรูป กันดังมีข้อความต่อไปนี้</p>
+
+        <p class="mb-2" style="text-align: justify;">
+            <strong>ข้อ 1.</strong> ผู้จะขายตกลงจะขายและผู้จะซื้อตกลงจะซื้อ ตู้สำนักงานสำเร็จรูป ซึ่งต่อไปในสัญญานี้เรียกว่า “สินค้า” (รายละเอียดตามเอกสารแบบแปลนการผลิตแนบท้ายสัญญา) รวมเป็นเงิน <strong>{{ qt.grand_total|floatformat:2|intcomma }}</strong> บาท <strong>(-{{ grand_total_text }}-)</strong> ตามใบเสนอราคาเลขที่ <strong>{{ qt.code }}</strong> โดยให้ถือเป็นส่วนหนึ่งของสัญญานี้ด้วย
+        </p>
+
+        <p class="mb-2" style="text-align: justify;">
+            <strong>ข้อ 2.</strong> ในวันทำสัญญานี้ผู้จะซื้อได้วางเงินมัดจำไว้ให้กับผู้จะขายเป็นจำนวนเงิน <strong>{{ qt.deposit_amount|floatformat:2|intcomma }}</strong> บาท <strong>(-{{ deposit_amount_text }}-)</strong>
+
+            {% if qt.deposit_method == 'CASH' %}
+                โดยชำระเป็น <strong>เงินสด</strong> ซึ่งผู้จะขายได้รับไว้แล้วในวันทำสัญญานี้ <br>
+            {% elif qt.deposit_method == 'TRANSFER' %}
+                โดยชำระเป็น <strong>โอนเงินเข้าบัญชีธนาคาร</strong> ซึ่งผู้จะขายได้รับไว้แล้วในวันทำสัญญานี้ <br>
+            {% elif qt.deposit_method == 'CHECK' %}
+                โดยชำระเป็น <strong>เช็คธนาคาร</strong> ........................................................... สาขา ..................................... เลขที่ .............................. ลงวันที่ .............................. ซึ่งผู้จะขายได้รับไว้แล้วในวันทำสัญญานี้ <br>
+            {% else %}
+                โดยชำระเป็น ............................................................................................................................ ซึ่งผู้จะขายได้รับไว้แล้วในวันทำสัญญานี้ <br>
+            {% endif %}
+
+            ส่วนที่ยังค้างอยู่อีกจำนวน <strong>{{ balance_due|floatformat:2|intcomma }}</strong> บาท <strong>(-{{ balance_due_text }}-)</strong> ผู้จะซื้อตกลงจะชำระให้ผู้จะขายก่อนวันที่ส่งมอบสินค้า
+        </p>
+
+        <p class="mb-2" style="text-align: justify;">
+            <strong>ข้อ 3.</strong> ผู้จะขายและผู้จะซื้อตกลงซื้อขายสินค้า โดยจะส่งมอบสินค้าและชำระค่าสินค้าให้แก่กันแล้วเสร็จ
+            ในวันที่ <strong>{% if delivery_date %}{{ delivery_date|date:"d/m/Y" }}{% else %}.....................................................................{% endif %}</strong>
+            ตามขอบเขต คุณภาพ และมาตรฐาน และตามเงื่อนไขอื่นที่กำหนดในสัญญานี้
+        </p>
+
+        <p class="mb-1" style="text-align: justify;">
+            <strong>ข้อ 4.</strong> การรับมอบ และส่งมอบสินค้า หากผู้จะขายส่งมอบสินค้า ถูกต้องครบถ้วนตามที่กำหนดไว้ในสัญญาฉบับนี้แล้ว ผู้จะซื้อจะรับมอบสินค้าไว้เป็นลายลักษณ์อักษร และถือว่าผู้จะขายได้ทำตามสัญญาฉบับนี้สมบูรณ์ครบถ้วนแล้ว มีข้อกำหนดดังนี้
+        </p>
+        <p class="text-indent mb-0">- ผู้จะซื้อต้องตรวจรับมอบสินค้า เป็นลายลักษณ์อักษร ก่อนการขึ้นรถจัดส่งสินค้า</p>
+        <p class="text-indent mb-2">- ผู้จะซื้อเป็นผู้รับผิดชอบการขนส่ง และค่าใช้จ่ายที่เกิดขึ้นจากการจัดส่ง รวมถึงการยกวางสินค้า เพื่อเป็นไปตามความต้องการของผู้จะซื้อ ผู้จะซื้อยินยอมเป็นผู้ชำระทั้งสิ้น</p>
+
+        <p class="mb-1" style="text-align: justify;">
+            <strong>ข้อ 5.</strong> เงื่อนไขการรับประกันสินค้า และหน้าที่ผู้จะขาย และข้อตกลงอื่น ๆ (หากมี)
+        </p>
+        <div class="ps-4 mb-2">
+            <p class="mb-0">- โครงสร้างหลักสินค้าเป็นเหล็กกัลวาไนท์ หากมีการผุกร่อนอันเกิดจากสนิม โดยผู้จะซื้อต้องดำเนินการตามวิธีติดตั้ง และวางสินค้า ที่ผู้จะขายกำหนดเท่านั้น (ข้อความท้ายสัญญา)</p>
+            <p class="mb-0">- โครงสร้างผนัง และหลังคา หากมีน้ำรั่วซึมเข้าพื้นที่ด้านใน อันเกิดจากการผลิตของผู้จะขายเท่านั้น</p>
+            <p class="mb-0">- โครงสร้างพื้น หากมีการชำรุด อันเกิดจากการผลิตของผู้จะขายเท่านั้น (ไม่รวมถึงวัสดุปูพื้น เช่น ผ้ายาง, กระเบื้องยาง SPC, กระเบื้องปูห้องน้ำทั้งหมด)</p>
+            <p class="mb-0">- ระบบไฟฟ้า หากมีการขัดข้อง ใช้งานไม่ได้ อันเกิดจากการผลิตของผู้จะขายเท่านั้น</p>
+            <p class="mb-0">- ระบบประปา หากมีการรั่วซึม ขัดข้อง ใช้งานไม่ได้ อันเกิดจากการผลิตของผู้จะขายเท่านั้น</p>
+            <p class="mb-0">- สีภายใน ภายนอก ผู้จะขายรับประกันสินค้าเฉพาะการแก้ไข จนกว่าผู้จะซื้อตรวจสอบ และยินยอมรับสินค้าเป็นลายลักษณ์อักษร ก่อนการส่งมอบสินค้าเท่านั้น</p>
+            <p class="mb-0">- การตรวจสอบ และแก้ไขการชำรุดของสินค้าผู้จะซื้อรับว่าจะวางเงินประกันการเข้าตรวจสอบการชำรุด ให้ผู้จะขาย ครั้งละ 2,000.00 บาท และหากการชำรุดนั้นเกิดขึ้นจากการผลิตสินค้าแล้ว ผู้จะขายรับว่าจะคืนเงินประกันการเข้าตรวจสอบการชำรุดให้แก่ผู้จะซื้อทั้งหมด และหากการชำรุดนั้นไม่ได้เกิดขึ้นจากการผลิตสินค้าแล้ว ผู้จะซื้อยินยอมให้ผู้จะขายเรียกเก็บค่าใช้จ่ายจากการเข้าตรวจสอบการชำรุด และการซ่อมแซมการชำรุด และนำเงินประกันการเข้าตรวจสอบการชำรุดมาหักจากค่าใช้จ่ายที่เรียกเก็บจากผู้จะซื้อได้ทันที</p>
+            <p class="mb-1 mt-1">- อื่นๆ</p>
+            <textarea class="editable-textarea" rows="3" placeholder="(คลิกเพื่อพิมพ์เงื่อนไขเพิ่มเติมที่นี่...)"></textarea>
+        </div>
+
+        <p class="mb-2" style="text-align: justify;">
+            <strong>ข้อ 6.</strong> หากผู้จะซื้อผิดสัญญา ผู้จะขายมีสิทธิบอกเลิกสัญญาและริบมัดจำทั้งหมดที่วางไว้แก่ผู้จะขายได้ โดยผู้จะซื้อไม่มีสิทธิที่จะเรียกร้องค่าเสียหายใด ๆ จากผู้จะขาย และหากผู้จะขายผิดสัญญา ผู้จะซื้อมีสิทธิบอกเลิกสัญญาและผู้จะขายต้องคืนเงินมัดจำทั้งหมดที่ได้รับมาจากผู้จะซื้อทันที โดยผู้จะขายไม่มีสิทธิที่จะเรียกร้องค่าเสียหายใด ๆ จากผู้จะซื้อ
+        </p>
+        <p class="mb-4" style="text-align: justify;">
+            <strong>ข้อ 7.</strong> การบอกกล่าว ผู้จะซื้อและผู้จะขายตกลงกันว่าคำบอกกล่าวหรือหนังสือซึ่งต้องแจ้งให้แก่กันภายใต้สัญญาฉบับนี้จะถือว่าได้มีการแจ้งแก่กันแล้ว หากว่าได้มีการส่งไปยังที่อยู่ของคู่สัญญาแต่ละฝ่ายตามที่ได้ระบุไว้ในสัญญาฉบับนี้
+        </p>
+
+        <p class="text-indent mb-5" style="text-align: justify;">
+            สัญญาจะซื้อจะขายและวางเงินมัดจำฉบับนี้ได้ทำขึ้นเป็นสองฉบับ มีข้อความถูกต้องตรงกันทุกประการ คู่สัญญาแต่ละฝ่ายได้อ่านโดยตลอดแล้วยืนยันว่าถูกต้องตรงตามเจตนา จึงได้ลงลายมือชื่อไว้เป็นสำคัญต่อหน้าพยาน และแต่ละฝ่ายถือไว้เป็นหลักฐานฝ่ายละฉบับ
+        </p>
+
+        <div class="row text-center mt-4">
+            <div class="col-6 mb-5">
+                <p>ลงชื่อ ............................................................. ผู้จะขาย</p>
+                <p class="mt-2">( บริษัท นีด ช็อปปิ้ง จำกัด)</p>
+            </div>
+            <div class="col-6 mb-5">
+                <p>ลงชื่อ ............................................................. ผู้จะซื้อ</p>
+                <p class="mt-2">( <strong>{{ qt.customer_name|default:"............................................................." }}</strong> )</p>
+            </div>
+            <div class="col-6">
+                <p>ลงชื่อ ............................................................. พยาน</p>
+                <p class="mt-2">( ............................................................. )</p>
+            </div>
+            <div class="col-6">
+                <p>ลงชื่อ ............................................................. พยาน</p>
+                <p class="mt-2">( ............................................................. )</p>
+            </div>
+        </div>
+
+        <hr class="mt-4 mb-3 border-dark">
+        <h6 class="fw-bold">ข้อความท้ายสัญญา</h6>
+        <p class="small text-muted mb-1" style="text-align: justify;">- การติดตั้ง และวางสินค้า สำหรับสินค้าที่มีห้องน้ำ หรือต้องเชื่อมต่อระบบสุขาภิบาลภายนอก ผู้จะซื้อต้องวางสินค้าสูงจากพื้นดินไม่น้อยกว่า 45 เซนติเมตร และสำหรับสินค้าที่ไม่มีห้องน้ำ หรือไม่ต้องเชื่อมต่อระบบสุขาภิบาลภายนอก ผู้จะซื้อต้องวางสินค้าสูงจากพื้นดินไม่น้อยกว่า 25 เซนติเมตร</p>
+        <p class="small text-muted mb-0" style="text-align: justify;">- การติดตั้ง และวางสินค้า ผู้จะซื้อต้องตรวจสอบให้แน่ใจว่าสินค้า ได้วางอยู่ในแนวราบหรือแนวระนาบที่ถูกต้องตามเครื่องมือวัดระดับน้ำ (Spirit Level) หากการวางสินค้าไม่ได้วางอยู่ในแนวราบหรือแนวระนาบที่ถูกต้องแล้วเป็นเหตุให้เกิดความชำรุด เสียหายกับสินค้า ผู้จะซื้อรับว่าไม่ได้เกิดขึ้นจากการผลิตของผู้จะขาย</p>
+
+    </div>
+
+    <script>
+        const tx = document.getElementsByTagName("textarea");
+        for (let i = 0; i < tx.length; i++) {
+            tx[i].setAttribute("style", "height:" + (tx[i].scrollHeight) + "px;overflow-y:hidden;");
+            tx[i].addEventListener("input", OnInput, false);
+        }
+        function OnInput() {
+            this.style.height = 0;
+            this.style.height = (this.scrollHeight) + "px";
+        }
+    </script>
+</body>
+</html>

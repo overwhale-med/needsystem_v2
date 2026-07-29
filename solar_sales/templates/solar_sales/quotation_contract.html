@@ -1,0 +1,169 @@
+{% load humanize %}
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>หนังสือสัญญาติดตั้งระบบโซล่าเซลล์ - {{ qt.code }}</title>
+    
+    <!-- นำเข้า Bootstrap และ Font (Sarabun) เพื่อความสวยงาม -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap');
+        
+        body { 
+            font-family: 'Sarabun', sans-serif; 
+            background-color: #e9ecef; 
+            color: #333; 
+            font-size: 15px;
+            line-height: 1.6;
+        }
+        
+        /* 🌟 สไตล์กำหนดขนาดกระดาษ A4 🌟 */
+        .a4-sheet {
+            background: white; 
+            width: 21cm; 
+            min-height: 29.7cm;
+            padding: 2cm; 
+            margin: 1.5cm auto; 
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            position: relative;
+        }
+
+        .contract-title { font-size: 24px; font-weight: 700; text-align: center; margin-bottom: 30px; letter-spacing: 0.5px; }
+        .section-title { font-weight: 700; font-size: 16px; margin-top: 20px; margin-bottom: 10px; border-bottom: 1px solid #ddd; padding-bottom: 5px;}
+        .data-value { border-bottom: 1px dotted #999; display: inline-block; padding: 0 10px; font-weight: 600; color: #000; }
+        
+        /* 🌟 สไตล์กล่องลายเซ็น 🌟 */
+        .signature-section { margin-top: 60px; page-break-inside: avoid; }
+        .signature-box { text-align: center; margin-bottom: 20px; }
+        .signature-line { border-bottom: 1px solid #000; width: 80%; margin: 40px auto 10px auto; }
+
+        /* 🌟 การตั้งค่าสำหรับตอนกดพิมพ์ (Print) 🌟 */
+        @media print {
+            body { background-color: white; margin: 0; padding: 0; }
+            .a4-sheet { width: 100%; min-height: auto; margin: 0; padding: 0; box-shadow: none; }
+            .no-print { display: none !important; }
+            @page { size: A4; margin: 1cm; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 🌟 แถบเครื่องมือด้านบน (ซ่อนตอนพิมพ์) 🌟 -->
+    <div class="bg-dark text-white py-3 no-print shadow-sm sticky-top">
+        <div class="container d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="fas fa-file-contract me-2"></i> ระบบเอกสาร NEED System</h5>
+            <div>
+                <button class="btn btn-primary fw-bold px-4 rounded-pill" onclick="window.print()">
+                    <i class="fas fa-print me-2"></i> พิมพ์สัญญา
+                </button>
+                <button class="btn btn-outline-light fw-bold px-4 rounded-pill ms-2" onclick="window.close()">
+                    <i class="fas fa-times me-2"></i> ปิดหน้าต่าง
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 🌟 กระดาษ A4 🌟 -->
+    <div class="a4-sheet">
+        
+        <!-- ส่วนหัวบริษัท -->
+        <div class="row mb-4 align-items-center">
+            <div class="col-8">
+                <h4 class="fw-bold mb-1">{{ company.name_th|default:"บริษัท นีด ซิสเต็ม จำกัด" }}</h4>
+                <div class="small text-muted">
+                    {{ company.address|default:"ที่อยู่บริษัท..." }}<br>
+                    โทรศัพท์: {{ company.phone|default:"-" }} | เลขประจำตัวผู้เสียภาษี: {{ company.tax_id|default:"-" }}
+                </div>
+            </div>
+            <div class="col-4 text-end">
+                <div class="border rounded p-2 text-center bg-light">
+                    <div class="small text-muted mb-1">เลขที่สัญญา / อ้างอิงใบเสนอราคา</div>
+                    <h5 class="fw-bold text-dark mb-0">{{ qt.code }}</h5>
+                </div>
+            </div>
+        </div>
+
+        <div class="contract-title">หนังสือสัญญาติดตั้งระบบโซล่าเซลล์</div>
+
+        <!-- ย่อหน้า 1: วันที่และสถานที่ทำสัญญา -->
+        <div class="text-end mb-4">
+            ทำที่: <span class="data-value" style="width: 250px; text-align: left;">{{ company.name_th|default:"สำนักงานบริษัท" }}</span><br>
+            วันที่: <span class="data-value" style="width: 250px; text-align: left;">{{ qt.deposit_date|date:"d/m/Y" }}</span>
+        </div>
+
+        <!-- ย่อหน้า 2: คู่สัญญา -->
+        <div class="mb-4 text-justify">
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;สัญญาฉบับนี้ทำขึ้นระหว่าง <strong>{{ company.name_th|default:"บริษัท นีด ซิสเต็ม จำกัด" }}</strong> ซึ่งต่อไปในสัญญานี้จะเรียกว่า <strong>"ผู้รับจ้าง"</strong> ฝ่ายหนึ่ง กับ 
+            <strong>{{ qt.customer.name|default:"-" }}</strong> ซึ่งต่อไปในสัญญานี้จะเรียกว่า <strong>"ผู้ว่าจ้าง"</strong> อีกฝ่ายหนึ่ง 
+            คู่สัญญาทั้งสองฝ่ายตกลงทำสัญญากันโดยมีเงื่อนไขและรายละเอียดดังต่อไปนี้:
+        </div>
+
+        <!-- ย่อหน้า 3: ขอบเขตงาน -->
+        <div class="section-title">ข้อ 1. ขอบเขตของงาน (Scope of Work)</div>
+        <div class="mb-3 text-justify">
+            ผู้ว่าจ้างตกลงว่าจ้าง และผู้รับจ้างตกลงรับดำเนินการติดตั้งระบบผลิตไฟฟ้าพลังงานแสงอาทิตย์ (Solar Cell) ตามรายละเอียดและรายการวัสดุอุปกรณ์ที่ระบุไว้ในใบเสนอราคาเลขที่ <strong>{{ qt.code }}</strong> ลงวันที่ <strong>{{ qt.date|date:"d/m/Y" }}</strong> ซึ่งถือเป็นส่วนหนึ่งของสัญญาฉบับนี้
+        </div>
+
+        <!-- ย่อหน้า 4: ค่าจ้างและการชำระเงิน -->
+        <div class="section-title">ข้อ 2. ค่าจ้างและเงื่อนไขการชำระเงิน (Payment Terms)</div>
+        <div class="mb-3 text-justify">
+            ผู้ว่าจ้างตกลงชำระค่าดำเนินการติดตั้งระบบโซล่าเซลล์ เป็นจำนวนเงินทั้งสิ้น <strong>{{ qt.grand_total|floatformat:2|intcomma }} บาท</strong> (รวมภาษีมูลค่าเพิ่มแล้ว) โดยมีรายละเอียดการชำระเงินดังนี้:
+            <ul class="mt-2 mb-2">
+                <li><strong>งวดที่ 1 (เงินมัดจำ):</strong> จำนวนเงิน <strong>{{ qt.deposit_amount|floatformat:2|intcomma }} บาท</strong> ชำระเรียบร้อยแล้วเมื่อวันที่ {{ qt.deposit_date|date:"d/m/Y" }} เพื่อเป็นการยืนยันการสั่งซื้อ</li>
+                <li><strong>งวดที่ 2 (ส่วนที่เหลือ):</strong> จำนวนเงิน <strong>{{ qt.balance_due|floatformat:2|intcomma }} บาท</strong> ผู้ว่าจ้างตกลงชำระให้แก่ผู้รับจ้าง ภายในวันที่ส่งมอบงานและติดตั้งระบบแล้วเสร็จ</li>
+            </ul>
+        </div>
+
+        <!-- ย่อหน้า 5: การรับประกัน -->
+        <div class="section-title">ข้อ 3. การรับประกันผลงาน (Warranty)</div>
+        <div class="mb-4 text-justify">
+            ผู้รับจ้างรับประกันผลงานการติดตั้งและการทำงานของระบบ เป็นระยะเวลาตามมาตรฐานของบริษัทผู้ผลิตอุปกรณ์ โดยเริ่มนับตั้งแต่วันที่ส่งมอบงาน ทั้งนี้การรับประกันจะไม่ครอบคลุมถึงความเสียหายที่เกิดจากอุบัติเหตุ, ภัยธรรมชาติ, หรือการดัดแปลงแก้ไขโดยบุคคลอื่นที่ไม่ใช่ตัวแทนของผู้รับจ้าง
+        </div>
+
+        <div class="mb-4 text-justify">
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;สัญญานี้ทำขึ้นเป็นสองฉบับมีข้อความถูกต้องตรงกัน คู่สัญญาทั้งสองฝ่ายได้อ่านและเข้าใจข้อความในสัญญาโดยตลอดแล้ว จึงได้ลงลายมือชื่อไว้เป็นสำคัญต่อหน้าพยาน
+        </div>
+
+        <!-- 🌟 ลายเซ็น 🌟 -->
+        <div class="row signature-section">
+            <div class="col-6">
+                <div class="signature-box">
+                    <div class="signature-line"></div>
+                    <div class="mb-1">( {{ qt.customer.name|default:"........................................................" }} )</div>
+                    <div class="fw-bold">ผู้ว่าจ้าง (Customer)</div>
+                    <div class="small text-muted mt-1">วันที่: ....../....../..........</div>
+                </div>
+            </div>
+            <div class="col-6">
+                <div class="signature-box">
+                    <div class="signature-line"></div>
+                    <div class="mb-1">( {{ qt.employee.first_name|default:"........................................................" }} {{ qt.employee.last_name|default:"" }} )</div>
+                    <div class="fw-bold">ผู้รับจ้าง (Company Representative)</div>
+                    <div class="small text-muted mt-1">วันที่: {{ qt.deposit_date|date:"d/m/Y" }}</div>
+                </div>
+            </div>
+            <div class="col-6 mt-4">
+                <div class="signature-box">
+                    <div class="signature-line"></div>
+                    <div class="mb-1">( ........................................................ )</div>
+                    <div class="fw-bold">พยาน (Witness)</div>
+                </div>
+            </div>
+            <div class="col-6 mt-4">
+                <div class="signature-box">
+                    <div class="signature-line"></div>
+                    <div class="mb-1">( ........................................................ )</div>
+                    <div class="fw-bold">พยาน (Witness)</div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Script สำหรับ Bootstrap -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

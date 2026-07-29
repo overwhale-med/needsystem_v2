@@ -1,0 +1,80 @@
+{% extends 'core/base.html' %}
+
+{% block content %}
+<style>
+    .btn-gold { background: linear-gradient(135deg, #d4af37 0%, #aa8c2c 100%); color: #ffffff !important; border: none; transition: all 0.3s ease; }
+    .btn-gold:hover { background: linear-gradient(135deg, #aa8c2c 0%, #8c7324 100%); transform: translateY(-2px); box-shadow: 0 4px 8px rgba(212, 175, 55, 0.3) !important; }
+</style>
+
+<div class="container py-5" style="max-width: 700px;">
+    <div class="card border-0 shadow-sm rounded-4 bg-white">
+        <div class="card-header bg-white py-4 border-bottom text-center">
+            <h4 class="fw-bold text-dark mb-0"><i class="fas fa-box-open text-gold me-2"></i>{{ title }}</h4>
+        </div>
+        
+        <div class="card-body p-5 pt-4">
+            <form method="POST">
+                {% csrf_token %}
+                <div class="row g-4">
+                    {% for field in form %}
+                    <div class="col-md-{% if field.name == 'name' or field.name == 'product_type' %}12{% elif field.name == 'is_active' %}12{% else %}6{% endif %}" id="wrapper_{{ field.name }}">
+                        <label class="form-label fw-bold text-muted small text-uppercase">{{ field.label }}</label>
+                        {% if field.name == 'is_active' %}
+                            <div class="form-check form-switch mt-2">
+                                {{ field }}
+                                <label class="form-check-label ms-2 fw-bold text-success" for="{{ field.id_for_label }}">เปิดให้แสดงผลในระบบ</label>
+                            </div>
+                        {% else %}
+                            {{ field }}
+                        {% endif %}
+                        {% if field.errors %}
+                            <div class="text-danger small mt-1"><i class="fas fa-exclamation-circle me-1"></i>{{ field.errors|striptags }}</div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <div class="d-flex justify-content-between mt-5 pt-3 border-top">
+                    <a href="{% url 'solar_inventory_list' %}" class="btn btn-light border rounded-pill px-4 fw-bold">ยกเลิก</a>
+                    <button type="submit" class="btn btn-gold rounded-pill px-5 fw-bold shadow-sm fs-6">
+                        <i class="fas fa-save me-2"></i> บันทึกข้อมูล
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const typeSelect = document.getElementById('id_product_type');
+        const fgWrapper = document.getElementById('wrapper_category');
+        const rmWrapper = document.getElementById('wrapper_rm_category');
+
+        function toggleCategories() {
+            if (typeSelect && fgWrapper && rmWrapper) {
+                if (typeSelect.value === 'FG') {
+                    // ถ้าเลือก FG: โชว์หมวดหมู่ FG และ ซ่อนหมวดหมู่ RM
+                    fgWrapper.style.display = 'block';
+                    rmWrapper.style.display = 'none';
+                    // ล้างค่าหมวดหมู่ RM ทิ้ง ป้องกันการแอบบันทึกข้อมูลตกค้าง
+                    document.getElementById('id_rm_category').value = '';
+                } else if (typeSelect.value === 'RM') {
+                    // ถ้าเลือก RM: ซ่อนหมวดหมู่ FG และ โชว์หมวดหมู่ RM
+                    fgWrapper.style.display = 'none';
+                    rmWrapper.style.display = 'block';
+                    // ล้างค่าหมวดหมู่ FG ทิ้ง
+                    document.getElementById('id_category').value = '';
+                }
+            }
+        }
+
+        if (typeSelect) {
+            // สั่งทำงานครั้งแรกทันทีที่เปิดหน้าเว็บ
+            toggleCategories();
+            // สั่งทำงานทุกครั้งที่ผู้ใช้คลิกเปลี่ยนค่าประเภทสินค้า
+            typeSelect.addEventListener('change', toggleCategories);
+        }
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,78 @@
+{% extends 'core/base.html' %}
+{% load humanize %} 
+
+{% block content %}
+<div class="container-fluid py-4 px-4">
+    <div class="d-flex justify-content-between align-items-end mb-4">
+        <div>
+            <h4 class="fw-bold mb-1 text-dark"><i class="fas fa-folder-open text-primary me-2"></i>รายการใบเตรียมสั่งซื้อ (PPO)</h4>
+            <p class="text-muted small mb-0">ประวัติการรวมใบสั่งผลิต และแถบติดตามความคืบหน้าการเปิด PO</p>
+        </div>
+        <div>
+            <a href="{% url 'ppo_prepare' %}" class="btn btn-warning rounded-pill px-4 shadow-sm fw-bold">
+                <i class="fas fa-plus me-1"></i> สร้าง PPO ใหม่
+            </a>
+            <a href="{% url 'purchasing_dashboard' %}" class="btn btn-outline-secondary rounded-pill px-4 ms-2 fw-bold"><i class="fas fa-arrow-left me-2"></i> กลับหน้าจัดซื้อ</a>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0 rounded-4 overflow-hidden">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="bg-light text-secondary" style="font-size: 0.85rem; text-transform: uppercase;">
+                    <tr>
+                        <th class="ps-4 py-3 border-0">เลขที่ใบเตรียม (PPO)</th>
+                        <th class="py-3 border-0">วันที่สร้าง</th>
+                        <th class="py-3 border-0">ใบสั่งผลิต (JOB) ที่ถูกรวม</th>
+                        <th class="py-3 border-0 text-end">จำนวนเงินรวม (ประเมิน)</th>
+                        
+                        <th class="py-3 border-0 text-center" style="width: 15%;">ความคืบหน้า (Progress)</th>
+                        
+                        <th class="pe-4 py-3 border-0 text-center">จัดการ</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for ppo in ppos %}
+                    <tr>
+                        <td class="ps-4 fw-bold text-primary">{{ ppo.code }}</td>
+                        <td class="text-muted small">{{ ppo.created_at|date:"d/m/Y H:i" }}</td>
+                        <td>
+                            {% for job in ppo.production_orders.all %}
+                                <span class="badge bg-secondary bg-opacity-10 text-dark border me-1">{{ job.code }}</span>
+                            {% endfor %}
+                        </td>
+                        <td class="text-end fw-bold text-danger">{{ ppo.total_estimated_cost|floatformat:2|intcomma }} บาท</td>
+                        
+                        <td class="text-center">
+                            {% if ppo.po_status == 'GREEN' %}
+                                <span class="badge bg-success rounded-pill px-3 py-2 shadow-sm w-100">
+                                    <i class="fas fa-check-circle me-1"></i> สั่งครบแล้ว (100%)
+                                </span>
+                            {% elif ppo.po_status == 'ORANGE' %}
+                                <span class="badge bg-warning text-dark rounded-pill px-3 py-2 shadow-sm w-100">
+                                    <i class="fas fa-clock me-1"></i> กำลังดำเนินการ ({{ ppo.progress_percent }}%)
+                                </span>
+                            {% elif ppo.po_status == 'RED' %}
+                                <span class="badge bg-danger rounded-pill px-3 py-2 shadow-sm w-100">
+                                    <i class="fas fa-exclamation-circle me-1"></i> รอเปิด PO (0%)
+                                </span>
+                            {% else %}
+                                <span class="badge bg-secondary rounded-pill px-3 py-2 shadow-sm w-100">ไม่มีวัตถุดิบ</span>
+                            {% endif %}
+                        </td>
+
+                        <td class="pe-4 text-center">
+                            <a href="{% url 'ppo_detail' ppo.id %}" class="btn btn-sm btn-primary rounded-pill px-4 shadow-sm fw-bold">
+                                เข้าจัดการ <i class="fas fa-arrow-right ms-1"></i>
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="6" class="text-center py-5 text-muted"><i class="fas fa-box-open fa-3x mb-3 opacity-25"></i><br>ยังไม่มีประวัติใบเตรียมสั่งซื้อ</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

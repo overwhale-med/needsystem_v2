@@ -1,0 +1,148 @@
+{% extends 'core/base.html' %}
+{% load humanize %}
+
+{% block content %}
+<style>
+    .modern-table { border-collapse: separate; border-spacing: 0 12px; }
+    .modern-table thead th { border: none; padding-bottom: 0; text-transform: uppercase; font-size: 0.85rem; letter-spacing: 0.5px; color: #495057; font-weight: 700; }
+    .modern-table tbody tr { background-color: #ffffff; box-shadow: 0 2px 6px rgba(0,0,0,0.03); border-radius: 12px; transition: transform 0.2s ease, box-shadow 0.2s ease; }
+    .modern-table tbody tr:hover { transform: translateY(-3px); box-shadow: 0 6px 15px rgba(0,0,0,0.08); }
+    .modern-table td { padding: 1.2rem 1rem; vertical-align: top; border: none; border-top: 1px solid transparent; border-bottom: 1px solid transparent; }
+    /* 🌟 สีแถบด้านซ้าย แยกแผนกคลังสินค้าเป็นสีเขียว 🌟 */
+    .modern-table td:first-child { border-top-left-radius: 12px; border-bottom-left-radius: 12px; border-left: 4px solid #198754; padding-left: 1.5rem !important; }
+    .modern-table td:last-child { border-top-right-radius: 12px; border-bottom-right-radius: 12px; border-right: 1px solid transparent; }
+    
+    .table-ready td:first-child { border-left: 4px solid #6c757d; opacity: 0.8; }
+    
+    .info-label { font-size: 0.75rem; color: #6c757d; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; display: block; font-weight: 600; }
+</style>
+
+<div class="container-fluid py-4 px-4">
+    <div class="d-flex justify-content-between align-items-end mb-4">
+        <div>
+            <h4 class="fw-bold mb-1 text-dark"><i class="fas fa-boxes text-success me-2"></i>กระดานคลังสินค้า (Inventory Board)</h4>
+            <p class="text-secondary small mb-0">ตรวจสอบความพร้อมของวัตถุดิบแต่ละ JOB และเบิกตัดสต็อก (GI) ให้ช่างลงมือผลิต</p>
+        </div>
+        <div>
+            <a href="/" class="btn btn-outline-secondary rounded-pill px-4"><i class="fas fa-arrow-left me-1"></i> กลับหน้าหลัก</a>
+        </div>
+    </div>
+
+    <div class="table-responsive px-1 pb-3" style="overflow-x: auto; overflow-y: visible;">
+        <table class="table modern-table mb-0 w-100">
+            <thead>
+                <tr>
+                    <th style="width: 20%;">ข้อมูลเอกสาร</th>
+                    <th style="width: 30%;">สินค้าที่ผลิต</th>
+                    <th style="width: 30%;">สถานะและหมายเหตุ</th>
+                    <th class="text-end pe-4" style="width: 20%;">จัดการ</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for order in orders %}
+                <tr class="{% if order.status != 'WAITING_INVENTORY' %}table-ready{% endif %}">
+                    <td>
+                        <span class="info-label">เลขที่ JOB</span>
+                        <div class="fw-bold text-dark font-monospace mb-2" style="font-size: 1.1rem;">{{ order.code }}</div>
+                        
+                        <span class="info-label">วันที่ส่งแผน</span>
+                        <div class="small text-dark mb-2 fw-bold"><i class="far fa-calendar-alt text-secondary me-1"></i> {{ order.start_date|date:"d/m/Y" }}</div>
+                        
+                        <span class="info-label mt-2">พนักงานขาย</span>
+                        <div class="small text-dark fw-bold"><i class="fas fa-user-tie text-secondary me-1"></i> {{ order.salesperson.name|default:"ไม่ระบุ" }}</div>
+                    </td>
+                    <td>
+                        <span class="info-label">สินค้าที่จะผลิต</span>
+                        <div class="fw-bold text-dark mb-2" style="font-size: 0.95rem;">
+                            <span class="text-success me-1">[{{ order.product.code }}]</span>{{ order.product.name }}
+                        </div>
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <span class="fw-bold text-dark fs-6">{{ order.quantity }} หลัง</span>
+                            {% if order.is_onsite %}
+                            <span class="badge bg-danger text-white border border-danger shadow-sm py-1 px-2" style="font-size: 0.7rem;" title="แพ็กใส่กล่อง/พาเลท รอขนขึ้นรถ">
+                                <i class="fas fa-hard-hat me-1"></i>ประกอบหน้างาน
+                            </span>
+                            {% endif %}
+                        </div>
+
+                        <div class="bg-light rounded-3 p-2 border border-secondary border-opacity-10 mt-2">
+                            <div class="small text-dark mb-1">
+                                <i class="fas fa-building text-primary opacity-75 me-1"></i> <strong>สถานที่:</strong> 
+                                {% if order.is_onsite %}
+                                    <span class="text-danger fw-bold">ประกอบหน้างาน (On-site)</span>
+                                {% else %}
+                                    {{ order.branch.name|default:"กองกลาง" }}
+                                {% endif %}
+                            </div>
+                            <div class="small text-dark">
+                                <i class="fas fa-users text-warning text-darken opacity-75 me-1"></i> <strong>ทีมช่าง:</strong> {{ order.production_team.name|default:"ไม่ระบุ" }}
+                            </div>
+                        </div>
+                    </td>
+                    <td class="align-middle">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <span class="info-label">สถานะปัจจุบัน</span>
+                                {% if order.status == 'WAITING_INVENTORY' %}
+                                    <span class="badge bg-warning text-dark border border-warning rounded-pill px-3 py-2 shadow-sm mb-3"><i class="fas fa-hourglass-half me-1"></i> รวบรวมวัตถุดิบ / รอของมาส่ง</span>
+                                {% else %}
+                                    <span class="badge bg-success text-white border border-success rounded-pill px-3 py-2 shadow-sm mb-3"><i class="fas fa-check-circle me-1"></i> เบิกตัดสต็อกเรียบร้อยแล้ว</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <div class="text-start bg-light p-2 rounded-3 border border-secondary border-opacity-25 mt-1">
+                            {% if order.quotation_ref and order.quotation_ref.note and order.quotation_ref.note != "-ไม่มี-" %}
+                            <div class="small text-danger mb-2" style="font-size: 0.75rem;">
+                                <i class="fas fa-bullhorn me-1"></i> <strong>จากเซลส์:</strong> {{ order.quotation_ref.note|truncatechars:50 }}
+                            </div>
+                            {% endif %}
+
+                            <span class="info-label text-dark mb-1"><i class="fas fa-edit me-1"></i> หมายเหตุจัดของ (แสดงในใบ BOM)</span>
+                            <form action="{% url 'update_production_board' order.id %}" method="POST" class="d-flex align-items-center gap-2">
+                                {% csrf_token %}
+                                <input type="hidden" name="action" value="update_note">
+                                <input type="hidden" name="redirect_to" value="inventory_board">
+                                <textarea name="note" class="form-control form-control-sm shadow-sm" rows="1" style="resize: none;" placeholder="พิมพ์หมายเหตุ... (เช่น ฝากไปกับรถกระบะ, แพ็กแยก 2 กล่อง)">{% if "อ้างอิงใบเสนอราคา:" not in order.note %}{{ order.note }}{% endif %}</textarea>
+                                <button type="submit" class="btn btn-sm btn-dark text-white rounded shadow-sm flex-shrink-0" title="บันทึกหมายเหตุ"><i class="fas fa-save"></i> บันทึก</button>
+                            </form>
+                        </div>
+                    </td>
+                    <td class="text-end pe-4 align-middle">
+                        
+                        {% if order.status == 'WAITING_INVENTORY' %}
+                            {% if order.has_shortage %}
+                                <button class="btn btn-secondary shadow-sm rounded-pill fw-bold px-4 py-2" disabled>
+                                    <i class="fas fa-exclamation-triangle me-1"></i> วัตถุดิบไม่พอเบิก
+                                </button>
+                                <div class="small text-danger mt-2 fw-bold"><i class="fas fa-info-circle"></i> {{ order.shortage_list }}</div>
+                                <a href="{% url 'print_bom' order.id %}" target="_blank" class="btn btn-outline-secondary shadow-sm rounded-circle ms-2 mt-1" style="width: 40px; height: 40px; padding: 7px;" title="พิมพ์รายการจัดของ (BOM)">
+                                    <i class="fas fa-print"></i>
+                                </a>
+                            {% else %}
+                                <form action="{% url 'materials_ready' order.id %}" method="POST" class="d-inline">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-success shadow-sm rounded-pill fw-bold px-4 py-2" onclick="return confirm('⚠️ ตรวจสอบของลงตะกร้าครบแล้วใช่หรือไม่?\n\nระบบจะทำการ ตัดสต็อกวัตถุดิบ (GI) ออกจากคลังทันที\n{% if order.is_onsite %}(*งาน On-site จะถูกส่งไปรอกระดานจัดส่งทันที){% else %}(ส่งงานไปที่กระดานช่างผลิต){% endif %}');">
+                                        <i class="fas fa-box-open me-1"></i> วัตถุดิบพร้อมผลิต
+                                    </button>
+                                </form>
+                                <a href="{% url 'print_bom' order.id %}" target="_blank" class="btn btn-outline-secondary shadow-sm rounded-circle ms-2" style="width: 40px; height: 40px; padding: 7px;" title="พิมพ์รายการจัดของ (BOM)">
+                                    <i class="fas fa-print"></i>
+                                </a>
+                            {% endif %}
+                        {% else %}
+                            <button class="btn btn-light text-success fw-bold rounded-pill px-4 py-2 border" disabled>
+                                <i class="fas fa-check me-1"></i> ส่งมอบของให้ช่างแล้ว
+                            </button>
+                        {% endif %}
+                        
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="4" class="text-center py-5 text-secondary bg-white rounded-4 shadow-sm"><i class="fas fa-boxes fa-3x mb-3 opacity-25"></i><br>ไม่มีงานรอจัดวัตถุดิบในขณะนี้</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

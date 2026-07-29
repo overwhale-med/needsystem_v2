@@ -1,0 +1,188 @@
+{% extends 'core/base.html' %}
+{% load humanize %}
+
+{% block content %}
+<style>
+    .btn-gold { background: linear-gradient(135deg, #d4af37 0%, #aa8c2c 100%); color: #ffffff !important; border: none; transition: all 0.3s ease; }
+    .btn-gold:hover { background: linear-gradient(135deg, #aa8c2c 0%, #8c7324 100%); transform: translateY(-2px); box-shadow: 0 4px 8px rgba(212, 175, 55, 0.3) !important; }
+    .form-label { font-size: 0.85rem; font-weight: 700; color: #6c757d; text-transform: uppercase; letter-spacing: 0.5px; }
+    .table-items th { background-color: #f8f9fa; font-weight: 600; color: #495057; border-bottom: 2px solid #dee2e6; }
+</style>
+
+<div class="container-fluid py-4 px-4">
+    <div class="d-flex justify-content-between align-items-end mb-4">
+        <div>
+            <h4 class="fw-bold mb-1 text-dark"><i class="fas fa-tools text-primary me-2"></i>จัดการงานติดตั้ง: <span class="text-warning">{{ job.code }}</span></h4>
+            <p class="text-muted small mb-0">ปรับปรุงสถานะงานและเบิกวัตถุดิบ (รูปแบบวันที่: dd/mm/yyyy)</p>
+        </div>
+        <div class="d-flex gap-2">
+            <!-- 🌟 ปุ่มพาไปหน้าจัดการฐานข้อมูลช่าง -->
+            <a href="{% url 'subcontractor_list' %}" class="btn btn-outline-primary rounded-pill px-4 fw-bold shadow-sm">
+                <i class="fas fa-users-cog me-2"></i> ฐานข้อมูลทีมช่าง
+            </a>
+            <a href="{% url 'solar_center_dashboard' %}" class="btn btn-outline-secondary rounded-pill px-4 fw-bold shadow-sm">
+                <i class="fas fa-arrow-left me-2"></i> กลับหน้ากระดาน
+            </a>
+        </div>
+    </div>
+
+    <form method="POST" id="jobManageForm">
+        {% csrf_token %}
+        <div class="row g-4">
+            <div class="col-lg-4">
+                <div class="card border-0 shadow-sm rounded-4 bg-white h-100">
+                    <div class="card-header bg-white py-3 border-bottom-0">
+                        <h6 class="fw-bold mb-0 text-dark">ข้อมูลลูกค้าและแพ็กเกจ</h6>
+                    </div>
+                    <div class="card-body pt-0">
+                        <div class="p-3 bg-light rounded-3 mb-3 border">
+                            <label class="form-label">ลูกค้า</label>
+                            <p class="fw-bold text-dark mb-1">{{ job.customer.name|default:"ไม่ระบุ" }}</p>
+                            <p class="small text-muted mb-0"><i class="fas fa-phone me-1"></i> {{ job.customer.phone|default:"-" }}</p>
+                        </div>
+                        <div class="p-3 bg-light rounded-3 mb-3 border">
+                            <label class="form-label">แพ็กเกจที่ต้องติดตั้ง</label>
+                            <p class="fw-bold text-primary mb-0">{{ job.package_sold.name|default:"-" }}</p>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">สถานะงาน (Status)</label>
+                            {{ form.status }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-8">
+                <div class="card border-0 shadow-sm rounded-4 bg-white h-100">
+                    <div class="card-header bg-white py-3 border-bottom-0">
+                        <h6 class="fw-bold mb-0 text-dark">จัดทีมช่าง และ กำหนดเวลา</h6>
+                    </div>
+                    <div class="card-body pt-0">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">ทีมช่างผู้รับผิดชอบ</label>
+                                <!-- 🌟 [FIXED] ดึง Dropdown ทีมช่างจากตาราง SubcontractorTeam -->
+                                <select name="technician_team" class="form-select">
+                                    <option value="">---------</option>
+                                    {% for team in teams %}
+                                        <option value="{{ team.id }}" {% if job.technician_team_id == team.id %}selected{% endif %}>{{ team.name }} (ติดต่อ: {{ team.phone|default:"-" }})</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">งบประมาณค่าแรงช่าง (บาท)</label>
+                                <!-- 🌟 [FIXED] แสดงช่องกรอกที่พิมพ์จุดทศนิยมได้อิสระ -->
+                                {{ form.labor_cost_budget }}
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">กำหนดเริ่มงาน (dd/mm/yyyy)</label>
+                                {{ form.start_date }}
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">กำหนดเสร็จ (dd/mm/yyyy)</label>
+                                {{ form.expected_finish_date }}
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">หมายเหตุ / รายละเอียดเพิ่มเติม</label>
+                                {{ form.note }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card border-0 shadow-sm rounded-4 bg-white mt-4">
+            <div class="card-header bg-white py-3 border-bottom-0 d-flex justify-content-between align-items-center">
+                <h6 class="fw-bold mb-0 text-dark">รายการเบิกวัตถุดิบ (RM)</h6>
+                <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3 fw-bold" id="add-material-btn">
+                    <i class="fas fa-plus me-1"></i> เบิกสินค้าเพิ่ม
+                </button>
+            </div>
+            <div class="card-body pt-0">
+                {{ formset.management_form }}
+                <div class="table-responsive">
+                    <table class="table table-borderless table-items align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th style="width: 45%;">วัตถุดิบ (RM)</th>
+                                <th class="text-center" style="width: 20%;">จำนวน</th>
+                                <th class="text-end" style="width: 25%;">ต้นทุน/หน่วย (บาท)</th>
+                                <th class="text-center" style="width: 10%;">ลบ</th>
+                            </tr>
+                        </thead>
+                        <tbody id="formset-body">
+                            {% for item_form in formset %}
+                            <tr class="item-row border-bottom">
+                                <td>
+                                    {% for hidden in item_form.hidden_fields %}{{ hidden }}{% endfor %}
+                                    {{ item_form.product }}
+                                </td>
+                                <td>{{ item_form.quantity }}</td>
+                                <td>{{ item_form.unit_cost }}</td>
+                                <td class="text-center">
+                                    {% if item_form.instance.pk %}
+                                        {{ item_form.DELETE }}
+                                    {% else %}
+                                        <button type="button" class="btn btn-sm btn-outline-danger border-0 remove-row-btn"><i class="fas fa-times"></i></button>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="text-end mt-4">
+            <button type="submit" class="btn btn-gold rounded-pill px-5 fw-bold shadow-sm fs-6">
+                <i class="fas fa-save me-2"></i> บันทึกข้อมูลงาน
+            </button>
+        </div>
+    </form>
+</div>
+
+<table style="display: none;">
+    <tbody id="empty-row-template">
+        <tr class="item-row border-bottom">
+            <td>{{ formset.empty_form.product }}</td>
+            <td>{{ formset.empty_form.quantity }}</td>
+            <td>{{ formset.empty_form.unit_cost }}</td>
+            <td class="text-center">
+                <button type="button" class="btn btn-sm btn-outline-danger border-0 remove-row-btn"><i class="fas fa-times"></i></button>
+            </td>
+        </tr>
+    </tbody>
+</table>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const formsetBody = document.getElementById("formset-body");
+        const addBtn = document.getElementById("add-material-btn");
+        const totalFormsInput = document.getElementById("id_materials-TOTAL_FORMS");
+
+        addBtn.addEventListener("click", function() {
+            const currentFormCount = parseInt(totalFormsInput.value);
+            const templateHtml = document.getElementById("empty-row-template").innerHTML;
+            const newRowHtml = templateHtml.replace(/__prefix__/g, currentFormCount);
+
+            formsetBody.insertAdjacentHTML('beforeend', newRowHtml);
+            totalFormsInput.value = currentFormCount + 1;
+        });
+
+        formsetBody.addEventListener("click", function(e) {
+            if (e.target.closest(".remove-row-btn")) {
+                e.target.closest(".item-row").remove();
+            }
+        });
+        
+        // ซ่อน checkbox ของแถวที่มีข้อมูลแล้วเพื่อความสวยงาม
+        const deleteCheckboxes = formsetBody.querySelectorAll('input[type="checkbox"][name$="-DELETE"]');
+        deleteCheckboxes.forEach(cb => {
+            const label = cb.nextElementSibling;
+            if (label) label.style.display = 'none';
+        });
+    });
+</script>
+{% endblock %}

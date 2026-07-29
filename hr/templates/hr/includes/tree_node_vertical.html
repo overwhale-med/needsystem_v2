@@ -1,0 +1,37 @@
+<li class="tree-item {% if is_root %}is-root{% endif %}">
+    
+    <div class="d-inline-block position-relative">
+        <div class="node-card rank-{{ node.business_rank }}">
+            {% if node.photo %}
+                <img src="{{ node.photo.url }}" class="node-img">
+            {% else %}
+                <div class="node-img bg-secondary text-white d-flex align-items-center justify-content-center fw-bold small">
+                    {{ node.first_name|slice:":1" }}
+                </div>
+            {% endif %}
+            
+            <div class="text-start lh-sm">
+                <div class="fw-bold text-dark" style="font-size: 0.95rem;">
+                    {{ node.prefix }} {{ node.first_name }} {{ node.last_name }}
+                </div>
+                <div class="text-muted" style="font-size: 0.75rem;">
+                    {{ node.position.title }}
+                </div>
+            </div>
+        </div>
+
+        {% if node.downlines.all %}
+            <div class="toggle-btn" onclick="toggleNode(this)">
+                <i class="fas fa-plus" style="font-size: 10px;"></i>
+            </div>
+        {% endif %}
+    </div>
+
+    {% if node.downlines.all %}
+        <ul>
+            {% for child in node.downlines.all %}
+                {% include "hr/includes/tree_node_vertical.html" with node=child is_root=False %}
+            {% endfor %}
+        </ul>
+    {% endif %}
+</li>

@@ -1,0 +1,263 @@
+{% extends 'core/base.html' %}
+{% load humanize %}
+
+{% block content %}
+<style>
+    :root {
+        --gold-grad: linear-gradient(135deg, #e6c884 0%, #c5a059 100%);
+        --blue-grad: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        --text-dark: #2d3436;
+        --text-light: #636e72;
+    }
+    .stat-card {
+        background: white; border-radius: 16px; padding: 25px;
+        border: 1px solid #f1f2f6; box-shadow: 0 10px 20px rgba(0,0,0,0.02);
+        transition: all 0.3s; height: 100%; position: relative; overflow: hidden;
+    }
+    .stat-card:hover { transform: translateY(-5px); box-shadow: 0 15px 30px rgba(0,0,0,0.05); border-color: #e2e6ea; }
+    .stat-icon-bg { position: absolute; right: -10px; bottom: -10px; font-size: 5rem; opacity: 0.05; transform: rotate(-15deg); }
+    .stat-value { font-size: 2.5rem; font-weight: 700; color: var(--text-dark); line-height: 1.2; }
+    .stat-label { font-size: 0.9rem; color: var(--text-light); font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; }
+
+    .menu-btn {
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        background: white; color: var(--text-dark); border: 1px solid #f1f2f6;
+        border-radius: 20px; padding: 40px 20px; text-decoration: none;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.01); transition: all 0.3s ease; height: 100%;
+    }
+    .menu-btn:hover { transform: translateY(-5px); box-shadow: 0 20px 40px rgba(0,0,0,0.08); border-color: white; }
+
+    .menu-icon-box {
+        width: 70px; height: 70px; border-radius: 50%; background: #f8f9fa;
+        display: flex; align-items: center; justify-content: center; margin-bottom: 20px; transition: all 0.3s;
+    }
+    .menu-icon { font-size: 1.8rem; color: #b2bec3; transition: all 0.3s; }
+
+    /* 🌟 เอฟเฟกต์สีทองเมื่อนำเมาส์ไปชี้ 🌟 */
+    .menu-btn:hover .menu-icon-box { background: var(--gold-grad); box-shadow: 0 10px 20px rgba(197, 160, 89, 0.3); }
+    .menu-btn:hover .menu-icon { color: white; }
+
+    .menu-title { font-size: 1.1rem; font-weight: 700; color: var(--text-dark); }
+    .menu-desc { font-size: 0.8rem; color: #a4b0be; margin-top: 5px; }
+
+    .section-header { display: flex; align-items: center; margin: 40px 0 20px 0; }
+    .section-title { font-size: 1.25rem; font-weight: 800; color: var(--text-dark); margin-right: 15px; }
+    .section-divider { flex-grow: 1; height: 1px; background: #e9ecef; }
+</style>
+
+<div class="container-fluid py-4 px-4">
+    <div class="d-flex justify-content-between align-items-end mb-4">
+        <div><span class="badge bg-white text-dark border px-3 py-2 rounded-pill shadow-sm">📅 {% now "d F Y" %}</span></div>
+    </div>
+
+    <div class="row g-4 mb-4">
+        {% if user.is_superuser or user.groups.all.0.name == 'Sales' or user.groups.all.0.name == 'Executive' %}
+        <div class="col-md-3 col-sm-6">
+            <div class="stat-card">
+                <div class="stat-label">ยอดขายวันนี้</div>
+                <div class="stat-value text-primary">{{ sales_today|intcomma }}</div>
+                <div class="mt-2"><span class="badge bg-primary bg-opacity-10 text-primary rounded-pill">Daily Sales</span></div>
+                <i class="fas fa-chart-line stat-icon-bg text-primary"></i>
+                <div class="mt-3 pt-3 border-top">
+                    <a href="{% url 'export_sales_excel' %}" class="text-decoration-none small fw-bold text-primary"><i class="fas fa-download"></i> โหลดรายงาน</a>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if user.is_superuser or user.groups.all.0.name == 'Accounting' or user.groups.all.0.name == 'Executive' %}
+        <div class="col-md-3 col-sm-6">
+            <div class="stat-card">
+                <div class="stat-label">กำไรสุทธิ</div>
+                <div class="stat-value text-success">{{ profit_month|intcomma }}</div>
+                <div class="mt-2"><span class="badge bg-success bg-opacity-10 text-success rounded-pill">Monthly Profit</span></div>
+                <i class="fas fa-coins stat-icon-bg text-success"></i>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if user.is_superuser or user.groups.all.0.name == 'Inventory' or user.groups.all.0.name == 'Purchasing' or user.groups.all.0.name == 'Executive' %}
+        <div class="col-md-3 col-sm-6">
+            <div class="stat-card">
+                <div class="stat-label">สินค้าวิกฤต</div>
+                <div class="stat-value text-danger">{{ low_stock_count }}</div>
+                <div class="mt-2"><span class="badge bg-danger bg-opacity-10 text-danger rounded-pill">Low Stock</span></div>
+                <i class="fas fa-exclamation-circle stat-icon-bg text-danger"></i>
+            </div>
+        </div>
+
+        <div class="col-md-3 col-sm-6">
+            <div class="stat-card">
+                <div class="stat-label">รอรับของ</div>
+                <div class="stat-value text-warning">{{ pending_po_count }}</div>
+                <div class="mt-2"><span class="badge bg-warning bg-opacity-10 text-warning rounded-pill">Pending PO</span></div>
+                <i class="fas fa-truck-loading stat-icon-bg text-warning"></i>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="section-header">
+        <span class="section-title">เมนูจัดการ (Management)</span>
+        <div class="section-divider"></div>
+    </div>
+
+    <div class="row g-3">
+
+        <div class="col-6 col-md-3 col-lg-3">
+            <a href="{% if user.is_superuser or user.groups.all.0.name == 'HR' or user.groups.all.0.name == 'Executive' %}{% url 'hr_executive_dashboard' %}{% else %}{% url 'employee_dashboard' %}{% endif %}" class="menu-btn">
+                <div class="menu-icon-box"><i class="fas fa-id-card menu-icon"></i></div>
+                <div class="menu-title">ระบบพนักงาน</div>
+                <div class="menu-desc">{% if user.is_superuser or user.groups.all.0.name == 'HR' or user.groups.all.0.name == 'Executive' %}วิเคราะห์ข้อมูล HR{% else %}สลิปเงินเดือน / ลงเวลา{% endif %}</div>
+            </a>
+        </div>
+
+        {% if user.is_superuser or user.groups.all.0.name == 'Accounting' or user.groups.all.0.name == 'Executive' %}
+        <div class="col-6 col-md-3 col-lg-3">
+             <a href="{% url 'accounting_dashboard' %}" class="menu-btn">
+                <div class="menu-icon-box"><i class="fas fa-calculator menu-icon"></i></div>
+                <div class="menu-title">บัญชี (Accounting)</div>
+                <div class="menu-desc">รายรับ / รายจ่าย / ตรวจสอบ</div>
+            </a>
+        </div>
+        {% endif %}
+
+        {% if user.is_superuser or user.groups.all.0.name == 'Sales' or user.groups.all.0.name == 'Executive' %}
+        <div class="col-6 col-md-3 col-lg-3">
+            <a href="{% url 'sales_dashboard' %}" class="menu-btn">
+                <div class="menu-icon-box"><i class="fas fa-cash-register menu-icon"></i></div>
+                <div class="menu-title">ฝ่ายขาย</div>
+                <div class="menu-desc">POS / ใบเสนอราคา</div>
+            </a>
+        </div>
+        {% endif %}
+
+        {% if user.is_superuser or user.groups.all.0.name == 'Inventory' or user.groups.all.0.name == 'Executive' %}
+        <div class="col-6 col-md-3 col-lg-3">
+            <a href="{% url 'inventory_dashboard' %}" class="menu-btn">
+                <div class="menu-icon-box"><i class="fas fa-box-open menu-icon"></i></div>
+                <div class="menu-title">คลังสินค้า</div>
+                <div class="menu-desc">สต็อก / บาร์โค้ด</div>
+            </a>
+        </div>
+
+        <div class="col-6 col-md-3 col-lg-3">
+            <a href="{% url 'inventory_board' %}" class="menu-btn">
+                <div class="menu-icon-box"><i class="fas fa-boxes menu-icon"></i></div>
+                <div class="menu-title">เบิกวัตถุดิบ (GI)</div>
+                <div class="menu-desc">จัดของ / ตัดสต็อกให้ช่าง</div>
+            </a>
+        </div>
+        {% endif %}
+
+        {% if user.is_superuser or user.groups.all.0.name == 'Purchasing' or user.groups.all.0.name == 'Executive' %}
+        <div class="col-6 col-md-3 col-lg-3">
+            <a href="{% url 'purchasing_dashboard' %}" class="menu-btn">
+                <div class="menu-icon-box"><i class="fas fa-shopping-cart menu-icon"></i></div>
+                <div class="menu-title">จัดซื้อ (PO)</div>
+                <div class="menu-desc">สั่งของเข้า</div>
+            </a>
+        </div>
+        {% endif %}
+
+        {% with group_name=user.groups.all.0.name %}
+
+        {% if user.is_superuser or group_name == 'Executive' or group_name == 'Planner_Team' %}
+        <div class="col-6 col-md-3 col-lg-3">
+            <a href="{% url 'planner_board' %}" class="menu-btn">
+                <div class="menu-icon-box"><i class="fas fa-clipboard-list menu-icon"></i></div>
+                <div class="menu-title">วางแผนการผลิต</div>
+                <div class="menu-desc">เช็ก BOM / ยืนยันแผน</div>
+            </a>
+        </div>
+        {% endif %}
+
+        {% if user.is_superuser or group_name == 'Executive' or group_name == 'Blueprint_Team' %}
+        <div class="col-6 col-md-3 col-lg-3">
+            <a href="{% url 'blueprint_hub' %}" class="menu-btn">
+                <div class="menu-icon-box"><i class="fas fa-drafting-compass menu-icon"></i></div>
+                <div class="menu-title">ศูนย์ตรวจแบบแปลน</div>
+                <div class="menu-desc">ตรวจ BOM / ตั้งเบิกเงิน</div>
+            </a>
+        </div>
+        {% endif %}
+
+        {% if user.is_superuser or group_name == 'Executive' or group_name == 'Production_Team' or group_name == 'Production' %}
+        <div class="col-6 col-md-3 col-lg-3">
+            <a href="{% url 'production_head_board' %}" class="menu-btn">
+                <div class="menu-icon-box"><i class="fas fa-hammer menu-icon"></i></div>
+                <div class="menu-title">ฝ่ายผลิต (ช่าง)</div>
+                <div class="menu-desc">กระดานช่าง / ส่ง QC</div>
+            </a>
+        </div>
+        {% endif %}
+
+        {% if user.is_superuser or group_name == 'Executive' or group_name == 'QC_Team' %}
+        <div class="col-6 col-md-3 col-lg-3">
+            <a href="{% url 'qc_board' %}" class="menu-btn">
+                <div class="menu-icon-box"><i class="fas fa-search-plus menu-icon"></i></div>
+                <div class="menu-title">ตรวจสอบคุณภาพ</div>
+                <div class="menu-desc">ตรวจงาน / รับเข้าคลัง</div>
+            </a>
+        </div>
+        {% endif %}
+
+        {% if user.is_superuser or group_name == 'Executive' or group_name == 'Logistics_Team' %}
+        <div class="col-6 col-md-3 col-lg-3">
+            <a href="{% url 'logistics_board' %}" class="menu-btn">
+                <div class="menu-icon-box"><i class="fas fa-truck menu-icon"></i></div>
+                <div class="menu-title">ฝ่ายจัดส่งสินค้า</div>
+                <div class="menu-desc">จัดคิวรถ / นำส่งลูกค้า</div>
+            </a>
+        </div>
+        {% endif %}
+
+        {% endwith %}
+
+        {% if user.is_superuser or user.groups.all.0.name == 'Executive' or user.groups.all.0.name == 'Center' or user.groups.all.0.name == 'Purchasing' %}
+        <div class="col-6 col-md-3 col-lg-3">
+            <a href="{% url 'solar_center_dashboard' %}" class="menu-btn">
+                <div class="menu-icon-box"><i class="fas fa-solar-panel menu-icon"></i></div>
+                <div class="menu-title">ระบบโซล่าเซลล์</div>
+                <div class="menu-desc">จัดซื้อ / คุมงาน / เบิกจ่าย</div>
+            </a>
+        </div>
+        {% endif %}
+
+        {% if user.is_superuser %}
+        <div class="col-6 col-md-3 col-lg-3">
+            <a href="{% url 'company_settings' %}" class="menu-btn">
+                <div class="menu-icon-box"><i class="fas fa-building menu-icon"></i></div>
+                 <div class="menu-title">ตั้งค่าองค์กร</div>
+                 <div class="menu-desc">แก้ข้อมูล / โควตาผลิต</div>
+            </a>
+        </div>
+
+        <div class="col-6 col-md-3 col-lg-3">
+            <a href="/admin/master_data/" class="menu-btn">
+                <div class="menu-icon-box"><i class="fas fa-database menu-icon"></i></div>
+                 <div class="menu-title">ข้อมูลพื้นฐาน</div>
+                 <div class="menu-desc">จัดการตารางฐานข้อมูล</div>
+            </a>
+        </div>
+
+        <div class="col-6 col-md-3 col-lg-3">
+            <a href="/admin/" class="menu-btn">
+                <div class="menu-icon-box">
+                    <i class="fas fa-cogs menu-icon"></i>
+                </div>
+                <div class="menu-title">ผู้ดูแลระบบ</div>
+                 <div class="menu-desc">ระบบหลังบ้าน (Django)</div>
+            </a>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="mt-4 pt-3 border-top">
+         <a href="https://jcneedhistory.pythonanywhere.com" target="_blank" class="text-muted text-decoration-none small">
+             <i class="fas fa-history me-1"></i> เข้าสู่โปรเจ็คเก่า (Legacy System)
+        </a>
+    </div>
+
+</div>
+{% endblock %}

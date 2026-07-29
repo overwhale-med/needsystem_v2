@@ -1,0 +1,568 @@
+{% extends 'core/base.html' %}
+{% load humanize %}
+
+{% block content %}
+<!-- นำเข้าไลบรารี Date Range Picker -->
+<script type="text/javascript" src="https://cdn.jsdelivr.net/jquery/latest/jquery.min.js"></script>
+<script type="text/javascript" src="https://cdn.jsdelivr.net/momentjs/latest/moment.min.js"></script>
+<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.min.js"></script>
+<link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css" />
+
+<style>
+    /* สไตล์สีปุ่มและป้ายสถานะ */
+    .btn-light-hover:hover { background-color: #e9ecef; }
+    .status-badge {
+        font-size: 0.75rem; padding: 6px 12px; border-radius: 20px; font-weight: 600; letter-spacing: 0.3px;
+        display: inline-flex; align-items: center; gap: 6px;
+    }
+    .status-pending { background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
+    .status-paid { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+    .status-unpaid { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+
+    .doc-type-icon {
+        width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
+        border-radius: 8px; font-size: 14px;
+    }
+    .type-pos { background-color: #e2e6ea; color: #495057; }
+    .type-inv { background-color: #cce5ff; color: #004085; }
+    .table-hover tbody tr:hover { background-color: #f8f9fa; }
+    .fw-medium { font-weight: 500; }
+
+    /* สไตล์รูปสลิป */
+    .slip-thumbnail {
+        width: 35px; height: 35px; object-fit: cover; border-radius: 6px; cursor: pointer;
+        transition: transform 0.2s ease, box-shadow 0.2s ease; border: 1px solid #dee2e6;
+    }
+    .slip-thumbnail:hover { transform: scale(1.2); box-shadow: 0 5px 15px rgba(0,0,0,0.2); z-index: 10; position: relative; }
+    #slipModal .modal-backdrop { background-color: rgba(0,0,0,0.8); }
+
+    /* 🌟 สไตล์แถบค้นหาแบบแคปซูล (Pill-shaped Search Bar) 🌟 */
+    .search-pill-container {
+        display: flex;
+        align-items: center;
+        background-color: #f8f9fa; /* สีพื้นหลังกล่อง */
+        border: 1px solid #ced4da; /* สีเส้นขอบ */
+        border-radius: 50px; /* ทำให้โค้งเป็นแคปซูล */
+        padding: 5px 10px;
+        box-shadow: inset 0 1px 2px rgba(0,0,0,0.05);
+    }
+    .search-pill-input {
+        border: none;
+        background: transparent;
+        box-shadow: none;
+        outline: none;
+        width: 100%;
+        padding: 8px 15px;
+        font-size: 0.9rem;
+        cursor: pointer;
+    }
+    .search-pill-input:focus {
+        outline: none;
+        box-shadow: none;
+    }
+    .search-pill-icon {
+        color: #6c757d;
+        padding-left: 10px;
+    }
+    .search-pill-btn {
+        background-color: #198754; /* สีเขียว */
+        color: white;
+        border: none;
+        border-radius: 50px;
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s ease;
+    }
+    .search-pill-btn:hover {
+        background-color: #157347; /* สีเขียวเข้มตอนชี้เมาส์ */
+        transform: scale(1.05);
+    }
+
+    /* ซ่อน input แบบเดิมเพื่อส่งค่า */
+    .hidden-date { display: none; }
+</style>
+
+<div class="container-fluid py-4 px-4">
+    <div class="row justify-content-center">
+        <div class="col-12">
+
+            <div class="d-flex justify-content-between align-items-end mb-4">
+                <div>
+                    <h4 class="fw-bold mb-1 text-dark"><i class="fas fa-receipt text-success me-2"></i>รายการใบรับชำระเงิน</h4>
+                    <p class="text-muted small mb-0">ตรวจสอบยอดเงินเข้าและจัดการสถานะเอกสาร</p>
+                </div>
+                <a href="{% url 'sales_dashboard' %}" class="btn btn-outline-secondary rounded-pill px-4 text-uppercase" style="font-size: 0.85rem; letter-spacing: 0.5px;">
+                    <i class="fas fa-arrow-left me-2"></i> Dashboard
+                </a>
+            </div>
+
+            <!-- 🌟 แถบค้นหาดีไซน์ใหม่ 🌟 -->
+            <div class="card shadow-sm border-0 rounded-4 mb-4">
+                <div class="card-body p-3">
+                    <form method="GET" class="row g-2 align-items-center">
+
+                        <!-- 1. ค้นหาทั่วไป -->
+                        <div class="col-md-3">
+                            <div class="input-group border-0 bg-light rounded-pill px-2">
+                                <span class="input-group-text bg-transparent border-0 text-muted"><i class="fas fa-search"></i></span>
+                                <input type="text" name="q" class="form-control border-0 bg-transparent shadow-none" placeholder="ค้นหาเลขที่, ชื่อลูกค้า..." value="{{ search_query|default:'' }}">
+                            </div>
+                        </div>
+
+                        <!-- 🌟 [NEW] 2. คัดกรองสาขา (โชว์เฉพาะ Manager หรือ Supervisor) 🌟 -->
+                        {% if is_manager or is_supervisor %}
+                        <div class="col-md-2">
+                            <div class="input-group border-0 bg-light rounded-pill px-2">
+                                <span class="input-group-text bg-transparent border-0 text-muted"><i class="fas fa-map-marker-alt"></i></span>
+                                <select name="branch" class="form-select border-0 bg-transparent shadow-none" style="cursor: pointer;">
+                                    <option value="" {% if not branch_filter %}selected{% endif %}>ทุกสาขา</option>
+                                    {% for dept in departments %}
+                                        <option value="{{ dept.id }}" {% if branch_filter == dept.id|stringformat:"s" %}selected{% endif %}>{{ dept.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        <!-- 3. คัดกรองสถานะ -->
+                        <div class="col-md-2">
+                            <div class="input-group border-0 bg-light rounded-pill px-2">
+                                <span class="input-group-text bg-transparent border-0 text-muted"><i class="fas fa-filter"></i></span>
+                                <select name="status" class="form-select border-0 bg-transparent shadow-none" style="cursor: pointer;">
+                                    <option value="" {% if not status_filter %}selected{% endif %}>สถานะทั้งหมด</option>
+                                    <option value="UNPAID" {% if status_filter == 'UNPAID' %}selected{% endif %}>ยังไม่ชำระเงิน</option>
+                                    <option value="PENDING" {% if status_filter == 'PENDING' %}selected{% endif %}>รอตรวจสอบยอด</option>
+                                    <option value="PAID" {% if status_filter == 'PAID' %}selected{% endif %}>ชำระแล้ว</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- 🌟 4. กล่องค้นหาวันที่แบบแคปซูล 🌟 -->
+                        <div class="col-md-4">
+                            <div class="search-pill-container">
+                                <i class="far fa-calendar-alt search-pill-icon"></i>
+                                <input type="text" id="reportrange" class="search-pill-input" placeholder="เลือกช่วงวันที่..." readonly>
+                                <button type="submit" class="search-pill-btn" title="ค้นหา">
+                                    <i class="fas fa-search"></i>
+                                </button>
+                            </div>
+
+                            <!-- Input ล่องหนสำหรับส่งค่าไปยัง Backend -->
+                            <input type="text" name="start_date" id="start_date" class="hidden-date" value="{{ start_date|default:'' }}">
+                            <input type="text" name="end_date" id="end_date" class="hidden-date" value="{{ end_date|default:'' }}">
+                        </div>
+
+                        <!-- ปุ่มล้างค่า -->
+                        <div class="col-md-1 text-end">
+                            {% if search_query or start_date or status_filter or branch_filter %}
+                                <a href="{% url 'invoice_list' %}" class="btn btn-outline-danger rounded-circle d-inline-flex align-items-center justify-content-center" style="width: 40px; height: 40px;" title="ล้างค่าทั้งหมด">
+                                    <i class="fas fa-undo-alt"></i>
+                                </a>
+                            {% endif %}
+                        </div>
+
+                    </form>
+                </div>
+            </div>
+
+            <!-- ตารางแสดงข้อมูล -->
+            <div class="card shadow-sm border-0 rounded-4 overflow-hidden">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="bg-light text-secondary" style="font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.5px;">
+                            <tr>
+                                <th class="ps-4 py-3 fw-bold">ประเภท</th>
+                                <th class="py-3 fw-bold">เอกสาร / วันที่</th>
+                                <th class="py-3 fw-bold">ลูกค้า</th>
+                                <th class="py-3 fw-bold text-center">พนักงาน</th>
+                                <th class="py-3 fw-bold text-end">ยอดสุทธิ (บาท)</th>
+                                <th class="py-3 fw-bold text-center">เงินมัดจำ</th>
+                                <th class="py-3 fw-bold text-center">ยอดรับชำระ / หลักฐาน</th>
+                                <th class="py-3 fw-bold text-center">สถานะ</th>
+                                <th class="py-3 fw-bold text-center" style="width: 10%;">ตรวจสอบ</th>
+                                <th class="pe-4 py-3 fw-bold text-center" style="width: 8%;">พิมพ์</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in page_obj %}
+                            <tr>
+                                <td class="ps-4" style="width: 60px;">
+                                    {% if item.total_amount %}
+                                        <div class="doc-type-icon type-pos" title="ขายหน้าร้าน (POS)"><i class="fas fa-store"></i></div>
+                                    {% else %}
+                                        <div class="doc-type-icon type-inv" title="ใบวางบิล (Invoice)"><i class="fas fa-file-invoice"></i></div>
+                                    {% endif %}
+                                </td>
+
+                                <td>
+                                    <div class="fw-bold text-dark" style="font-family: 'Courier New', monospace;">{{ item.code }}</div>
+                                    <div class="text-muted small mb-1" style="font-size: 0.75rem;"><i class="far fa-clock me-1"></i> {{ item.created_at|date:"d/m/Y H:i" }}</div>
+                                    {% if not item.total_amount %}
+                                        {% if item.quotation_ref %}
+                                            <div class="small lh-sm" style="font-size: 0.7rem;"><span class="text-secondary opacity-75">QT:</span> {{ item.quotation_ref.code }}</div>
+                                            {% for job in item.quotation_ref.production_orders.all %}
+                                                <div class="small lh-sm" style="font-size: 0.7rem;"><span class="text-secondary opacity-75">JOB:</span> {{ job.code }}</div>
+                                            {% endfor %}
+                                        {% endif %}
+                                    {% endif %}
+                                </td>
+
+                                <td>
+                                    {% if item.customer_name %}
+                                        <div class="fw-bold text-dark text-truncate" style="max-width: 150px;">{{ item.customer_name }}</div>
+                                    {% elif item.customer %}
+                                        <div class="fw-bold text-dark text-truncate" style="max-width: 150px;">{{ item.customer.name }}</div>
+                                    {% else %}
+                                        <span class="text-muted fst-italic small">ลูกค้าทั่วไป</span>
+                                    {% endif %}
+                                </td>
+
+                                <td>
+                                    <div class="d-flex flex-column align-items-center justify-content-center">
+                                        {% if item.employee.photo %}
+                                         <img src="{{ item.employee.photo.url }}" class="rounded-circle border mb-1" style="width: 30px; height: 30px; object-fit: cover;">
+                                        {% else %}
+                                            <div class="bg-light text-secondary rounded-circle d-inline-flex align-items-center justify-content-center border mb-1" style="width: 30px; height: 30px; font-size: 10px;">
+                                                {{ item.employee.first_name|slice:":2" }}
+                                            </div>
+                                        {% endif %}
+                                        <div class="small fw-bold text-dark lh-sm">{{ item.employee.first_name|default:"-" }}</div>
+                                        <div class="text-muted lh-sm" style="font-size: 0.65rem;">{{ item.employee.department.name|default:"ไม่มีสาขา"|truncatechars:15 }}</div>
+                                    </div>
+                                </td>
+
+                                <td class="text-end">
+                                    <div class="fw-bold text-dark fs-6">
+                                        {% if item.total_amount %}
+                                            ฿{{ item.total_amount|intcomma }}
+                                        {% else %}
+                                            ฿{{ item.grand_total|intcomma }}
+                                        {% endif %}
+                                    </div>
+                                    {% if not item.total_amount and item.balance_amount > 0 and item.status != 'PAID' %}
+                                        <div class="text-danger small fw-bold mt-1">ค้างชำระ: ฿{{ item.balance_amount|intcomma }}</div>
+                                    {% endif %}
+                                </td>
+
+                                <td class="text-center">
+                                    {% if not item.total_amount and item.quotation_ref and item.quotation_ref.deposit_amount > 0 %}
+                                        <div class="fw-bold text-success" style="font-size: 0.8rem;">฿{{ item.quotation_ref.deposit_amount|intcomma }}</div>
+                                        <div class="d-flex align-items-center justify-content-center gap-1 mt-1">
+                                            {% if item.quotation_ref.deposit_method == 'TRANSFER' %}
+                                                <i class="fas fa-mobile-alt text-info" title="โอนเงิน"></i>
+                                            {% elif item.quotation_ref.deposit_method == 'CASH' %}
+                                                <i class="fas fa-money-bill-wave text-success" title="เงินสด"></i>
+                                            {% elif item.quotation_ref.deposit_method == 'CHECK' %}
+                                                <i class="fas fa-money-check text-warning" title="เช็ค"></i>
+                                            {% endif %}
+
+                                            {% if item.quotation_ref.deposit_slip %}
+                                                <img src="{{ item.quotation_ref.deposit_slip.url }}" class="slip-thumbnail mx-1" style="width: 25px; height: 25px;" data-bs-toggle="modal" data-bs-target="#slipModal" onclick="document.getElementById('slipImageFull').src='{{ item.quotation_ref.deposit_slip.url }}'">
+                                            {% endif %}
+                                        </div>
+                                    {% else %}
+                                        <span class="text-muted small">-</span>
+                                    {% endif %}
+                                </td>
+
+                                <td class="text-center">
+                                    {% if item.total_amount %}
+                                        <div class="d-flex align-items-center justify-content-center gap-2">
+                                            <span class="fw-bold text-dark" style="font-size: 0.8rem;">฿{{ item.total_amount|intcomma }}</span>
+                                            {% if item.payment_method == 'TRANSFER' %}
+                                                <i class="fas fa-mobile-alt text-info" title="โอนเงิน"></i>
+                                                {% if item.transfer_slip %}
+                                                    <img src="{{ item.transfer_slip.url }}" class="slip-thumbnail" loading="lazy" style="width: 25px; height: 25px;" data-bs-toggle="modal" data-bs-target="#slipModal" onclick="document.getElementById('slipImageFull').src='{{ item.transfer_slip.url }}'">
+                                                {% endif %}
+                                            {% elif item.payment_method == 'CASH' %}
+                                                <i class="fas fa-money-bill-wave text-success" title="เงินสด"></i>
+                                            {% elif item.payment_method == 'CHECK' %}
+                                                <i class="fas fa-money-check text-warning" title="เช็ค"></i>
+                                                {% if item.check_slip %}
+                                                    <img src="{{ item.check_slip.url }}" class="slip-thumbnail" loading="lazy" style="width: 25px; height: 25px;" data-bs-toggle="modal" data-bs-target="#slipModal" onclick="document.getElementById('slipImageFull').src='{{ item.check_slip.url }}'">
+                                                {% endif %}
+                                            {% endif %}
+                                        </div>
+                                    {% else %}
+                                        {% if item.payment_history.all %}
+                                            <div class="d-flex flex-column gap-1 align-items-center mb-2">
+                                                {% for pay in item.payment_history.all %}
+                                                    <div class="d-flex align-items-center gap-2 bg-light border rounded px-2 py-1">
+                                                        <span class="fw-bold text-dark" style="font-size: 0.75rem;">฿{{ pay.amount|intcomma }}</span>
+
+                                                        {% if pay.payment_method == 'TRANSFER' %}<i class="fas fa-mobile-alt text-info"></i>
+                                                        {% elif pay.payment_method == 'CASH' %}<i class="fas fa-money-bill-wave text-success"></i>
+                                                        {% else %}<i class="fas fa-money-check text-warning"></i>{% endif %}
+
+                                                        {% if pay.transfer_slip %}
+                                                            <img src="{{ pay.transfer_slip.url }}" class="slip-thumbnail" loading="lazy" style="width: 25px; height: 25px;" data-bs-toggle="modal" data-bs-target="#slipModal" onclick="document.getElementById('slipImageFull').src='{{ pay.transfer_slip.url }}'">
+                                                        {% elif pay.check_slip %}
+                                                            <img src="{{ pay.check_slip.url }}" class="slip-thumbnail" loading="lazy" style="width: 25px; height: 25px;" data-bs-toggle="modal" data-bs-target="#slipModal" onclick="document.getElementById('slipImageFull').src='{{ pay.check_slip.url }}'">
+                                                        {% endif %}
+
+                                                        {% if pay.status == 'PENDING' %}
+                                                            <i class="fas fa-circle text-warning" style="font-size: 8px;" title="รอตรวจ"></i>
+
+                                                            {% if item.status != 'PAID' %}
+                                                                <a href="{% url 'delete_invoice_payment' pay.id %}" class="text-danger ms-1" onclick="return confirm('ยืนยันการลบรายการรับชำระยอด ฿{{ pay.amount|intcomma }} ใช่หรือไม่?\n(ยอดค้างชำระของบิลนี้จะถูกบวกกลับเข้าไปเหมือนเดิม)');" title="ลบรายการนี้">
+                                                                    <i class="fas fa-times"></i>
+                                                                </a>
+                                                            {% endif %}
+
+                                                        {% else %}
+                                                            <i class="fas fa-check-circle text-success" style="font-size: 10px;" title="ตรวจแล้ว (ไม่สามารถลบได้)"></i>
+                                                        {% endif %}
+                                                    </div>
+                                                {% endfor %}
+                                            </div>
+                                        {% endif %}
+
+                                        {% if item.status != 'PAID' %}
+                                            {% if not 'บัญชี' in user.employee.department.name|default:'' and not 'Accounting' in user.employee.department.name|default:'' %}
+                                                <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3 shadow-sm fw-bold mt-1" data-bs-toggle="modal" data-bs-target="#paymentModal{{ item.id }}">
+                                                    <i class="fas fa-plus"></i> เพิ่มรับชำระ
+                                                </button>
+                                            {% else %}
+                                                {% if not item.payment_history.all %}
+                                                    <span class="badge bg-light text-muted border rounded-pill px-2 py-1 mt-1" style="font-size: 0.65rem;"><i class="fas fa-hourglass-start me-1"></i> รอเซลล์แนบสลิป</span>
+                                                {% endif %}
+                                            {% endif %}
+                                        {% endif %}
+                                    {% endif %}
+                                </td>
+
+                                <td class="text-center">
+                                    {% if item.status == 'PAID' %}
+                                        <span class="status-badge status-paid"><i class="fas fa-check-circle"></i> ชำระแล้ว</span>
+                                    {% elif item.status == 'PENDING' %}
+                                        <span class="status-badge status-pending"><i class="fas fa-hourglass-half"></i> รอตรวจสอบ</span>
+                                    {% else %}
+                                        <span class="status-badge status-unpaid"><i class="fas fa-times-circle"></i> ยังไม่ชำระ</span>
+                                    {% endif %}
+                                </td>
+
+                                <td class="text-center">
+                                    {% if item.status == 'PENDING' %}
+                                        {% if user.is_superuser or 'บัญชี' in user.employee.department.name|default:'' or 'Accounting' in user.employee.department.name|default:'' %}
+                                            {% if item.total_amount %}
+                                                <a href="{% url 'confirm_payment' 'pos' item.id %}" class="btn btn-sm btn-warning text-dark fw-bold border-0 px-2 shadow-sm w-100" onclick="return confirm('ยืนยันยอดเงินเข้าบัญชีเรียบร้อย?');" title="ยืนยันยอดเงิน">
+                                                    <i class="fas fa-check-double me-1"></i> ยืนยันยอด
+                                                </a>
+                                            {% else %}
+                                                <a href="{% url 'confirm_payment' 'invoice' item.id %}" class="btn btn-sm btn-warning text-dark fw-bold border-0 px-2 shadow-sm w-100" onclick="return confirm('ยืนยันยอดเงินเข้าบัญชีเรียบร้อย?');" title="ยืนยันยอดเงิน">
+                                                    <i class="fas fa-check-double me-1"></i> ยืนยันยอด
+                                                </a>
+                                            {% endif %}
+                                        {% else %}
+                                            <span class="text-muted small">-</span>
+                                        {% endif %}
+                                    {% else %}
+                                        <span class="text-muted small">-</span>
+                                    {% endif %}
+                                </td>
+
+                                <td class="text-center pe-4">
+                                    {% if item.total_amount %}
+                                        <a href="{% url 'pos_print_slip' item.code %}" target="_blank" class="btn btn-sm btn-white border text-secondary btn-light-hover shadow-sm" title="พิมพ์สลิป">
+                                            <i class="fas fa-print"></i>
+                                        </a>
+                                    {% else %}
+                                        <a href="{% url 'invoice_print' item.id %}" target="_blank" class="btn btn-sm btn-white border text-secondary btn-light-hover shadow-sm" title="พิมพ์ใบเสร็จ">
+                                            <i class="fas fa-print"></i>
+                                        </a>
+                                    {% endif %}
+                                </td>
+                            </tr>
+
+                            {% if not item.total_amount and item.status != 'PAID' %}
+                            <div class="modal fade" id="paymentModal{{ item.id }}" tabindex="-1">
+                                <div class="modal-dialog modal-dialog-centered">
+                                    <div class="modal-content border-0 rounded-4 shadow-lg">
+                                        <div class="modal-header bg-primary border-0">
+                                            <h5 class="modal-title fw-bold text-white"><i class="fas fa-hand-holding-usd me-2"></i>บันทึกรับชำระเงิน</h5>
+                                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                                        </div>
+                                        <form method="POST" action="{% url 'record_invoice_payment' item.id %}" enctype="multipart/form-data">
+                                            {% csrf_token %}
+                                            <div class="modal-body p-4">
+                                                <div class="alert alert-primary py-3 mb-4 rounded-3 border-0">
+                                                    <div class="d-flex justify-content-between align-items-center border-bottom border-primary border-opacity-25 pb-2 mb-2">
+                                                        <span class="text-primary fw-bold">เอกสารอ้างอิง:</span>
+                                                        <strong class="text-dark fs-6">{{ item.code }}</strong>
+                                                    </div>
+                                                    <div class="d-flex justify-content-between align-items-center">
+                                                        <span class="text-primary fw-bold">ยอดค้างชำระ:</span>
+                                                        <strong class="text-danger fs-5">{{ item.balance_amount|default:0|floatformat:2|intcomma }} บาท</strong>
+                                                    </div>
+                                                </div>
+
+                                                <div class="mb-4">
+                                                    <label class="form-label fw-bold text-dark fs-6">จำนวนเงินที่รับชำระ (บาท)</label>
+                                                    <input type="text" name="received_amount" class="form-control form-control-lg text-end fw-bold text-success shadow-sm"
+                                                           value="{{ item.balance_amount|default:0|floatformat:2|intcomma }}"
+                                                           placeholder="ระบุจำนวนเงิน..." onfocus="this.select();" oninput="formatCurrencyInput(this)" required style="font-size: 1.25rem;">
+                                                    <small class="text-muted mt-2 d-block"><i class="fas fa-info-circle me-1"></i> ระบบดึงยอดค้างชำระมาให้อัตโนมัติ สามารถพิมพ์แก้ตัวเลขได้หากเป็นการแบ่งจ่าย</small>
+                                                </div>
+
+                                                <div class="mb-3">
+                                                    <label class="form-label fw-bold text-muted">วันที่รับเงิน</label>
+                                                    <input type="date" name="payment_date" class="form-control bg-light" value="{% now 'Y-m-d' %}" required>
+                                                </div>
+
+                                                <div class="mb-3">
+                                                    <label class="form-label fw-bold text-muted">ช่องทางรับเงิน</label>
+                                                    <select name="payment_method" id="paymentMethodSelect{{ item.id }}" class="form-select bg-light" onchange="togglePaymentFields('{{ item.id }}')">
+                                                        <option value="TRANSFER">โอนเงินเข้าบัญชี</option>
+                                                        <option value="CASH">เงินสด</option>
+                                                        <option value="CHECK">เช็คธนาคาร</option>
+                                                    </select>
+                                                </div>
+
+                                                <div id="transferFields{{ item.id }}">
+                                                    <div class="mb-2">
+                                                        <label class="form-label fw-bold text-muted">อัปโหลดสลิป</label>
+                                                        <input type="file" name="transfer_slip" class="form-control bg-light" accept="image/*">
+                                                    </div>
+                                                </div>
+
+                                                <div id="checkFields{{ item.id }}" class="d-none">
+                                                    <div class="row g-2 mb-2">
+                                                        <div class="col-6">
+                                                            <label class="form-label fw-bold text-muted">ธนาคาร</label>
+                                                            <input type="text" name="check_bank" class="form-control bg-light" placeholder="เช่น กสิกรไทย">
+                                                        </div>
+                                                        <div class="col-6">
+                                                            <label class="form-label fw-bold text-muted">เลขที่เช็ค</label>
+                                                            <input type="text" name="check_number" class="form-control bg-light" placeholder="ระบุเลขที่เช็ค">
+                                                        </div>
+                                                    </div>
+                                                    <div class="mb-2">
+                                                        <label class="form-label fw-bold text-muted">อัปโหลดหน้าเช็ค</label>
+                                                        <input type="file" name="check_slip" class="form-control bg-light" accept="image/*">
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="modal-footer bg-light border-0">
+                                                <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">ยกเลิก</button>
+                                                <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm" onclick="return confirm('ยืนยันบันทึกรับชำระเงิน?\n(ยอดนี้จะรอการตรวจสอบจากฝ่ายบัญชีอีกครั้ง)')">บันทึกยอดรับชำระ</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endif %}
+
+                            {% empty %}
+                                <tr><td colspan="10" class="text-center py-5 text-muted"><i class="fas fa-inbox fa-3x mb-3 opacity-25"></i><br>ไม่พบรายการ</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                {% if page_obj.has_other_pages %}
+                <div class="card-footer bg-white py-3 border-top-0 d-flex justify-content-center">
+                    <nav>
+                        <ul class="pagination pagination-sm shadow-sm mb-0">
+                            {% if page_obj.has_previous %}
+                            <li class="page-item"><a class="page-link border-0 text-muted" href="?page={{ page_obj.previous_page_number }}&q={{ search_query|default:'' }}&start_date={{ start_date|default:'' }}&end_date={{ end_date|default:'' }}&status={{ status_filter|default:'' }}&branch={{ branch_filter|default:'' }}"><i class="fas fa-chevron-left"></i></a></li>
+                            {% endif %}
+                            <li class="page-item disabled"><span class="page-link border-0 text-dark fw-bold px-3">หน้า {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span></li>
+                            {% if page_obj.has_next %}
+                            <li class="page-item"><a class="page-link border-0 text-muted" href="?page={{ page_obj.next_page_number }}&q={{ search_query|default:'' }}&start_date={{ start_date|default:'' }}&end_date={{ end_date|default:'' }}&status={{ status_filter|default:'' }}&branch={{ branch_filter|default:'' }}"><i class="fas fa-chevron-right"></i></a></li>
+                            {% endif %}
+                        </ul>
+                    </nav>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal สำหรับซูมดูรูปสลิป -->
+<div class="modal fade" id="slipModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content bg-transparent border-0">
+            <div class="modal-header border-0 pb-0 justify-content-end">
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close" style="filter: invert(1);"></button>
+            </div>
+            <div class="modal-body text-center pt-0">
+                <img id="slipImageFull" src="" class="img-fluid rounded-3 shadow-lg" style="max-height: 80vh; object-fit: contain;">
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 🌟 สคริปต์ Date Range Picker 🌟 -->
+<script type="text/javascript">
+$(function() {
+    // 🌟 1. ดึงค่าวันที่ที่เคยค้นหาไว้ (ถ้าไม่มี จะถูกเซ็ตเป็นวันนี้จาก Views อยู่แล้ว) 🌟
+    var start = moment("{{ start_date|default:'' }}", "YYYY-MM-DD");
+    var end = moment("{{ end_date|default:'' }}", "YYYY-MM-DD");
+
+    // 2. ฟังก์ชันแปลข้อความบนกล่อง
+    function cb(start, end) {
+        if(start && end) {
+            $('#reportrange').val(start.format('DD/MM/YYYY') + ' - ' + end.format('DD/MM/YYYY'));
+            $('#start_date').val(start.format('YYYY-MM-DD'));
+            $('#end_date').val(end.format('YYYY-MM-DD'));
+        }
+    }
+
+    // 3. ตั้งค่าระบบ Date Range Picker
+    $('#reportrange').daterangepicker({
+        startDate: start,
+        endDate: end,
+        ranges: {
+           'วันนี้': [moment(), moment()],
+           'เมื่อวาน': [moment().subtract(1, 'days'), moment().subtract(1, 'days')],
+           'ช่วง 7 วันก่อนหน้า': [moment().subtract(6, 'days'), moment()],
+           'ช่วง 30 วันก่อนหน้า': [moment().subtract(29, 'days'), moment()],
+           'เดือนนี้': [moment().startOf('month'), moment().endOf('month')],
+           '1 เดือนก่อนหน้า': [moment().subtract(1, 'month').startOf('month'), moment().subtract(1, 'month').endOf('month')]
+        },
+        locale: {
+            format: 'DD/MM/YYYY',
+            separator: ' - ',
+            applyLabel: 'ตกลง',
+            cancelLabel: 'ยกเลิก',
+            fromLabel: 'จาก',
+            toLabel: 'ถึง',
+            customRangeLabel: 'กำหนดเอง',
+            weekLabel: 'ส',
+            daysOfWeek: ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'],
+            monthNames: ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'],
+            firstDay: 1
+        }
+    }, cb);
+
+    // 4. กรณีที่เลือกวันที่ ให้เรียกฟังก์ชันแปลข้อความ
+    $('#reportrange').on('apply.daterangepicker', function(ev, picker) {
+        cb(picker.startDate, picker.endDate);
+    });
+
+    // 5. บังคับใส่ค่าลงไปตอนโหลดหน้าเว็บเสมอ!
+    cb(start, end);
+
+    // ฟังก์ชันอื่นๆ เดิม
+    window.togglePaymentFields = function(itemId) {
+        var method = document.getElementById('paymentMethodSelect' + itemId).value;
+        document.getElementById('transferFields' + itemId).classList.add('d-none');
+        document.getElementById('checkFields' + itemId).classList.add('d-none');
+        if (method === 'TRANSFER') document.getElementById('transferFields' + itemId).classList.remove('d-none');
+        else if (method === 'CHECK') document.getElementById('checkFields' + itemId).classList.remove('d-none');
+    }
+
+    window.formatCurrencyInput = function(input) {
+        let val = input.value.replace(/[^0-9.]/g, '');
+        let parts = val.split('.');
+        if (parts.length > 2) parts = [parts[0], parts[1]];
+        parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+        input.value = parts.join('.');
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,114 @@
+{% extends 'core/base.html' %}
+{% load humanize %}
+
+{% block content %}
+<div class="container-fluid py-4 px-4">
+    
+    <div class="d-flex justify-content-end mb-4">
+        <a href="{% url 'sales_dashboard' %}" class="btn btn-outline-secondary rounded-pill px-4 text-uppercase d-flex align-items-center" style="font-size: 0.85rem; letter-spacing: 0.5px;">
+            <i class="fas fa-arrow-left me-2"></i> กลับหน้า Dashboard
+        </a>
+    </div>
+
+    <div class="text-center mb-5">
+        <h2 class="fw-bold text-dark">เลือกประเภทการขาย</h2>
+        <p class="text-muted">กรุณาเลือกรูปแบบการเปิดบิลที่คุณต้องการ</p>
+    </div>
+
+    <div class="row g-4 justify-content-center mb-5">
+        
+        <div class="col-md-5 col-lg-4">
+            <a href="{% url 'pos_home' %}" class="text-decoration-none">
+                <div class="card border-0 shadow-sm h-100 rounded-4 hover-scale text-center p-4" style="background: #e3f2fd;">
+                    <div class="card-body">
+                        <div class="bg-primary text-white rounded-circle d-inline-flex align-items-center justify-content-center mb-4 shadow" style="width: 80px; height: 80px;">
+                            <i class="fas fa-cash-register fa-2x"></i>
+                        </div>
+                        <h4 class="fw-bold text-dark mb-2">ขายหน้าร้าน (POS)</h4>
+                        <p class="text-muted small mb-0">เหมาะสำหรับลูกค้า Walk-in, ซื้อปลีก, หรือต้องการความรวดเร็ว (คิดเงิน ตัดสต็อกทันที)</p>
+                    </div>
+                </div>
+            </a>
+        </div>
+
+        <div class="col-md-5 col-lg-4">
+            <a href="{% url 'quotation_list' %}" class="text-decoration-none">
+                <div class="card border-0 shadow-sm h-100 rounded-4 hover-scale bg-white p-4">
+                    <div class="card-body text-center">
+                        <div class="bg-warning text-dark rounded-circle d-inline-flex align-items-center justify-content-center mb-4 shadow-sm" style="width: 80px; height: 80px;">
+                            <i class="fas fa-file-invoice-dollar fa-2x"></i>
+                        </div>
+                        <h4 class="fw-bold text-dark mb-2">ดึงใบเสนอราคา</h4>
+                        <p class="text-muted small mb-3">ไปที่หน้ารายการใบเสนอราคา เพื่อเลือกใบที่อนุมัติแล้ว มาเปิดเป็นบิลขาย (Invoice)</p>
+                        
+                        <div class="mt-3">
+                            <span class="btn btn-outline-dark rounded-pill px-4">
+                                <i class="fas fa-search me-2"></i>ค้นหาใบเสนอราคา
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </a>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm rounded-4">
+        <div class="card-header bg-white py-3">
+            <h6 class="fw-bold m-0"><i class="fas fa-list me-2 text-primary"></i>รายการขายวันนี้ (Today's Invoices & Orders)</h6>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="bg-light text-muted small">
+                    <tr>
+                        <th class="ps-4">เวลา</th>
+                        <th>เลขที่เอกสาร</th>
+                        <th>ประเภท</th>
+                        <th>ลูกค้า</th>
+                        <th class="text-end">ยอดสุทธิ</th>
+                        <th class="text-center">สถานะ</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for inv in today_invoices %}
+                    <tr>
+                        <td class="ps-4 text-muted">{{ inv.created_at|date:"H:i" }}</td>
+                        <td class="fw-bold text-primary">{{ inv.code }}</td>
+                        <td><span class="badge bg-info text-dark">Invoice</span></td>
+                        <td>{{ inv.customer.name|default:"-" }}</td>
+                        <td class="text-end fw-bold">{{ inv.grand_total|intcomma }}</td>
+                        <td class="text-center">
+                            {% if inv.status == 'PAID' %}
+                                <span class="badge bg-success rounded-pill">ชำระแล้ว</span>
+                            {% else %}
+                                <span class="badge bg-warning text-dark rounded-pill">รอชำระ</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+
+                    {% for pos in today_pos %}
+                    <tr>
+                        <td class="ps-4 text-muted">{{ pos.created_at|date:"H:i" }}</td>
+                        <td class="fw-bold">{{ pos.code }}</td>
+                        <td><span class="badge bg-light text-dark border">POS</span></td>
+                        <td>{{ pos.customer.name|default:"ลูกค้าทั่วไป" }}</td>
+                        <td class="text-end fw-bold">{{ pos.total_amount|intcomma }}</td>
+                        <td class="text-center"><span class="badge bg-success rounded-pill">ชำระแล้ว</span></td>
+                    </tr>
+                    {% endfor %}
+
+                    {% if not today_invoices and not today_pos %}
+                    <tr><td colspan="6" class="text-center py-4 text-muted">ยังไม่มีรายการขายวันนี้</td></tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<style>
+    .hover-scale { transition: transform 0.2s, box-shadow 0.2s; }
+    .hover-scale:hover { transform: translateY(-5px); box-shadow: 0 10px 20px rgba(0,0,0,0.1) !important; }
+    .hover-dark:hover { color: #000 !important; }
+</style>
+{% endblock %}

@@ -1,0 +1,51 @@
+{% extends 'core/base.html' %}
+{% block content %}
+<div class="container-fluid py-4 px-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-6">
+            <div class="card shadow-sm border-0 rounded-4">
+                <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+                    <h5 class="fw-bold mb-0 text-dark">
+                        <i class="fas fa-user-hard-hat text-primary me-2"></i> 
+                        {% if team %}แก้ไขข้อมูลทีมช่าง{% else %}เพิ่มทีมช่างใหม่{% endif %}
+                    </h5>
+                </div>
+                <div class="card-body p-4">
+                    <form method="POST">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label class="form-label fw-bold text-muted small">ชื่อทีมรับเหมา / ชื่อบริษัท <span class="text-danger">*</span></label>
+                            <input type="text" name="name" class="form-control form-control-lg fs-6" value="{{ team.name|default:'' }}" required placeholder="ระบุชื่อทีมงาน">
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label fw-bold text-muted small">ชื่อหัวหน้าช่าง</label>
+                                <input type="text" name="leader_name" class="form-control" value="{{ team.leader_name|default:'' }}" placeholder="ชื่อผู้ติดต่อหลัก">
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label fw-bold text-muted small">เบอร์ติดต่อ</label>
+                                <input type="text" name="phone" class="form-control" value="{{ team.phone|default:'' }}" placeholder="08X-XXX-XXXX">
+                            </div>
+                        </div>
+                        <div class="mb-4">
+                            <label class="form-label fw-bold text-muted small">หมายเหตุ / ความเชี่ยวชาญ</label>
+                            <textarea name="note" class="form-control" rows="3" placeholder="ระบุรายละเอียดเพิ่มเติม เช่น ถนัดงานโรงงาน, มีใบเซอร์ฯ">{{ team.note|default:'' }}</textarea>
+                        </div>
+                        <div class="form-check form-switch mb-4 bg-light p-3 rounded-3 border">
+                            <input class="form-check-input ms-0 me-3" type="checkbox" name="is_active" id="isActive" style="transform: scale(1.3);" {% if not team or team.is_active %}checked{% endif %}>
+                            <label class="form-check-label fw-bold text-dark mt-1" for="isActive">เปิดรับงาน (Active) - แสดงในตัวเลือกการจัดช่าง</label>
+                        </div>
+                        
+                        <div class="text-end">
+                            <a href="{% url 'subcontractor_list' %}" class="btn btn-secondary rounded-pill px-4 fw-bold me-2">ยกเลิก</a>
+                            <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm">
+                                <i class="fas fa-save me-2"></i> บันทึกข้อมูล
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

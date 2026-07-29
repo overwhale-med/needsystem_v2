@@ -1,0 +1,130 @@
+{% extends 'core/base.html' %}
+{% load humanize %}
+
+{% block content %}
+<style>
+    /* สไตล์กระดาษ A4 */
+    .payslip-paper {
+        background: white;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 40px;
+        box-shadow: 0 0 20px rgba(0,0,0,0.1);
+        border-radius: 8px;
+        font-family: 'Sarabun', sans-serif; /* แนะนำให้ใช้ฟอนต์ทางการ */
+    }
+    .table-borderless td { border: none; padding: 5px 0; }
+    .b-bottom { border-bottom: 1px solid #dee2e6; }
+    .b-double { border-bottom: 3px double #000; }
+    
+    /* ซ่อนปุ่มตอนสั่งพิมพ์ */
+    @media print {
+        body * { visibility: hidden; }
+        .payslip-paper, .payslip-paper * { visibility: visible; }
+        .payslip-paper { position: absolute; left: 0; top: 0; width: 100%; box-shadow: none; }
+        .no-print { display: none !important; }
+    }
+</style>
+
+<div class="container py-5">
+    
+    <div class="d-flex justify-content-center mb-4 gap-2 no-print">
+        <a href="{% url 'payslip_list' %}" class="btn btn-light border rounded-pill px-4">
+            <i class="fas fa-arrow-left me-2"></i>กลับ
+        </a>
+        <button onclick="window.print()" class="btn btn-primary rounded-pill px-4 shadow-sm">
+            <i class="fas fa-print me-2"></i>พิมพ์สลิป
+        </button>
+    </div>
+
+    <div class="payslip-paper">
+        
+        <div class="row mb-4 b-bottom pb-3">
+            <div class="col-2 text-center">
+                <div class="bg-dark text-white rounded-circle d-flex align-items-center justify-content-center mx-auto" style="width: 60px; height: 60px; font-size: 24px;">N</div>
+            </div>
+            <div class="col-6">
+                <h4 class="fw-bold mb-0">บริษัท นีด ซิสเต็ม จำกัด</h4>
+                <small class="text-muted">NEED System Co., Ltd.</small>
+            </div>
+            <div class="col-4 text-end">
+                <h5 class="fw-bold text-uppercase text-primary mb-0">Slip เงินเดือน</h5>
+                <small class="text-muted">งวด: {{ payslip.get_month_display }} {{ payslip.year }}</small>
+            </div>
+        </div>
+
+        <div class="row mb-4 bg-light p-3 rounded mx-0">
+            <div class="col-6">
+                <table class="table-borderless w-100">
+                    <tr><td class="text-muted w-25">ชื่อ-สกุล:</td> <td class="fw-bold">{{ payslip.employee.prefix }} {{ payslip.employee.first_name }} {{ payslip.employee.last_name }}</td></tr>
+                    <tr><td class="text-muted">รหัส:</td> <td>{{ payslip.employee.emp_id }}</td></tr>
+                    <tr><td class="text-muted">ตำแหน่ง:</td> <td>{{ payslip.employee.position }}</td></tr>
+                </table>
+            </div>
+            <div class="col-6">
+                <table class="table-borderless w-100">
+                    <tr><td class="text-muted w-40">แผนก:</td> <td>{{ payslip.employee.department }}</td></tr>
+                    <tr><td class="text-muted">วันที่จ่าย:</td> <td>{{ payslip.payment_date|date:"d M Y"|default:"-" }}</td></tr>
+                    <tr><td class="text-muted">เลขบัญชี:</td> <td>{{ payslip.employee.bank_account_no|default:"-" }}</td></tr>
+                </table>
+            </div>
+        </div>
+
+        <div class="row mb-2">
+            <div class="col-6 border-end">
+                <h6 class="fw-bold text-success border-bottom pb-2">รายการได้ (Income)</h6>
+                <table class="table table-borderless table-sm">
+                    <tr><td>เงินเดือนค่าจ้าง</td> <td class="text-end">{{ payslip.base_salary|intcomma }}</td></tr>
+                    <tr><td>ค่าล่วงเวลา (OT)</td> <td class="text-end">{{ payslip.ot_pay|intcomma }}</td></tr>
+                    <tr><td>โบนัส/เบี้ยขยัน</td> <td class="text-end">{{ payslip.bonus|intcomma }}</td></tr>
+                    <tr><td>รายได้อื่นๆ</td> <td class="text-end">{{ payslip.other_income|intcomma }}</td></tr>
+                </table>
+            </div>
+            
+            <div class="col-6">
+                <h6 class="fw-bold text-danger border-bottom pb-2">รายการหัก (Deduction)</h6>
+                <table class="table table-borderless table-sm">
+                    <tr><td>ภาษี ณ ที่จ่าย</td> <td class="text-end">{{ payslip.tax|intcomma }}</td></tr>
+                    <tr><td>ประกันสังคม</td> <td class="text-end">{{ payslip.social_security|intcomma }}</td></tr>
+                    <tr><td>หัก ขาด/ลา/สาย</td> <td class="text-end">{{ payslip.leave_deduction|intcomma }}</td></tr>
+                    <tr><td>รายการหักอื่นๆ</td> <td class="text-end">{{ payslip.other_deduction|intcomma }}</td></tr>
+                </table>
+            </div>
+        </div>
+
+        <div class="row mt-3">
+            <div class="col-6">
+                <div class="d-flex justify-content-between border-top pt-2">
+                    <span class="fw-bold">รวมเงินได้</span>
+                    <span class="fw-bold text-success">{{ payslip.base_salary|add:payslip.ot_pay|add:payslip.bonus|add:payslip.other_income|intcomma }}</span>
+                </div>
+            </div>
+            <div class="col-6">
+                <div class="d-flex justify-content-between border-top pt-2">
+                    <span class="fw-bold">รวมเงินหัก</span>
+                    <span class="fw-bold text-danger">{{ payslip.tax|add:payslip.social_security|add:payslip.leave_deduction|add:payslip.other_deduction|intcomma }}</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-4 bg-primary bg-opacity-10 p-3 rounded mx-0 border border-primary border-opacity-25">
+            <div class="col-12 d-flex justify-content-between align-items-center">
+                <h5 class="mb-0 fw-bold text-primary">เงินได้สุทธิ (Net Salary)</h5>
+                <h3 class="mb-0 fw-bold text-primary">฿ {{ payslip.net_salary|intcomma }}</h3>
+            </div>
+        </div>
+
+        <div class="row mt-5 pt-4">
+            <div class="col-6 text-center">
+                <div class="border-bottom w-75 mx-auto mb-2" style="border-color: #ccc !important;"></div>
+                <small>ผู้จ่ายเงิน</small>
+            </div>
+            <div class="col-6 text-center">
+                <div class="border-bottom w-75 mx-auto mb-2" style="border-color: #ccc !important;"></div>
+                <small>ผู้รับเงิน</small>
+            </div>
+        </div>
+
+    </div>
+</div>
+{% endblock %}

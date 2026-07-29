@@ -1,0 +1,376 @@
+{% extends 'core/base.html' %}
+{% load humanize %}
+
+{% block content %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="https://npmcdn.com/flatpickr/dist/l10n/th.js"></script>
+
+<style>
+    /* CSS สำหรับส่วนหัวและ Card Stats */
+    .dashboard-header {
+        background: linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%);
+        color: white;
+        border-radius: 0 0 30px 30px;
+        padding-bottom: 60px;
+        margin-bottom: -40px;
+    }
+    .stat-card {
+        border: none;
+        border-radius: 20px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+        transition: transform 0.2s;
+        background: white;
+    }
+    .stat-card:hover { transform: translateY(-5px); }
+    
+    /* ปุ่ม Action */
+    .btn-action {
+        border-radius: 15px;
+        padding: 15px;
+        font-weight: bold;
+        transition: all 0.3s;
+        border: none;
+    }
+    .btn-checkin {
+        background: linear-gradient(45deg, #11998e, #38ef7d);
+        color: white;
+        box-shadow: 0 4px 15px rgba(56, 239, 125, 0.4);
+    }
+    .btn-leave {
+        background: linear-gradient(45deg, #fce38a, #f38181);
+        color: #fff;
+        box-shadow: 0 4px 15px rgba(243, 129, 129, 0.4);
+    }
+    
+    .profile-img-circle {
+        width: 100px;
+        height: 100px;
+        border-radius: 50%;
+        border: 4px solid rgba(255,255,255,0.3);
+        object-fit: cover;
+    }
+    .blur-text {
+        filter: blur(8px);
+        user-select: none;
+        transition: filter 0.3s;
+        cursor: pointer;
+    }
+    .blur-text.revealed { filter: blur(0); }
+
+    /* ปรับแต่งช่องวันที่ให้ดูดีขึ้น */
+    .flatpickr-input {
+        background-color: #f8f9fa !important;
+        cursor: pointer;
+    }
+</style>
+
+<div class="dashboard-header pt-5 px-4">
+    <div class="container">
+        <div class="d-flex align-items-center">
+            <div class="me-4">
+                {% if employee.photo %}
+                    <img src="{{ employee.photo.url }}" class="profile-img-circle shadow">
+                {% else %}
+                    <div class="profile-img-circle bg-white text-dark d-flex align-items-center justify-content-center fw-bold fs-1 shadow">
+                        {{ employee.first_name|slice:":1" }}
+                    </div>
+                {% endif %}
+            </div>
+            <div>
+                <span class="badge bg-white text-dark mb-2 px-3 rounded-pill">
+                    <i class="fas fa-id-badge me-1"></i> {{ employee.emp_id }}
+                </span>
+                <h2 class="fw-bold mb-0">{{ employee.prefix }} {{ employee.first_name }}</h2>
+                <p class="opacity-75 mb-0">{{ employee.position.title }} | {{ employee.department }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="container">
+    
+    <div class="row g-4 mb-5">
+        <div class="col-md-3">
+            <div class="stat-card h-100 p-4 position-relative overflow-hidden">
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                    <div>
+                        <small class="text-muted text-uppercase fw-bold">เงินได้สุทธิเดือนนี้</small>
+                        <h2 class="fw-bold text-primary mt-1 mb-0 blur-text" id="salaryText" onclick="toggleSalary()">
+                            ฿ {{ payslip.net_salary|default:employee.salary|floatformat:2|intcomma }}
+                        </h2>
+                        <small class="text-muted" style="font-size: 0.8rem;">คลิกเพื่อแสดง/ซ่อน</small>
+                    </div>
+                    <div class="bg-light p-3 rounded-circle text-primary">
+                        <i class="fas fa-wallet fa-lg"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="stat-card h-100 p-4 position-relative overflow-hidden">
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                    <div>
+                        <small class="text-muted text-uppercase fw-bold">คอมมิชชันสะสมเดือนนี้</small>
+                        <h2 class="fw-bold text-success mt-1 mb-0 blur-text" id="commText" onclick="toggleComm()">
+                            ฿ {{ total_commission|default:"0.00"|floatformat:2|intcomma }}
+                        </h2>
+                        <small class="text-muted" style="font-size: 0.8rem;">คลิกเพื่อแสดง/ซ่อน</small>
+                    </div>
+                    <div class="bg-success bg-opacity-10 p-3 rounded-circle text-success">
+                        <i class="fas fa-hand-holding-usd fa-lg"></i>
+                    </div>
+                </div>
+                <div class="mt-2">
+                    <span class="badge bg-success bg-opacity-10 text-success rounded-pill px-2 py-1" style="font-size: 0.75rem;">
+                        <i class="fas fa-sync-alt me-1"></i> อัปเดตแบบ Real-time
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="stat-card h-100 p-4 position-relative overflow-hidden">
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                    <div>
+                        <small class="text-muted text-uppercase fw-bold">ยอดเงินกองทุนทีม</small>
+                        <h2 class="fw-bold text-info mt-1 mb-0 blur-text" id="fundText" onclick="toggleFund()">
+                            ฿ {{ group_fund|default:"0.00"|floatformat:2|intcomma }}
+                        </h2>
+                        <small class="text-muted" style="font-size: 0.8rem;">คลิกเพื่อแสดง/ซ่อน</small>
+                    </div>
+                    <div class="bg-info bg-opacity-10 p-3 rounded-circle text-info">
+                        <i class="fas fa-piggy-bank fa-lg"></i>
+                    </div>
+                </div>
+                <div class="mt-2">
+                    <span class="badge bg-info bg-opacity-10 text-info rounded-pill px-2 py-1" style="font-size: 0.75rem;">
+                        <i class="fas fa-users me-1"></i> {{ employee.sales_group.name|default:"ไม่มีสังกัดทีม" }}
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="stat-card h-100 p-4" style="background: #f8f9fa;">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <small class="text-muted text-uppercase fw-bold">สถานะวันนี้</small>
+                    {% if today_attendance.time_in %}
+                        <span class="badge bg-success rounded-pill px-3">เข้างานแล้ว</span>
+                    {% else %}
+                        <span class="badge bg-warning text-dark rounded-pill px-3">ยังไม่ลงเวลา</span>
+                    {% endif %}
+                 </div>
+                <div class="text-center py-2">
+                    <h1 class="fw-bold display-6 mb-0">
+                        {{ today_attendance.time_in|time:"H:i"|default:"--:--" }}
+                    </h1>
+                    <small class="text-muted">เวลาเข้างาน</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <h5 class="fw-bold text-muted mb-3"><i class="fas fa-bolt me-2"></i>เมนูด่วน</h5>
+    <div class="row g-3 mb-5">
+        <div class="col-md-4">
+            {% if not today_attendance.time_in %}
+                <form id="checkInForm" action="{% url 'check_in' %}" method="post" class="w-100">
+                    {% csrf_token %}
+                    <input type="hidden" name="latitude" id="latInput">
+                    <input type="hidden" name="longitude" id="longInput">
+                    
+                    <button type="button" onclick="getLocationAndSubmit()" class="btn btn-action btn-checkin w-100 d-flex align-items-center justify-content-center">
+                        <i class="fas fa-fingerprint fa-2x me-3"></i>
+                        <div class="text-start">
+                            <div class="fs-5">ลงเวลาเข้างาน</div>
+                            <small class="opacity-75">Check-in with GPS</small>
+                        </div>
+                    </button>
+                </form>
+            {% elif not today_attendance.time_out %}
+                <form action="{% url 'check_out' %}" method="post" class="w-100">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-action btn-danger w-100 d-flex align-items-center justify-content-center shadow">
+                        <i class="fas fa-sign-out-alt fa-2x me-3"></i>
+                        <div class="text-start">
+                            <div class="fs-5">ลงเวลาออกงาน</div>
+                            <small class="opacity-75">Check-out</small>
+                        </div>
+                    </button>
+                </form>
+            {% else %}
+                <button class="btn btn-secondary w-100 py-3 disabled" style="opacity: 0.6;">
+                    <i class="fas fa-check-double me-2"></i> วันนี้ลงเวลาครบแล้ว
+                </button>
+            {% endif %}
+        </div>
+
+        <div class="col-md-4">
+            <a href="{% url 'leave_create' %}" class="text-decoration-none">
+                <button class="btn btn-action btn-leave w-100 d-flex align-items-center justify-content-center">
+                    <i class="fas fa-paper-plane fa-2x me-3"></i>
+                    <div class="text-start">
+                        <div class="fs-5">ขอลางาน</div>
+                        <small class="opacity-75">Request Leave</small>
+                    </div>
+                </button>
+            </a>
+        </div>
+
+        <div class="col-md-4">
+            <a href="{% url 'payslip_list' %}" class="text-decoration-none">
+                <button class="btn btn-action btn-light bg-white text-primary w-100 d-flex align-items-center justify-content-center shadow-sm">
+                    <i class="fas fa-file-invoice-dollar fa-2x me-3"></i>
+                    <div class="text-start">
+                        <div class="fs-5">สลิปเงินเดือน</div>
+                        <small class="text-muted">View Payslips</small>
+                    </div>
+                </button>
+            </a>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm rounded-4 mb-4">
+        <div class="card-body p-4">
+            <form method="get" class="row g-3 align-items-end">
+                <div class="col-md-4">
+                    <label class="form-label fw-bold text-muted small"><i class="fas fa-calendar-alt me-1"></i> วันที่เริ่มต้น</label>
+                    <input type="text" id="startDate" name="start_date" class="form-control bg-light border-0" placeholder="เลือกวันที่..." value="{{ start_date }}">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-bold text-muted small"><i class="fas fa-calendar-alt me-1"></i> วันที่สิ้นสุด</label>
+                    <input type="text" id="endDate" name="end_date" class="form-control bg-light border-0" placeholder="เลือกวันที่..." value="{{ end_date }}">
+                </div>
+                <div class="col-md-4">
+                    <button type="submit" class="btn btn-primary w-100 fw-bold shadow-sm">
+                        <i class="fas fa-search me-2"></i>ค้นหาประวัติ
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="row g-4 mb-5">
+        <div class="col-lg-6">
+            <div class="card border-0 shadow-sm rounded-4 h-100 overflow-hidden">
+                <div class="card-header bg-white py-3 border-bottom-0">
+                    <h6 class="fw-bold m-0 text-primary"><i class="fas fa-history me-2"></i>ประวัติการลา (Leave History)</h6>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="bg-light text-muted small text-uppercase">
+                            <tr>
+                                <th class="ps-4 py-3">วันที่ลา</th>
+                                <th>ประเภท</th>
+                                <th>สถานะ</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for leave in leaves %}
+                            <tr>
+                                <td class="ps-4 fw-bold text-dark">{{ leave.start_date|date:"d/m/Y" }}</td>
+                                <td>{{ leave.get_leave_type_display }}</td>
+                                <td>
+                                    <span class="badge bg-{% if leave.status == 'approved' %}success{% elif leave.status == 'rejected' %}danger{% else %}warning{% endif %} bg-opacity-10 text-{% if leave.status == 'approved' %}success{% elif leave.status == 'rejected' %}danger{% else %}warning{% endif %} rounded-pill px-2">
+                                        {{ leave.get_status_display }}
+                                    </span>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="3" class="text-center py-4 text-muted small">ยังไม่มีประวัติการลา</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6">
+            <div class="card border-0 shadow-sm rounded-4 h-100 overflow-hidden bg-dark text-white">
+                <div class="card-header bg-transparent py-3 border-secondary border-opacity-25">
+                    <h6 class="fw-bold m-0"><i class="fas fa-clock me-2 text-warning"></i>บันทึกเวลาเข้า-ออก (Attendance)</h6>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-dark table-hover align-middle mb-0" style="--bs-table-bg: transparent;">
+                        <thead class="text-secondary small text-uppercase">
+                            <tr>
+                                <th class="ps-4 py-3">วันที่</th>
+                                <th>เวลาเข้า</th>
+                                <th>เวลาออก</th>
+                                <th class="text-end pe-4">สถานะ</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for log in attendance_history %}
+                            <tr>
+                                <td class="ps-4 text-white-50">{{ log.date|date:"d/m/Y" }}</td>
+                                <td class="text-success fw-bold">{{ log.time_in|time:"H:i"|default:"-" }}</td>
+                                <td class="text-danger fw-bold">{{ log.time_out|time:"H:i"|default:"-" }}</td>
+                                <td class="text-end pe-4">
+                                    {% if log.is_late %}<span class="badge bg-warning text-dark">⚠️ มาสาย</span>
+                                    {% elif log.time_in %}<span class="badge bg-success bg-opacity-25 text-success">ปกติ</span>
+                                    {% else %}<span class="badge bg-secondary">ขาดงาน</span>{% endif %}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="4" class="text-center py-4 text-muted small">ไม่พบข้อมูลในช่วงเวลานี้</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // ✅ ฟังก์ชันดึงพิกัด GPS ก่อนส่งฟอร์ม (Step 2)
+    function getLocationAndSubmit() {
+        const form = document.getElementById('checkInForm');
+        const btn = form.querySelector('button');
+        
+        if (navigator.geolocation) {
+            // โชว์ Loading สวยๆ
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin me-3"></i> กำลังดึงพิกัด GPS...';
+
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    // ดึงค่าใส่ Hidden Input
+                    document.getElementById('latInput').value = position.coords.latitude;
+                    document.getElementById('longInput').value = position.coords.longitude;
+                    form.submit(); // ส่งข้อมูลเข้าเซิร์ฟเวอร์
+                },
+                (error) => {
+                    let msg = "ไม่สามารถเข้าถึงตำแหน่งได้: ";
+                    switch(error.code) {
+                        case error.PERMISSION_DENIED: msg += "คุณไม่ได้อนุญาตให้เข้าถึงพิกัด"; break;
+                        case error.POSITION_UNAVAILABLE: msg += "ข้อมูลพิกัดไม่พร้อมใช้งาน"; break;
+                        case error.TIMEOUT: msg += "หมดเวลาดึงพิกัด"; break;
+                        default: msg += "เกิดข้อผิดพลาดที่ไม่รู้จัก"; break;
+                    }
+                    alert(msg + "\n\nระบบจะลงเวลาเช็คอินโดยไม่มีพิกัดตำแหน่งค่ะ");
+                    form.submit(); // ส่งต่อแม้ดึงพิกัดไม่ได้ (เพื่อให้พนักงานเช็คอินได้แม้ในที่อับสัญญาณ)
+                },
+                { enableHighAccuracy: true, timeout: 7000 } // ความแม่นยำสูง รอไม่เกิน 7 วิ
+            );
+        } else {
+            alert("เบราว์เซอร์ของคุณไม่รองรับการดึงพิกัด GPS ค่ะ");
+            form.submit();
+        }
+    }
+
+    // ฟังก์ชันส่วนอื่นๆ คงเดิม
+    document.addEventListener('DOMContentLoaded', function() {
+        flatpickr("#startDate", { locale: "th", dateFormat: "Y-m-d", altInput: true, altFormat: "d/m/Y", defaultDate: "{{ start_date }}" });
+        flatpickr("#endDate", { locale: "th", dateFormat: "Y-m-d", altInput: true, altFormat: "d/m/Y", defaultDate: "{{ end_date }}" });
+    });
+
+    function toggleSalary() { document.getElementById("salaryText").classList.toggle("revealed"); }
+    function toggleComm() { document.getElementById("commText").classList.toggle("revealed"); }
+    function toggleFund() { document.getElementById("fundText").classList.toggle("revealed"); }
+</script>
+
+{% endblock %}

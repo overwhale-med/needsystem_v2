@@ -1,0 +1,87 @@
+{% extends 'core/base.html' %}
+{% load humanize %}
+
+{% block content %}
+<div class="container-fluid py-4 px-4">
+    <div class="d-flex justify-content-between align-items-end mb-4">
+        <div>
+            <h4 class="fw-bold mb-1 text-dark"><i class="fas fa-box-open text-success me-2"></i>ดำเนินการรับสินค้า (GR - Import)</h4>
+            <p class="text-muted small mb-0">รับสินค้าเข้าคลังจากใบสั่งซื้อต่างประเทศ: <span class="fw-bold text-primary">{{ po.po_number }}</span></p>
+        </div>
+        <a href="{% url 'pq_receive_list' %}" class="btn btn-outline-secondary rounded-pill px-4 fw-bold"><i class="fas fa-arrow-left me-2"></i> ยกเลิก</a>
+    </div>
+
+    <form method="POST">
+        {% csrf_token %}
+        <div class="row g-4">
+            <div class="col-lg-4">
+                <div class="card border-0 shadow-sm rounded-4 mb-4 position-sticky" style="top: 20px;">
+                    <div class="card-header bg-success text-white py-3 px-4 border-0">
+                        <h6 class="mb-0 fw-bold"><i class="fas fa-info-circle me-2"></i>ข้อมูลใบรับสินค้า (GR)</h6>
+                    </div>
+                    <div class="card-body p-4">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold text-dark">เลขที่อ้างอิง (Ref. PI / BL) <span class="text-danger">*</span></label>
+                            <input type="text" name="reference_doc" class="form-control" value="{{ po.pi_number }}" required>
+                            <small class="text-muted">ระบบดึงเลข PI มาให้เป็นค่าเริ่มต้น สามารถแก้เป็นเลขใบขน หรือ BL ได้</small>
+                        </div>
+                        <div class="mb-4">
+                            <label class="form-label fw-bold text-dark">หมายเหตุ / Note</label>
+                            <textarea name="note" class="form-control" rows="3">รับสินค้าจากใบสั่งซื้อต่างประเทศ {{ po.po_number }}</textarea>
+                        </div>
+                        
+                        <div class="alert alert-warning border-warning small">
+                            <i class="fas fa-lightbulb me-1"></i> ระบบจะทำการรับสินค้าเข้าคลังแบบ <b>เต็มจำนวน 100%</b> ตามที่สั่งซื้อโดยอัตโนมัติ
+                        </div>
+
+                        <button type="submit" class="btn btn-success rounded-pill w-100 fw-bold shadow-sm py-2" onclick="return confirm('ยืนยันการรับสินค้าเข้าคลัง? (สต็อกจะถูกเพิ่มทันที)')">
+                            <i class="fas fa-check-circle me-2"></i> ยืนยันรับเข้าคลัง (GR)
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-8">
+                <div class="card border-0 shadow-sm rounded-4 border-start border-success" style="border-left-width: 5px !important;">
+                    <div class="card-header bg-white py-3 border-bottom px-4">
+                        <h6 class="mb-0 fw-bold text-dark"><i class="fas fa-boxes me-2 text-success"></i>รายการสินค้าที่จะถูกเพิ่มเข้าคลัง</h6>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0 text-center">
+                                <thead class="bg-light">
+                                    <tr>
+                                        <th width="15%" class="py-3">รหัสคลัง</th>
+                                        <th width="45%" class="text-start py-3">รายละเอียด (สเปก)</th>
+                                        <th width="20%" class="py-3 text-end">จำนวนที่สั่ง</th>
+                                        <th width="20%" class="py-3 text-success text-end pe-4">ยอดรับเข้าสต็อก</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for item in po.overseas_items.all %}
+                                    <tr>
+                                        <td class="fw-bold text-primary">{{ item.product.code }}</td>
+                                        <td class="text-start">
+                                            <div class="fw-bold text-dark">{{ item.product.name }}</div>
+                                            <div class="small text-muted">{{ item.description }}</div>
+                                        </td>
+                                        <td class="text-end fw-bold text-muted">{{ item.quantity|floatformat:0|intcomma }}</td>
+                                        <td class="text-end fw-bold text-success fs-5 pe-4">+{{ item.quantity|floatformat:0|intcomma }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                                <tfoot class="bg-light">
+                                    <tr>
+                                        <td colspan="3" class="text-end fw-bold py-3">มูลค่าสินค้ารวม (รับเข้า):</td>
+                                        <td class="text-end fw-bold text-dark py-3 pe-4">฿ {{ po.total_amount|floatformat:2|intcomma }}</td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}

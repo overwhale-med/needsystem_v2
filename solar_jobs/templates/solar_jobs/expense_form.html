@@ -1,0 +1,54 @@
+{% extends 'core/base.html' %}
+
+{% block content %}
+<style>
+    .btn-gold { background: linear-gradient(135deg, #d4af37 0%, #aa8c2c 100%); color: #ffffff !important; border: none; transition: all 0.3s ease; }
+    .btn-gold:hover { background: linear-gradient(135deg, #aa8c2c 0%, #8c7324 100%); transform: translateY(-2px); box-shadow: 0 4px 8px rgba(212, 175, 55, 0.3) !important; }
+</style>
+
+<div class="container-fluid py-5 px-4">
+    <div class="card border-0 shadow-sm rounded-4 bg-white mx-auto" style="max-width: 650px;">
+        <div class="card-header bg-white py-4 border-bottom-0 text-center">
+            <div class="d-inline-flex align-items-center justify-content-center bg-warning bg-opacity-10 text-warning rounded-circle mb-3" style="width: 60px; height: 60px;">
+                <i class="fas fa-hand-holding-usd fa-2x"></i>
+            </div>
+            <h4 class="fw-bold mb-0 text-dark">แบบฟอร์มขอตั้งเบิกค่าใช้จ่าย</h4>
+            <p class="text-muted small mt-1">ระบบงานโซล่าเซลล์ (Solar Jobs)</p>
+        </div>
+        <div class="card-body px-5 pb-5 pt-0">
+            <form method="POST" enctype="multipart/form-data">
+                {% csrf_token %}
+                <div class="mb-3">
+                    <label class="form-label fw-bold small text-muted">อ้างอิงรหัสใบสั่งงาน (SOL)</label>
+                    {{ form.job }}
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold small text-muted">หมวดหมู่ค่าใช้จ่าย</label>
+                    {{ form.expense_type }}
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold small text-muted">รายละเอียดเพิ่มเติม</label>
+                    {{ form.description }}
+                </div>
+                <div class="mb-4">
+                    <label class="form-label fw-bold small text-muted">จำนวนเงินที่เบิก (บาท)</label>
+                    {{ form.amount }}
+                </div>
+                <div class="mb-4 p-3 bg-light rounded-3 border">
+                    <label class="form-label fw-bold small text-muted"><i class="fas fa-paperclip me-1"></i> แนบรูปภาพใบเสร็จ / สลิป (ถ้ามี)</label>
+                    {{ form.receipt_image }}
+                </div>
+                
+                <hr class="opacity-25 mb-4">
+                
+                <div class="d-flex justify-content-end gap-2">
+                    <a href="{% url 'solar_expense_list' %}" class="btn btn-light rounded-pill px-4 fw-bold">ยกเลิก</a>
+                    <button type="submit" class="btn btn-gold rounded-pill px-5 fw-bold shadow-sm">
+                        <i class="fas fa-paper-plane me-2"></i> ส่งเรื่องเบิกจ่าย
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

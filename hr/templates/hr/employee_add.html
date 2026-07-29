@@ -1,0 +1,318 @@
+{% extends 'core/base.html' %}
+
+{% block content %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+
+<div class="container py-5">
+    
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold mb-0 text-dark"><i class="fas fa-user-plus me-2 text-primary"></i>ลงทะเบียนพนักงานใหม่</h2>
+            <p class="text-muted">กรอกข้อมูลพนักงานแบบ One-Stop Service</p>
+        </div>
+        <a href="{% url 'hr_executive_dashboard' %}" class="btn btn-light rounded-pill border shadow-sm">
+            <i class="fas fa-times me-2"></i>ยกเลิก
+        </a>
+    </div>
+
+    <form method="post" enctype="multipart/form-data" autocomplete="off">
+        {% csrf_token %}
+        
+        {% if form.errors %}
+            <div class="alert alert-danger shadow-sm rounded-3">
+                <i class="fas fa-exclamation-triangle me-2"></i><strong>บันทึกไม่สำเร็จ:</strong> โปรดตรวจสอบข้อมูล: {{ form.errors }}
+            </div>
+        {% endif %}
+
+        <div class="row g-4">
+            
+            <div class="col-lg-4">
+                <div class="card border-0 shadow-sm rounded-4 mb-4">
+                    <div class="card-body text-center p-4">
+                        <div class="bg-light rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 100px; height: 100px;">
+                            {% if form.instance.photo %}
+                                <img src="{{ form.instance.photo.url }}" class="rounded-circle" style="width: 100px; height: 100px; object-fit: cover;">
+                            {% else %}
+                                <i class="fas fa-camera fa-3x text-secondary opacity-25"></i>
+                            {% endif %}
+                        </div>
+                        <h6 class="fw-bold">รูปโปรไฟล์</h6>
+                        <div class="mb-0">{{ form.photo }}</div>
+                    </div>
+                </div>
+
+                <div class="card border-0 shadow-sm rounded-4 mb-4">
+                    <div class="card-body text-center p-4">
+                        <div class="bg-light rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 80px; height: 80px;">
+                            <i class="fas fa-file-signature fa-2x text-secondary opacity-25"></i>
+                        </div>
+                        <h6 class="fw-bold">ลายเซ็นต์ดิจิทัล</h6>
+                        <div class="mb-2">{{ form.signature }}</div>
+                        <small class="text-muted" style="font-size: 0.75rem;">(ไฟล์ .png พื้นหลังใส)</small>
+                    </div>
+                </div>
+
+                <div class="card border-0 shadow-sm rounded-4 bg-primary bg-opacity-10">
+                    <div class="card-header bg-transparent border-0 pt-3 pb-0">
+                         <div class="form-check form-switch">
+                            {{ form.create_user_account }}
+                            <label class="form-check-label fw-bold text-primary" for="id_create_user_account">สร้างบัญชีผู้ใช้งาน (Login)</label>
+                        </div>
+                    </div>
+                    <div class="card-body" id="user-account-section">
+                        <div class="mb-2">
+                            <label class="small fw-bold text-muted">Username</label>
+                            {{ form.username }}
+                        </div>
+                        <div class="mb-2">
+                            <label class="small fw-bold text-muted">Password</label>
+                            {{ form.password }}
+                        </div>
+                        <div class="mb-0">
+                            <label class="small fw-bold text-muted">Email</label>
+                            {{ form.email }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-8">
+                
+                <div class="card border-0 shadow-sm rounded-4 mb-4">
+                    <div class="card-header bg-white py-3">
+                        <h6 class="fw-bold m-0 text-dark">👤 ข้อมูลส่วนตัว</h6>
+                    </div>
+                    <div class="card-body p-4">
+                        <div class="row g-3">
+                            <div class="col-12 mb-2 pb-3 border-bottom">
+                                <label class="form-label fw-bold text-primary">ดึงรหัสพนักงานอัตโนมัติ</label>
+                                <div class="input-group">
+                                    {{ form.emp_id }}
+                                    <button class="btn btn-outline-primary fw-bold px-4" type="button" onclick="generateEmpId()">
+                                        <i class="fas fa-magic me-1"></i> ดึงรหัส
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="col-md-2">
+                                <label class="form-label fw-bold">คำนำหน้า</label>
+                                {{ form.prefix }}
+                            </div>
+                            <div class="col-md-5">
+                                <label class="form-label fw-bold">ชื่อจริง</label>
+                                {{ form.first_name }}
+                            </div>
+                            <div class="col-md-5">
+                                <label class="form-label fw-bold">นามสกุล</label>
+                                {{ form.last_name }}
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold">ชื่อเล่น</label>
+                                {{ form.nickname }}
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold">เพศ</label>
+                                {{ form.gender }}
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold">วันเกิด</label>
+                                {{ form.birth_date }}
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label fw-bold">เลขบัตรประชาชน (ID Card)</label>
+                                {{ form.id_card }}
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label fw-bold">เบอร์โทรศัพท์</label>
+                                {{ form.phone }}
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label fw-bold">ที่อยู่</label>
+                                {{ form.address }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card border-0 shadow-sm rounded-4 mb-4">
+                    <div class="card-header bg-white py-3">
+                        <h6 class="fw-bold m-0 text-success">💼 ข้อมูลการจ้างงาน & สวัสดิการ</h6>
+                    </div>
+                    <div class="card-body p-4">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">ประเภทพนักงาน <span class="text-danger">*</span></label>
+                                {{ form.emp_type }}
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">สถานะภาพ</label>
+                                {{ form.status }}
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">ตำแหน่ง</label>
+                                <div class="input-group">
+                                    {{ form.position }}
+                                    <button class="btn btn-outline-secondary" type="button" data-bs-toggle="modal" data-bs-target="#modalPosition"><i class="fas fa-plus"></i></button>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">แผนก</label>
+                                <div class="input-group">
+                                    {{ form.department }}
+                                    <button class="btn btn-outline-secondary" type="button" data-bs-toggle="modal" data-bs-target="#modalDepartment"><i class="fas fa-plus"></i></button>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">เงินเดือน (บาท)</label>
+                                {{ form.salary }}
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">เริ่มงานวันที่</label>
+                                {{ form.start_date }}
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold text-primary">เลขประกันสังคม</label>
+                                {{ form.social_security_id }}
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold text-primary">เลขบัญชี (สำหรับรับเงินเดือน)</label>
+                                {{ form.bank_account_no }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card border-0 shadow-sm rounded-4 border-start border-4 border-warning">
+                    <div class="card-header bg-warning bg-opacity-10 py-3">
+                        <h6 class="fw-bold m-0 text-dark">🌳 โครงสร้างทีม & ผลตอบแทน (Sales)</h6>
+                    </div>
+                    <div class="card-body p-4">
+                        
+                        <div class="d-none">
+                            {{ form.introducer }}
+                            {{ form.business_rank }}
+                            {{ form.commission_rate }}
+                        </div>
+
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold text-success">สังกัดทีม/กลุ่ม (Sales Group)</label>
+                                {{ form.sales_group }}
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold text-success">บทบาทในทีม (Role)</label>
+                                {{ form.group_role }}
+                            </div>
+                            
+                            <div class="col-12"><hr class="text-muted opacity-25"></div>
+                            
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold">ธนาคาร (รับค่าคอมฯ)</label>
+                                {{ form.bank_name }}
+                            </div>
+                            <div class="col-md-8">
+                                <label class="form-label fw-bold">เลขบัญชี (รับค่าคอมฯ)</label>
+                                {{ form.bank_account }}
+                            </div>
+                        </div>
+
+                        <div class="d-grid mt-4">
+                             <button type="submit" class="btn btn-primary btn-lg rounded-pill shadow fw-bold">
+                                <i class="fas fa-save me-2"></i>บันทึกข้อมูล
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </form>
+</div>
+
+<div class="modal fade" id="modalPosition" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">เพิ่มตำแหน่ง</h5><button class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><input type="text" id="new_position_title" class="form-control" placeholder="ชื่อตำแหน่ง..."></div><div class="modal-footer"><button class="btn btn-primary" onclick="savePosition()">บันทึก</button></div></div></div></div>
+<div class="modal fade" id="modalDepartment" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">เพิ่มแผนก</h5><button class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><input type="text" id="new_dept_name" class="form-control" placeholder="ชื่อแผนก..."></div><div class="modal-footer"><button class="btn btn-primary" onclick="saveDepartment()">บันทึก</button></div></div></div></div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const dateConfig = { dateFormat: "Y-m-d", altInput: true, altFormat: "d/m/Y", allowInput: true };
+        flatpickr("#id_start_date", dateConfig);
+        flatpickr("#id_birth_date", dateConfig);
+        
+        const toggleUser = document.getElementById('id_create_user_account');
+        const userSection = document.getElementById('user-account-section');
+        function updateToggle() {
+            if(toggleUser.checked) {
+                userSection.style.display = 'block';
+                userSection.querySelectorAll('input').forEach(i => i.required = true);
+            } else {
+                userSection.style.display = 'none';
+                userSection.querySelectorAll('input').forEach(i => i.required = false);
+            }
+        }
+        if(toggleUser) {
+            toggleUser.addEventListener('change', updateToggle);
+            updateToggle();
+        }
+
+        const salaryInput = document.getElementById('input_salary');
+        function formatMoney(amount) {
+            if (!amount || amount === '') return '0.00';
+            let num = parseFloat(amount.replace(/,/g, ''));
+            if (isNaN(num)) return '0.00';
+            return num.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        }
+        
+        if (salaryInput) {
+            salaryInput.value = formatMoney(salaryInput.value);
+            salaryInput.addEventListener('focus', function() {
+                let val = this.value.replace(/,/g, ''); 
+                if (val === '0.00' || val === '0') {
+                    this.value = '';
+                } else {
+                    this.value = val;
+                }
+            });
+            salaryInput.addEventListener('blur', function() {
+                if (this.value === '') {
+                    this.value = '0.00';
+                } else {
+                    this.value = formatMoney(this.value);
+                }
+            });
+        }
+    });
+
+    function generateEmpId() {
+        fetch("{% url 'api_generate_emp_id' %}", { 
+            method: "POST", 
+            headers: { 
+                "X-CSRFToken": document.querySelector('[name=csrfmiddlewaretoken]').value, 
+                "Content-Type": "application/x-www-form-urlencoded" 
+            } 
+        })
+        .then(r => r.json())
+        .then(d => { 
+            if(d.status === 'success') { 
+                document.getElementById('id_emp_id').value = d.emp_id; 
+            } 
+        });
+    }
+
+    function savePosition() {
+        const title = document.getElementById('new_position_title').value;
+        if(!title) return alert("กรุณากรอกชื่อตำแหน่ง");
+        fetch("{% url 'api_create_position' %}", { method: "POST", headers: { "X-CSRFToken": document.querySelector('[name=csrfmiddlewaretoken]').value, "Content-Type": "application/x-www-form-urlencoded" }, body: "title=" + encodeURIComponent(title) })
+        .then(r => r.json()).then(d => { if(d.status==='success') { const s = document.getElementById('id_position'); s.add(new Option(d.title, d.id, true, true)); bootstrap.Modal.getInstance(document.getElementById('modalPosition')).hide(); } });
+    }
+    function saveDepartment() {
+        const name = document.getElementById('new_dept_name').value;
+        if(!name) return alert("กรุณากรอกชื่อแผนก");
+        fetch("{% url 'api_create_department' %}", { method: "POST", headers: { "X-CSRFToken": document.querySelector('[name=csrfmiddlewaretoken]').value, "Content-Type": "application/x-www-form-urlencoded" }, body: "name=" + encodeURIComponent(name) })
+        .then(r => r.json()).then(d => { if(d.status==='success') { const s = document.getElementById('id_department'); s.add(new Option(d.name, d.id, true, true)); bootstrap.Modal.getInstance(document.getElementById('modalDepartment')).hide(); } });
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,136 @@
+{% load humanize %}
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ใบรับมอบและส่งมอบสินค้า - {{ order.code }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* 🌟 ตั้งค่าสำหรับหน้าจอและกระดาษ A4 🌟 */
+        @page {
+            size: A4;
+            margin: 10mm 15mm;
+        }
+        body {
+            font-family: 'Sarabun', sans-serif;
+            color: #000;
+            background: #eee;
+            font-size: 16px;
+        }
+        .page-a4 {
+            width: 210mm; min-height: 297mm; background: white;
+            margin: 20px auto; padding: 25mm 20mm; box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+
+        /* 🌟 สไตล์การจัดวางข้อความแบบสัญญา 🌟 */
+        p { margin-bottom: 0.5rem; line-height: 1.8; }
+        .text-indent { text-indent: 3rem; }
+        .line-signature { display: inline-block; width: 220px; border-bottom: 1px dotted #000; }
+
+        @media print {
+            body { background: white; margin: 0; padding: 0; }
+            .page-a4 { box-shadow: none; margin: 0; width: 100%; padding: 20mm 15mm; }
+            .d-print-none { display: none !important; }
+            * { -webkit-print-color-adjust: exact !important; color-adjust: exact !important; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="text-center mt-4 d-print-none">
+        <button onclick="window.print()" class="btn btn-primary btn-lg rounded-pill shadow"><i class="fas fa-print me-2"></i> พิมพ์เอกสาร</button>
+        <button onclick="window.close()" class="btn btn-secondary btn-lg rounded-pill shadow ms-2">ปิดหน้าต่าง</button>
+    </div>
+
+    <div class="page-a4">
+
+        <div class="d-flex justify-content-center align-items-center mb-5" style="padding-top: 10px;">
+
+            <div class="pe-4 text-center" style="width: 30%;">
+                {% if company.logo %}
+                    <img src="{{ company.logo.url }}" alt="Logo" style="max-height: 110px; max-width: 100%; object-fit: contain;">
+                {% else %}
+                    <h2 class="fw-bold mb-0" style="color: #4b8b9b;">NEED<br><span style="font-size: 14px; color:#21a8a2;">HOME & OFFICE</span></h2>
+                {% endif %}
+            </div>
+
+            <div style="border-left: 2px solid #000; height: 120px; margin: 0 10px;"></div>
+
+            <div class="ps-4" style="width: 70%;">
+                <h4 class="fw-bold mb-3" style="font-size: 22px;">{{ company.name|default:"บริษัท นีด ช็อปปิ้ง จำกัด" }}</h4>
+                <p class="mb-1" style="font-size: 15px;">{{ company.address|default:"10/10 หมู่ 10 ตำบลบางพระ อำเภอศรีราชา จังหวัดชลบุรี 20110" }}</p>
+                <p class="mb-1" style="font-size: 15px;">โทร : {{ company.phone|default:"033 166 699" }} &nbsp;&nbsp;&nbsp; Email : {{ company.email|default:"needshopping.acc@gmail.com" }}</p>
+                <p class="mb-0" style="font-size: 15px;">เลขประจำตัวผู้เสียภาษีอากร &nbsp;&nbsp;{{ company.tax_id|default:"0205563029342" }} (สำนักงานใหญ่)</p>
+            </div>
+
+        </div>
+
+        <div class="text-center mb-4">
+            <h5 class="fw-bold text-decoration-underline" style="font-size: 20px;">ใบรับมอบสินค้า และส่งมอบสินค้า</h5>
+        </div>
+
+        <div class="text-end mb-4 me-3">
+            <p>วันที่ &nbsp;&nbsp;&nbsp; {{ order.delivery_date|date:"d / m / Y"|default:".........................................." }}</p>
+        </div>
+
+        <div class="mb-4">
+            <p class="text-indent" style="text-align: justify;">
+                ตามที่ทาง &nbsp;&nbsp;<strong>{{ order.customer_name|default:"................................................................" }}</strong>&nbsp;&nbsp;
+                ได้ตกลงซื้อสินค้าจาก &nbsp;&nbsp;<strong>{{ company.name|default:"บริษัท นีด ช็อปปิ้ง จำกัด" }}</strong>&nbsp;&nbsp;
+                ตามใบเสนอราคา เลขที่ &nbsp;&nbsp;<strong>{{ order.quotation_ref.code|default:".................................." }}</strong>&nbsp;&nbsp;
+                ลงวันที่ &nbsp;&nbsp;<strong>{{ order.quotation_ref.date|date:"d/m/Y"|default:"..........................." }}</strong>&nbsp;&nbsp;
+                จำนวนเงิน &nbsp;&nbsp;<strong>{{ order.quotation_ref.grand_total|floatformat:2|intcomma|default:"..........................." }}</strong> บาท &nbsp;&nbsp;
+                {% if amount_text %}
+                    <span class="fw-bold">( -{{ amount_text }}- )</span>
+                {% else %}
+                    ( ............................................................................................ )
+                {% endif %}
+            </p>
+        </div>
+
+        <div class="mb-5">
+            <p class="text-indent" style="text-align: justify;">
+                บัดนี้ทางบริษัทฯ ได้ดำเนินการส่งสินค้าตามขอบเขต คุณภาพและมาตรฐาน ตามเงื่อนไขอื่นที่กำหนดในใบเสนอราคาเป็นที่เรียบร้อยแล้ว จึงเรียนมายัง "ผู้ซื้อ" เพื่อตรวจรับสินค้าต่อไป
+            </p>
+        </div>
+
+        <div class="text-end mb-5 pe-5">
+            <p class="mb-5 text-start d-inline-block" style="width: 280px;"><strong>ผู้ส่งมอบสินค้า</strong></p>
+            <div class="d-flex justify-content-end align-items-center mb-2">
+                <span class="me-2">ลงชื่อ</span>
+                <span class="line-signature"></span>
+                <span class="ms-2">ผู้ส่งมอบสินค้า</span>
+            </div>
+            <div class="d-flex justify-content-end">
+                <span style="width: 250px; text-align: center; margin-right: 90px;">
+                    ( {{ company.name|default:"บริษัท นีด ช็อปปิ้ง จำกัด" }} )
+                </span>
+            </div>
+        </div>
+
+        <div class="mb-5 mt-5 pt-4">
+            <p class="text-indent" style="text-align: justify;">
+                ข้าพเจ้าในนาม “ผู้ซื้อ” ได้ทำการตรวจสอบสินค้า และยินดีรับมอบสินค้าทั้งหมดตามเงื่อนไขในเอกสารใบเสนอราคาไว้เป็นที่เรียบร้อยแล้ว
+            </p>
+        </div>
+
+        <div class="text-end pe-5">
+            <p class="mb-5 text-start d-inline-block" style="width: 280px;"><strong>ผู้รับมอบสินค้า</strong></p>
+            <div class="d-flex justify-content-end align-items-center mb-2">
+                <span class="me-2">ลงชื่อ</span>
+                <span class="line-signature"></span>
+                <span class="ms-2">ผู้รับมอบสินค้า</span>
+            </div>
+            <div class="d-flex justify-content-end">
+                <span style="width: 250px; text-align: center; margin-right: 90px;">
+                    ( {{ order.customer_name|default:"................................................................" }} )
+                </span>
+            </div>
+        </div>
+
+    </div>
+</body>
+</html>

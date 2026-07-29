@@ -1,0 +1,75 @@
+{% extends 'core/base.html' %}
+
+{% block content %}
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="https://npmcdn.com/flatpickr/dist/l10n/th.js"></script> <div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card border-0 shadow-lg rounded-4">
+                <div class="card-header bg-gradient bg-warning text-white p-4 rounded-top-4 border-0">
+                    <h4 class="mb-0 fw-bold"><i class="fas fa-paper-plane me-2"></i>ยื่นใบลา</h4>
+                    <p class="mb-0 opacity-75 small">กรอกรายละเอียดเพื่อขออนุมัติ</p>
+                </div>
+                <div class="card-body p-4">
+                    <form method="post">
+                        {% csrf_token %}
+                        
+                        {% if form.errors %}
+                            <div class="alert alert-danger">{{ form.errors }}</div>
+                        {% endif %}
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">ประเภทการลา</label>
+                            {{ form.leave_type }}
+                        </div>
+
+                        <div class="row g-2 mb-3">
+                            <div class="col-6">
+                                <label class="form-label fw-bold">ตั้งแต่วันที่</label>
+                                {{ form.start_date }}
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label fw-bold">ถึงวันที่</label>
+                                {{ form.end_date }}
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">เหตุผล</label>
+                            {{ form.reason }}
+                        </div>
+
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-warning text-white btn-lg rounded-pill shadow-sm fw-bold">
+                                ยืนยันการลา
+                            </button>
+                            <a href="{% url 'employee_dashboard' %}" class="btn btn-light rounded-pill text-muted">ยกเลิก</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // ตั้งค่าปฏิทินสำหรับช่อง 'ตั้งแต่วันที่'
+        flatpickr("#id_start_date", {
+            dateFormat: "d/m/Y",  // บังคับรูปแบบ 31/01/2026
+            locale: "th",         // ใช้ภาษาไทย (จันทร์, อังคาร...)
+            allowInput: true      // อนุญาตให้พิมพ์เองได้ด้วย
+        });
+
+        // ตั้งค่าปฏิทินสำหรับช่อง 'ถึงวันที่'
+        flatpickr("#id_end_date", {
+            dateFormat: "d/m/Y",
+            locale: "th",
+            allowInput: true
+        });
+    });
+</script>
+
+{% endblock %}

@@ -1,0 +1,141 @@
+{% extends 'core/base.html' %}
+{% load humanize %}
+
+{% block content %}
+<div class="container-fluid py-4 px-4">
+    <div class="d-flex justify-content-between align-items-end mb-4">
+        <div>
+            <h4 class="fw-bold mb-1 text-dark"><i class="fas fa-store text-info me-2"></i>ทำเนียบร้านค้าต่างประเทศ (Overseas Suppliers)</h4>
+            <p class="text-muted small mb-0">จัดการฐานข้อมูลร้านค้า ผู้ส่งออก และโรงงานผลิตจากต่างประเทศ</p>
+        </div>
+        <div>
+            <button type="button" class="btn btn-info text-white rounded-pill px-4 shadow-sm fw-bold" onclick="openSupplierModal()">
+                <i class="fas fa-plus me-1"></i> เพิ่มร้านค้าใหม่
+            </button>
+            <a href="{% url 'overseas_po_list' %}" class="btn btn-outline-secondary rounded-pill px-4 ms-2 fw-bold"><i class="fas fa-arrow-left me-2"></i> กลับหน้าตารางนำเข้า</a>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm rounded-4 overflow-hidden bg-white mb-4">
+        <div class="table-responsive">
+            <table class="table table-hover text-center mb-0 align-middle">
+                <thead class="bg-light">
+                    <tr>
+                        <th width="5%">ID</th>
+                        <th width="25%" class="text-start">ชื่อร้านค้า (Supplier Name)</th>
+                        <th width="15%">ประเทศ (Country)</th>
+                        <th width="15%">ชื่อผู้ติดต่อ (Contact)</th>
+                        <th width="15%">เบอร์โทร / WeChat</th>
+                        <th width="15%">อีเมล (Email)</th>
+                        <th width="10%">จัดการ</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for sup in suppliers %}
+                    <tr>
+                        <td class="text-muted">{{ sup.id }}</td>
+                        <td class="text-start fw-bold text-dark">{{ sup.name }}</td>
+                        <td>
+                            {% if sup.country %}
+                                <span class="badge bg-secondary rounded-pill px-3">{{ sup.country }}</span>
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ sup.contact_name|default:"-" }}</td>
+                        <td>{{ sup.phone|default:"-" }}</td>
+                        <td>{{ sup.email|default:"-" }}</td>
+                        <td>
+                            <div class="d-flex justify-content-center gap-2">
+                                <button type="button" class="btn btn-sm btn-light text-primary border shadow-sm" onclick='editSupplierModal({{ sup.id }}, "{{ sup.name|escapejs }}", "{{ sup.country|escapejs }}", "{{ sup.contact_name|escapejs }}", "{{ sup.phone|escapejs }}", "{{ sup.email|escapejs }}", "{{ sup.note|escapejs }}")'><i class="fas fa-pen"></i></button>
+                                <a href="{% url 'overseas_supplier_delete' sup.id %}" class="btn btn-sm btn-light text-danger border shadow-sm" onclick="return confirm('ยืนยันการลบร้านค้านี้?')"><i class="fas fa-trash"></i></a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="py-5 text-muted">
+                            <i class="fas fa-store-slash fa-3x mb-3 text-light"></i><br>
+                            <span class="fs-5">-- ยังไม่มีฐานข้อมูลร้านค้าต่างประเทศ --</span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="supplierModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <form method="post" action="{% url 'overseas_supplier_save' %}">
+            {% csrf_token %}
+            <input type="hidden" name="supplier_id" id="modal_sup_id">
+            <div class="modal-content rounded-4 border-0 shadow-lg">
+                <div class="modal-header bg-info text-white border-0 py-3 px-4">
+                    <h5 class="modal-title fw-bold" id="supModalTitle"><i class="fas fa-store me-2"></i> บันทึกข้อมูลร้านค้าต่างประเทศ</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4 bg-light">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold text-dark">ชื่อร้านค้า (Supplier Name) <span class="text-danger">*</span></label>
+                        <input type="text" name="name" id="modal_sup_name" class="form-control" required placeholder="เช่น QINGDAO HONOR BUILDING...">
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold text-dark">ประเทศ (Country)</label>
+                            <input type="text" name="country" id="modal_sup_country" class="form-control" placeholder="เช่น China">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold text-dark">ชื่อผู้ติดต่อ (Contact Person)</label>
+                            <input type="text" name="contact_name" id="modal_sup_contact" class="form-control">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold text-dark">เบอร์โทร / WeChat / WhatsApp</label>
+                            <input type="text" name="phone" id="modal_sup_phone" class="form-control">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold text-dark">อีเมล (Email)</label>
+                            <input type="email" name="email" id="modal_sup_email" class="form-control">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold text-dark">ที่อยู่ / หมายเหตุ (Address & Notes)</label>
+                        <textarea name="note" id="modal_sup_note" class="form-control" rows="3" placeholder="กรอกที่อยู่บริษัทแบบเต็ม หรือหมายเหตุเพิ่มเติม..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 py-3 px-4 bg-white">
+                    <button type="button" class="btn btn-light rounded-pill px-4 border" data-bs-dismiss="modal">ยกเลิก</button>
+                    <button type="submit" class="btn btn-info text-white rounded-pill px-4 fw-bold shadow-sm">บันทึกข้อมูล</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    function openSupplierModal() {
+        document.getElementById('supModalTitle').innerHTML = '<i class="fas fa-plus-circle me-2"></i> เพิ่มร้านค้าใหม่';
+        document.getElementById('modal_sup_id').value = '';
+        document.getElementById('modal_sup_name').value = '';
+        document.getElementById('modal_sup_country').value = '';
+        document.getElementById('modal_sup_contact').value = '';
+        document.getElementById('modal_sup_phone').value = '';
+        document.getElementById('modal_sup_email').value = '';
+        document.getElementById('modal_sup_note').value = '';
+        new bootstrap.Modal(document.getElementById('supplierModal')).show();
+    }
+
+    function editSupplierModal(id, name, country, contact, phone, email, note) {
+        document.getElementById('supModalTitle').innerHTML = '<i class="fas fa-edit me-2"></i> แก้ไขข้อมูลร้านค้า';
+        document.getElementById('modal_sup_id').value = id;
+        document.getElementById('modal_sup_name').value = name;
+        document.getElementById('modal_sup_country').value = country;
+        document.getElementById('modal_sup_contact').value = contact;
+        document.getElementById('modal_sup_phone').value = phone;
+        document.getElementById('modal_sup_email').value = email;
+        document.getElementById('modal_sup_note').value = note;
+        new bootstrap.Modal(document.getElementById('supplierModal')).show();
+    }
+</script>
+{% endblock %}

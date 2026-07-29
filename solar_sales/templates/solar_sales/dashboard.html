@@ -1,0 +1,110 @@
+{% extends 'core/base.html' %}
+{% load humanize %}
+
+{% block content %}
+<style>
+    .stat-card {
+        background: white; border-radius: 16px; padding: 25px;
+        border: 1px solid #f1f2f6; box-shadow: 0 10px 20px rgba(0,0,0,0.02);
+        transition: all 0.3s; height: 100%; position: relative; overflow: hidden;
+    }
+    .stat-card:hover { transform: translateY(-5px); box-shadow: 0 15px 30px rgba(212, 175, 55, 0.1); border-color: #e6c884; }
+    .stat-icon-bg { position: absolute; right: -10px; bottom: -10px; font-size: 5rem; opacity: 0.05; transform: rotate(-15deg); }
+    .text-gold { color: #c5a059 !important; }
+    
+    /* 🌟 เพิ่ม Custom CSS สำหรับป้าย Badge เพื่อให้อ่านง่ายและสีคมชัด */
+    .badge-soft-success { background-color: #e6f4ea !important; color: #137333 !important; border: 1px solid #ceead6; }
+    .badge-soft-danger { background-color: #fce8e6 !important; color: #c5221f !important; border: 1px solid #fad2cf; }
+    .badge-soft-warning { background-color: #fef7e0 !important; color: #b06000 !important; border: 1px solid #feefc3; }
+    .badge-soft-primary { background-color: #e8f0fe !important; color: #1a73e8 !important; border: 1px solid #d2e3fc; }
+</style>
+
+<div class="container-fluid py-4 px-4">
+    <div class="d-flex justify-content-between align-items-end mb-4">
+        <div>
+            <h4 class="fw-bold mb-1 text-dark"><i class="fas fa-chart-pie text-warning me-2"></i>ภาพรวมฝ่ายขาย (Solar Sales Dashboard)</h4>
+            <p class="text-muted small mb-0">ข้อมูลสรุปยอดขายและลูกหนี้การค้า แผนกโซล่าเซลล์</p>
+        </div>
+        <div><span class="badge bg-white text-dark border px-3 py-2 rounded-pill shadow-sm">📅 {% now "d/m/Y" %}</span></div>
+    </div>
+
+    <!-- แถวการ์ดสรุปยอด -->
+    <div class="row g-4 mb-4">
+        <div class="col-md-3 col-sm-6">
+            <div class="stat-card">
+                <div class="small text-muted fw-bold text-uppercase mb-1">ยอดขายรวม (เก็บเงินแล้ว)</div>
+                <h2 class="fw-bold text-success mb-2">฿{{ total_sales|floatformat:2|intcomma }}</h2>
+                <span class="badge badge-soft-success rounded-pill px-3 py-1">Total Revenue</span>
+                <i class="fas fa-coins stat-icon-bg text-success"></i>
+            </div>
+        </div>
+        
+        <div class="col-md-3 col-sm-6">
+            <div class="stat-card">
+                <div class="small text-muted fw-bold text-uppercase mb-1">ยอดค้างชำระ (ลูกหนี้)</div>
+                <h2 class="fw-bold text-danger mb-2">฿{{ pending_balance|floatformat:2|intcomma }}</h2>
+                <span class="badge badge-soft-danger rounded-pill px-3 py-1">Pending Balance</span>
+                <i class="fas fa-hand-holding-usd stat-icon-bg text-danger"></i>
+            </div>
+        </div>
+
+        <div class="col-md-3 col-sm-6">
+            <div class="stat-card">
+                <div class="small text-muted fw-bold text-uppercase mb-1">เสนอราคา (รออนุมัติ)</div>
+                <h2 class="fw-bold text-warning mb-2">{{ draft_qt_count }} <span class="fs-6 text-muted">รายการ</span></h2>
+                <span class="badge badge-soft-warning rounded-pill px-3 py-1">Draft Quotations</span>
+                <i class="fas fa-file-signature stat-icon-bg text-warning"></i>
+            </div>
+        </div>
+
+        <div class="col-md-3 col-sm-6">
+            <div class="stat-card">
+                <div class="small text-muted fw-bold text-uppercase mb-1">บิลแจ้งหนี้ (รอรับเงิน)</div>
+                <h2 class="fw-bold text-primary mb-2">{{ unpaid_inv_count }} <span class="fs-6 text-muted">รายการ</span></h2>
+                <span class="badge badge-soft-primary rounded-pill px-3 py-1">Unpaid Invoices</span>
+                <i class="fas fa-file-invoice-dollar stat-icon-bg text-primary"></i>
+            </div>
+        </div>
+    </div>
+
+    <!-- ตารางความเคลื่อนไหวล่าสุด -->
+    <div class="card border-0 shadow-sm rounded-4 bg-white mt-2">
+        <div class="card-header bg-white py-3 border-bottom-0 d-flex justify-content-between align-items-center">
+            <h6 class="fw-bold mb-0 text-dark"><i class="fas fa-history text-muted me-2"></i>บิลเรียกเก็บเงินล่าสุด</h6>
+            <a href="{% url 'solar_invoice_list' %}" class="btn btn-sm btn-outline-secondary rounded-pill px-3">ดูทั้งหมด</a>
+        </div>
+        <div class="card-body pt-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="bg-light text-secondary small">
+                        <tr>
+                            <th class="border-0">เลขที่บิล / วันที่</th>
+                            <th class="border-0">ลูกค้า</th>
+                            <th class="border-0 text-end">ยอดสุทธิ</th>
+                            <th class="border-0 text-center">สถานะ</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for inv in recent_invoices %}
+                        <tr>
+                            <td>
+                                <div class="fw-bold text-dark">{{ inv.code }}</div>
+                                <div class="small text-muted">{{ inv.date|date:"d/m/Y" }}</div>
+                            </td>
+                            <td class="fw-bold text-secondary">{{ inv.customer.name|default:"-" }}</td>
+                            <td class="text-end fw-bold text-gold">฿{{ inv.grand_total|floatformat:2|intcomma }}</td>
+                            <td class="text-center">
+                                {% if inv.status == 'UNPAID' %}<span class="badge badge-soft-danger rounded-pill px-3">ค้างชำระ</span>
+                                {% else %}<span class="badge badge-soft-success rounded-pill px-3">ชำระแล้ว</span>{% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="4" class="text-center py-4 text-muted">ไม่มีความเคลื่อนไหว</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

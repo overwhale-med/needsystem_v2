@@ -1,0 +1,53 @@
+{% extends 'core/base.html' %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card border-0 shadow-lg rounded-4 overflow-hidden">
+                <div class="card-header bg-primary text-white p-4 border-0">
+                    <h4 class="mb-0 fw-bold"><i class="fas fa-file-image me-2"></i> ระบบจับคู่รูปภาพวัตถุดิบอัตโนมัติ (Bulk Image Upload)</h4>
+                </div>
+                <div class="card-body p-5 bg-light">
+                    
+                    <div class="alert alert-info rounded-3 mb-4 border-info">
+                        <h6 class="fw-bold"><i class="fas fa-lightbulb me-1"></i> วิธีการใช้งาน:</h6>
+                        <ol class="mb-0 text-dark small">
+                            <li>สร้างไฟล์ Excel ให้มี 2 คอลัมน์คือ <b>SKU</b> (รหัสวัตถุดิบ) และ <b>Filename</b> (ชื่อไฟล์รูปภาพพร้อมนามสกุล)</li>
+                            <li>ตัวอย่าง: SKU <code>RM-001</code> คู่กับ Filename <code>img(1).jpg</code></li>
+                            <li>ในช่องเลือกรูปภาพ <b>ให้ลากคลุมเลือกรูปภาพทั้งหมด</b> ที่มีชื่อตรงกับใน Excel</li>
+                        </ol>
+                    </div>
+
+                    <form method="POST" enctype="multipart/form-data" class="bg-white p-4 rounded-4 shadow-sm border">
+                        {% csrf_token %}
+                        
+                        <div class="mb-4">
+                            <label class="form-label fw-bold text-dark"><i class="fas fa-file-excel text-success me-2"></i> 1. อัปโหลดไฟล์ Excel (.xlsx)</label>
+                            <input type="file" name="excel_file" class="form-control form-control-lg border-success" accept=".xlsx, .xls" required>
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label fw-bold text-dark"><i class="fas fa-images text-warning me-2"></i> 2. อัปโหลดไฟล์รูปภาพ (เลือกได้หลายรูปพร้อมกัน)</label>
+                            <input type="file" name="image_files" class="form-control form-control-lg border-warning" accept="image/*" multiple required>
+                            <div class="form-text text-muted small mt-2">
+                                * คลิกที่ปุ่ม Browse แล้วกด <kbd>Ctrl + A</kbd> เพื่อเลือกรูปภาพทั้งหมดในโฟลเดอร์ได้เลยค่ะ
+                            </div>
+                        </div>
+
+                        <hr class="my-4">
+                        
+                        <div class="text-end">
+                            <a href="{% url 'dashboard' %}" class="btn btn-secondary rounded-pill px-4 me-2">ยกเลิก</a>
+                            <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm" onclick="return confirm('ระบบกำลังจะเริ่มจับคู่รูปภาพ อาจใช้เวลาสักครู่... ยืนยันใช่ไหมคะ?');">
+                                <i class="fas fa-cloud-upload-alt me-2"></i> เริ่มจับคู่และอัปโหลดเข้าฐานข้อมูล
+                            </button>
+                        </div>
+                    </form>
+
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

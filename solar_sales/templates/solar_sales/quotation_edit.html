@@ -1,0 +1,384 @@
+{% extends 'core/base.html' %}
+{% load humanize %}
+
+{% block content %}
+<div class="container-xxl py-4 px-4">
+
+    <!-- 🌟 ส่วนหัวและปุ่มจัดการ -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="fw-bold text-dark mb-1" style="font-size: 1.5rem;">
+                <i class="fas fa-edit text-primary me-2"></i>{% if qt.status != 'DRAFT' and qt.status != 'PENDING' %}รายละเอียดใบเสนอราคา{% else %}แก้ไขใบเสนอราคา{% endif %}
+            </h4>
+            <div class="text-muted" style="font-size: 0.9rem;">
+                เลขที่: <span class="text-danger fw-bold">{{ qt.code }}</span> | วันที่: {{ qt.date|date:"d/m/Y" }}
+            </div>
+        </div>
+        <div>
+            <a href="{% url 'solar_quotation_list' %}" class="btn btn-light border shadow-sm rounded-pill px-3 btn-sm fw-bold"><i class="fas fa-chevron-left me-1"></i> กลับ</a>
+            
+            <!-- 🌟 ปุ่มอนุมัติ (จะแสดงเมื่อสถานะเป็น DRAFT หรือรออนุมัติ) -->
+            {% if qt.status == 'DRAFT' or qt.status == 'PENDING' %}
+            <a href="{% url 'solar_quotation_approve' qt.id %}" class="btn btn-success shadow-sm rounded-pill px-4 ms-2 btn-sm fw-bold" onclick="return confirm('ยืนยันการอนุมัติใบเสนอราคา {{ qt.code }} ใช่หรือไม่?');">
+                <i class="fas fa-check-circle me-1"></i> อนุมัติเอกสาร
+            </a>
+            {% endif %}
+
+            <!-- 🌟 ปุ่มส่งงานเข้า Center (จะแสดงเมื่อเอกสารอนุมัติแล้วเท่านั้น) -->
+            {% if qt.status == 'APPROVED' %}
+            <a href="{% url 'solar_quotation_send_to_center' qt.id %}" class="btn btn-warning shadow-sm rounded-pill px-4 ms-2 btn-sm fw-bold text-dark" onclick="return confirm('ยืนยันการส่งงาน {{ qt.code }} เข้า Center เพื่อเริ่มงานใช่หรือไม่?');">
+                <i class="fas fa-paper-plane me-1"></i> ส่งงานเข้า Center
+            </a>
+            {% endif %}
+
+            {% if qt.status != 'CANCELLED' %}
+            <a href="{% url 'solar_quotation_print' qt.id %}" target="_blank" class="btn btn-primary shadow-sm rounded-pill px-4 ms-2 btn-sm fw-bold"><i class="fas fa-print me-1"></i> พิมพ์ / ตัวอย่าง</a>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="row g-3">
+        <!-- 🌟 ฝั่งซ้าย: ข้อมูลลูกค้า -->
+        <div class="col-lg-4">
+            <div class="card shadow-sm border-0 rounded-3 h-100">
+                <div class="card-header bg-white py-3 border-bottom">
+                    <h6 class="m-0 fw-bold text-primary"><i class="fas fa-address-card me-2"></i>ข้อมูลลูกค้า</h6>
+                </div>
+                <div class="card-body bg-light bg-opacity-10 p-3">
+                    <div class="mb-2">
+                        <label class="text-muted fw-bold custom-label small">ชื่อลูกค้า / บริษัท</label>
+                        <input type="text" class="form-control custom-input bg-white" value="{{ qt.customer_name }}" readonly>
+                    </div>
+                    <div class="mb-2">
+                        <label class="text-muted fw-bold custom-label small">เบอร์โทรศัพท์</label>
+                        <input type="text" class="form-control custom-input bg-white" value="{{ qt.customer_phone|default:'-' }}" readonly>
+                    </div>
+                    <div class="mb-2">
+                        <label class="text-muted fw-bold custom-label small">ที่อยู่</label>
+                        <textarea class="form-control custom-input bg-white" rows="3" readonly>{{ qt.customer_address }}</textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 🌟 ฝั่งขวา: รายการสินค้าและสรุปยอด -->
+        <div class="col-lg-8">
+            
+            {% if qt.status == 'DRAFT' or qt.status == 'PENDING' %}
+            <div class="d-flex justify-content-center gap-3 mb-4">
+                <button type="button" class="btn btn-outline-primary rounded-pill px-4 py-2 fw-bold shadow-sm border-2" onclick="$('#box-main-product').slideDown(); $('#box-upsale').slideUp();">
+                    <i class="fas fa-solar-panel me-2"></i>+ เพิ่มแพ็กเกจ (FG)
+                </button>
+                <button type="button" class="btn btn-outline-warning text-dark rounded-pill px-4 py-2 fw-bold shadow-sm border-2" onclick="$('#box-upsale').slideDown(); $('#box-main-product').slideUp();">
+                    <i class="fas fa-tools me-2"></i>+ เพิ่มอุปกรณ์เสริม (RM)
+                </button>
+            </div>
+
+            <!-- กล่องเพิ่ม FG -->
+            <div id="box-main-product" class="card border-primary border-2 border-bottom-0 border-end-0 border-start-0 shadow-sm mb-4" style="display: none;">
+                <div class="card-body p-4 bg-light"> 
+                    <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom border-secondary border-opacity-25">
+                        <h6 class="fw-bold text-dark m-0"><span class="badge bg-primary me-2"><i class="fas fa-solar-panel"></i></span> เลือกแพ็กเกจโซล่า (FG)</h6>
+                        <button type="button" class="btn-close" onclick="$('#box-main-product').slideUp();"></button>
+                    </div>
+                    <form method="post" autocomplete="off" class="smart-form">
+                        {% csrf_token %}
+                        <input type="hidden" name="add_item" value="true">
+                        <div class="row g-2 mb-3">
+                            <div class="col-md-12">
+                                <label class="text-dark fw-bold small mb-1">เลือกสินค้า</label> 
+                                <select id="product_selector" name="product_id" class="form-select form-select-sm select2">
+                                    <option value="">-- ค้นหาแพ็กเกจ --</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="row g-2 align-items-end">
+                            <div class="col-md-5"> 
+                                <label class="text-dark fw-bold small mb-1">ชื่อที่จะโชว์ในบิล *</label> 
+                                <input type="text" name="item_name" id="input_name" class="form-control form-control-sm border-dark border-opacity-25" required autocomplete="off">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="text-dark fw-bold small mb-1">ราคา/หน่วย</label> 
+                                <input type="text" name="price" id="input_price" class="form-control form-control-sm text-end number-format border-dark border-opacity-25" required autocomplete="off">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="text-dark fw-bold small mb-1">จำนวน</label> 
+                                <input type="text" name="quantity" class="form-control form-control-sm text-center number-only border-dark border-opacity-25" value="1" required autocomplete="off">
+                            </div>
+                            <div class="col-md-2"> 
+                                <button type="submit" class="btn btn-dark text-white btn-sm w-100 fw-bold shadow-sm"><i class="fas fa-check me-1"></i> บันทึก</button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- กล่องเพิ่ม RM -->
+            <div id="box-upsale" class="card border-warning border-2 border-bottom-0 border-end-0 border-start-0 shadow-sm mb-4" style="display: none;">
+                <div class="card-body p-4 bg-light"> 
+                    <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom border-secondary border-opacity-25">
+                        <h6 class="fw-bold text-dark m-0"><span class="badge bg-warning text-dark me-2"><i class="fas fa-tools"></i></span> เลือกอุปกรณ์เสริม (RM)</h6>
+                        <button type="button" class="btn-close" onclick="$('#box-upsale').slideUp();"></button>
+                    </div>
+                    <form method="post" autocomplete="off" class="smart-form">
+                        {% csrf_token %}
+                        <input type="hidden" name="add_upsale" value="true">
+                        <div class="row g-2 mb-3">
+                            <div class="col-md-12">
+                                <label class="text-dark fw-bold small mb-1">เลือกอุปกรณ์</label> 
+                                <select id="upsale_selector" name="upsale_product_id" class="form-select form-select-sm select2">
+                                    <option value="">-- ค้นหาอุปกรณ์ --</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="row g-2 align-items-end">
+                            <div class="col-md-5"> 
+                                <label class="text-dark fw-bold small mb-1">ชื่อที่จะโชว์ในบิล *</label> 
+                                <input type="text" name="upsale_desc" id="input_upsale_desc" class="form-control form-control-sm border-dark border-opacity-25" required autocomplete="off">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="text-dark fw-bold small mb-1">ราคา/หน่วย</label> 
+                                <input type="text" name="upsale_price" id="input_upsale_price" class="form-control form-control-sm text-end number-format border-dark border-opacity-25" required autocomplete="off">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="text-dark fw-bold small mb-1">จำนวน</label> 
+                                <input type="text" name="upsale_qty" class="form-control form-control-sm text-center number-only border-dark border-opacity-25" value="1" required autocomplete="off">
+                            </div>
+                            <div class="col-md-2"> 
+                                <button type="submit" class="btn btn-dark text-white btn-sm w-100 fw-bold shadow-sm"><i class="fas fa-check me-1"></i> บันทึก</button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- 🌟 ตารางรายการสินค้า -->
+            <div class="card shadow-sm border-0 rounded-3">
+                <div class="card-header py-3 bg-white">
+                    <h6 class="m-0 fw-bold text-dark"><i class="fas fa-list me-2"></i>รายการในใบเสนอราคา</h6>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="bg-light text-secondary small text-uppercase">
+                            <tr>
+                                <th class="ps-4 text-center" style="width: 5%;">ลำดับ</th>
+                                <th style="width: 15%;">รหัสสินค้า</th>
+                                <th style="width: 30%;">สินค้า / รายการ</th>
+                                <th class="text-center" style="width: 10%;">จำนวน</th>
+                                <th class="text-end" style="width: 15%;">ราคา/หน่วย</th>
+                                <th class="text-end pe-4" style="width: 15%;">รวมเงิน</th>
+                                {% if qt.status == 'DRAFT' or qt.status == 'PENDING' %}<th style="width: 10%;" class="text-center">ลบ</th>{% endif %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in qt.items.all %}
+                            <tr class="{% if item.product.product_type == 'RM' %}bg-warning bg-opacity-10{% endif %}">
+                                <td class="ps-4 text-center fw-bold text-muted">{{ forloop.counter }}</td>
+                                <td class="text-secondary fw-bold">{{ item.product.code|default:"-" }}</td>
+                                <td class="fw-bold {% if item.product.product_type == 'RM' %}text-dark{% else %}text-primary{% endif %}">{{ item.item_name }}</td>
+                                <td class="text-center"><span class="badge bg-light text-dark border px-3">{{ item.quantity|floatformat:0 }}</span></td>
+                                <td class="text-end">{{ item.unit_price|floatformat:2|intcomma }}</td>
+                                <td class="text-end pe-4 fw-bold {% if item.product.product_type == 'RM' %}text-dark{% else %}text-primary{% endif %}">{{ item.amount|floatformat:2|intcomma }}</td>
+                                {% if qt.status == 'DRAFT' or qt.status == 'PENDING' %}
+                                <td class="text-center">
+                                    <a href="{% url 'solar_delete_item' item.id %}" class="text-danger" onclick="return confirm('ลบสินค้านี้?')"><i class="fas fa-trash-alt"></i></a>
+                                </td>
+                                {% endif %}
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="{% if qt.status == 'DRAFT' or qt.status == 'PENDING' %}7{% else %}6{% endif %}" class="text-center py-5">
+                                    <i class="fas fa-shopping-basket fa-2x mb-3 text-muted opacity-25"></i>
+                                    <p class="small mb-0 text-muted">ยังไม่มีรายการสินค้า</p>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- 🌟 สรุปยอดและหมายเหตุ -->
+                <div class="card-footer bg-white p-3 border-top">
+                    <form method="post" autocomplete="off" class="smart-form">
+                        {% csrf_token %}
+                        <div class="row">
+                            <div class="col-lg-7 border-end pe-lg-4 pb-3 pb-lg-0">
+                                <label class="text-primary fw-bold small mb-1"><i class="fas fa-file-invoice-dollar me-1"></i> เงื่อนไขการชำระเงิน (Payment Terms):</label>
+                                <textarea name="payment_terms" class="form-control form-control-sm mb-3" rows="3" {% if qt.status != 'DRAFT' and qt.status != 'PENDING' %}readonly{% endif %}>{{ qt.payment_terms|default:"- ชำระเงินมัดจำ 50% ของยอดรวมเพื่อยืนยันการสั่งซื้อ\n- ส่วนที่เหลือชำระก่อนการติดตั้ง" }}</textarea>
+                                
+                                <label class="text-primary fw-bold small mb-1"><i class="fas fa-pen me-1"></i> หมายเหตุ / เงื่อนไข (Note):</label>
+                                <textarea name="note" class="form-control form-control-sm mb-2" rows="2" {% if qt.status != 'DRAFT' and qt.status != 'PENDING' %}readonly{% endif %}>{{ qt.note|default:"-ไม่มี-" }}</textarea>
+                                
+                                <label class="text-primary fw-bold small mb-1 mt-2"><i class="fas fa-percent me-1"></i> การคิดภาษี (VAT):</label>
+                                <select name="vat_type" id="vat_type" class="form-select form-select-sm mb-2" {% if qt.status != 'DRAFT' and qt.status != 'PENDING' %}disabled{% endif %}>
+                                    <option value="NONE" {% if qt.vat_type == 'NONE' %}selected{% endif %}>ไม่มี VAT</option>
+                                    <option value="EXCLUDE" {% if qt.vat_type == 'EXCLUDE' %}selected{% endif %}>แยก VAT 7%</option>
+                                    <option value="INCLUDE" {% if qt.vat_type == 'INCLUDE' %}selected{% endif %}>รวม VAT 7% แล้ว</option>
+                                </select>
+                                
+                                {% if qt.status == 'DRAFT' or qt.status == 'PENDING' %}
+                                <button type="submit" name="update_info" class="btn btn-outline-primary btn-sm shadow-sm rounded-pill px-3 mt-2">
+                                    <i class="fas fa-sync-alt me-1"></i> บันทึกหมายเหตุ/เงื่อนไข
+                                </button>
+                                {% endif %}
+                            </div>
+
+                            <div class="col-lg-5 ps-lg-4 d-flex flex-column justify-content-center">
+                                <table class="table table-sm table-borderless mb-0">
+                                    <tr class="border-bottom">
+                                        <td class="text-end text-muted align-middle pb-2">รวมราคาสินค้า:</td>
+                                        <td class="text-end pb-2 fw-bold text-dark">{{ item_total|floatformat:2|intcomma }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="text-end text-muted align-middle pt-2">หักส่วนลด:</td>
+                                        <td class="pt-2 text-end">
+                                            <input type="text" name="discount" id="live_discount" value="{% if qt.discount > 0 %}{{ qt.discount }}{% endif %}" class="form-control form-control-sm text-end d-inline-block text-danger number-format" style="width: 110px;" placeholder="0.00" autocomplete="off" {% if qt.status != 'DRAFT' and qt.status != 'PENDING' %}readonly{% endif %}>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td class="text-end text-muted align-middle">ค่าสำรวจหน้างาน/จัดส่ง:</td>
+                                        <td class="text-end">
+                                            <input type="text" name="survey_fee" id="live_survey" value="{% if qt.survey_fee > 0 %}{{ qt.survey_fee }}{% endif %}" class="form-control form-control-sm text-end d-inline-block number-format fw-bold text-success" style="width: 110px;" placeholder="0.00" autocomplete="off" {% if qt.status != 'DRAFT' and qt.status != 'PENDING' %}readonly{% endif %}>
+                                        </td>
+                                    </tr>
+                                    <tr class="border-top">
+                                        <td class="text-end text-muted small pt-2">ราคาก่อนภาษี (Subtotal):</td>
+                                        <td class="text-end fw-bold small pt-2" id="live_subtotal">{{ qt.subtotal|floatformat:2|intcomma }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="text-end text-muted small">VAT 7%:</td>
+                                        <td class="text-end text-danger small" id="live_tax">{{ qt.tax_amount|floatformat:2|intcomma }}</td>
+                                    </tr>
+                                    <tr class="border-top border-dark border-2">
+                                        <td class="text-end align-middle pt-2"><span class="fw-bold text-dark fs-6">ยอดรวมสุทธิ:</span></td>
+                                        <td class="text-end pt-2"><span class="fw-bold text-dark fs-5" id="live_grand_total">฿{{ qt.grand_total|floatformat:2|intcomma }}</span></td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+
+                        {% if qt.status == 'DRAFT' %}
+                        <div class="mt-4 pt-3 border-top text-end">
+                            <button type="submit" name="finish_quote" class="btn btn-success btn-lg shadow rounded-pill px-5 fw-bold" onclick="return confirm('ยืนยันสร้างใบเสนอราคานี้ เสร็จสมบูรณ์ใช่หรือไม่?');">
+                                <i class="fas fa-check-circle me-2"></i> สร้างใบเสนอราคา (เสร็จสิ้น)
+                            </button>
+                        </div>
+                        {% endif %}
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 🌟 Scripts (Select2 + Live Calculation) -->
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<link href="https://cdn.jsdelivr.net/npm/@ttskch/select2-bootstrap4-theme@x.x.x/dist/select2-bootstrap4.min.css" rel="stylesheet">
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+<script>
+    $(document).ready(function() {
+        $('.select2').select2({ theme: 'bootstrap4', width: '100%' });
+        
+        // 1. โหลดข้อมูลเข้า Dropdown
+        const products = {{ products_json|safe }};
+        products.forEach(p => $('#product_selector').append(`<option value="${p.id}" data-name="${p.name}" data-price="${p.sell_price}">${p.code} : ${p.name}</option>`));
+        
+        const accessories = {{ upsales_json|safe }};
+        accessories.forEach(a => $('#upsale_selector').append(`<option value="${a.id}" data-name="${a.name}" data-price="${a.sell_price}">${a.code} : ${a.name}</option>`));
+
+        // 2. จับ Event เมื่อเลือกสินค้า ให้กรอกชื่อและราคาลงช่องอัตโนมัติ
+        $('#product_selector').change(function() {
+            var opt = $(this).find(':selected');
+            if(opt.val()) {
+                $('#input_name').val(opt.data('name'));
+                $('#input_price').val(formatNumber(opt.data('price')));
+            } else {
+                $('#input_name, #input_price').val('');
+            }
+        });
+
+        $('#upsale_selector').change(function() {
+            var opt = $(this).find(':selected');
+            if(opt.val()) {
+                $('#input_upsale_desc').val(opt.data('name'));
+                $('#input_upsale_price').val(formatNumber(opt.data('price')));
+            } else {
+                $('#input_upsale_desc, #input_upsale_price').val('');
+            }
+        });
+
+        // 3. ฟังก์ชันจัดรูปแบบตัวเลข (มีลูกน้ำ)
+        function formatNumber(num) {
+            if (!num || isNaN(num)) return '';
+            return parseFloat(num).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        }
+        function unformatNumber(str) {
+            if (!str) return 0;
+            return parseFloat(str.toString().replace(/,/g, '')) || 0;
+        }
+
+        $('.number-format').on('blur', function() {
+            let val = unformatNumber(this.value);
+            if (val === 0 && !$(this).prop('required')) { this.value = ''; } 
+            else { this.value = formatNumber(val); }
+        }).on('focus', function() {
+            let val = unformatNumber(this.value);
+            this.value = val === 0 ? '' : val;
+        }).on('input', function() {
+            this.value = this.value.replace(/[^0-9.]/g, '');
+            calculateLiveTotals();
+        });
+        $('.number-only').on('input', function() { this.value = this.value.replace(/[^0-9]/g, ''); });
+        
+        $('.number-format').each(function() {
+            if (this.value && this.value !== '0.00') { this.value = formatNumber(unformatNumber(this.value)); } 
+        });
+
+        // 4. คำนวณยอดรวมสดๆ หน้าเว็บ
+        const baseItemTotal = {{ item_total|default:0 }};
+        function calculateLiveTotals() {
+            let survey = unformatNumber($('#live_survey').val());
+            let discount = unformatNumber($('#live_discount').val());
+            let vatType = $('#vat_type').val();
+            
+            let totalBeforeVat = (baseItemTotal + survey) - discount;
+            if (totalBeforeVat < 0) totalBeforeVat = 0;
+
+            let subtotal = 0;
+            let taxAmount = 0;
+            let grandTotal = 0;
+
+            if (vatType === 'EXCLUDE') {
+                taxAmount = totalBeforeVat * 0.07;
+                grandTotal = totalBeforeVat + taxAmount;
+                subtotal = totalBeforeVat;
+            } else if (vatType === 'INCLUDE') {
+                grandTotal = totalBeforeVat;
+                subtotal = totalBeforeVat / 1.07;
+                taxAmount = totalBeforeVat - subtotal;
+            } else {
+                grandTotal = totalBeforeVat;
+                subtotal = totalBeforeVat;
+                taxAmount = 0;
+            }
+            
+            $('#live_subtotal').text(formatNumber(subtotal));
+            $('#live_tax').text(formatNumber(taxAmount));
+            $('#live_grand_total').text('฿' + formatNumber(grandTotal));
+        }
+
+        $('#vat_type').change(calculateLiveTotals);
+
+        // 5. ปลดลูกน้ำออกก่อนกด Submit บันทึก
+        $('.smart-form').on('submit', function() {
+            $(this).find('.number-format').each(function() {
+                if(this.value) { this.value = this.value.replace(/,/g, ''); }
+            });
+            $(this).find('select').prop('disabled', false); 
+        });
+    });
+</script>
+{% endblock %}

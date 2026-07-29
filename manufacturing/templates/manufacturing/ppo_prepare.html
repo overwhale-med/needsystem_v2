@@ -1,0 +1,135 @@
+{% extends 'core/base.html' %}
+{% load static %}
+{% load humanize %} 
+
+{% block content %}
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-end mb-4">
+        <div>
+            <h4 class="fw-bold mb-1 text-dark"><i class="fas fa-clipboard-list text-primary me-2"></i>เตรียมการสั่งซื้อ (PPO)</h4>
+            <p class="text-muted small mb-0">เลือกใบสั่งผลิต (JOB) ที่ต้องการมัดรวม เพื่อให้ระบบยุบรวมวัตถุดิบและแยกตามร้านค้า</p>
+        </div>
+        <a href="{% url 'purchasing_dashboard' %}" class="btn btn-outline-secondary rounded-pill px-4"><i class="fas fa-arrow-left me-2"></i> กลับ</a>
+    </div>
+
+    <div class="card shadow-sm border-0 rounded-4 mb-4" style="background-color: #f0f7ff; border-left: 5px solid #0d6efd !important;">
+        <div class="card-body p-4">
+            <form method="POST">
+                {% csrf_token %}
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="fw-bold text-dark mb-0"><i class="fas fa-tasks text-primary me-2"></i>รายการใบสั่งผลิต (JOB) ที่ค้างสั่งของ</h6>
+                    <button type="submit" class="btn btn-primary fw-bold shadow-sm rounded-pill px-4">
+                        <i class="fas fa-calculator me-2"></i> กดรวมยอดและคำนวณวัตถุดิบ
+                    </button>
+                </div>
+
+                <div class="table-responsive bg-white rounded border shadow-sm">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="bg-light text-secondary small">
+                            <tr>
+                                <th class="text-center" style="width: 50px;">
+                                    <input class="form-check-input" type="checkbox" id="selectAll">
+                                </th>
+                                <th>เลขที่ใบสั่งผลิต (JOB)</th>
+                                <th>แบบบ้านที่สั่งทำ</th>
+                                <th class="text-center">วันที่สร้าง</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for job in available_jobs %}
+                            <tr>
+                                <td class="text-center">
+                                    <input class="form-check-input job-checkbox" type="checkbox" name="job_ids" value="{{ job.id }}" {% if job.id in selected_job_ids %}checked{% endif %}>
+                                </td>
+                                <td><span class="fw-bold text-primary">{{ job.code }}</span></td>
+                                <td class="fw-bold">{{ job.product.name }}</td>
+                                <td class="text-center text-muted small">{{ job.start_date|date:"d/m/Y" }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="4" class="text-center py-4 text-muted">-- ไม่มีใบสั่งผลิตที่ค้างสั่งของ --</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {% if ppo_code %}
+    <div class="alert alert-success border-0 rounded-4 mb-4 shadow-sm d-flex align-items-center">
+        <i class="fas fa-check-circle fa-2x me-3"></i>
+        <div>
+            <h5 class="mb-0 fw-bold">สร้างใบเตรียมการสั่งซื้อสำเร็จ!</h5>
+            <span>เลขที่เอกสาร PPO มัดรวม: <strong>{{ ppo_code }}</strong> (ระบบยุบรวมวัตถุดิบที่ซ้ำกันให้เรียบร้อยแล้ว)</span>
+        </div>
+    </div>
+
+    {% for sup_id, data in materials_by_supplier.items %}
+    <div class="card shadow-sm border-0 rounded-4 mb-4 overflow-hidden">
+        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center border-bottom">
+            <h6 class="fw-bold mb-0 text-dark">
+                <i class="fas fa-store text-warning me-2"></i>ร้านค้า: <span class="text-primary">{{ data.name }}</span>
+            </h6>
+            <button type="button" class="btn btn-sm btn-success rounded-pill px-3 shadow-sm fw-bold" 
+                    onclick="transferToPO('{{ sup_id }}', '{{ ppo_code }}', '{{ data.items|escapejs }}')">
+                <i class="fas fa-paper-plane me-1"></i> ส่งไปทำใบ PO ร้านนี้
+            </button>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="bg-light small text-secondary">
+                    <tr>
+                        <th class="ps-4">วัตถุดิบ</th>
+                        <th class="text-center">จำนวนรวมที่ต้องใช้</th>
+                        <th class="text-end">ราคา/หน่วย</th>
+                        <th class="text-end pe-4">รวมเป็นเงิน</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in data.items %}
+                    <tr>
+                        <td class="ps-4">
+                            <div class="fw-bold text-dark">{{ item.product_name }}</div>
+                            <small class="text-muted">{{ item.product_code }}</small>
+                        </td>
+                        <td class="text-center fw-bold">{{ item.qty|floatformat:"-2"|intcomma }}</td>
+                        <td class="text-end">{{ item.cost|floatformat:"2"|intcomma }}</td>
+                        <td class="text-end pe-4 fw-bold text-primary">{{ item.total|floatformat:"2"|intcomma }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endfor %}
+    {% endif %}
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // สคริปต์สำหรับปุ่ม "เลือกทั้งหมด" (Check All)
+    const selectAllCheckbox = document.getElementById('selectAll');
+    const jobCheckboxes = document.querySelectorAll('.job-checkbox');
+    
+    if(selectAllCheckbox) {
+        selectAllCheckbox.addEventListener('change', function() {
+            jobCheckboxes.forEach(cb => cb.checked = this.checked);
+        });
+    }
+});
+
+function transferToPO(supplierId, ppoRef, itemsData) {
+    const rawData = JSON.parse(itemsData.replace(/'/g, '"'));
+    const cleanItems = rawData.map(item => ({
+        id: item.product_id,
+        qty: item.qty,
+        cost: item.cost,
+        total: item.total
+    }));
+    const itemsJson = encodeURIComponent(JSON.stringify(cleanItems));
+    
+    // วาร์ปไปยังหน้าสร้าง PO ใหม่ พร้อมหอบของที่รวมยอดแล้วไปวางใส่ฟอร์ม
+    window.location.href = `/purchasing/po/create/?ppo_ref=${ppoRef}&supplier_id=${supplierId}&items_data=${itemsJson}`;
+}
+</script>
+{% endblock %}
