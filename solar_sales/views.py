@@ -14,6 +14,7 @@ from django.core.paginator import Paginator
 from django.db.models import Q
 from hr.models import Department
 import datetime
+import pytz
 
 # 🌟 [FIXED] เพิ่มบรรทัดนี้เข้ามา เพื่อให้ระบบรู้จักคำสั่ง timezone 🌟
 from django.utils import timezone
@@ -40,7 +41,19 @@ def solar_sales_dashboard(request):
 
 @login_required
 def solar_quotation_list(request):
-    quotations = SolarQuotation.objects.all().order_by('-date', '-id')
+    # 🌟 [FIXED] เพิ่ม prefetch_related เพื่อโหลดข้อมูล JOB ล่วงหน้า ลดภาระ Database
+    quotations = SolarQuotation.objects.prefetch_related('center_jobs').all().order_by('-date', '-id')
+
+    # 🌟 [NEW] ระบบ Auto-Sync: ซิงค์สถานะจาก Center อัตโนมัติ 🌟
+    # ถ้ามีงานไหนในกระดาน Center ที่เสร็จสมบูรณ์แล้ว ให้ปรับสถานะใบเสนอราคาเป็น READY ทันที
+    for qt in quotations:
+        if qt.status == 'PROCESSING':
+            for job in qt.center_jobs.all():
+                if job.status == 'COMPLETED':
+                    # ยิงคำสั่งอัปเดตเข้าฐานข้อมูลทันทีแบบ 100%
+                    SolarQuotation.objects.filter(id=qt.id).update(status='READY')
+                    qt.status = 'READY'  # อัปเดตภาพบนหน้าจอทันทีเพื่อให้ปุ่มสีม่วงโชว์
+                    break
 
     # 🌟 ระบบจำกัดสิทธิ์และดึงข้อมูลสาขา
     is_manager = False
@@ -236,41 +249,36 @@ def solar_quotation_approve(request, qt_id):
     qt.status = 'APPROVED'
     qt.save()
     messages.success(request, f"✅ อนุมัติใบเสนอราคา {qt.code} เรียบร้อยแล้ว")
-    return redirect('solar_quotation_edit', qt_id=qt.id)
+
+    # 🌟 [FIXED] เปลี่ยนให้ระบบเด้งกลับมาหน้าตารางรายการ 🌟
+    return redirect('solar_quotation_list')
 
 @login_required
 def solar_quotation_send_to_center(request, qt_id):
     qt = get_object_or_404(SolarQuotation, pk=qt_id)
 
-    # 🌟 [เพิ่มระบบป้องกัน] ตรวจสอบว่าบัญชียืนยันสลิปแล้วหรือยัง
     if not qt.is_deposit_verified:
         messages.error(request, "❌ ไม่สามารถส่งงานได้: กรุณารอให้แผนกบัญชีตรวจสอบและยืนยันสลิปมัดจำก่อนครับ")
         return redirect('solar_quotation_list')
 
-    qt.status = 'CONVERTED'
+    # 🌟 [FIXED] เปลี่ยนสถานะเป็น 'PROCESSING' (กำลังดำเนินการ) และยกเลิกการสร้าง Invoice อัตโนมัติ 🌟
+    qt.status = 'PROCESSING'
     qt.save()
 
     first_item = qt.items.first()
     package = first_item.product if first_item else None
 
+    # สร้างใบสั่งงาน (JOB) ให้ฝั่ง Center ไปดำเนินการต่อ
     job = SolarJob.objects.create(
         customer=qt.customer,
         salesperson=qt.employee,
         package_sold=package,
+        quotation_ref=qt,
         status='DRAFT',
         note=f"📌 สร้างอัตโนมัติจากใบเสนอราคาโซล่า: {qt.code}\nรายละเอียดเพิ่มเติม: {qt.note}"
     )
 
-    if not hasattr(qt, 'solarinvoice'):
-        SolarInvoice.objects.create(
-            quotation_ref=qt,
-            customer=qt.customer,
-            grand_total=qt.grand_total,
-            balance_amount=qt.grand_total - qt.deposit_amount,
-            status='UNPAID' if (qt.grand_total - qt.deposit_amount) > 0 else 'PAID'
-        )
-
-    messages.success(request, f"🚀 ส่งงานเข้า Center สำเร็จ! ระบบสร้างรหัสงาน {job.code} และออกใบเสร็จเรียบร้อยแล้ว")
+    messages.success(request, f"🚀 ส่งงานเข้า Center สำเร็จ! ระบบสร้างรหัสงาน {job.code} เรียบร้อยแล้ว (รอช่างดำเนินการติดตั้ง)")
     return redirect('solar_quotation_list')
 
 # ==========================================
@@ -278,19 +286,92 @@ def solar_quotation_send_to_center(request, qt_id):
 # ==========================================
 @login_required
 def solar_invoice_list(request):
-    invoices = SolarInvoice.objects.all().order_by('-date', '-id')
-    return render(request, 'solar_sales/invoice_list.html', {'invoices': invoices})
+    # 🌟 [FIXED] เพิ่ม select_related และ prefetch_related ลดการทำงานซ้ำซ้อนของฐานข้อมูล 🌟
+    invoices = SolarInvoice.objects.select_related(
+        'customer',
+        'quotation_ref',
+        'quotation_ref__employee',
+        'quotation_ref__employee__department'
+    ).prefetch_related('quotation_ref__center_jobs').all().order_by('-date', '-id')
 
-@login_required
-def solar_invoice_detail(request, inv_id):
-    inv = get_object_or_404(SolarInvoice, pk=inv_id)
-    if request.method == 'POST':
-        inv.balance_amount = 0
-        inv.status = 'PAID'
-        inv.save()
-        messages.success(request, f"✅ ยืนยันการรับชำระเงินบิล {inv.code} ปิดยอดเรียบร้อยแล้ว!")
-        return redirect('solar_invoice_detail', inv_id=inv.id)
-    return render(request, 'solar_sales/invoice_detail.html', {'inv': inv})
+    # 🌟 ระบบจำกัดสิทธิ์และดึงข้อมูลสาขา (อ้างอิงจากผู้เปิดบิล)
+    is_manager = False
+    is_supervisor = False
+    current_emp = getattr(request.user, 'employee', None)
+
+    if request.user.is_superuser:
+        is_manager = True
+    elif current_emp:
+        rank = current_emp.business_rank.lower() if current_emp.business_rank else ""
+        if rank in ['manager', 'director'] or 'manager' in getattr(current_emp.position, 'title', '').lower() or 'บัญชี' in getattr(current_emp.department, 'name', ''):
+            is_manager = True
+        elif rank == 'supervisor':
+            is_supervisor = True
+
+    # โหลดรายชื่อสาขา
+    if is_manager:
+        departments = list(Department.objects.filter(Q(name__icontains='ทีม') | Q(name__icontains='สาขา')).order_by('name'))
+    elif is_supervisor and current_emp.department:
+        departments = list(Department.objects.filter(id=current_emp.department.id))
+    else:
+        departments = []
+
+    for d in departments:
+        d.name = d.name.replace('แผนก', '').strip()
+
+    # รับค่าการค้นหา
+    search_query = request.GET.get('q', '')
+    status_filter = request.GET.get('status', '')
+    branch_filter = request.GET.get('branch', '')
+
+    # 1. กรองสาขา
+    if branch_filter and (is_manager or is_supervisor):
+        invoices = invoices.filter(quotation_ref__employee__department_id=branch_filter)
+    elif not is_manager and not is_supervisor and current_emp:
+        # พนักงานทั่วไปเห็นแค่งานตัวเอง
+        invoices = invoices.filter(quotation_ref__employee=current_emp)
+
+    # 2. กรองสถานะ
+    if status_filter:
+        invoices = invoices.filter(status=status_filter)
+
+    # 3. กรองคำค้นหา (ค้นหาได้ทั้งเลขบิล, ชื่อลูกค้า, และเลข QT)
+    if search_query:
+        invoices = invoices.filter(
+            Q(code__icontains=search_query) |
+            Q(customer__name__icontains=search_query) |
+            Q(quotation_ref__code__icontains=search_query)
+        )
+
+    # 4. กรองวันที่ (ค่าเริ่มต้นคือวันที่ปัจจุบันของไทย)
+    tz_bkk = pytz.timezone('Asia/Bangkok')
+    today_bkk = timezone.now().astimezone(tz_bkk).date()
+
+    date_start = request.GET.get('start_date')
+    date_end = request.GET.get('end_date')
+
+    if not date_start or date_start == 'None':
+        date_start = today_bkk.strftime('%Y-%m-%d')
+    if not date_end or date_end == 'None':
+        date_end = today_bkk.strftime('%Y-%m-%d')
+
+    invoices = invoices.filter(date__gte=date_start, date__lte=date_end)
+
+    # ระบบแบ่งหน้า (Pagination)
+    paginator = Paginator(invoices, 15)
+    page_obj = paginator.get_page(request.GET.get('page'))
+
+    return render(request, 'solar_sales/invoice_list.html', {
+        'page_obj': page_obj,
+        'search_query': search_query,
+        'is_manager': is_manager,
+        'is_supervisor': is_supervisor,
+        'departments': departments,
+        'branch_filter': branch_filter,
+        'status_filter': status_filter,
+        'start_date': date_start,
+        'end_date': date_end,
+    })
 
 @login_required
 def solar_quotation_print(request, qt_id):
@@ -521,5 +602,113 @@ def solar_quotation_cancel(request, qt_id):
     qt = get_object_or_404(SolarQuotation, pk=qt_id)
     qt.status = 'CANCELLED'
     qt.save()
-    messages.success(request, f"✅ ยกเลิกเอกสาร {qt.code} เรียบร้อยแล้ว")
+
+    # 🌟 [NEW] ยกเลิก Job ในกระดาน Center ด้วย (ถ้ามี) 🌟
+    # ค้นหาทั้งจาก FK และจากข้อความใน Note เผื่อเป็นงานเก่า
+    SolarJob.objects.filter(Q(quotation_ref=qt) | Q(note__icontains=qt.code)).update(status='CANCELLED')
+
+    messages.success(request, f"✅ ยกเลิกเอกสาร {qt.code} และงานในระบบ Center (ถ้ามี) เรียบร้อยแล้ว")
     return redirect('solar_quotation_list')
+
+@login_required
+def solar_deposit_list(request):
+    # ดึงใบเสนอราคา Solar ที่มีการจ่ายมัดจำแล้ว
+    quotations = SolarQuotation.objects.filter(is_deposit_paid=True)
+
+    # 🌟 ระบบจำกัดสิทธิ์ (ผู้จัดการ/บัญชี เห็นทั้งหมด, เซลส์เห็นเฉพาะของตัวเอง)
+    is_manager = False
+    current_emp = getattr(request.user, 'employee', None)
+
+    if request.user.is_superuser:
+        is_manager = True
+    elif current_emp:
+        rank = current_emp.business_rank.lower() if current_emp.business_rank else ""
+        if rank in ['manager', 'director'] or 'manager' in getattr(current_emp.position, 'title', '').lower() or 'บัญชี' in getattr(current_emp.department, 'name', ''):
+            is_manager = True
+
+    if not is_manager and current_emp:
+        quotations = quotations.filter(employee=current_emp)
+
+    # รับค่าการค้นหาจาก URL
+    search_query = request.GET.get('q', '')
+    status_filter = request.GET.get('status', '')
+    start_date_str = request.GET.get('start_date')
+    end_date_str = request.GET.get('end_date')
+
+    # กรองคำค้นหา (เลขที่เอกสาร หรือ ชื่อลูกค้า)
+    if search_query:
+        quotations = quotations.filter(Q(code__icontains=search_query) | Q(customer__name__icontains=search_query))
+
+    # กรองสถานะ
+    if status_filter == 'VERIFIED':
+        quotations = quotations.filter(is_deposit_verified=True)
+    elif status_filter == 'PENDING':
+        quotations = quotations.filter(is_deposit_verified=False)
+
+    # 🌟 กรองวันที่มัดจำ 🌟
+    if start_date_str and end_date_str:
+        try:
+            start_date = parse_date(start_date_str)
+            end_date = parse_date(end_date_str)
+            if start_date and end_date:
+                quotations = quotations.filter(deposit_date__range=[start_date, end_date])
+        except Exception:
+            pass # หากวันที่ผิดรูปแบบให้ปล่อยผ่าน
+
+    # เรียงลำดับและแบ่งหน้า
+    quotations = quotations.order_by('-deposit_date', '-id')
+    paginator = Paginator(quotations, 15)
+    page_obj = paginator.get_page(request.GET.get('page'))
+
+    return render(request, 'solar_sales/deposit_list.html', {
+        'page_obj': page_obj,
+        'search_query': search_query,
+        'status_filter': status_filter,
+        'start_date': start_date_str,
+        'end_date': end_date_str,
+    })
+
+@login_required
+def solar_invoice_detail(request, inv_id):
+    inv = get_object_or_404(SolarInvoice, pk=inv_id)
+    if request.method == 'POST':
+        inv.balance_amount = 0
+        inv.status = 'PAID'
+        inv.save()
+        messages.success(request, f"✅ ยืนยันการรับชำระเงินบิล {inv.code} ปิดยอดเรียบร้อยแล้ว!")
+        return redirect('solar_invoice_detail', inv_id=inv.id)
+    return render(request, 'solar_sales/invoice_detail.html', {'inv': inv})
+
+# ------------------------------------------
+# 🌟 ฟังก์ชันสำหรับปุ่ม "เปิดบิลขาย" (Invoice Creation) 🌟
+# ------------------------------------------
+@login_required
+def solar_quotation_create_invoice(request, qt_id):
+    qt = get_object_or_404(SolarQuotation, pk=qt_id)
+
+    if qt.status != 'READY':
+        messages.error(request, "❌ ไม่สามารถเปิดบิลได้ เอกสารต้องอยู่ในสถานะ 'พร้อมเปิดบิล' เท่านั้น")
+        return redirect('solar_quotation_list')
+
+    # เช็คว่ามี Invoice อยู่แล้วหรือไม่ กันเหนียวไม่ให้เปิดบิลซ้ำ
+    if hasattr(qt, 'solarinvoice'):
+        messages.warning(request, "⚠️ ใบเสนอราคานี้มีการเปิดบิลไปแล้ว")
+        return redirect('solar_quotation_list')
+
+    # สร้าง Invoice
+    SolarInvoice.objects.create(
+        quotation_ref=qt,
+        customer=qt.customer,
+        grand_total=qt.grand_total,
+        balance_amount=qt.grand_total - qt.deposit_amount,
+        status='UNPAID' if (qt.grand_total - qt.deposit_amount) > 0 else 'PAID'
+    )
+
+    # อัปเดตสถานะใบเสนอราคาเป็น เปิดบิลแล้ว
+    qt.status = 'CONVERTED'
+    qt.save()
+
+    messages.success(request, f"🎉 สร้างใบเสร็จรับเงินสำหรับ {qt.code} สำเร็จ! สามารถเพิ่มการรับชำระเงินได้ทันที")
+
+    # 🌟 [FIXED] เปลี่ยนให้เด้งไปหน้า "รายการใบเสร็จรับเงิน" ทันที 🌟
+    return redirect('solar_invoice_list')

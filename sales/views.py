@@ -183,7 +183,7 @@ def sales_dashboard(request):
     if not is_sales_authorized(request.user): return redirect('dashboard')
 
     target_employees, scope_title = get_target_employees(request.user)
-    
+
     # 🌟 [FIXED] ใช้เวลาประเทศไทย
     tz_bkk = pytz.timezone('Asia/Bangkok')
     today_bkk = timezone.now().astimezone(tz_bkk).date()
@@ -238,7 +238,7 @@ def api_dashboard_data(request):
 
     target_employees, scope_title = get_target_employees(request.user)
     emp = getattr(request.user, 'employee', None)
-    
+
     # 🌟 [FIXED] ใช้เวลาประเทศไทย
     tz_bkk = pytz.timezone('Asia/Bangkok')
     today_bkk = timezone.now().astimezone(tz_bkk).date()
@@ -337,7 +337,7 @@ def api_dashboard_data(request):
 
         # แปลงเวลาสร้างให้เป็นโซนเวลาไทยก่อนแสดงผล
         item_time_bkk = item.created_at.astimezone(tz_bkk)
-        
+
         recent_sales_data.append({
             'time': item_time_bkk.strftime('%H:%M') if item_time_bkk.date() == today_bkk else item_time_bkk.strftime('%d/%m/%Y'),
             'code': item.code, 'is_pos': is_pos, 'qt_code': qt, 'job_code': job,
@@ -375,11 +375,11 @@ def sales_hub(request):
     today_bkk = timezone.now().astimezone(tz_bkk).date()
 
     ready_quotes = qt_qs.filter(status='APPROVED').order_by('-created_at')
-    
+
     # คำนวณขอบเขตของ "วันนี้" ตามเวลาไทย
     today_start = tz_bkk.localize(datetime.datetime.combine(today_bkk, datetime.time.min))
     tomorrow_start = today_start + timedelta(days=1)
-    
+
     today_invoices = inv_qs.filter(date=today_bkk).order_by('-created_at')
     today_pos = pos_qs.filter(created_at__gte=today_start, created_at__lt=tomorrow_start).order_by('-created_at')
 
@@ -591,7 +591,7 @@ def sales_timeline(request):
     # 🌟 [FIXED] ใช้เวลาประเทศไทย
     tz_bkk = pytz.timezone('Asia/Bangkok')
     today_bkk = timezone.now().astimezone(tz_bkk).date()
-    
+
     company_info = CompanyInfo.objects.first()
     max_quota = company_info.weekly_job_quota if company_info and company_info.weekly_job_quota else 25
 
@@ -889,7 +889,7 @@ def quotation_list(request):
     if branch_filter and (is_manager or is_supervisor):
         queryset = queryset.filter(employee__department_id=branch_filter)
 
-    # 🌟 2. กรองข้อมูลตาม "สถานะเอกสาร" 
+    # 🌟 2. กรองข้อมูลตาม "สถานะเอกสาร"
     if status_filter:
         if status_filter == 'PENDING_CLOSING': # รอรับมัดจำ
             queryset = queryset.filter(status='APPROVED', is_deposit_paid=False).distinct()
@@ -904,7 +904,7 @@ def quotation_list(request):
 
     total_departments_count = ProductionStatus.objects.count()
 
-    # 🌟 3. กรองข้อมูลตาม "สถานะผลิต" 
+    # 🌟 3. กรองข้อมูลตาม "สถานะผลิต"
     if prod_status_filter:
         if prod_status_filter == 'CLOSED':
             valid_jobs = ProductionOrder.objects.filter(is_closed=True)
@@ -921,17 +921,17 @@ def quotation_list(request):
         valid_job_ids = list(valid_jobs.values_list('id', flat=True))
         queryset = queryset.filter(production_orders__in=valid_job_ids).distinct()
 
-    # 🌟 4. กรองข้อมูลตาม "สถานะจัดส่ง" 
+    # 🌟 4. กรองข้อมูลตาม "สถานะจัดส่ง"
     if deliv_status_filter:
-        if deliv_status_filter == 'NO_TRUCK': 
+        if deliv_status_filter == 'NO_TRUCK':
             valid_jobs = ProductionOrder.objects.filter(
                 Q(status='COMPLETED') | Q(status='WAITING_QC') | Q(is_onsite=True)
             ).filter(transporter__isnull=True)
-        elif deliv_status_filter == 'DELIVERING': 
+        elif deliv_status_filter == 'DELIVERING':
             valid_jobs = ProductionOrder.objects.filter(transporter__isnull=False).exclude(
                 delivery_status__name__in=['ส่งมอบสำเร็จ', 'ลูกค้าเซ็นรับแล้ว', 'จัดส่งเรียบร้อย']
             )
-        elif deliv_status_filter == 'DELIVERED': 
+        elif deliv_status_filter == 'DELIVERED':
             valid_jobs = ProductionOrder.objects.filter(
                 delivery_status__name__in=['ส่งมอบสำเร็จ', 'ลูกค้าเซ็นรับแล้ว', 'จัดส่งเรียบร้อย']
             )
@@ -945,7 +945,7 @@ def quotation_list(request):
     # 🌟 6. กรองวันที่ (FIXED: ใช้เวลาประเทศไทย) 🌟
     tz_bkk = pytz.timezone('Asia/Bangkok')
     today_bkk = timezone.now().astimezone(tz_bkk).date()
-    
+
     date_start = request.GET.get('start_date')
     date_end = request.GET.get('end_date')
 
@@ -988,11 +988,11 @@ def quotation_create(request):
             if cust_id:
                 try: qt.customer = Customer.objects.get(pk=cust_id)
                 except Customer.DoesNotExist: pass
-            
+
             # 🌟 [FIXED] รันรหัสใบเสนอราคาตามเวลาประเทศไทย
             tz_bkk = pytz.timezone('Asia/Bangkok')
             now_bkk = timezone.now().astimezone(tz_bkk)
-            
+
             thai_year = (now_bkk.year + 543) % 100
             prefix = f"QT-{thai_year:02d}{now_bkk.strftime('%m')}"
             last = Quotation.objects.filter(code__startswith=prefix).order_by('code').last()
@@ -1158,11 +1158,11 @@ def delete_item(request, item_id):
 @login_required
 def quotation_clone(request, qt_id):
     old_qt = get_object_or_404(Quotation, pk=qt_id)
-    
+
     # 🌟 [FIXED] รันรหัสใบเสนอราคาใหม่ตามเวลาประเทศไทย
     tz_bkk = pytz.timezone('Asia/Bangkok')
     now_bkk = timezone.now().astimezone(tz_bkk)
-    
+
     thai_year = (now_bkk.year + 543) % 100
     prefix = f"QT-{thai_year:02d}{now_bkk.strftime('%m')}"
     last = Quotation.objects.filter(code__startswith=prefix).order_by('code').last()
@@ -1434,7 +1434,7 @@ def invoice_list(request):
     # 🌟 กรองวันที่ (FIXED: ใช้เวลาประเทศไทย) 🌟
     tz_bkk = pytz.timezone('Asia/Bangkok')
     today_bkk = timezone.now().astimezone(tz_bkk).date()
-    
+
     start_date = request.GET.get('start_date')
     end_date = request.GET.get('end_date')
 
@@ -1634,22 +1634,48 @@ def deposit_list(request):
     target_employees, _ = get_target_employees(request.user)
     qs = get_sales_queryset(Quotation, request.user, target_employees).filter(is_deposit_paid=True)
 
+    # รับค่าต่างๆ จาก URL
     search_query = request.GET.get('q', '')
+    status_filter = request.GET.get('status')
+
+    # 🌟 [NEW] รับค่า วันที่เริ่มต้น - วันที่สิ้นสุด 🌟
+    start_date_str = request.GET.get('start_date')
+    end_date_str = request.GET.get('end_date')
+
+    # กรองข้อความ
     if search_query:
         qs = qs.filter(Q(code__icontains=search_query) | Q(customer_name__icontains=search_query))
 
-    status_filter = request.GET.get('status')
+    # กรองสถานะ
     if status_filter == 'VERIFIED':
         qs = qs.filter(is_deposit_verified=True)
     elif status_filter == 'PENDING':
         qs = qs.filter(is_deposit_verified=False)
+
+    # 🌟 [NEW] ประมวลผลและกรองวันที่มัดจำ 🌟
+    if start_date_str and end_date_str:
+        try:
+            # ใช้ parse_date เพื่อแปลง String ให้เป็น Date Object
+            start_date = parse_date(start_date_str)
+            end_date = parse_date(end_date_str)
+
+            if start_date and end_date:
+                 # ดึงเฉพาะรายการที่มัดจำในช่วงเวลานี้
+                 qs = qs.filter(deposit_date__range=[start_date, end_date])
+        except Exception as e:
+            pass # ปล่อยผ่านไปหากมีใครซนแอบพิมพ์วันที่ผิดรูปแบบมาใน URL
 
     qs = qs.order_by('-deposit_date', '-created_at')
     paginator = Paginator(qs, 15)
     page_obj = paginator.get_page(request.GET.get('page'))
 
     return render(request, 'sales/deposit_list.html', {
-        'page_obj': page_obj, 'search_query': search_query, 'status_filter': status_filter
+        'page_obj': page_obj,
+        'search_query': search_query,
+        'status_filter': status_filter,
+        # 🌟 [NEW] ส่งค่ากลับไปหา Template เพื่อให้ช่อง Input ยังคงแสดงวันที่ที่เลือกไว้ 🌟
+        'start_date': start_date_str,
+        'end_date': end_date_str
     })
 
 @login_required

@@ -16,23 +16,12 @@
         </div>
         <div>
             <a href="{% url 'solar_quotation_list' %}" class="btn btn-light border shadow-sm rounded-pill px-3 btn-sm fw-bold"><i class="fas fa-chevron-left me-1"></i> กลับ</a>
-            
-            <!-- 🌟 ปุ่มอนุมัติ (จะแสดงเมื่อสถานะเป็น DRAFT หรือรออนุมัติ) -->
-            {% if qt.status == 'DRAFT' or qt.status == 'PENDING' %}
-            <a href="{% url 'solar_quotation_approve' qt.id %}" class="btn btn-success shadow-sm rounded-pill px-4 ms-2 btn-sm fw-bold" onclick="return confirm('ยืนยันการอนุมัติใบเสนอราคา {{ qt.code }} ใช่หรือไม่?');">
-                <i class="fas fa-check-circle me-1"></i> อนุมัติเอกสาร
-            </a>
-            {% endif %}
 
             <!-- 🌟 ปุ่มส่งงานเข้า Center (จะแสดงเมื่อเอกสารอนุมัติแล้วเท่านั้น) -->
             {% if qt.status == 'APPROVED' %}
             <a href="{% url 'solar_quotation_send_to_center' qt.id %}" class="btn btn-warning shadow-sm rounded-pill px-4 ms-2 btn-sm fw-bold text-dark" onclick="return confirm('ยืนยันการส่งงาน {{ qt.code }} เข้า Center เพื่อเริ่มงานใช่หรือไม่?');">
                 <i class="fas fa-paper-plane me-1"></i> ส่งงานเข้า Center
             </a>
-            {% endif %}
-
-            {% if qt.status != 'CANCELLED' %}
-            <a href="{% url 'solar_quotation_print' qt.id %}" target="_blank" class="btn btn-primary shadow-sm rounded-pill px-4 ms-2 btn-sm fw-bold"><i class="fas fa-print me-1"></i> พิมพ์ / ตัวอย่าง</a>
             {% endif %}
         </div>
     </div>
@@ -63,7 +52,7 @@
 
         <!-- 🌟 ฝั่งขวา: รายการสินค้าและสรุปยอด -->
         <div class="col-lg-8">
-            
+
             {% if qt.status == 'DRAFT' or qt.status == 'PENDING' %}
             <div class="d-flex justify-content-center gap-3 mb-4">
                 <button type="button" class="btn btn-outline-primary rounded-pill px-4 py-2 fw-bold shadow-sm border-2" onclick="$('#box-main-product').slideDown(); $('#box-upsale').slideUp();">
@@ -76,7 +65,7 @@
 
             <!-- กล่องเพิ่ม FG -->
             <div id="box-main-product" class="card border-primary border-2 border-bottom-0 border-end-0 border-start-0 shadow-sm mb-4" style="display: none;">
-                <div class="card-body p-4 bg-light"> 
+                <div class="card-body p-4 bg-light">
                     <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom border-secondary border-opacity-25">
                         <h6 class="fw-bold text-dark m-0"><span class="badge bg-primary me-2"><i class="fas fa-solar-panel"></i></span> เลือกแพ็กเกจโซล่า (FG)</h6>
                         <button type="button" class="btn-close" onclick="$('#box-main-product').slideUp();"></button>
@@ -86,26 +75,26 @@
                         <input type="hidden" name="add_item" value="true">
                         <div class="row g-2 mb-3">
                             <div class="col-md-12">
-                                <label class="text-dark fw-bold small mb-1">เลือกสินค้า</label> 
+                                <label class="text-dark fw-bold small mb-1">เลือกสินค้า</label>
                                 <select id="product_selector" name="product_id" class="form-select form-select-sm select2">
                                     <option value="">-- ค้นหาแพ็กเกจ --</option>
                                 </select>
                             </div>
                         </div>
                         <div class="row g-2 align-items-end">
-                            <div class="col-md-5"> 
-                                <label class="text-dark fw-bold small mb-1">ชื่อที่จะโชว์ในบิล *</label> 
+                            <div class="col-md-5">
+                                <label class="text-dark fw-bold small mb-1">ชื่อที่จะโชว์ในบิล *</label>
                                 <input type="text" name="item_name" id="input_name" class="form-control form-control-sm border-dark border-opacity-25" required autocomplete="off">
                             </div>
                             <div class="col-md-3">
-                                <label class="text-dark fw-bold small mb-1">ราคา/หน่วย</label> 
+                                <label class="text-dark fw-bold small mb-1">ราคา/หน่วย</label>
                                 <input type="text" name="price" id="input_price" class="form-control form-control-sm text-end number-format border-dark border-opacity-25" required autocomplete="off">
                             </div>
                             <div class="col-md-2">
-                                <label class="text-dark fw-bold small mb-1">จำนวน</label> 
+                                <label class="text-dark fw-bold small mb-1">จำนวน</label>
                                 <input type="text" name="quantity" class="form-control form-control-sm text-center number-only border-dark border-opacity-25" value="1" required autocomplete="off">
                             </div>
-                            <div class="col-md-2"> 
+                            <div class="col-md-2">
                                 <button type="submit" class="btn btn-dark text-white btn-sm w-100 fw-bold shadow-sm"><i class="fas fa-check me-1"></i> บันทึก</button>
                             </div>
                         </div>
@@ -115,7 +104,7 @@
 
             <!-- กล่องเพิ่ม RM -->
             <div id="box-upsale" class="card border-warning border-2 border-bottom-0 border-end-0 border-start-0 shadow-sm mb-4" style="display: none;">
-                <div class="card-body p-4 bg-light"> 
+                <div class="card-body p-4 bg-light">
                     <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom border-secondary border-opacity-25">
                         <h6 class="fw-bold text-dark m-0"><span class="badge bg-warning text-dark me-2"><i class="fas fa-tools"></i></span> เลือกอุปกรณ์เสริม (RM)</h6>
                         <button type="button" class="btn-close" onclick="$('#box-upsale').slideUp();"></button>
@@ -125,26 +114,26 @@
                         <input type="hidden" name="add_upsale" value="true">
                         <div class="row g-2 mb-3">
                             <div class="col-md-12">
-                                <label class="text-dark fw-bold small mb-1">เลือกอุปกรณ์</label> 
+                                <label class="text-dark fw-bold small mb-1">เลือกอุปกรณ์</label>
                                 <select id="upsale_selector" name="upsale_product_id" class="form-select form-select-sm select2">
                                     <option value="">-- ค้นหาอุปกรณ์ --</option>
                                 </select>
                             </div>
                         </div>
                         <div class="row g-2 align-items-end">
-                            <div class="col-md-5"> 
-                                <label class="text-dark fw-bold small mb-1">ชื่อที่จะโชว์ในบิล *</label> 
+                            <div class="col-md-5">
+                                <label class="text-dark fw-bold small mb-1">ชื่อที่จะโชว์ในบิล *</label>
                                 <input type="text" name="upsale_desc" id="input_upsale_desc" class="form-control form-control-sm border-dark border-opacity-25" required autocomplete="off">
                             </div>
                             <div class="col-md-3">
-                                <label class="text-dark fw-bold small mb-1">ราคา/หน่วย</label> 
+                                <label class="text-dark fw-bold small mb-1">ราคา/หน่วย</label>
                                 <input type="text" name="upsale_price" id="input_upsale_price" class="form-control form-control-sm text-end number-format border-dark border-opacity-25" required autocomplete="off">
                             </div>
                             <div class="col-md-2">
-                                <label class="text-dark fw-bold small mb-1">จำนวน</label> 
+                                <label class="text-dark fw-bold small mb-1">จำนวน</label>
                                 <input type="text" name="upsale_qty" class="form-control form-control-sm text-center number-only border-dark border-opacity-25" value="1" required autocomplete="off">
                             </div>
-                            <div class="col-md-2"> 
+                            <div class="col-md-2">
                                 <button type="submit" class="btn btn-dark text-white btn-sm w-100 fw-bold shadow-sm"><i class="fas fa-check me-1"></i> บันทึก</button>
                             </div>
                         </div>
@@ -206,17 +195,17 @@
                             <div class="col-lg-7 border-end pe-lg-4 pb-3 pb-lg-0">
                                 <label class="text-primary fw-bold small mb-1"><i class="fas fa-file-invoice-dollar me-1"></i> เงื่อนไขการชำระเงิน (Payment Terms):</label>
                                 <textarea name="payment_terms" class="form-control form-control-sm mb-3" rows="3" {% if qt.status != 'DRAFT' and qt.status != 'PENDING' %}readonly{% endif %}>{{ qt.payment_terms|default:"- ชำระเงินมัดจำ 50% ของยอดรวมเพื่อยืนยันการสั่งซื้อ\n- ส่วนที่เหลือชำระก่อนการติดตั้ง" }}</textarea>
-                                
+
                                 <label class="text-primary fw-bold small mb-1"><i class="fas fa-pen me-1"></i> หมายเหตุ / เงื่อนไข (Note):</label>
                                 <textarea name="note" class="form-control form-control-sm mb-2" rows="2" {% if qt.status != 'DRAFT' and qt.status != 'PENDING' %}readonly{% endif %}>{{ qt.note|default:"-ไม่มี-" }}</textarea>
-                                
+
                                 <label class="text-primary fw-bold small mb-1 mt-2"><i class="fas fa-percent me-1"></i> การคิดภาษี (VAT):</label>
                                 <select name="vat_type" id="vat_type" class="form-select form-select-sm mb-2" {% if qt.status != 'DRAFT' and qt.status != 'PENDING' %}disabled{% endif %}>
                                     <option value="NONE" {% if qt.vat_type == 'NONE' %}selected{% endif %}>ไม่มี VAT</option>
                                     <option value="EXCLUDE" {% if qt.vat_type == 'EXCLUDE' %}selected{% endif %}>แยก VAT 7%</option>
                                     <option value="INCLUDE" {% if qt.vat_type == 'INCLUDE' %}selected{% endif %}>รวม VAT 7% แล้ว</option>
                                 </select>
-                                
+
                                 {% if qt.status == 'DRAFT' or qt.status == 'PENDING' %}
                                 <button type="submit" name="update_info" class="btn btn-outline-primary btn-sm shadow-sm rounded-pill px-3 mt-2">
                                     <i class="fas fa-sync-alt me-1"></i> บันทึกหมายเหตุ/เงื่อนไข
@@ -281,11 +270,11 @@
 <script>
     $(document).ready(function() {
         $('.select2').select2({ theme: 'bootstrap4', width: '100%' });
-        
+
         // 1. โหลดข้อมูลเข้า Dropdown
         const products = {{ products_json|safe }};
         products.forEach(p => $('#product_selector').append(`<option value="${p.id}" data-name="${p.name}" data-price="${p.sell_price}">${p.code} : ${p.name}</option>`));
-        
+
         const accessories = {{ upsales_json|safe }};
         accessories.forEach(a => $('#upsale_selector').append(`<option value="${a.id}" data-name="${a.name}" data-price="${a.sell_price}">${a.code} : ${a.name}</option>`));
 
@@ -322,7 +311,7 @@
 
         $('.number-format').on('blur', function() {
             let val = unformatNumber(this.value);
-            if (val === 0 && !$(this).prop('required')) { this.value = ''; } 
+            if (val === 0 && !$(this).prop('required')) { this.value = ''; }
             else { this.value = formatNumber(val); }
         }).on('focus', function() {
             let val = unformatNumber(this.value);
@@ -332,9 +321,9 @@
             calculateLiveTotals();
         });
         $('.number-only').on('input', function() { this.value = this.value.replace(/[^0-9]/g, ''); });
-        
+
         $('.number-format').each(function() {
-            if (this.value && this.value !== '0.00') { this.value = formatNumber(unformatNumber(this.value)); } 
+            if (this.value && this.value !== '0.00') { this.value = formatNumber(unformatNumber(this.value)); }
         });
 
         // 4. คำนวณยอดรวมสดๆ หน้าเว็บ
@@ -343,7 +332,7 @@
             let survey = unformatNumber($('#live_survey').val());
             let discount = unformatNumber($('#live_discount').val());
             let vatType = $('#vat_type').val();
-            
+
             let totalBeforeVat = (baseItemTotal + survey) - discount;
             if (totalBeforeVat < 0) totalBeforeVat = 0;
 
@@ -364,7 +353,7 @@
                 subtotal = totalBeforeVat;
                 taxAmount = 0;
             }
-            
+
             $('#live_subtotal').text(formatNumber(subtotal));
             $('#live_tax').text(formatNumber(taxAmount));
             $('#live_grand_total').text('฿' + formatNumber(grandTotal));
@@ -377,7 +366,7 @@
             $(this).find('.number-format').each(function() {
                 if(this.value) { this.value = this.value.replace(/,/g, ''); }
             });
-            $(this).find('select').prop('disabled', false); 
+            $(this).find('select').prop('disabled', false);
         });
     });
 </script>
