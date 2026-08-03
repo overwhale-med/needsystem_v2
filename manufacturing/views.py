@@ -1,19 +1,27 @@
+import math
+import json
+import datetime
+import openpyxl
+import base64
+import pytz
+from django.core.files.base import ContentFile
+from decimal import Decimal, ROUND_DOWN, InvalidOperation
+
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from django.utils import timezone
-from django.utils.dateparse import parse_date
-from django.db.models import Count, Sum, F, ExpressionWrapper, DecimalField, Q
-from django.db.models.functions import Coalesce
-from django.db import transaction
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.db.models import Q, Sum, Count, Max, F, FloatField
+from django.db.models.functions import TruncDate, TruncMonth
 from django.core.paginator import Paginator
-from decimal import Decimal, InvalidOperation
-import datetime
-import calendar
-import json
-import pandas as pd
+from django.utils.dateparse import parse_date
+from django.utils import timezone
+from datetime import timedelta
+from django.db import transaction
+from django.urls import reverse # 🌟 นำเข้า reverse เพิ่มเติม (ใส่ไว้บรรทัดบนสุดของไฟล์ร่วมกับอันอื่น หรือใส่ตรงนี้ก็ได้ครับ)
 
+# Models
 from .models import ProductionOrder, ProductionOrderMaterial, BOM, BOMItem, Branch, MfgBranch, Salesperson, ProductionStatus, ProductionTeam, DeliveryStatus, Transporter, QCInspectionLog
 from master_data.models import CompanyInfo
 from inventory.models import Product, InventoryDoc, StockMovement
@@ -22,6 +30,150 @@ from .forms import BOMForm, BOMItemFormSet
 from .models import BlueprintClaimSplit
 from .models import LogisticsClaim
 from accounting.models import Expense
+
+# ==========================================
+# 🌟 Helper Function: แปลงวันที่ DD/MM/YYYY เป็น YYYY-MM-DD
+# ==========================================
+def parse_thai_date(date_str):
+    if not date_str:
+        return None
+    try:
+        return parse_date(date_str)
+    except:
+        pass
+    try:
+        day, month, year = map(int, date_str.split('/'))
+        return datetime.date(year, month, day)
+    except:
+        return None
+
+# ==========================================
+# 🧠 ระบบคำนวณคอมมิชชัน
+# ==========================================
+def process_commission_logic(sale_amount, seller, sale_ref_id):
+    now = timezone.now()
+    sale_amount = Decimal(str(sale_amount))
+    target, _ = CompanySalesTarget.objects.get_or_create(year=now.year, month=now.month)
+    target.current_sales += sale_amount
+    if target.current_sales >= target.target_amount:
+        target.is_unlocked = True
+    target.save()
+
+    exec_group = SalesGroup.objects.filter(group_type='EXECUTIVE').first()
+    if exec_group:
+        exec_pool_amount = sale_amount * (exec_group.commission_rate / Decimal('100'))
+        executives = Employee.objects.filter(sales_group=exec_group)
+        if executives.exists():
+            exact_share = exec_pool_amount / Decimal(str(executives.count()))
+            share_per_head = exact_share.quantize(Decimal('0.00'), rounding=ROUND_DOWN)
+            remainder = exec_pool_amount - (share_per_head * Decimal(str(executives.count())))
+            for ex in executives:
+                CommissionLog.objects.create(recipient=ex, source_employee=seller, level=1, amount=share_per_head, sale_ref_id=sale_ref_id)
+            if remainder > 0:
+                exec_group.fund_balance += remainder
+                exec_group.save()
+                FundTransaction.objects.create(group=exec_group, transaction_type='IN', amount=remainder, description=f"ปัดเศษเข้าสำรองบริหาร จากบิล {sale_ref_id}")
+
+    if not seller or not seller.sales_group: return
+    group = seller.sales_group
+
+    total_group_comm = sale_amount * (group.commission_rate / Decimal('100'))
+    fund_to_add = Decimal('0.00')
+
+    if group.group_type == 'TEAM':
+        exact_leader_share = total_group_comm * (group.share_leader / Decimal('100'))
+        leader_share = exact_leader_share.quantize(Decimal('0.00'), rounding=ROUND_DOWN)
+        fund_to_add += (exact_leader_share - leader_share)
+        leader = Employee.objects.filter(sales_group=group, group_role='LEADER').first()
+        if leader:
+            CommissionLog.objects.create(recipient=leader, source_employee=seller, level=1, amount=leader_share, sale_ref_id=sale_ref_id)
+        else:
+            fund_to_add += leader_share
+
+        exact_l1_share = total_group_comm * (group.share_level1 / Decimal('100'))
+        l1_members = Employee.objects.filter(sales_group=group, group_role='LEVEL1')
+        if l1_members.exists():
+            exact_split = exact_l1_share / Decimal(str(l1_members.count()))
+            split = exact_split.quantize(Decimal('0.00'), rounding=ROUND_DOWN)
+            remainder = exact_l1_share - (split * Decimal(str(l1_members.count())))
+            fund_to_add += remainder
+            for m in l1_members:
+                CommissionLog.objects.create(recipient=m, source_employee=seller, level=2, amount=split, sale_ref_id=sale_ref_id)
+        else:
+            fund_to_add += exact_l1_share
+
+        exact_l2_share = total_group_comm * (group.share_level2 / Decimal('100'))
+        l2_members = Employee.objects.filter(sales_group=group, group_role='LEVEL2')
+        if l2_members.exists():
+            exact_split = exact_l2_share / Decimal(str(l2_members.count()))
+            split = exact_split.quantize(Decimal('0.00'), rounding=ROUND_DOWN)
+            remainder = exact_l2_share - (split * Decimal(str(l2_members.count())))
+            fund_to_add += remainder
+            for m in l2_members:
+                CommissionLog.objects.create(recipient=m, source_employee=seller, level=3, amount=split, sale_ref_id=sale_ref_id)
+        else:
+            fund_to_add += exact_l2_share
+
+        exact_fixed_fund_share = total_group_comm * (group.share_fund / Decimal('100'))
+        fund_to_add += exact_fixed_fund_share
+
+    elif group.group_type == 'INDEPENDENT':
+        exact_fund_share = total_group_comm * (group.share_fund / Decimal('100'))
+        exact_personal_share = total_group_comm - exact_fund_share
+        personal_share = exact_personal_share.quantize(Decimal('0.00'), rounding=ROUND_DOWN)
+        fund_to_add = exact_fund_share + (exact_personal_share - personal_share)
+        CommissionLog.objects.create(recipient=seller, source_employee=seller, level=1, amount=personal_share, sale_ref_id=sale_ref_id)
+
+    if fund_to_add > 0:
+        group.fund_balance += fund_to_add
+        group.save()
+        FundTransaction.objects.create(group=group, transaction_type='IN', amount=fund_to_add, description=f"รับคอมฯและปัดเศษสตางค์ จากบิล {sale_ref_id}")
+
+def get_next_document_number():
+    now = timezone.now()
+    thai_year = (now.year + 543) % 100
+    prefix = f"DLN-{thai_year:02d}{now.strftime('%m')}"
+    last_inv = Invoice.objects.filter(code__startswith=prefix).aggregate(Max('code'))['code__max']
+    last_pos = POSOrder.objects.filter(code__startswith=prefix).aggregate(Max('code'))['code__max']
+    max_seq = 0
+    if last_inv:
+        try: max_seq = max(max_seq, int(last_inv.split('-')[-1]))
+        except: pass
+    if last_pos:
+        try: max_seq = max(max_seq, int(last_pos.split('-')[-1]))
+        except: pass
+    return f"{prefix}-{max_seq + 1:03d}"
+
+def get_target_employees(user):
+    current_emp = getattr(user, 'employee', None)
+    if user.is_superuser: return Employee.objects.all(), "Admin View"
+    elif current_emp:
+        dept_name = current_emp.department.name if current_emp.department else ""
+        if 'บัญชี' in dept_name or 'Accounting' in dept_name: return Employee.objects.all(), "Accounting View"
+        rank = current_emp.business_rank.lower() if current_emp.business_rank else ""
+        if rank in ['manager', 'director']: return Employee.objects.all(), "Manager View"
+        elif rank == 'supervisor':
+            if current_emp.department: return Employee.objects.filter(department=current_emp.department), f"Team {current_emp.department.name}"
+            else: return Employee.objects.filter(Q(id=current_emp.id) | Q(introducer=current_emp)), "Direct Team"
+        else: return Employee.objects.filter(id=current_emp.id), "Self View"
+    return Employee.objects.none(), "-"
+
+def get_sales_queryset(model_class, user, target_employees):
+    if user.is_superuser: return model_class.objects.all()
+    if hasattr(user, 'employee') and user.employee:
+        dept_name = user.employee.department.name if user.employee.department else ""
+        rank = user.employee.business_rank.lower() if user.employee.business_rank else ""
+        if 'บัญชี' in dept_name or rank in ['manager', 'director']: return model_class.objects.all()
+
+    emp_ids = list(target_employees.values_list('id', flat=True))
+    return model_class.objects.filter(employee_id__in=emp_ids)
+
+def is_sales_authorized(user):
+    if user.is_superuser: return True
+    if hasattr(user, 'employee') and user.employee:
+        dept = user.employee.department.name if user.employee.department else ''
+        if 'ขาย' in dept or 'Sales' in dept: return True
+    return False
 
 # ==========================================
 # 🌟 ระบบใบสั่งผลิต (Production Order) 🌟
@@ -152,7 +304,7 @@ def planner_board(request):
 
     orders = ProductionOrder.objects.select_related(
         'product', 'branch', 'production_team', 'salesperson', 'salesperson__branch', 'quotation_ref'
-    ).all().order_by('-id')
+    ).filter(is_closed=False).order_by('-id')
 
     if start_date: orders = orders.filter(start_date__gte=start_date)
     if end_date: orders = orders.filter(start_date__lte=end_date)
@@ -563,7 +715,7 @@ def update_production_board(request, pk):
     if request.method == 'POST':
         order = get_object_or_404(ProductionOrder, pk=pk)
         action = request.POST.get('action')
-        redirect_to = request.POST.get('redirect_to') 
+        redirect_to = request.POST.get('redirect_to')
 
         if action == 'update_note':
             order.note = request.POST.get('note', '')
@@ -580,7 +732,7 @@ def update_production_board(request, pk):
 
         if 'production_team' in request.POST:
             order.production_team_id = request.POST.get('production_team') or None
-        
+
         if 'branch' in request.POST:
             order.branch_id = request.POST.get('branch') or None
 
@@ -817,10 +969,10 @@ def production_head_board(request):
         else:
             return f"จ.{monday.day}/{monday.month}-อา.{sunday.day}/{sunday.month}/{y_str}"
 
-    col1_upcoming = []  
-    col2_current = []   
-    col3_overdue = []   
-    col4_rework = []    
+    col1_upcoming = []
+    col2_current = []
+    col3_overdue = []
+    col4_rework = []
 
     for order in orders:
         order.display_cohort = format_week_range(order.start_date)
@@ -841,7 +993,7 @@ def production_head_board(request):
     prod_statuses = ProductionStatus.objects.all().order_by('sequence', 'id')
 
     return render(request, 'manufacturing/production_head_board.html', {
-        'orders': orders, 
+        'orders': orders,
         'col1_upcoming': col1_upcoming,
         'col2_current': col2_current,
         'col3_overdue': col3_overdue,
@@ -918,9 +1070,9 @@ def qc_board(request):
         else:
             return f"จ.{monday.day}/{monday.month}-อา.{sunday.day}/{sunday.month}/{y_str}"
 
-    col1_current = []   
-    col2_overdue = []   
-    col3_rework = []    
+    col1_current = []
+    col2_overdue = []
+    col3_rework = []
 
     for order in orders:
         order.display_cohort = format_week_range(order.start_date)
@@ -1002,7 +1154,7 @@ def process_qc(request, pk):
         elif action == 'fail':
             comments = request.POST.get('comments', '')
             order.rework_count += 1
-            order.status = 'REWORK' 
+            order.status = 'REWORK'
 
             log = QCInspectionLog.objects.create(
                 production_order=order,
@@ -1033,8 +1185,21 @@ from .models import BlueprintClaim, BlueprintLog
 def blueprint_hub(request):
     current_emp = getattr(request.user, 'employee', None)
 
-    start_date = request.GET.get('start_date', '')
-    end_date = request.GET.get('end_date', '')
+    date_range = request.GET.get('date_range', '')
+    start_date = ''
+    end_date = ''
+
+    if date_range:
+        parts = date_range.split(' - ')
+        if len(parts) == 2:
+            try:
+                d1, m1, y1 = parts[0].strip().split('/')
+                start_date = f"{y1}-{m1}-{d1}"
+                d2, m2, y2 = parts[1].strip().split('/')
+                end_date = f"{y2}-{m2}-{d2}"
+            except:
+                pass
+
     q_job = request.GET.get('q_job', '')
     q_customer = request.GET.get('q_customer', '')
     search_sp = request.GET.get('salesperson', '')
@@ -1045,9 +1210,10 @@ def blueprint_hub(request):
         is_closed=False
     ).order_by('start_date')
 
+    # 🌟 [FIXED] เปลี่ยนจาก blueprint_approved_by เป็น blueprint_approved_at__isnull=False (แอดมินกดอนุมัติก็จะโชว์)
     history_jobs = ProductionOrder.objects.select_related(
         'product', 'salesperson', 'salesperson__branch', 'blueprint_approved_by', 'blueprint_claim'
-    ).filter(blueprint_approved_by__isnull=False)
+    ).filter(blueprint_approved_at__isnull=False)
 
     if start_date:
         history_jobs = history_jobs.filter(blueprint_approved_at__date__gte=start_date)
@@ -1065,18 +1231,23 @@ def blueprint_hub(request):
     elif claim_status in ['PENDING', 'PAID', 'REJECTED']:
         history_jobs = history_jobs.filter(blueprint_claim__status=claim_status)
 
-    history_jobs = history_jobs.order_by('-blueprint_approved_at')[:100] 
+    history_jobs = history_jobs.order_by('-blueprint_approved_at')[:100]
 
-    claimable_jobs = ProductionOrder.objects.filter(
+    # 🌟 [FIXED] เพิ่ม select_related เพื่อให้ระบบดึงข้อมูลเซลส์ ใบเสนอราคา และใบขาย มารอไว้เลย ป้องกันเว็บโหลดช้า
+    claimable_jobs = ProductionOrder.objects.select_related(
+        'salesperson', 'quotation_ref', 'quotation_ref__invoice'
+    ).filter(
         blueprint_approved_by=current_emp,
         blueprint_claim__isnull=True,
-        quotation_ref__invoice__isnull=False 
+        quotation_ref__invoice__isnull=False
     ).order_by('blueprint_approved_at')
 
-    waiting_invoice_jobs = ProductionOrder.objects.filter(
+    waiting_invoice_jobs = ProductionOrder.objects.select_related(
+        'salesperson', 'quotation_ref'
+    ).filter(
         blueprint_approved_by=current_emp,
         blueprint_claim__isnull=True,
-        quotation_ref__invoice__isnull=True 
+        quotation_ref__invoice__isnull=True
     ).order_by('blueprint_approved_at')
 
     claims = BlueprintClaim.objects.filter(employee=current_emp).order_by('-created_at')
@@ -1087,11 +1258,10 @@ def blueprint_hub(request):
         'pending_jobs': pending_jobs,
         'history_jobs': history_jobs,
         'claimable_jobs': claimable_jobs,
-        'waiting_invoice_jobs': waiting_invoice_jobs, 
+        'waiting_invoice_jobs': waiting_invoice_jobs,
         'claims': claims,
         'salespersons': salespersons,
-        'start_date': start_date,
-        'end_date': end_date,
+        'date_range': date_range,
         'q_job': q_job,
         'q_customer': q_customer,
         'search_sp': search_sp,
@@ -1132,7 +1302,9 @@ def blueprint_approve(request, pk):
         )
 
         messages.success(request, f"✅ ยืนยันความถูกต้องของ JOB {order.code} เรียบร้อย! งานถูกส่งต่อไปยังแผนกสั่งวัตถุดิบแล้วค่ะ")
-        return redirect('blueprint_hub')
+        # 🌟 [FIXED] สั่งให้รีไดเรกต์แล้วกระโดดไปที่แท็บประวัติอัตโนมัติ
+        return redirect(reverse('blueprint_hub') + '#history')
+
     return redirect('blueprint_workspace', pk=pk)
 
 @login_required
@@ -1231,10 +1403,10 @@ def print_blueprint_claim(request, pk):
     splits = claim.splits.all()
 
     total_split_amount = sum([s.amount for s in splits]) if splits else Decimal('0')
-    fund_amount = claim.total_amount - total_split_amount 
+    fund_amount = claim.total_amount - total_split_amount
 
     total_split_percent = sum([s.percentage for s in splits]) if splits else Decimal('0')
-    fund_percentage = Decimal('100') - total_split_percent 
+    fund_percentage = Decimal('100') - total_split_percent
 
     return render(request, 'manufacturing/print_blueprint_claim.html', {
         'claim': claim,
@@ -1242,7 +1414,7 @@ def print_blueprint_claim(request, pk):
         'company': company,
         'amount_text': amount_text,
         'fund_amount': fund_amount,
-        'fund_percentage': fund_percentage, 
+        'fund_percentage': fund_percentage,
     })
 
 # ==========================================
@@ -1267,7 +1439,7 @@ def logistics_board(request):
                 inv = order.quotation_ref.invoice_set.first()
             elif hasattr(order.quotation_ref, 'invoice'):
                 inv = order.quotation_ref.invoice
-            
+
             if inv:
                 # ถ้ามีการเปิด Invoice แล้ว ยึดยอดคงเหลือจาก Invoice เป็นหลัก
                 order.actual_balance = getattr(inv, 'balance_amount', Decimal('0'))
@@ -1305,7 +1477,7 @@ def process_logistics(request, pk):
         if action == 'assign_truck':
             transporter_id = request.POST.get('transporter')
             delivery_fee = request.POST.get('delivery_fee', 0)
-            delivery_date_str = request.POST.get('delivery_date') 
+            delivery_date_str = request.POST.get('delivery_date')
 
             if transporter_id:
                 order.transporter_id = transporter_id
@@ -1355,7 +1527,7 @@ def create_logistics_claim(request):
                 messages.success(request, f"💰 สร้างใบตั้งเบิกค่ารถ {claim.code} สำเร็จ!")
             else: messages.error(request, "❌ ไม่พบงาน หรือมีการตั้งเบิกไปแล้ว")
         else: messages.warning(request, "⚠️ กรุณาติ๊กเลือกอย่างน้อย 1 งาน")
-    return redirect('logistics_claim_history') 
+    return redirect('logistics_claim_history')
 
 @login_required
 def print_delivery_note(request, pk):
@@ -1369,7 +1541,26 @@ def print_delivery_note(request, pk):
     return render(request, 'manufacturing/print_delivery_note.html', {
         'order': order,
         'company': company,
-        'amount_text': amount_text 
+        'amount_text': amount_text
+    })
+
+@login_required
+def print_consent_form(request, pk):
+    order = get_object_or_404(ProductionOrder, pk=pk)
+    company = CompanyInfo.objects.first()
+    return render(request, 'manufacturing/print_consent_form.html', {
+        'order': order,
+        'company': company,
+    })
+
+# 🌟 [NEW] ฟังก์ชันดึงข้อมูลเพื่อพิมพ์ใบตรวจสอบก่อนติดตั้ง 🌟
+@login_required
+def print_site_checklist(request, pk):
+    order = get_object_or_404(ProductionOrder, pk=pk)
+    company = CompanyInfo.objects.first()
+    return render(request, 'manufacturing/print_site_checklist.html', {
+        'order': order,
+        'company': company,
     })
 
 @login_required

@@ -2,64 +2,296 @@
 {% load humanize %}
 
 {% block content %}
+<!-- 🌟 นำเข้าไลบรารี Date Range Picker 🌟 -->
+<script type="text/javascript" src="https://cdn.jsdelivr.net/jquery/latest/jquery.min.js"></script>
+<script type="text/javascript" src="https://cdn.jsdelivr.net/momentjs/latest/moment.min.js"></script>
+<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.min.js"></script>
+<link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css" />
+
+<!-- 🌟 นำเข้าไลบรารี Flatpickr สำหรับ Datepicker ใน Modal 🌟 -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+
 <style>
     .btn-gold { background: linear-gradient(135deg, #d4af37 0%, #aa8c2c 100%); color: #ffffff !important; border: none; transition: all 0.3s ease; }
     .btn-gold:hover { background: linear-gradient(135deg, #aa8c2c 0%, #8c7324 100%); transform: translateY(-2px); box-shadow: 0 4px 8px rgba(212, 175, 55, 0.3) !important; }
+
+    /* 🌟 สไตล์แถบค้นหาแบบแคปซูล 🌟 */
+    .search-pill-container {
+        display: flex; align-items: center; background-color: #f8f9fa; border: 1px solid #ced4da;
+        border-radius: 50px; padding: 4px 8px; box-shadow: inset 0 1px 2px rgba(0,0,0,0.05);
+    }
+    .search-pill-input {
+        border: none; background: transparent; box-shadow: none; outline: none; width: 100%;
+        padding: 6px 12px; font-size: 0.85rem; cursor: pointer;
+    }
+    .search-pill-icon { color: #6c757d; padding-left: 10px; }
+    .search-pill-btn {
+        background-color: #198754; color: white; border: none; border-radius: 50px;
+        width: 35px; height: 35px; display: flex; align-items: center; justify-content: center; transition: all 0.2s ease;
+    }
+    .search-pill-btn:hover { background-color: #157347; transform: scale(1.05); }
+    .hidden-date { display: none; }
+    
+    /* 🌟 สไตล์ปุ่มรับชำระ 🌟 */
+    .btn-outline-gold {
+        color: #c5a059; border-color: #c5a059; transition: all 0.3s ease;
+    }
+    .btn-outline-gold:hover {
+        background-color: #c5a059; color: white;
+    }
 </style>
 
 <div class="container-fluid py-4 px-4">
     <div class="d-flex justify-content-between align-items-end mb-4">
         <div>
             <h4 class="fw-bold mb-1 text-dark"><i class="fas fa-file-invoice-dollar text-success me-2"></i>รายการใบเสร็จรับเงิน (Solar Invoice)</h4>
-            <p class="text-muted small mb-0">ระบบจัดการบิลเรียกเก็บเงินแผนกโซล่าเซลล์</p>
+            <p class="text-muted small mb-0">ตรวจสอบบิลเรียกเก็บเงินและจัดการสถานะเอกสารแผนกโซล่าเซลล์</p>
+        </div>
+        <a href="{% url 'solar_sales_dashboard' %}" class="btn btn-outline-secondary rounded-pill px-4 text-uppercase">
+            <i class="fas fa-arrow-left me-2"></i> Dashboard
+        </a>
+    </div>
+
+    <!-- 🌟 แถบค้นหาดีไซน์ใหม่ 🌟 -->
+    <div class="card shadow-sm border-0 rounded-4 mb-4">
+        <div class="card-body p-3">
+            <form method="GET" class="row g-2 align-items-center">
+
+                <div class="col-md-3">
+                    <div class="input-group border-0 bg-light rounded-pill px-2">
+                        <span class="input-group-text bg-transparent border-0 text-muted"><i class="fas fa-search"></i></span>
+                        <input type="text" name="q" class="form-control border-0 bg-transparent shadow-none" placeholder="ค้นหาเลขที่, ชื่อลูกค้า..." value="{{ search_query|default:'' }}">
+                    </div>
+                </div>
+
+                {% if is_manager or is_supervisor %}
+                <div class="col-md-2">
+                    <div class="input-group border-0 bg-light rounded-pill px-2">
+                        <span class="input-group-text bg-transparent border-0 text-muted"><i class="fas fa-map-marker-alt"></i></span>
+                        <select name="branch" class="form-select border-0 bg-transparent shadow-none" style="cursor: pointer;">
+                            <option value="" {% if not branch_filter %}selected{% endif %}>ทุกสาขา</option>
+                            {% for dept in departments %}
+                                <option value="{{ dept.id }}" {% if branch_filter == dept.id|stringformat:"s" %}selected{% endif %}>{{ dept.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                {% endif %}
+
+                <div class="col-md-2">
+                    <div class="input-group border-0 bg-light rounded-pill px-2">
+                        <span class="input-group-text bg-transparent border-0 text-muted"><i class="fas fa-filter"></i></span>
+                        <select name="status" class="form-select border-0 bg-transparent shadow-none" style="cursor: pointer;">
+                            <option value="" {% if not status_filter %}selected{% endif %}>สถานะทั้งหมด</option>
+                            <option value="UNPAID" {% if status_filter == 'UNPAID' %}selected{% endif %}>ค้างชำระ</option>
+                            <option value="PAID" {% if status_filter == 'PAID' %}selected{% endif %}>ชำระแล้ว</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="col-md-4">
+                    <div class="search-pill-container">
+                        <i class="far fa-calendar-alt search-pill-icon"></i>
+                        <input type="text" id="reportrange" class="search-pill-input text-center fw-bold" placeholder="เลือกช่วงวันที่..." readonly>
+                        <button type="submit" class="search-pill-btn" title="ค้นหา">
+                            <i class="fas fa-search"></i>
+                        </button>
+                    </div>
+                    <input type="text" name="start_date" id="start_date" class="hidden-date" value="{{ start_date|default:'' }}">
+                    <input type="text" name="end_date" id="end_date" class="hidden-date" value="{{ end_date|default:'' }}">
+                </div>
+
+                <div class="col-md-1 text-end">
+                    {% if search_query or start_date or status_filter or branch_filter %}
+                        <a href="{% url 'solar_invoice_list' %}" class="btn btn-outline-danger rounded-circle d-inline-flex align-items-center justify-content-center" style="width: 38px; height: 38px;" title="ล้างค่าทั้งหมด">
+                            <i class="fas fa-undo-alt"></i>
+                        </a>
+                    {% endif %}
+                </div>
+
+            </form>
         </div>
     </div>
 
+    <!-- 🌟 ตารางข้อมูล 🌟 -->
     <div class="card shadow-sm border-0 rounded-4 bg-white overflow-hidden">
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
-                <thead class="bg-light text-secondary small text-uppercase">
+                <thead class="bg-light text-secondary small text-uppercase" style="letter-spacing: 0.5px;">
                     <tr>
-                        <th class="ps-4 py-3 border-0">เลขที่บิล / วันที่</th>
-                        <th class="py-3 border-0">ลูกค้า</th>
-                        <th class="py-3 border-0">อ้างอิงใบเสนอราคา</th>
-                        <th class="py-3 border-0 text-end">ยอดสุทธิ (บาท)</th>
-                        <th class="py-3 border-0 text-end">ยอดคงค้าง (บาท)</th>
-                        <th class="py-3 border-0 text-center">สถานะ</th>
-                        <th class="pe-4 py-3 border-0 text-center">จัดการ</th>
+                        <th class="ps-4 py-3 border-0" style="width: 15%;">เอกสาร / วันที่</th>
+                        <th class="py-3 border-0" style="width: 15%;">ลูกค้า</th>
+                        <th class="py-3 border-0 text-center" style="width: 10%;">พนักงาน</th>
+                        <th class="py-3 border-0 text-end" style="width: 15%;">ยอดสุทธิ (บาท)</th>
+                        <th class="py-3 border-0 text-center" style="width: 10%;">เงินมัดจำ</th>
+                        <th class="py-3 border-0 text-center" style="width: 15%;">ยอดรับชำระ / หลักฐาน</th>
+                        <th class="py-3 border-0 text-center" style="width: 10%;">สถานะ</th>
+                        <th class="pe-4 py-3 border-0 text-center" style="width: 10%;">จัดการ</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% for inv in invoices %}
+                    {% for item in page_obj %}
                     <tr>
                         <td class="ps-4">
-                            <div class="fw-bold text-success">{{ inv.code }}</div>
-                            <div class="small text-muted"><i class="far fa-calendar-alt me-1"></i>{{ inv.date|date:"d/m/Y" }}</div>
-                        </td>
-                        <td>
-                            <div class="fw-bold text-dark">{{ inv.customer.name|default:"-" }}</div>
-                        </td>
-                        <td>
-                            <span class="text-primary fw-bold">{{ inv.quotation_ref.code|default:"-" }}</span>
-                        </td>
-                        <td class="text-end fw-bold text-dark">
-                            ฿{{ inv.grand_total|floatformat:2|intcomma }}
-                        </td>
-                        <td class="text-end fw-bold text-danger">
-                            ฿{{ inv.balance_amount|floatformat:2|intcomma }}
-                        </td>
-                        <td class="text-center">
-                            {% if inv.status == 'UNPAID' %}<span class="badge bg-danger rounded-pill px-3 shadow-sm">ค้างชำระ</span>
-                            {% elif inv.status == 'PAID' %}<span class="badge bg-success rounded-pill px-3 shadow-sm">ชำระครบแล้ว</span>
+                            <div class="fw-bold text-dark" style="font-family: 'Courier New', monospace;">{{ item.code }}</div>
+                            <div class="small text-muted mb-1" style="font-size: 0.75rem;"><i class="far fa-clock me-1"></i> {{ item.date|date:"d/m/Y" }}</div>
+                            <div class="small lh-sm" style="font-size: 0.7rem;"><span class="text-secondary opacity-75">QT:</span> {{ item.quotation_ref.code }}</div>
+                            
+                            <!-- 🌟 [NEW] แสดงเลขที่ JOB (ถ้ามี) 🌟 -->
+                            {% if item.quotation_ref.center_jobs.first %}
+                                <div class="small fw-bold text-success mt-1" style="font-size: 0.75rem;"><i class="fas fa-hard-hat me-1"></i>{{ item.quotation_ref.center_jobs.first.code }}</div>
                             {% endif %}
                         </td>
+
+                        <td>
+                            <div class="fw-bold text-dark text-truncate" style="max-width: 150px;">{{ item.customer.name|default:"-" }}</div>
+                        </td>
+
+                        <td>
+                            <div class="d-flex flex-column align-items-center justify-content-center">
+                                {% if item.quotation_ref.employee.photo %}
+                                    <img src="{{ item.quotation_ref.employee.photo.url }}" class="rounded-circle border mb-1" style="width: 30px; height: 30px; object-fit: cover;">
+                                {% else %}
+                                    <div class="bg-light text-secondary rounded-circle d-inline-flex align-items-center justify-content-center border mb-1" style="width: 30px; height: 30px; font-size: 10px;">
+                                        {{ item.quotation_ref.employee.first_name|slice:":2"|default:"-" }}
+                                    </div>
+                                {% endif %}
+                                <div class="small fw-bold text-dark lh-sm">{{ item.quotation_ref.employee.first_name|default:"-" }}</div>
+                            </div>
+                        </td>
+
+                        <td class="text-end">
+                            <div class="fw-bold text-dark fs-6">฿{{ item.grand_total|floatformat:2|intcomma }}</div>
+                            
+                            {% if item.balance_amount > 0 %}
+                                <div class="small fw-bold text-danger mt-1">ค้างชำระ: ฿{{ item.balance_amount|floatformat:2|intcomma }}</div>
+                            {% endif %}
+                        </td>
+
+                        <!-- 🌟 แสดงข้อมูลเงินมัดจำ 🌟 -->
+                        <td class="text-center">
+                            {% if item.quotation_ref and item.quotation_ref.deposit_amount > 0 %}
+                                <div class="fw-bold text-success" style="font-size: 0.85rem;">฿{{ item.quotation_ref.deposit_amount|intcomma }}</div>
+                                <div class="d-flex align-items-center justify-content-center gap-1 mt-1">
+                                    {% if item.quotation_ref.deposit_method == 'TRANSFER' %}
+                                        <i class="fas fa-mobile-alt text-info" title="โอนเงิน"></i>
+                                    {% elif item.quotation_ref.deposit_method == 'CASH' %}
+                                        <i class="fas fa-money-bill-wave text-success" title="เงินสด"></i>
+                                    {% elif item.quotation_ref.deposit_method == 'CHECK' %}
+                                        <i class="fas fa-money-check text-warning" title="เช็ค"></i>
+                                    {% endif %}
+                                    
+                                    <!-- 🌟 [FIXED] กดเพื่อเปิด Modal โชว์รูปสลิปแทนการเปิดแท็บใหม่ 🌟 -->
+                                    {% if item.quotation_ref.deposit_slip %}
+                                        <a href="javascript:void(0);" data-bs-toggle="modal" data-bs-target="#slipModal{{ item.id }}" title="ดูสลิป">
+                                            <i class="fas fa-image text-secondary ms-1 fs-6"></i>
+                                        </a>
+                                    {% endif %}
+                                </div>
+                            {% else %}
+                                <span class="text-muted small">-</span>
+                            {% endif %}
+                        </td>
+
+                        <td class="text-center">
+                            <!-- 🌟 ปุ่มเพิ่มรับชำระ 🌟 -->
+                            {% if item.balance_amount > 0 %}
+                                <button class="btn btn-sm btn-outline-gold rounded-pill px-3 fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#paymentModal{{ item.id }}">
+                                    <i class="fas fa-plus me-1"></i> เพิ่มรับชำระ
+                                </button>
+                            {% else %}
+                                <div class="fw-bold text-success fs-6"><i class="fas fa-check-circle me-1"></i> ครบแล้ว</div>
+                            {% endif %}
+                        </td>
+
+                        <td class="text-center">
+                            {% if item.status == 'UNPAID' %}
+                                <span class="badge bg-danger rounded-pill px-3 py-2 shadow-sm border border-danger bg-opacity-10 text-danger"><i class="fas fa-times-circle me-1"></i>ยังไม่ชำระ</span>
+                            {% elif item.status == 'PAID' %}
+                                <span class="badge bg-success rounded-pill px-3 py-2 shadow-sm border border-success bg-opacity-10 text-success"><i class="fas fa-check-circle me-1"></i>ชำระครบแล้ว</span>
+                            {% endif %}
+                        </td>
+
                         <td class="pe-4 text-center">
-                            <a href="{% url 'solar_invoice_detail' inv.id %}" class="btn btn-sm btn-outline-primary rounded-pill px-3 fw-bold">เปิดดู</a>
+                            <div class="d-flex justify-content-center align-items-center gap-2">
+                                <a href="{% url 'solar_invoice_detail' item.id %}" class="btn btn-sm btn-light border text-primary rounded-circle shadow-sm" title="เปิดดูรายละเอียด" style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;">
+                                    <i class="fas fa-search"></i>
+                                </a>
+                                <a href="{% url 'solar_invoice_print' item.id %}" target="_blank" class="btn btn-sm btn-light border text-secondary rounded-circle shadow-sm" title="พิมพ์ใบเสร็จ" style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;">
+                                    <i class="fas fa-print"></i>
+                                </a>
+                            </div>
                         </td>
                     </tr>
+
+                    <!-- 🌟 Modal โชว์รูปสลิปมัดจำ (Popup) 🌟 -->
+                    {% if item.quotation_ref.deposit_slip %}
+                    <div class="modal fade" id="slipModal{{ item.id }}" tabindex="-1" aria-hidden="true">
+                        <div class="modal-dialog modal-dialog-centered modal-lg">
+                            <div class="modal-content bg-transparent border-0 shadow-none">
+                                <div class="modal-header border-0 pb-0 justify-content-end">
+                                    <button type="button" class="btn-close fs-5" data-bs-dismiss="modal" aria-label="Close" style="filter: invert(1) grayscale(100%) brightness(200%);"></button>
+                                </div>
+                                <div class="modal-body text-center p-0 mt-2">
+                                    <img src="{{ item.quotation_ref.deposit_slip.url }}" class="img-fluid rounded-4 shadow-lg" style="max-height: 85vh; object-fit: contain; border: 3px solid rgba(255,255,255,0.2);">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- 🌟 Modal สำหรับเพิ่มรับชำระเงิน 🌟 -->
+                    {% if item.balance_amount > 0 %}
+                    <div class="modal fade" id="paymentModal{{ item.id }}" tabindex="-1">
+                        <div class="modal-dialog modal-dialog-centered">
+                            <div class="modal-content border-0 rounded-4 shadow-lg text-start">
+                                <div class="modal-header bg-gold border-0" style="background-color: #c5a059;">
+                                    <h5 class="modal-title fw-bold text-white"><i class="fas fa-hand-holding-usd me-2"></i>บันทึกรับชำระเงิน</h5>
+                                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                                </div>
+                                <form method="POST" action="{% url 'solar_invoice_record_payment' item.id %}" enctype="multipart/form-data">
+                                    {% csrf_token %}
+                                    <div class="modal-body p-4">
+                                        <div class="mb-4 text-center">
+                                            <div class="small text-muted mb-1">ยอดค้างชำระทั้งหมด</div>
+                                            <h3 class="fw-bold text-danger mb-0">{{ item.balance_amount|floatformat:2|intcomma }} บาท</h3>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label fw-bold text-dark">จำนวนเงินที่รับชำระ (บาท)</label>
+                                            <input type="number" step="0.01" name="amount" class="form-control form-control-lg text-end fw-bold text-success" value="{{ item.balance_amount }}" max="{{ item.balance_amount }}" required>
+                                            <div class="small text-muted mt-1"><i class="fas fa-info-circle me-1"></i> ระบบดึงยอดค้างชำระมาให้อัตโนมัติ สามารถพิมพ์แก้ตัวเลขได้หากเป็นการแบ่งจ่าย</div>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label fw-bold text-dark">วันที่รับเงิน</label>
+                                            <input type="text" name="payment_date" class="form-control datepicker bg-white" value="{% now 'd/m/Y' %}" required>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label fw-bold text-dark">ช่องทางรับเงิน</label>
+                                            <select name="payment_method" class="form-select">
+                                                <option value="TRANSFER">โอนเงินเข้าบัญชี</option>
+                                                <option value="CASH">เงินสด</option>
+                                                <option value="CHECK">เช็คธนาคาร</option>
+                                            </select>
+                                        </div>
+                                        <div class="mb-2">
+                                            <label class="form-label fw-bold text-dark">อัปโหลดสลิป</label>
+                                            <input type="file" name="payment_slip" class="form-control" accept="image/*">
+                                        </div>
+                                    </div>
+                                    <div class="modal-footer bg-light border-0">
+                                        <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">ยกเลิก</button>
+                                        <button type="submit" class="btn btn-gold text-white rounded-pill px-4 fw-bold shadow-sm" style="background-color: #c5a059;" onclick="return confirm('ยืนยันบันทึกยอดรับชำระ?');">บันทึกยอดรับชำระ</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+
                     {% empty %}
                     <tr>
-                        <td colspan="7" class="text-center py-5 text-muted">
+                        <td colspan="8" class="text-center py-5 text-muted">
                             <i class="fas fa-box-open fa-3x mb-3 opacity-25"></i>
                             <h5 class="fw-bold">ยังไม่มีรายการใบเสร็จรับเงิน</h5>
                         </td>
@@ -68,6 +300,80 @@
                 </tbody>
             </table>
         </div>
+
+        <!-- 🌟 แถบแบ่งหน้า (Pagination) 🌟 -->
+        {% if page_obj.has_other_pages %}
+        <div class="card-footer bg-white py-3 border-top-0 d-flex justify-content-center">
+            <nav>
+                <ul class="pagination pagination-sm shadow-sm mb-0">
+                    {% if page_obj.has_previous %}
+                    <li class="page-item"><a class="page-link border-0 text-muted" href="?page={{ page_obj.previous_page_number }}&q={{ search_query|default:'' }}&start_date={{ start_date|default:'' }}&end_date={{ end_date|default:'' }}&status={{ status_filter|default:'' }}&branch={{ branch_filter|default:'' }}"><i class="fas fa-chevron-left"></i></a></li>
+                    {% endif %}
+                    <li class="page-item disabled"><span class="page-link border-0 text-dark fw-bold px-3">หน้า {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span></li>
+                    {% if page_obj.has_next %}
+                    <li class="page-item"><a class="page-link border-0 text-muted" href="?page={{ page_obj.next_page_number }}&q={{ search_query|default:'' }}&start_date={{ start_date|default:'' }}&end_date={{ end_date|default:'' }}&status={{ status_filter|default:'' }}&branch={{ branch_filter|default:'' }}"><i class="fas fa-chevron-right"></i></a></li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+        {% endif %}
     </div>
 </div>
+
+<!-- 🌟 สคริปต์ Date Range Picker 🌟 -->
+<script type="text/javascript">
+document.addEventListener("DOMContentLoaded", function() {
+    flatpickr(".datepicker", { dateFormat: "Y-m-d", altInput: true, altFormat: "d/m/Y", allowInput: true });
+});
+
+$(function() {
+    var start_str = "{{ start_date|default:'' }}";
+    var end_str = "{{ end_date|default:'' }}";
+
+    var start = (start_str !== "" && start_str !== "None") ? moment(start_str, "YYYY-MM-DD") : moment().startOf('month');
+    var end = (end_str !== "" && end_str !== "None") ? moment(end_str, "YYYY-MM-DD") : moment().endOf('month');
+
+    function cb(start, end) {
+        if(start && end && start.isValid() && end.isValid()) {
+            $('#reportrange').val(start.format('DD/MM/YYYY') + ' - ' + end.format('DD/MM/YYYY'));
+            $('#start_date').val(start.format('YYYY-MM-DD'));
+            $('#end_date').val(end.format('YYYY-MM-DD'));
+        }
+    }
+
+    $('#reportrange').daterangepicker({
+        startDate: start,
+        endDate: end,
+        linkedCalendars: false,
+        ranges: {
+           'วันนี้': [moment(), moment()],
+           'เมื่อวาน': [moment().subtract(1, 'days'), moment().subtract(1, 'days')],
+           'ช่วง 7 วันก่อนหน้า': [moment().subtract(6, 'days'), moment()],
+           'ช่วง 30 วันก่อนหน้า': [moment().subtract(29, 'days'), moment()],
+           'ช่วง 3 เดือนก่อนหน้า': [moment().subtract(3, 'months'), moment()],
+           'เดือนนี้': [moment().startOf('month'), moment().endOf('month')],
+           '1 เดือนก่อนหน้า': [moment().subtract(1, 'month').startOf('month'), moment().subtract(1, 'month').endOf('month')]
+        },
+        locale: {
+            format: 'DD/MM/YYYY',
+            separator: ' - ',
+            applyLabel: 'ตกลง',
+            cancelLabel: 'ยกเลิก',
+            fromLabel: 'จาก',
+            toLabel: 'ถึง',
+            customRangeLabel: 'กำหนดเอง',
+            weekLabel: 'ส',
+            daysOfWeek: ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'],
+            monthNames: ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'],
+            firstDay: 1
+        }
+    }, cb);
+
+    $('#reportrange').on('apply.daterangepicker', function(ev, picker) {
+        cb(picker.startDate, picker.endDate);
+    });
+
+    cb(start, end);
+});
+</script>
 {% endblock %}

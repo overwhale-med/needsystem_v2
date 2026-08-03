@@ -561,6 +561,7 @@
         $('#reportrange').daterangepicker({
             startDate: start,
             endDate: end,
+            linkedCalendars: false, // 🌟 [NEW] เพิ่มบรรทัดนี้เพื่อแยกปฏิทินซ้าย-ขวาให้เป็นอิสระต่อกัน
             ranges: {
                'วันนี้': [moment(), moment()],
                'เมื่อวาน': [moment().subtract(1, 'days'), moment().subtract(1, 'days')],

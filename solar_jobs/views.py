@@ -5,7 +5,9 @@ from django.db.models import Count, Sum
 from .models import SolarJob, SolarExpense, SubcontractorTeam
 from .forms import SolarJobForm, SolarMaterialFormSet, SolarExpenseForm
 from master_data.models import Customer
-from solar_sales.models import SolarProduct
+from solar_sales.models import SolarProduct, SolarQuotation
+from django.http import JsonResponse
+import json
 
 # ------------------------------------------
 # 🛡️ ระบบเช็คสิทธิ์สำหรับแผนก Center / ปฏิบัติการ
@@ -24,14 +26,16 @@ def center_dashboard(request):
         messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์เข้าถึงระบบ Center (Solar)")
         return redirect('dashboard')
 
-    all_jobs = SolarJob.objects.all().order_by('-created_at')
+    # 🌟 [FIXED] ใช้ select_related เพื่อดึงข้อมูลเชิงลึกมาไว้ในการ์ดแบบไม่กินสเปคเซิร์ฟเวอร์ 🌟
+    all_jobs = SolarJob.objects.select_related('customer', 'package_sold', 'salesperson', 'quotation_ref', 'technician_team').all().order_by('-created_at')
+
     draft_jobs = all_jobs.filter(status='DRAFT').count()
     preparing_jobs = all_jobs.filter(status='PREPARING').count()
     in_progress_jobs = all_jobs.filter(status='IN_PROGRESS').count()
     pending_expenses = SolarExpense.objects.filter(status='PENDING').count()
 
     context = {
-        'jobs': all_jobs[:20],
+        'jobs': all_jobs[:30], # โหลดมาแสดง 30 งานล่าสุด
         'draft_jobs': draft_jobs,
         'preparing_jobs': preparing_jobs,
         'in_progress_jobs': in_progress_jobs,
@@ -194,3 +198,38 @@ def expense_approve(request, expense_id):
         expense.save()
 
     return redirect('solar_expense_list')
+
+# ------------------------------------------
+# 🔄 API สำหรับอัปเดตสถานะการ์ด (Drag & Drop) & Automation
+# ------------------------------------------
+@login_required
+def update_job_status(request):
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            job_id = data.get('job_id')
+            new_status = str(data.get('new_status', '')).strip().upper()
+
+            # 1. อัปเดตสถานะของใบสั่งงานในกระดาน Center
+            job = SolarJob.objects.get(id=job_id)
+            job.status = new_status
+            job.save()
+
+            # 2. 🌟 AUTOMATION: ยิงตรงเข้าฐานข้อมูลใบเสนอราคา 🌟
+            if new_status == 'COMPLETED':
+                if job.quotation_ref_id:
+                    # 🌟 [FIXED] ใช้คำสั่ง update() ยิงตรงเข้าระดับฐานข้อมูล ชัวร์ 100% ทะลุทุกเงื่อนไข
+                    SolarQuotation.objects.filter(id=job.quotation_ref_id).update(status='READY')
+                elif job.note and "QT-SOL" in str(job.note):
+                    # กรณีเผื่อสร้างงานแบบไม่ผูก FK ให้ค้นหาจากใน Note
+                    for word in str(job.note).split():
+                        if "QT-SOL" in word:
+                            qt_code = word.strip().replace(',', '').replace(':', '')
+                            SolarQuotation.objects.filter(code__icontains=qt_code).update(status='READY')
+                            break
+
+            return JsonResponse({'success': True, 'message': 'อัปเดตเรียบร้อย'})
+        except Exception as e:
+            print(f"Error updating job: {str(e)}") # ปริ้นท์ error ลง Console ไว้เช็ค
+            return JsonResponse({'success': False, 'error': str(e)})
+    return JsonResponse({'success': False, 'error': 'Invalid request'})

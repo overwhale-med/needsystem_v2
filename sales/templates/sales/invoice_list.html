@@ -516,11 +516,13 @@ $(function() {
     $('#reportrange').daterangepicker({
         startDate: start,
         endDate: end,
+        linkedCalendars: false, // 🌟 [FIXED] ปลดล็อกปฏิทินให้เป็นอิสระ 🌟
         ranges: {
            'วันนี้': [moment(), moment()],
            'เมื่อวาน': [moment().subtract(1, 'days'), moment().subtract(1, 'days')],
            'ช่วง 7 วันก่อนหน้า': [moment().subtract(6, 'days'), moment()],
            'ช่วง 30 วันก่อนหน้า': [moment().subtract(29, 'days'), moment()],
+           'ช่วง 3 เดือนก่อนหน้า': [moment().subtract(3, 'months'), moment()], // 🌟 [FIXED] เพิ่มเมนู 3 เดือนก่อนหน้า 🌟
            'เดือนนี้': [moment().startOf('month'), moment().endOf('month')],
            '1 เดือนก่อนหน้า': [moment().subtract(1, 'month').startOf('month'), moment().subtract(1, 'month').endOf('month')]
         },

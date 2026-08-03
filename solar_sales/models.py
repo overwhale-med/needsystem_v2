@@ -74,9 +74,14 @@ class SolarStockMovement(models.Model):
 # 📝 2. ระบบขายโซล่าเซลล์ (Solar Sales)
 # ==========================================
 class SolarQuotation(models.Model):
+    # 🌟 [FIXED] เพิ่มสถานะ PROCESSING และ READY เข้าไปในฐานข้อมูล เพื่อให้ระบบยอมรับการบันทึก 🌟
     STATUS_CHOICES = [
-        ('DRAFT', 'รออนุมัติ'), ('APPROVED', 'อนุมัติแล้ว'),
-        ('CONVERTED', 'เปิดบิลขายแล้ว'), ('CANCELLED', 'ยกเลิกแล้ว')
+        ('DRAFT', 'รออนุมัติ'),
+        ('APPROVED', 'อนุมัติแล้ว'),
+        ('PROCESSING', 'ช่างกำลังติดตั้ง'),
+        ('READY', 'พร้อมเปิดบิล'),
+        ('CONVERTED', 'เปิดบิลขายแล้ว'),
+        ('CANCELLED', 'ยกเลิกแล้ว')
     ]
     VAT_CHOICES = [
         ('NONE', 'ไม่มี VAT'),

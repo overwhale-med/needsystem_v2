@@ -2,6 +2,12 @@
 {% load humanize %}
 
 {% block content %}
+<!-- 🌟 [NEW] นำเข้าไลบรารีสำหรับ Daterangepicker 🌟 -->
+<script type="text/javascript" src="https://cdn.jsdelivr.net/jquery/latest/jquery.min.js"></script>
+<script type="text/javascript" src="https://cdn.jsdelivr.net/momentjs/latest/moment.min.js"></script>
+<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.min.js"></script>
+<link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css" />
+
 <style>
     .status-badge { font-size: 0.75rem; padding: 6px 12px; border-radius: 20px; font-weight: 600; }
     .status-pending { background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
@@ -9,12 +15,30 @@
     .slip-thumbnail { width: 35px; height: 35px; object-fit: cover; border-radius: 6px; cursor: pointer; transition: transform 0.2s; border: 1px solid #dee2e6; }
     .slip-thumbnail:hover { transform: scale(1.2); box-shadow: 0 5px 15px rgba(0,0,0,0.2); z-index: 10; position: relative; }
     #slipModal .modal-backdrop { background-color: rgba(0,0,0,0.8); }
+
+    /* 🌟 [NEW] สไตล์แถบค้นหาแบบแคปซูล (Pill-shaped Search Bar) 🌟 */
+    .search-pill-container {
+        display: flex; align-items: center; background-color: #f8f9fa; border: 1px solid #ced4da;
+        border-radius: 50px; padding: 4px 8px; box-shadow: inset 0 1px 2px rgba(0,0,0,0.05);
+    }
+    .search-pill-input {
+        border: none; background: transparent; box-shadow: none; outline: none;
+        width: 100%; padding: 6px 12px; font-size: 0.85rem; cursor: pointer;
+    }
+    .search-pill-icon { color: #6c757d; padding-left: 10px; }
+    .search-pill-btn {
+        background-color: #0dcaf0; color: white; border: none; border-radius: 50px; /* ใช้สี Info ของระบบ */
+        width: 35px; height: 35px; display: flex; align-items: center; justify-content: center;
+        transition: all 0.2s ease;
+    }
+    .search-pill-btn:hover { background-color: #0bacce; transform: scale(1.05); color: white; }
+    .hidden-date { display: none; }
 </style>
 
 <div class="container-fluid py-4 px-4">
     <div class="row justify-content-center">
-        <div class="col-12"> 
-            
+        <div class="col-12">
+
             <div class="d-flex justify-content-between align-items-end mb-4">
                 <div>
                     <h4 class="fw-bold mb-1 text-dark"><i class="fas fa-hand-holding-usd text-info me-2"></i>รายการใบรับเงินมัดจำ</h4>
@@ -25,31 +49,49 @@
                 </a>
             </div>
 
+            <!-- 🌟 [FIXED] รื้อฟอร์มค้นหาเก่า แล้วใส่ระบบค้นหาใหม่ที่ครอบคลุม 🌟 -->
             <div class="card shadow-sm border-0 rounded-4 mb-4">
-                <div class="card-body p-2">
-                    <form method="GET" class="row g-1 align-items-center">
+                <div class="card-body p-3">
+                    <form method="GET" class="row g-2 align-items-center">
+
+                        <!-- 1. ค้นหาชื่อ/เลขที่ -->
                         <div class="col-md-4">
-                            <div class="input-group border-0 bg-light rounded-3 px-2">
-                                <span class="input-group-text bg-transparent border-0 text-muted"><i class="fas fa-search"></i></span>
-                                <input type="text" name="q" class="form-control border-0 bg-transparent shadow-none" placeholder="ค้นหาเลขที่ใบเสนอราคา, ชื่อลูกค้า..." value="{{ search_query|default:'' }}">
+                            <div class="input-group bg-light rounded-pill overflow-hidden border">
+                                <span class="input-group-text bg-transparent border-0 ps-3"><i class="fas fa-search text-muted"></i></span>
+                                <input type="text" name="q" class="form-control bg-transparent border-0 shadow-none px-2" style="font-size: 0.85rem;" placeholder="เลขที่ / ลูกค้า..." value="{{ search_query|default:'' }}">
                             </div>
                         </div>
+
+                        <!-- 2. สถานะ -->
                         <div class="col-md-3">
-                            <div class="input-group border-0 bg-light rounded-3 px-2">
-                                <span class="input-group-text bg-transparent border-0 text-muted"><i class="fas fa-filter"></i></span>
-                                <select name="status" class="form-select border-0 bg-transparent shadow-none" style="cursor: pointer;">
+                            <div class="input-group bg-light rounded-pill overflow-hidden border">
+                                <span class="input-group-text bg-transparent border-0 ps-3"><i class="fas fa-filter text-muted"></i></span>
+                                <select name="status" class="form-select bg-transparent border-0 shadow-none px-2" style="font-size: 0.85rem; cursor: pointer;">
                                     <option value="" {% if not status_filter %}selected{% endif %}>สถานะทั้งหมด</option>
                                     <option value="PENDING" {% if status_filter == 'PENDING' %}selected{% endif %}>รอตรวจสอบ</option>
                                     <option value="VERIFIED" {% if status_filter == 'VERIFIED' %}selected{% endif %}>ตรวจสอบแล้ว</option>
                                 </select>
                             </div>
                         </div>
-                        <div class="col-md-3 d-flex gap-1">
-                            <button type="submit" class="btn btn-info text-white w-100 rounded-3 fw-bold">ค้นหา</button>
-                            {% if search_query or status_filter %}
-                                <a href="{% url 'deposit_list' %}" class="btn btn-light rounded-3 border" title="รีเซ็ต"><i class="fas fa-undo"></i></a>
+
+                        <!-- 3. ช่วงวันที่แคปซูล + ปุ่มค้นหา + ปุ่มล้างค่า -->
+                        <div class="col-md-5 d-flex align-items-center gap-2">
+                            <div class="search-pill-container flex-grow-1">
+                                <i class="far fa-calendar-alt search-pill-icon"></i>
+                                <input type="text" id="reportrange" class="search-pill-input text-center fw-bold" placeholder="เลือกช่วงวันที่มัดจำ..." readonly>
+                                <button type="submit" class="search-pill-btn" title="ค้นหา">
+                                    <i class="fas fa-search"></i>
+                                </button>
+                            </div>
+
+                            <input type="text" name="start_date" id="start_date" class="hidden-date" value="{{ start_date|default:'' }}">
+                            <input type="text" name="end_date" id="end_date" class="hidden-date" value="{{ end_date|default:'' }}">
+
+                            {% if search_query or status_filter or start_date %}
+                                <a href="{% url 'deposit_list' %}" class="btn btn-outline-danger rounded-circle d-flex align-items-center justify-content-center flex-shrink-0" style="width: 38px; height: 38px;" title="ล้างค่า"><i class="fas fa-redo-alt"></i></a>
                             {% endif %}
                         </div>
+
                     </form>
                 </div>
             </div>
@@ -131,6 +173,24 @@
                         </tbody>
                      </table>
                 </div>
+
+                <!-- 🌟 [NEW] เพิ่มแถบแบ่งหน้า 🌟 -->
+                {% if page_obj.has_other_pages %}
+                <div class="card-footer bg-white py-3 border-top d-flex justify-content-center">
+                    <nav>
+                        <ul class="pagination pagination-sm shadow-sm mb-0">
+                            {% if page_obj.has_previous %}
+                            <li class="page-item"><a class="page-link border-0 text-muted" href="?page={{ page_obj.previous_page_number }}&q={{ search_query|default:'' }}&status={{ status_filter|default:'' }}&start_date={{ start_date|default:'' }}&end_date={{ end_date|default:'' }}"><i class="fas fa-chevron-left"></i></a></li>
+                            {% endif %}
+                            <li class="page-item disabled"><span class="page-link border-0 text-dark fw-bold px-3">หน้า {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span></li>
+                            {% if page_obj.has_next %}
+                            <li class="page-item"><a class="page-link border-0 text-muted" href="?page={{ page_obj.next_page_number }}&q={{ search_query|default:'' }}&status={{ status_filter|default:'' }}&start_date={{ start_date|default:'' }}&end_date={{ end_date|default:'' }}"><i class="fas fa-chevron-right"></i></a></li>
+                            {% endif %}
+                        </ul>
+                    </nav>
+                </div>
+                {% endif %}
+
             </div>
         </div>
     </div>
@@ -155,5 +215,58 @@
         var slipModal = new bootstrap.Modal(document.getElementById('slipModal'));
         slipModal.show();
     }
+
+    // 🌟 สคริปต์ Daterangepicker 🌟
+    $(function() {
+        // 🌟 [FIXED] ดักจับคำว่า "None" หรือค่าว่าง เพื่อไม่ให้ปฏิทินพัง (NaN / Invalid Date) 🌟
+        var start_str = "{{ start_date|default:'' }}";
+        var end_str = "{{ end_date|default:'' }}";
+
+        var start = (start_str !== "" && start_str !== "None") ? moment(start_str, "YYYY-MM-DD") : moment().startOf('month');
+        var end = (end_str !== "" && end_str !== "None") ? moment(end_str, "YYYY-MM-DD") : moment().endOf('month');
+
+        function cb(start, end) {
+            // เช็คความถูกต้องของวันที่ก่อนแสดงผล
+            if(start && end && start.isValid() && end.isValid()) {
+                $('#reportrange').val(start.format('DD/MM/YYYY') + ' - ' + end.format('DD/MM/YYYY'));
+                $('#start_date').val(start.format('YYYY-MM-DD'));
+                $('#end_date').val(end.format('YYYY-MM-DD'));
+            }
+        }
+
+        $('#reportrange').daterangepicker({
+            startDate: start,
+            endDate: end,
+            linkedCalendars: false, // 🌟 ปลดล็อกปฏิทินให้เป็นอิสระ 🌟
+            ranges: {
+               'วันนี้': [moment(), moment()],
+               'เมื่อวาน': [moment().subtract(1, 'days'), moment().subtract(1, 'days')],
+               'ช่วง 7 วันก่อนหน้า': [moment().subtract(6, 'days'), moment()],
+               'ช่วง 30 วันก่อนหน้า': [moment().subtract(29, 'days'), moment()],
+               'ช่วง 3 เดือนก่อนหน้า': [moment().subtract(3, 'months'), moment()],
+               'เดือนนี้': [moment().startOf('month'), moment().endOf('month')],
+               '1 เดือนก่อนหน้า': [moment().subtract(1, 'month').startOf('month'), moment().subtract(1, 'month').endOf('month')]
+            },
+            locale: {
+                format: 'DD/MM/YYYY',
+                separator: ' - ',
+                applyLabel: 'ตกลง',
+                cancelLabel: 'ยกเลิก',
+                fromLabel: 'จาก',
+                toLabel: 'ถึง',
+                customRangeLabel: 'กำหนดเอง',
+                weekLabel: 'ส',
+                daysOfWeek: ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'],
+                monthNames: ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'],
+                firstDay: 1
+            }
+        }, cb);
+
+        $('#reportrange').on('apply.daterangepicker', function(ev, picker) {
+            cb(picker.startDate, picker.endDate);
+        });
+
+        cb(start, end);
+    });
 </script>
 {% endblock %}

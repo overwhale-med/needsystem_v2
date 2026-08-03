@@ -187,15 +187,32 @@
         $('#reportrange').daterangepicker({
             startDate: startDate,
             endDate: endDate,
+            // 🌟 [NEW] เพิ่ม linkedCalendars: false เพื่อปลดล็อกปฏิทิน 🌟
+            linkedCalendars: false,
             ranges: {
                'วันนี้': [moment(), moment()],
                'เมื่อวาน': [moment().subtract(1, 'days'), moment().subtract(1, 'days')],
                'ช่วง 7 วันก่อนหน้า': [moment().subtract(6, 'days'), moment()],
                'ช่วง 30 วันก่อนหน้า': [moment().subtract(29, 'days'), moment()],
+               // 🌟 [NEW] เพิ่ม "ช่วง 3 เดือนก่อนหน้า" เข้าไป 🌟
+               'ช่วง 3 เดือนก่อนหน้า': [moment().subtract(3, 'months'), moment()],
                'เดือนนี้': [moment().startOf('month'), moment().endOf('month')],
-               'เดือนก่อนหน้า': [moment().subtract(1, 'month').startOf('month'), moment().subtract(1, 'month').endOf('month')]
+               '1 เดือนก่อนหน้า': [moment().subtract(1, 'month').startOf('month'), moment().subtract(1, 'month').endOf('month')]
             },
-            locale: { format: 'DD/MM/YYYY', applyLabel: "ตกลง", cancelLabel: "ยกเลิก", customRangeLabel: "กำหนดเอง" }
+            // 🌟 [NEW] เปลี่ยนตั้งค่าภาษาให้เหมือนหน้าใบเสนอราคาเป๊ะๆ 🌟
+            locale: { 
+                format: 'DD/MM/YYYY', 
+                separator: ' - ',
+                applyLabel: 'ตกลง',
+                cancelLabel: 'ยกเลิก',
+                fromLabel: 'จาก',
+                toLabel: 'ถึง',
+                customRangeLabel: 'กำหนดเอง',
+                weekLabel: 'ส',
+                daysOfWeek: ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'],
+                monthNames: ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'],
+                firstDay: 1 
+            }
         }, function(start, end, label) {
             startDate = start;
             endDate = end;
@@ -227,8 +244,6 @@
         const branchEl = document.getElementById('filter_branch');
         const branchVal = branchEl ? branchEl.value : '';
 
-        // 🌟 [FIX] ลบโค้ดเจ้าปัญหาที่ทำให้ระบบค้างออกไปเรียบร้อยแล้วครับ 🌟
-
         const url = `{% url 'api_dashboard_data' %}?start_date=${start}&end_date=${end}&branch=${branchVal}`;
 
         fetch(url).then(r => r.json()).then(data => {
@@ -252,7 +267,6 @@
             document.getElementById('val-recent-sales').innerHTML = html || '<tr><td colspan="5" class="text-center py-5 text-muted">ไม่พบข้อมูล</td></tr>';
             if (syncIcon) setTimeout(() => syncIcon.style.opacity = '0', 800);
         }).catch(error => {
-            // 🌟 เพิ่มระบบดักจับ Error เพื่อให้หน้าเว็บไม่พังสนิท
             console.error("Error fetching data:", error);
             document.getElementById('chart-title-text').innerText = "โหลดข้อมูลเสร็จสิ้น";
             if (syncIcon) syncIcon.style.opacity = '0';

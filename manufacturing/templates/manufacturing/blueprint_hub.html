@@ -2,7 +2,8 @@
 {% load humanize %}
 
 {% block content %}
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<!-- 🌟 [FIXED] นำเข้า Daterangepicker CSS แทน Flatpickr 🌟 -->
+<link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css" />
 <style>
     .filter-input { font-size: 0.85rem; }
     .filter-select { font-size: 0.85rem; padding-left: 5px; cursor: pointer; }
@@ -53,13 +54,18 @@
                         <option value="REJECTED" {% if claim_status == 'REJECTED' %}selected{% endif %}>ไม่อนุมัติ</option>
                     </select>
                 </div>
-                <div class="col-md-3 d-flex gap-1">
-                    <input type="text" name="start_date" class="form-control form-control-sm rounded-pill px-3 datepicker text-center filter-input" value="{{ start_date }}" placeholder="ตั้งแต่">
-                    <input type="text" name="end_date" class="form-control form-control-sm rounded-pill px-3 datepicker text-center filter-input" value="{{ end_date }}" placeholder="ถึงวันที่">
+
+                <!-- 🌟 [FIXED] ปรับดีไซน์ช่องวันที่ให้รวมเป็นช่องเดียว 🌟 -->
+                <div class="col-md-3">
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text bg-white border-end-0 rounded-start-pill"><i class="fas fa-calendar-alt text-muted"></i></span>
+                        <input type="text" name="date_range" class="form-control rounded-end-pill px-3 text-center filter-input border-start-0 shadow-none" id="dateRangePicker" value="{{ date_range }}" placeholder="-- เลือกระยะเวลาอนุมัติแบบ --" readonly style="background-color: white; cursor: pointer;">
+                    </div>
                 </div>
+
                 <div class="col-md-1 d-flex gap-1">
                     <button type="submit" class="btn btn-sm btn-dark rounded-pill w-100 fw-bold shadow-sm"><i class="fas fa-filter"></i> ค้นหา</button>
-                    {% if q_job or q_customer or search_sp or claim_status or start_date %}
+                    {% if q_job or q_customer or search_sp or claim_status or date_range %}
                         <a href="{% url 'blueprint_hub' %}" class="btn btn-sm btn-outline-danger rounded-circle shadow-sm border d-flex align-items-center justify-content-center" style="width: 31px; height: 31px;" title="ล้างค่า"><i class="fas fa-times"></i></a>
                     {% endif %}
                 </div>
@@ -167,6 +173,7 @@
             </div>
         </div>
 
+        <!-- 🌟 เริ่มต้นส่วนที่ต้องวางทับ (แท็บตั้งเบิกผลงาน) 🌟 -->
         <div class="tab-pane fade" id="claim" role="tabpanel">
             <div class="row g-4">
                 <div class="col-md-7">
@@ -184,6 +191,9 @@
                                                 </th>
                                                 <th>เลข JOB</th>
                                                 <th>ลูกค้า</th>
+                                                <!-- 🌟 [NEW] เพิ่มหัวข้อตาราง 🌟 -->
+                                                <th>เซลส์ผู้ดูแล</th>
+                                                <th>เลขที่ใบขาย</th>
                                                 <th>ค่าตอบแทน</th>
                                             </tr>
                                         </thead>
@@ -195,10 +205,15 @@
                                                 </td>
                                                 <td><span class="badge bg-dark shadow-sm">{{ job.code }}</span></td>
                                                 <td class="small fw-bold text-dark">{{ job.customer_name|default:"-" }}</td>
+
+                                                <!-- 🌟 [NEW] ดึงข้อมูลมาแสดง 🌟 -->
+                                                <td class="small text-muted">{{ job.salesperson.name|default:"ไม่ระบุ" }}</td>
+                                                <td class="small fw-bold text-info"><i class="fas fa-file-invoice me-1"></i>{{ job.quotation_ref.invoice.code|default:"-" }}</td>
+
                                                 <td class="text-success fw-bold">฿{{ request.user.employee.sales_group.flat_rate_amount|default:"0"|floatformat:2|intcomma }}</td>
                                             </tr>
                                             {% empty %}
-                                            <tr><td colspan="4" class="text-center py-4 text-muted">ไม่มีงานใหม่ให้ตั้งเบิก</td></tr>
+                                            <tr><td colspan="6" class="text-center py-4 text-muted">ไม่มีงานใหม่ให้ตั้งเบิก</td></tr>
                                             {% endfor %}
                                         </tbody>
                                     </table>
@@ -220,7 +235,10 @@
                                     <tr>
                                         <th class="ps-4 py-2">เลข JOB</th>
                                         <th class="py-2">ลูกค้า</th>
+                                        <!-- 🌟 [NEW] เพิ่มหัวข้อตาราง 🌟 -->
+                                        <th class="py-2">เลขที่ใบเสนอราคา</th>
                                         <th class="py-2">เซลส์ผู้ดูแล</th>
+                                        <th class="py-2">ค่าตอบแทน</th>
                                         <th class="py-2 text-center">สถานะ</th>
                                     </tr>
                                 </thead>
@@ -229,19 +247,25 @@
                                     <tr>
                                         <td class="ps-4 py-2"><span class="badge bg-secondary">{{ job.code }}</span></td>
                                         <td class="small py-2">{{ job.customer_name|default:"-" }}</td>
+
+                                        <!-- 🌟 [NEW] ดึงข้อมูลมาแสดง 🌟 -->
+                                        <td class="small py-2 fw-bold text-primary">{{ job.quotation_ref.code|default:"-" }}</td>
                                         <td class="small py-2 fw-bold text-dark">{{ job.salesperson.name|default:"ไม่ระบุ" }}</td>
+                                        <td class="small py-2 text-success fw-bold">฿{{ request.user.employee.sales_group.flat_rate_amount|default:"0"|floatformat:2|intcomma }}</td>
+
                                         <td class="py-2 text-center">
                                             <span class="badge bg-danger bg-opacity-10 text-danger border border-danger rounded-pill px-2">รอเซลส์เปิดบิล</span>
                                         </td>
                                     </tr>
                                     {% empty %}
-                                    <tr><td colspan="4" class="text-center py-4 text-muted opacity-50">ไม่มีงานค้างรอเปิดบิล</td></tr>
+                                    <tr><td colspan="6" class="text-center py-4 text-muted opacity-50">ไม่มีงานค้างรอเปิดบิล</td></tr>
                                     {% endfor %}
                                 </tbody>
                             </table>
                         </div>
                     </div>
                 </div>
+        <!-- 🌟 สิ้นสุดส่วนที่ต้องวางทับ 🌟 -->
 
                 <div class="col-md-5">
                     <div class="card border-0 shadow-sm rounded-4 bg-white">
@@ -356,11 +380,54 @@
     </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script type="text/javascript" src="https://cdn.jsdelivr.net/momentjs/latest/moment.min.js"></script>
+<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.min.js"></script>
+
 <script>
     document.addEventListener("DOMContentLoaded", function() {
-        flatpickr(".datepicker", { dateFormat: "Y-m-d", altInput: true, altFormat: "d/m/Y", allowInput: true });
 
+        // 🌟 [NEW] สคริปต์สลับ Tab อัตโนมัติเมื่อกดอนุมัติเสร็จ 🌟
+        var hash = window.location.hash;
+        if (hash) {
+            var triggerEl = document.querySelector('button[data-bs-target="' + hash + '"]');
+            if (triggerEl) {
+                var tab = new bootstrap.Tab(triggerEl);
+                tab.show();
+            }
+        }
+
+        // 🌟 ติดตั้ง Date Range Picker
+        $('#dateRangePicker').daterangepicker({
+            autoUpdateInput: false,
+            linkedCalendars: false,
+            locale: {
+                format: 'DD/MM/YYYY',
+                applyLabel: "ตกลง",
+                cancelLabel: "ยกเลิก",
+                customRangeLabel: "กำหนดเอง",
+                daysOfWeek: ["อา.", "จ.", "อ.", "พ.", "พฤ.", "ศ.", "ส."],
+                monthNames: ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"],
+            },
+            ranges: {
+               'วันนี้': [moment(), moment()],
+               'เมื่อวาน': [moment().subtract(1, 'days'), moment().subtract(1, 'days')],
+               'ช่วง 7 วันก่อนหน้า': [moment().subtract(6, 'days'), moment()],
+               'ช่วง 30 วันก่อนหน้า': [moment().subtract(29, 'days'), moment()],
+               'เดือนนี้': [moment().startOf('month'), moment().endOf('month')],
+               'เดือนก่อนหน้า': [moment().subtract(1, 'month').startOf('month'), moment().subtract(1, 'month').endOf('month')]
+            }
+        });
+
+        $('#dateRangePicker').on('apply.daterangepicker', function(ev, picker) {
+            $(this).val(picker.startDate.format('DD/MM/YYYY') + ' - ' + picker.endDate.format('DD/MM/YYYY'));
+        });
+
+        $('#dateRangePicker').on('cancel.daterangepicker', function(ev, picker) {
+            $(this).val('');
+        });
+
+        // Checkbox เลือกทั้งหมด
         document.getElementById('selectAll').addEventListener('change', function(e) {
             var checkboxes = document.querySelectorAll('.claim-checkbox');
             for (var i = 0; i < checkboxes.length; i++) {

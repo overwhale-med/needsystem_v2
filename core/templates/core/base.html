@@ -28,7 +28,7 @@
         .nav-link:hover { color: #d4af37 !important; transform: translateY(-2px); }
         .nav-link.active { color: #c5a059 !important; border-bottom: 2px solid #c5a059; }
         .nav-user { color: #555; font-weight: 600; }
-        
+
         .btn-logout { border: 1px solid #eee; color: #777; background: #f8f9fa; }
         .btn-logout:hover { background: #fee; color: #d9534f; border-color: #f5c6cb; }
 
@@ -159,18 +159,23 @@
                                 </a>
                             </li>
                             <li><hr class="dropdown-divider opacity-25"></li>
-                            
-                            <!-- 🌟 เพิ่มเมนูคลังสินค้าโซล่า 🌟 -->
+
                             <li>
                                 <a class="dropdown-item py-2 fw-bold text-secondary" href="{% url 'solar_inventory_list' %}">
                                     <i class="fas fa-boxes text-gold me-2" style="width: 20px;"></i> คลังสินค้าโซล่า (Inventory)
                                 </a>
                             </li>
                             <li><hr class="dropdown-divider opacity-25"></li>
-                            
+
                             <li>
                                 <a class="dropdown-item py-2 fw-bold text-secondary" href="{% url 'solar_quotation_list' %}">
                                     <i class="fas fa-file-signature text-primary me-2" style="width: 20px;"></i> ใบเสนอราคา (Sales)
+                                </a>
+                            </li>
+                            <!-- 🌟 [NEW] เพิ่มปุ่ม ใบรับเงินมัดจำ (Deposit) 🌟 -->
+                            <li>
+                                <a class="dropdown-item py-2 fw-bold text-secondary" href="{% url 'solar_deposit_list' %}">
+                                    <i class="fas fa-hand-holding-usd text-info me-2" style="width: 20px;"></i> ใบรับเงินมัดจำ (Deposit)
                                 </a>
                             </li>
                             <li>
@@ -179,7 +184,7 @@
                                 </a>
                             </li>
                             <li><hr class="dropdown-divider opacity-25"></li>
-                            
+
                             <li>
                                 <a class="dropdown-item py-2 fw-bold text-secondary" href="{% url 'solar_po_list' %}">
                                     <i class="fas fa-shopping-cart text-primary me-2" style="width: 20px;"></i> จัดซื้อ (Solar Purchasing)
