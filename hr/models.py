@@ -20,6 +20,11 @@ class Department(models.Model):
 class Position(models.Model):
     title = models.CharField(max_length=100, verbose_name="ชื่อตำแหน่ง")
     department = models.ForeignKey(Department, on_delete=models.SET_NULL, null=True, verbose_name="สังกัดแผนก")
+
+    # 🌟 [NEW] เพิ่มช่องเก็บรายละเอียดงาน และ อำนาจการอนุมัติ 🌟
+    description = models.TextField(blank=True, null=True, verbose_name="รายละเอียดงาน (Job Description)")
+    approval_authority = models.TextField(blank=True, null=True, verbose_name="อำนาจการอนุมัติ (Approval Authority)")
+
     def __str__(self): return f"{self.title} ({self.department})"
     class Meta: verbose_name_plural = "ข้อมูลตำแหน่ง"
 

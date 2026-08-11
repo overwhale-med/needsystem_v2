@@ -118,9 +118,13 @@ class SolarQuotation(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='DRAFT')
     note = models.TextField(blank=True, verbose_name="หมายเหตุ")
 
-    # 🌟 [FIXED] เพิ่มฟังก์ชันคำนวณยอดค้างชำระ (Balance Due) 🌟
+    # 🌟 [FIXED] ให้ดึงยอดค้างชำระจาก Invoice หากมีการเปิดบิลแล้ว 🌟
     @property
     def balance_due(self):
+        # หากมีการออกใบเสร็จ (Invoice) แล้ว ให้ดึงยอดคงค้างจริงจากใบเสร็จมาแสดง
+        if hasattr(self, 'solarinvoice'):
+            return self.solarinvoice.balance_amount
+        # หากยังไม่เปิดบิล ให้ใช้สูตร ยอดสุทธิ - มัดจำ เหมือนเดิม
         return self.grand_total - self.deposit_amount
 
     def save(self, *args, **kwargs):

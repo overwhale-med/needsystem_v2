@@ -11,11 +11,20 @@
             {% endif %}
             
             <div class="text-start lh-sm">
+                <!-- 🌟 [FIXED] เอาตำแหน่งขึ้นก่อน พร้อมลูกเล่น Pop-up 🌟 -->
+                <div class="fw-bold text-primary mb-1" style="font-size: 0.85rem; cursor: help;"
+                     data-bs-toggle="popover" 
+                     data-bs-trigger="hover focus"
+                     data-bs-placement="top" 
+                     data-bs-html="true"
+                     title="<i class='fas fa-briefcase text-primary me-1'></i> {{ node.position.title|default:'ไม่ระบุตำแหน่ง' }}" 
+                     data-bs-content="<div style='font-family: Sarabun, sans-serif;'><strong>รายละเอียดงาน:</strong><br><span class='text-muted'>{{ node.position.description|default:'-ไม่มีระบุ-'|linebreaksbr }}</span><br><br><strong class='text-danger'>อำนาจการอนุมัติ:</strong><br><span class='text-muted'>{{ node.position.approval_authority|default:'-ไม่มีระบุ-'|linebreaksbr }}</span></div>">
+                    <i class="fas fa-briefcase me-1"></i> {{ node.position.title|default:"ไม่ระบุตำแหน่ง" }}
+                </div>
+
+                <!-- 🌟 [FIXED] ชื่อพนักงานอยู่ด้านล่าง 🌟 -->
                 <div class="fw-bold text-dark" style="font-size: 0.95rem;">
                     {{ node.prefix }} {{ node.first_name }} {{ node.last_name }}
-                </div>
-                <div class="text-muted" style="font-size: 0.75rem;">
-                    {{ node.position.title }}
                 </div>
             </div>
         </div>

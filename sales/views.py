@@ -419,13 +419,22 @@ def record_deposit(request, qt_id):
 
     return redirect('quotation_edit', qt_id=qt.id)
 
+# ==========================================
+# 🌟 สมองกลคำนวณวันจัดส่งอัตโนมัติ (แก้ไขใหม่) 🌟
+# ==========================================
 def get_auto_delivery_date(qt):
-    first_item = qt.items.filter(product__isnull=False).first()
-    if not first_item: return timezone.now().date()
+    # 🌟 [FIXED] ดึงสินค้าตัวแรกสุดมาคำนวณทันที ป้องกันกรณีสินค้าไม่ได้ผูกรหัสในคลัง
+    first_item = qt.items.first()
 
+    # ถ้าไม่มีสินค้าเลย ให้คำนวณโควตาจาก 1 หลังเป็นค่าเริ่มต้น
+    total_qty = first_item.quantity if first_item else 1
+
+    from master_data.models import CompanyInfo
+    from manufacturing.models import ProductionOrder
     company_info = CompanyInfo.objects.first()
     max_quota = company_info.weekly_job_quota if company_info and company_info.weekly_job_quota else 25
 
+    # เช็ควันที่รับมัดจำ (ถ้าไม่มีให้ใช้วันนี้)
     deposit_date = qt.deposit_date if qt.deposit_date else timezone.now().date()
     current_check_date = deposit_date
     weeks_pushed = 0
@@ -436,18 +445,23 @@ def get_auto_delivery_date(qt):
 
         total_qty_in_week = ProductionOrder.objects.filter(cohort_week=check_cohort, is_closed=False).aggregate(Sum('quantity'))['quantity__sum'] or 0
 
-        if total_qty_in_week + first_item.quantity <= max_quota:
+        # ถ้าคิวสัปดาห์นั้นบวกจำนวนนี้แล้วไม่ล้นโควตา ให้หยุดคำนวณ
+        if total_qty_in_week + total_qty <= max_quota:
             break
 
+        # ถ้าล้น ให้ปัดไปสัปดาห์ถัดไป
         weeks_pushed += 1
         current_check_date += datetime.timedelta(days=7)
 
+    # คำนวณ Lead Time: 14 วันพื้นฐาน + 7 วันต่อสัปดาห์ที่โดนปัด
     base_lead_time = 14 + (weeks_pushed * 7)
     delivery_start_date = deposit_date + datetime.timedelta(days=base_lead_time)
+
+    # ปัดให้ไปตกวันศุกร์เสมอเพื่อความเป็นระเบียบ
     days_to_monday = delivery_start_date.weekday()
     monday_of_delivery_week = delivery_start_date - datetime.timedelta(days=days_to_monday)
 
-    return monday_of_delivery_week + datetime.timedelta(days=4)
+    return monday_of_delivery_week + datetime.timedelta(days=4) # วันศุกร์
 
 @login_required
 def create_job_order(request, qt_id):

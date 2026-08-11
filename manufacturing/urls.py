@@ -20,6 +20,11 @@ urlpatterns = [
     path('production/<int:pk>/process-logistics/', views.process_logistics, name='process_logistics'),
     path('production/logistics-claim/', views.create_logistics_claim, name='create_logistics_claim'),
     path('production/<int:pk>/print-delivery/', views.print_delivery_note, name='print_delivery_note'),
+    
+    # 🌟 [FIXED] เพิ่มเส้นทาง URL สำหรับพิมพ์ใบยินยอมและใบตรวจสอบหน้างานที่หายไป 🌟
+    path('production/<int:pk>/print-consent/', views.print_consent_form, name='print_consent_form'),
+    path('production/<int:pk>/print-site-checklist/', views.print_site_checklist, name='print_site_checklist'),
+
     path('production/logistics-claim/<int:pk>/print/', views.print_logistics_claim, name='print_logistics_claim'),
     path('production/logistics-claim/history/', views.logistics_claim_history, name='logistics_claim_history'),
 
@@ -45,7 +50,7 @@ urlpatterns = [
     path('bom/create/', views.bom_create, name='bom_create'),
     path('bom/<int:pk>/', views.bom_detail, name='bom_detail'),
     path('bom/<int:pk>/edit/', views.bom_edit, name='bom_edit'),
-    path('bom/<int:pk>/update-labor-cost/', views.update_bom_labor_cost, name='update_bom_labor_cost'), # 🌟 [NEW] เพิ่มเส้นทางอัปเดตค่าแรงประกอบ
+    path('bom/<int:pk>/update-labor-cost/', views.update_bom_labor_cost, name='update_bom_labor_cost'),
     path('bom/<int:pk>/print/', views.print_master_bom, name='print_master_bom'),
     
     path('production/<int:pk>/update-board/', views.update_production_board, name='update_production_board'),
