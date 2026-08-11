@@ -1,5 +1,5 @@
 <li class="tree-item {% if is_root %}is-root{% endif %}">
-    
+
     <div class="d-inline-block position-relative">
         <div class="node-card rank-{{ node.business_rank }}">
             {% if node.photo %}
@@ -9,17 +9,18 @@
                     {{ node.first_name|slice:":1" }}
                 </div>
             {% endif %}
-            
+
             <div class="text-start lh-sm">
                 <!-- 🌟 [FIXED] เอาตำแหน่งขึ้นก่อน พร้อมลูกเล่น Pop-up 🌟 -->
+                <!-- 🌟 แก้ไขบรรทัดนี้: เพิ่มแผนกต่อท้ายตำแหน่ง 🌟 -->
                 <div class="fw-bold text-primary mb-1" style="font-size: 0.85rem; cursor: help;"
-                     data-bs-toggle="popover" 
+                     data-bs-toggle="popover"
                      data-bs-trigger="hover focus"
-                     data-bs-placement="top" 
+                     data-bs-placement="top"
                      data-bs-html="true"
-                     title="<i class='fas fa-briefcase text-primary me-1'></i> {{ node.position.title|default:'ไม่ระบุตำแหน่ง' }}" 
+                     title="<i class='fas fa-briefcase text-primary me-1'></i> {{ node.position.title|default:'ไม่ระบุตำแหน่ง' }} - {{ node.department.name|default:'ไม่ระบุแผนก' }}"
                      data-bs-content="<div style='font-family: Sarabun, sans-serif;'><strong>รายละเอียดงาน:</strong><br><span class='text-muted'>{{ node.position.description|default:'-ไม่มีระบุ-'|linebreaksbr }}</span><br><br><strong class='text-danger'>อำนาจการอนุมัติ:</strong><br><span class='text-muted'>{{ node.position.approval_authority|default:'-ไม่มีระบุ-'|linebreaksbr }}</span></div>">
-                    <i class="fas fa-briefcase me-1"></i> {{ node.position.title|default:"ไม่ระบุตำแหน่ง" }}
+                    <i class="fas fa-briefcase me-1"></i> {{ node.position.title|default:"ไม่ระบุตำแหน่ง" }} <span class="text-muted fw-normal" style="font-size: 0.75rem;">- {{ node.department.name|default:"ไม่ระบุแผนก" }}</span>
                 </div>
 
                 <!-- 🌟 [FIXED] ชื่อพนักงานอยู่ด้านล่าง 🌟 -->
