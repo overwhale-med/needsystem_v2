@@ -48,7 +48,19 @@
         .sig-date { font-size: 10px; color: #666; position: absolute; bottom: 0; left: 0; right: 0; }
 
         .sig-img { position: absolute; bottom: 65px; left: 50%; transform: translateX(-50%); height: 60px; width: auto; object-fit: contain; z-index: 5; }
-        .seal-img { position: absolute; bottom: 65px; left: 50%; transform: translateX(-50%) rotate(-15deg); width: 85px; opacity: 0.8; pointer-events: none; z-index: 10; }
+
+        /* 🌟 [UPDATED] ขยายขนาดตราประทับให้ใหญ่สะใจ (130px) และปรับความโปร่งใสให้ดูสมจริง 🌟 */
+        .seal-img {
+            position: absolute;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%) rotate(-12deg);
+            width: 150px;
+            opacity: 0.85;
+            pointer-events: none;
+            z-index: 10;
+            mix-blend-mode: multiply;
+        }
 
         @media print {
             body { background: white; margin: 0; }
@@ -62,7 +74,7 @@
     <!-- 🌟 [FIXED] เพิ่มปุ่มคัดลอกลิงก์ในแถบสีดำด้านบน 🌟 -->
     <div class="text-center py-3 no-print sticky-top" style="background: rgba(50,50,50,0.8); backdrop-filter: blur(5px);">
         <button onclick="window.print()" class="btn btn-light fw-bold shadow-sm rounded-pill px-4 me-2"><i class="fas fa-print me-2"></i> พิมพ์เอกสาร</button>
-        
+
         {% if qt.signature_token %}
         <button onclick="copySignLink('{{ request.scheme }}://{{ request.get_host }}{% url 'customer_sign_quotation' qt.signature_token %}')" class="btn btn-success fw-bold shadow-sm rounded-pill px-4 me-2">
             <i class="fas fa-link me-2"></i> คัดลอกลิงก์ให้ลูกค้าเซ็น
@@ -85,7 +97,7 @@
                     </div>
                     <div class="company-details ps-1">
                         {{ company.address|default:"10/10 หมู่ 10 ตำบลบางพระ อำเภอศรีราชา จังหวัดชลบุรี 20110" }}<br>
-                        <strong>โทร:</strong> {{ company.phone|default:"033 166 699" }} &nbsp;|&nbsp; <strong>เลขผู้เสียภาษี:</strong> {{ company.tax_id|default:"0205563029342" }}
+                        <strong>โทร:</strong> {{ company.phone|default:"033 640 447" }} &nbsp;|&nbsp; <strong>เลขผู้เสียภาษี:</strong> {{ company.tax_id|default:"0205563029342" }}
                     </div>
                 </div>
                 <div class="col-5">

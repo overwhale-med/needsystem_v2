@@ -101,27 +101,50 @@
                     <table class="table table-hover align-middle mb-0">
                         <thead class="bg-light text-secondary" style="font-size: 0.8rem; text-transform: uppercase;">
                             <tr>
-                                <th class="ps-4 py-3 fw-bold border-bottom-0">อ้างอิงเอกสาร</th>
+                                <!-- 🌟 [UPDATED] เพิ่มคอลัมน์ เลขใบรับมัดจำ (RVD) เป็นอันดับแรก 🌟 -->
+                                <th class="ps-4 py-3 fw-bold border-bottom-0">เลขใบรับมัดจำ</th>
+                                <!-- 🌟 [UPDATED] เปลี่ยนชื่อและย้าย เลขใบเสนอราคา (QT) มาอยู่อันดับสอง 🌟 -->
+                                <th class="py-3 fw-bold border-bottom-0">เลขใบเสนอราคา</th>
                                 <th class="py-3 fw-bold border-bottom-0">วันที่มัดจำ</th>
                                 <th class="py-3 fw-bold border-bottom-0">ลูกค้า</th>
+                                <!-- 🌟 [NEW] เพิ่มคอลัมน์ พนักงานขาย/สาขา 🌟 -->
+                                <th class="py-3 fw-bold border-bottom-0">พนักงานขาย/สาขา</th>
                                 <th class="py-3 fw-bold border-bottom-0 text-end">ยอดมัดจำที่รับ</th>
                                 <th class="py-3 fw-bold border-bottom-0 text-center">ช่องทาง</th>
                                 <th class="py-3 fw-bold border-bottom-0 text-center">สถานะ</th>
-                                <th class="py-3 fw-bold border-bottom-0 text-center" style="width: 12%;">ตรวจสอบยอด</th>
-                                <th class="pe-4 py-3 fw-bold border-bottom-0 text-center" style="width: 10%;">ใบรับเงิน</th>
+                                <th class="py-3 fw-bold border-bottom-0 text-center" style="width: 10%;">ตรวจสอบยอด</th>
+                                <th class="pe-4 py-3 fw-bold border-bottom-0 text-center" style="width: 8%;">ใบรับเงิน</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for qt in page_obj %}
                             <tr>
+                                <!-- 🌟 คอลัมน์ที่ 1: เลขใบรับมัดจำ (RVD) 🌟 -->
                                 <td class="ps-4">
+                                    <span class="fw-bold text-info" style="font-family: 'Courier New', monospace;">
+                                        {{ qt.deposit_code|default:"-" }}
+                                    </span>
+                                </td>
+
+                                <!-- 🌟 คอลัมน์ที่ 2: เลขใบเสนอราคา (QT) 🌟 -->
+                                <td>
                                     <a href="{% url 'quotation_edit' qt.id %}" class="fw-bold text-decoration-none" style="font-family: 'Courier New', monospace;">{{ qt.code }}</a>
                                 </td>
+
                                 <td class="text-muted small"><i class="far fa-calendar-alt me-1"></i> {{ qt.deposit_date|date:"d/m/Y" }}</td>
+
                                 <td>
-                                    <div class="fw-bold text-dark text-truncate" style="max-width: 180px;">{{ qt.customer_name }}</div>
+                                    <div class="fw-bold text-dark text-truncate" style="max-width: 150px;">{{ qt.customer_name }}</div>
                                 </td>
+
+                                <!-- 🌟 คอลัมน์ใหม่: พนักงานขาย/สาขา 🌟 -->
+                                <td>
+                                    <div class="text-dark" style="font-size: 0.85rem;">{{ qt.employee.first_name|default:"-" }}</div>
+                                    <div class="text-muted" style="font-size: 0.75rem;">{{ qt.employee.department.name|default:"สำนักงานใหญ่" }}</div>
+                                </td>
+
                                 <td class="text-end fw-bold text-success fs-6">{{ qt.deposit_amount|intcomma }}</td>
+
                                 <td class="text-center">
                                     <div class="d-flex align-items-center justify-content-center gap-2">
                                         {% if qt.deposit_method == 'TRANSFER' %}
@@ -141,6 +164,7 @@
                                         {% endif %}
                                     </div>
                                 </td>
+
                                 <td class="text-center">
                                     {% if qt.is_deposit_verified %}
                                          <span class="status-badge status-paid"><i class="fas fa-check-double"></i> ตรวจสอบแล้ว</span>
@@ -148,6 +172,7 @@
                                          <span class="status-badge status-pending"><i class="fas fa-search-dollar"></i> รอตรวจสอบ</span>
                                     {% endif %}
                                 </td>
+
                                 <td class="text-center">
                                     {% if not qt.is_deposit_verified %}
                                          {% if user.is_superuser or 'บัญชี' in user.employee.department.name|default:'' or 'Accounting' in user.employee.department.name|default:'' %}
@@ -161,6 +186,7 @@
                                          <span class="text-muted small">-</span>
                                     {% endif %}
                                 </td>
+
                                 <td class="text-center pe-4">
                                     <a href="{% url 'deposit_print' qt.id %}" target="_blank" class="btn btn-sm btn-white border text-secondary shadow-sm" title="พิมพ์ใบรับเงินมัดจำ">
                                         <i class="fas fa-print"></i>
@@ -168,7 +194,7 @@
                                 </td>
                             </tr>
                             {% empty %}
-                                <tr><td colspan="8" class="text-center py-5 text-muted"><i class="fas fa-hand-holding-usd fa-3x mb-3 opacity-25"></i><br>ยังไม่มีรายการมัดจำ</td></tr>
+                                <tr><td colspan="10" class="text-center py-5 text-muted"><i class="fas fa-hand-holding-usd fa-3x mb-3 opacity-25"></i><br>ยังไม่มีรายการมัดจำ</td></tr>
                             {% endfor %}
                         </tbody>
                      </table>

@@ -46,7 +46,18 @@
         .sig-name { font-size: 11px; position: absolute; bottom: 15px; left: 0; right: 0; }
         .sig-date { font-size: 10px; color: #666; position: absolute; bottom: 0; left: 0; right: 0; }
 
-        .seal-img { position: absolute; bottom: 70px; left: 50%; transform: translateX(-70%) rotate(-15deg); width: 85px; opacity: 0.25; pointer-events: none; z-index: 5; }
+        /* 🌟 [UPDATED] ปรับขนาดและสีตราประทับให้เหมือนกับใบเสนอราคา 🌟 */
+        .seal-img {
+            position: absolute;
+            bottom: 70px;
+            left: 50%;
+            transform: translateX(-70%) rotate(-15deg);
+            width: 150px; /* 👈 ขยายขนาดเป็น 150px ตามที่ต้องการ */
+            opacity: 0.85; /* 👈 ปรับความเข้มสีให้ชัดขึ้น */
+            mix-blend-mode: multiply; /* 👈 เพิ่มความสมจริงเวลาทับตัวหนังสือ */
+            pointer-events: none;
+            z-index: 5;
+        }
         .stamp-paid {
             position: absolute; top: -45px; left: 30px;
             color: #17a2b8; border: 4px solid #17a2b8; border-radius: 8px;
@@ -86,17 +97,20 @@
                         <strong>เลขผู้เสียภาษี:</strong> {{ company.tax_id|default:"0205563029342" }}
                     </div>
                 </div>
+                <!-- มุมบนขวา -->
                 <div class="col-5">
                     <div class="doc-title text-info">ใบรับเงินมัดจำ</div>
                     <div class="doc-subtitle">DEPOSIT RECEIPT</div>
                     <div class="doc-no-group mt-3">
-                        <div class="doc-no-label">อ้างอิงใบเสนอราคา / REF NO.</div>
-                        <div class="doc-no-value">{{ qt.code }}</div>
+                        <!-- 🌟 [UPDATED] เปลี่ยนเป็นเลขที่ใบรับเงินมัดจำ (RVD) 🌟 -->
+                        <div class="doc-no-label">เลขที่เอกสาร / RECEIPT NO.</div>
+                        <div class="doc-no-value">{{ qt.deposit_code|default:qt.code }}</div>
                     </div>
                 </div>
             </div>
             <div class="customer-divider"></div>
             <div class="row">
+                <!-- ฝั่งซ้าย (ลูกค้า) เหมือนเดิม -->
                 <div class="col-7 pe-4 border-end border-secondary">
                     <div class="info-group-label"><i class="fas fa-address-book me-1"></i> ลูกค้า / CUSTOMER</div>
                     <div class="customer-name">{{ qt.customer_name|default:"ลูกค้าทั่วไป" }}</div>
@@ -106,9 +120,12 @@
                         <strong>เลขผู้เสียภาษี:</strong> {{ qt.customer_tax_id|default:"-" }}
                     </div>
                 </div>
+                <!-- ฝั่งขวา (ข้อมูลอ้างอิง) -->
                 <div class="col-5 ps-4">
                     <div class="info-group-label">ข้อมูลอ้างอิง / REFERENCE</div>
                     <table class="ref-table">
+                        <!-- 🌟 [UPDATED] ย้ายเลขอ้างอิงใบเสนอราคา (QT) มาไว้ตรงนี้ 🌟 -->
+                        <tr><td class="ref-label">อ้างอิงใบเสนอราคา:</td><td class="ref-value">{{ qt.code }}</td></tr>
                         <tr><td class="ref-label">วันที่รับมัดจำ:</td><td class="ref-value text-info">{{ qt.deposit_date|date:"d/m/Y" }}</td></tr>
                         <tr><td class="ref-label">พนักงานขาย:</td><td class="ref-value">{{ qt.employee.first_name|default:"-" }}</td></tr>
                     </table>

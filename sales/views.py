@@ -408,10 +408,22 @@ def record_deposit(request, qt_id):
             else: qt.deposit_date = timezone.now().date()
             qt.is_deposit_paid = True
 
+            # 🌟 [NEW] สร้างรหัส RVD สำหรับใบรับเงินมัดจำ (ถ้ายังไม่มี) 🌟
+            if not getattr(qt, 'deposit_code', None):
+                tz_bkk = pytz.timezone('Asia/Bangkok')
+                now_bkk = timezone.now().astimezone(tz_bkk)
+                thai_year = (now_bkk.year + 543) % 100
+                prefix = f"RVD-{thai_year:02d}{now_bkk.strftime('%m')}"
+
+                # หาเลขรันล่าสุดของเดือนนี้
+                last_deposit = Quotation.objects.filter(deposit_code__startswith=prefix).order_by('deposit_code').last()
+                seq = int(last_deposit.deposit_code.split('-')[-1]) + 1 if last_deposit else 1
+                qt.deposit_code = f"{prefix}-{seq:03d}"
+
             if 'deposit_slip' in request.FILES:
                 qt.deposit_slip = request.FILES['deposit_slip']
             qt.save()
-            messages.success(request, f"💰 บันทึกรับมัดจำ {amount:,.2f} บาท สำหรับใบเสนอราคา {qt.code} เรียบร้อยแล้ว")
+            messages.success(request, f"💰 บันทึกรับมัดจำ {amount:,.2f} บาท และสร้างใบเสร็จ {qt.deposit_code} เรียบร้อยแล้ว")
         else:
             messages.error(request, "❌ จำนวนเงินมัดจำต้องมากกว่า 0")
 
