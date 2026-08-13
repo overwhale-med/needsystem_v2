@@ -1486,6 +1486,8 @@ def invoice_list(request):
 
 @login_required
 def confirm_payment(request, doc_type, doc_id):
+    current_emp = getattr(request.user, 'employee', None) # 🌟 ดึงข้อมูลผู้ใช้งานที่กำลังกดปุ่ม
+
     if doc_type == 'pos':
         obj = get_object_or_404(POSOrder, id=doc_id)
         if obj.status != 'PAID':
@@ -1495,6 +1497,7 @@ def confirm_payment(request, doc_type, doc_id):
             if obj.employee:
                 process_commission_logic(sale_amt, obj.employee, obj.code)
         messages.success(request, f"✅ ยืนยันรับชำระเงินเอกสาร {obj.code} ปิดการขายเรียบร้อยแล้ว!")
+
     else:
         obj = get_object_or_404(Invoice, id=doc_id)
         if obj.status == 'PENDING':
@@ -1503,6 +1506,7 @@ def confirm_payment(request, doc_type, doc_id):
 
             if obj.balance_amount <= 0:
                 obj.status = 'PAID'
+                obj.verified_by = current_emp # 🌟 บันทึกพนักงานบัญชีที่กดยืนยัน 🌟
                 obj.save()
                 sale_amt = getattr(obj, 'total_amount', getattr(obj, 'grand_total', 0))
                 if obj.employee:

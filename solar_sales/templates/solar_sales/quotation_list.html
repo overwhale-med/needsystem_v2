@@ -288,7 +288,7 @@
                                                 </div>
                                                 <div class="mb-3">
                                                     <label class="form-label fw-bold text-muted">วันที่รับเงิน</label>
-                                                    <input type="text" name="deposit_date" class="form-control datepicker bg-white" value="{% now 'd/m/Y' %}" required>
+                                                    <input type="text" name="deposit_date" class="form-control deposit-datepicker bg-white" required>
                                                 </div>
                                                 <div class="mb-3">
                                                     <label class="form-label fw-bold text-muted">ช่องทางรับเงิน</label>
@@ -348,7 +348,17 @@
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <script>
     document.addEventListener("DOMContentLoaded", function() {
+        // ใช้กับปฏิทินทั่วไป
         flatpickr(".datepicker", { dateFormat: "Y-m-d", altInput: true, altFormat: "d/m/Y", allowInput: true });
+
+        // 🌟 [FIXED] ใช้กับปฏิทินใน Modal รับเงิน และตั้งค่าให้ดึง "วันปัจจุบัน" เป็นค่าเริ่มต้น 🌟
+        flatpickr(".deposit-datepicker", {
+            dateFormat: "Y-m-d",
+            altInput: true,
+            altFormat: "d/m/Y",
+            allowInput: true,
+            defaultDate: "today"  // สั่งให้เลือกวันปัจจุบัน (ของเครื่องผู้ใช้) อัตโนมัติ
+        });
     });
 
     $(function() {

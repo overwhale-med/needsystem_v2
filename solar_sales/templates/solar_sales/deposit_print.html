@@ -3,7 +3,7 @@
 <html lang="th">
 <head>
     <meta charset="UTF-8">
-    <title>ใบเสนอราคา {{ qt.code }}</title>
+    <title>ใบรับเงินมัดจำ - {{ qt.deposit_code|default:"รอออกรหัส" }}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -16,29 +16,34 @@
         .company-title { font-size: 20px; font-weight: 700; color: #000; line-height: 1.1; margin-bottom: 2px; }
         .company-subtitle { font-size: 13px; color: #555; font-weight: 500; margin-bottom: 4px; }
         .company-details { font-size: 13px; color: #333; line-height: 1.4; }
-        .doc-title { font-size: 28px; font-weight: 700; color: var(--primary-dark); text-align: right; line-height: 1; margin-top: 5px; }
+
+        .doc-title { font-size: 24px; font-weight: 700; color: var(--primary-dark); text-align: right; line-height: 1; margin-top: 5px; }
         .doc-subtitle { font-size: 11px; color: #777; text-align: right; letter-spacing: 2px; text-transform: uppercase; font-weight: 600; margin-bottom: 8px; }
         .doc-no-group { text-align: right; margin-top: 5px; }
         .doc-no-label { font-size: 10px; color: #666; font-weight: 600; text-transform: uppercase; }
         .doc-no-value { font-size: 16px; font-weight: 700; color: #000; }
+
         .customer-divider { border-top: 1px solid #000; margin: 12px 0; opacity: 1; }
         .info-group-label { font-size: 11px; color: #666; font-weight: 700; text-transform: uppercase; margin-bottom: 4px; }
         .customer-name { font-size: 16px; font-weight: 700; color: #000; margin-bottom: 2px; }
         .customer-addr { font-size: 14px; line-height: 1.3; margin-bottom: 4px; }
+
         .ref-table { width: 100%; }
         .ref-table td { padding: 1px 0; font-size: 13px; vertical-align: top; }
         .ref-label { color: #555; width: 90px; font-weight: 500; }
         .ref-value { font-weight: 600; text-align: right; color: #000; }
+
         .premium-table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
         .premium-table th { background-color: #f4f4f4; color: #000; font-weight: 700; text-transform: uppercase; font-size: 12px; padding: 8px; border-top: 1px solid #000; border-bottom: 1px solid #000; text-align: center; }
         .premium-table td { padding: 6px 8px; border-bottom: 1px solid #eee; vertical-align: top; font-size: 13px; }
+
         .total-table { width: 100%; }
         .total-table td { padding: 3px 0; }
         .total-label { text-align: right; padding-right: 15px; color: #555; font-size: 13px; }
         .total-value { text-align: right; font-weight: 600; width: 120px; font-size: 14px; }
-        .grand-total-row td { padding-top: 8px; padding-bottom: 8px; font-size: 18px; font-weight: 700; color: #000; }
+        .grand-total-row td { padding-top: 8px; padding-bottom: 8px; font-size: 16px; font-weight: 700; color: #000; }
+
         .payment-box { font-size: 13px; line-height: 1.4; color: #333; }
-        .note-box { font-size: 12px; color: #555; line-height: 1.3; }
 
         .signature-section { margin-top: 40px; }
         .sig-box { text-align: center; position: relative; height: 140px; padding: 0 10px; }
@@ -47,20 +52,36 @@
         .sig-name { font-size: 11px; position: absolute; bottom: 15px; left: 0; right: 0; }
         .sig-date { font-size: 10px; color: #666; position: absolute; bottom: 0; left: 0; right: 0; }
 
-        /* 🌟 ลายเซ็น 🌟 */
         .sig-img { position: absolute; bottom: 60px; left: 50%; transform: translateX(-50%); height: 60px; mix-blend-mode: multiply; z-index: 5; }
 
-        /* 🌟 ตราประทับ 🌟 */
+        /* 🌟 [FIXED] จัดการตราประทับบริษัท ให้อยู่เหนือลายเซ็น 🌟 */
         .seal-img {
             position: absolute;
-            bottom: 80px;
+            bottom: 60px;
             left: 50%;
             transform: translateX(-50%) rotate(-12deg);
             width: 150px;
             opacity: 0.85;
             pointer-events: none;
             z-index: 10;
-            mix-blend-mode: multiply;
+            mix-blend-mode: multiply; /* ทำให้พื้นหลังตราประทับโปร่งใสทับลายเซ็นได้ */
+        }
+
+        /* 🌟 [FIXED] สไตล์ตรายาง "รับมัดจำแล้ว" สีฟ้า ทับกล่องข้อความ 🌟 */
+        .stamp-received {
+            position: absolute;
+            top: -60px;
+            left: 20px;
+            border: 3px solid #4eb6d7;
+            color: #4eb6d7;
+            font-size: 26px;
+            font-weight: 700;
+            padding: 4px 18px;
+            border-radius: 8px;
+            transform: rotate(-10deg);
+            z-index: 10;
+            background: transparent; /* โปร่งใสทะลุเห็นกล่องด้านหลัง */
+            pointer-events: none;
         }
 
         @media print {
@@ -73,19 +94,7 @@
 </head>
 <body>
     <div class="text-center py-3 no-print sticky-top" style="background: rgba(50,50,50,0.8); backdrop-filter: blur(5px);">
-        <button onclick="window.print()" class="btn btn-light fw-bold shadow-sm rounded-pill px-4 me-2"><i class="fas fa-print me-2"></i> พิมพ์เอกสาร</button>
-
-        <!-- 🌟 [FIXED] เพิ่มเงื่อนไข if และ default ป้องกันระบบแครชแบบ 100% 🌟 -->
-        {% if qt.signature_token %}
-        <button onclick="copySignLink('{{ request.scheme }}://{{ request.get_host }}{% url 'solar_customer_sign_quotation' qt.signature_token|default:'WAITING' %}')" class="btn btn-success fw-bold shadow-sm rounded-pill px-4 me-2">
-            <i class="fas fa-link me-2"></i> คัดลอกลิงก์ให้ลูกค้าเซ็น
-        </button>
-        {% else %}
-        <button class="btn btn-secondary fw-bold shadow-sm rounded-pill px-4 me-2" disabled title="กรุณากด 'บันทึก' ในหน้าแก้ไข 1 ครั้ง เพื่อสร้างรหัสเซ็นเอกสาร">
-            <i class="fas fa-link me-2"></i> ยังไม่พร้อมแชร์ลิงก์
-        </button>
-        {% endif %}
-
+        <button onclick="window.print()" class="btn btn-light fw-bold shadow-sm rounded-pill px-4 me-2"><i class="fas fa-print me-2"></i> พิมพ์ใบรับเงินมัดจำ</button>
         <button onclick="window.close()" class="btn btn-outline-light fw-bold shadow-sm rounded-pill px-4">ปิดหน้าต่าง</button>
     </div>
 
@@ -111,11 +120,11 @@
                     </div>
                 </div>
                 <div class="col-5">
-                    <div class="doc-title">ใบเสนอราคา</div>
-                    <div class="doc-subtitle">QUOTATION</div>
+                    <div class="doc-title">ใบรับเงินมัดจำ</div>
+                    <div class="doc-subtitle">DEPOSIT RECEIPT</div>
                     <div class="doc-no-group mt-3">
-                        <div class="doc-no-label">เลขที่เอกสาร / QUOTATION NO.</div>
-                        <div class="doc-no-value">{{ qt.code }}</div>
+                        <div class="doc-no-label">เลขที่เอกสาร / RECEIPT NO.</div>
+                        <div class="doc-no-value text-danger">{{ qt.deposit_code|default:"รอออกรหัส" }}</div>
                     </div>
                 </div>
             </div>
@@ -132,14 +141,12 @@
                 <div class="col-5 ps-4">
                     <div class="info-group-label">ข้อมูลอ้างอิง / REFERENCE</div>
                     <table class="ref-table">
-                        <tr><td class="ref-label">รหัสลูกค้า:</td><td class="ref-value">{% if qt.customer and qt.customer.code %}{{ qt.customer.code }}{% else %}-{% endif %}</td></tr>
-                        <tr><td class="ref-label">วันที่:</td><td class="ref-value">{{ qt.date|date:"d/m/Y" }}</td></tr>
-                        <tr><td class="ref-label">ยืนยันราคาถึง:</td><td class="ref-value">{{ qt.valid_until|date:"d/m/Y" }}</td></tr>
+                        <tr><td class="ref-label">อ้างอิงใบเสนอราคา:</td><td class="ref-value">{{ qt.code }}</td></tr>
+                        <tr><td class="ref-label">วันที่รับมัดจำ:</td><td class="ref-value">{{ qt.deposit_date|date:"d/m/Y" }}</td></tr>
                         <tr>
                             <td class="ref-label">พนักงานขาย:</td>
                             <td class="ref-value">
                                 {% if qt.employee and qt.employee.first_name %}{{ qt.employee.first_name }}{% else %}-{% endif %}
-                                {% if qt.employee and qt.employee.department %}/ {{ qt.employee.department.name }}{% endif %}
                             </td>
                         </tr>
                     </table>
@@ -147,7 +154,7 @@
             </div>
         </div>
 
-        <div style="min-height: 380px;">
+        <div style="min-height: 250px;">
             <table class="premium-table">
                 <thead>
                     <tr>
@@ -174,102 +181,91 @@
                     <tr><td colspan="5" class="text-center text-muted py-4">ไม่พบรายการสินค้า</td></tr>
                     {% endfor %}
 
-                    {% for i in "1234" %}<tr><td colspan="5" style="height: 25px;"></td></tr>{% endfor %}
+                    {% for i in "123" %}<tr><td colspan="5" style="height: 25px;"></td></tr>{% endfor %}
                 </tbody>
             </table>
         </div>
 
-        <div class="row">
+        <div class="row mt-4">
+            <!-- ฝั่งซ้าย: กล่องข้อความ และ รายละเอียดการโอน -->
             <div class="col-7 pe-5">
-                <div class="py-2 px-3 mb-3 bg-light border text-center fw-bold text-dark rounded" style="font-size: 14px;">( <span id="baht-text">...</span> )</div>
-                <div class="payment-box mb-3">
-                    <div class="fw-bold mb-1" style="font-size: 12px; text-transform: uppercase;">ข้อมูลการโอนเงิน (Bank Account):</div>
-                    <div class="ps-2 border-start border-3 border-dark">
-                        ธนาคาร: <strong>กสิกรไทย (KBANK)</strong><br>
-                        ชื่อบัญชี: <strong>บริษัท นีด ช็อปปิ้ง จำกัด</strong><br>
-                        เลขบัญชี: <strong>075-3-824782</strong>
-                    </div>
+                <div class="position-relative mt-2">
+                    <!-- 🌟 [FIXED] ตราประทับสีฟ้า ย้ายมาทับกล่องข้อความ 🌟 -->
+                    <div class="stamp-received">รับมัดจำแล้ว</div>
+                    <div class="py-2 px-3 mb-4 bg-light border text-center fw-bold text-info rounded" style="font-size: 14px; position: relative; z-index: 1;">( <span id="baht-text">...</span> )</div>
                 </div>
 
-                <div class="note-box mb-2"><strong>เงื่อนไขการชำระเงิน:</strong><br>{% if qt.payment_terms %}{{ qt.payment_terms|linebreaksbr }}{% else %}- ชำระเงินมัดจำ 50% ของยอดรวมเพื่อยืนยันการสั่งซื้อ<br>- ส่วนที่เหลือชำระก่อนการติดตั้ง{% endif %}</div>
-                <div class="note-box"><strong>หมายเหตุ:</strong><br>{% if qt.note %}{{ qt.note|linebreaksbr }}{% else %}-ไม่มี-{% endif %}</div>
+                <div class="payment-box mb-3">
+                    <div class="fw-bold mb-1" style="font-size: 12px; text-transform: uppercase;">รายละเอียดมัดจำ (DEPOSIT DETAILS):</div>
+                    <div class="ps-2 border-start border-3 border-warning">
+                        ช่องทาง:
+                        <strong>
+                            {% if qt.deposit_method == 'TRANSFER' %}โอนเงินเข้าบัญชี
+                            {% elif qt.deposit_method == 'CASH' %}เงินสด
+                            {% elif qt.deposit_method == 'CHECK' %}เช็คธนาคาร
+                            {% else %}{{ qt.deposit_method }}
+                            {% endif %}
+                        </strong><br>
+                        วันที่รับยอด: <strong>{{ qt.deposit_date|date:"d/m/Y" }}</strong>
+                    </div>
+                </div>
             </div>
 
+            <!-- ฝั่งขวา: ตารางสรุปยอดเงิน -->
             <div class="col-5">
                 <table class="total-table">
-                    <tr><td class="total-label">รวมราคาสินค้า</td><td class="total-value">{{ item_total|floatformat:2|intcomma }}</td></tr>
-                    {% if qt.discount > 0 %}<tr><td class="total-label text-danger">หักส่วนลด</td><td class="total-value text-danger">-{{ qt.discount|floatformat:2|intcomma }}</td></tr>{% endif %}
-                    {% if qt.survey_fee > 0 %}<tr><td class="total-label">ค่าสำรวจหน้างาน</td><td class="total-value">{{ qt.survey_fee|floatformat:2|intcomma }}</td></tr>{% endif %}
+                    <tr><td class="total-label">รวมราคาสินค้า</td><td class="total-value">{{ qt.grand_total|floatformat:2|intcomma }}</td></tr>
                     <tr><td class="total-label">ราคาก่อนภาษี</td><td class="total-value">{{ qt.subtotal|floatformat:2|intcomma }}</td></tr>
                     <tr><td class="total-label">VAT 7%</td><td class="total-value">{{ qt.vat_amount|floatformat:2|intcomma }}</td></tr>
-                    <tr class="grand-total-row"><td class="total-label" style="border-top: 1px solid #000; padding-top: 10px;">ยอดรวมสุทธิ</td><td class="total-value" style="border-top: 1px solid #000; padding-top: 10px;">{{ qt.grand_total|floatformat:2|intcomma }}</td></tr>
-                    <tr><td></td><td><div style="border-bottom: 3px double #000; margin-top: 2px;"></div></td></tr>
+                    <tr class="grand-total-row"><td class="total-label" style="border-top: 1px solid #000; padding-top: 10px;">จำนวนเงินทั้งหมด</td><td class="total-value" style="border-top: 1px solid #000; padding-top: 10px;">{{ qt.grand_total|floatformat:2|intcomma }}</td></tr>
+
+                    <!-- 🌟 [FIXED] ย้ายโค้ดสีมาใส่ที่ td โดยตรง และเพิ่ม !important เพื่อบังคับทับสีดำเดิม 🌟 -->
+                    <tr class="grand-total-row">
+                        <td class="total-label" style="color: #00b0f0 !important;">ยอดชำระมัดจำแล้ว</td>
+                        <td class="total-value" style="color: #00b0f0 !important;">{{ qt.deposit_amount|floatformat:2|intcomma }}</td>
+                    </tr>
+                    <tr class="grand-total-row">
+                        <td class="total-label" style="color: #ff0000 !important;">ยอดคงค้างชำระ</td>
+                        <td class="total-value" style="color: #ff0000 !important; border-bottom: 2px solid #000;">{{ balance_due|floatformat:2|intcomma }}</td>
+                    </tr>
                 </table>
             </div>
         </div>
 
-        <div class="row signature-section">
+        <div class="row signature-section mt-5">
 
-            <!-- 🌟 ผู้สั่งซื้อ (Buyer) 🌟 -->
+            <div class="col-4 position-relative"></div>
+
+            <div class="col-4 position-relative"></div>
+
+            <!-- 🌟 ผู้รับเงิน (บริษัท) 🌟 -->
             <div class="col-4 position-relative">
                 <div class="sig-box">
-                    {% if qt.customer_signature %}
-                        <img src="{{ qt.customer_signature.url }}" class="sig-img" style="bottom: 55px;" alt="ลายเซ็นผู้สั่งซื้อ">
+
+                    <!-- 🌟 [FIXED] ตราประทับและลายเซ็น 🌟 -->
+                    {% if company.seal %}
+                        <img src="{{ company.seal.url }}" class="seal-img" alt="ตราประทับบริษัท">
                     {% endif %}
-                    <div class="sig-line"></div>
-                    <div class="sig-role">ผู้สั่งซื้อ (Buyer)</div>
 
-                    <div class="sig-name">({% if qt.customer and qt.customer.name %}{{ qt.customer.name }}{% else %}ไม่ระบุชื่อ{% endif %})</div>
-                    <div class="sig-date">วันที่ {% if qt.signature_date %}{{ qt.signature_date|date:"d/m/Y" }}{% else %}........./........./.............{% endif %}</div>
-                </div>
-            </div>
-
-            <!-- 🌟 ผู้จัดทำ (Prepared By) 🌟 -->
-            <div class="col-4 position-relative">
-                <div class="sig-box">
                     {% if qt.employee and qt.employee.signature %}
-                        <img src="{{ qt.employee.signature.url }}" class="sig-img" alt="ลายเซ็นผู้จัดทำ">
-                    {% endif %}
-                    <div class="sig-line"></div>
-                    <div class="sig-role">ผู้จัดทำ (Prepared By)</div>
-                    <div class="sig-name">({% if qt.employee and qt.employee.first_name %}{{ qt.employee.first_name }} {{ qt.employee.last_name }}{% else %}................................................{% endif %})</div>
-                    <div class="sig-date">วันที่ {{ qt.date|date:"d/m/Y" }}</div>
-                </div>
-            </div>
-
-            <!-- 🌟 ผู้อนุมัติ (Authorized By) 🌟 -->
-            <div class="col-4 position-relative">
-                <div class="sig-box">
-                    {% if qt.status != 'DRAFT' and qt.status != 'CANCELLED' %}
-                        {% if company.seal %}
-                            <img src="{{ company.seal.url }}" class="seal-img" alt="ตราประทับบริษัท">
-                        {% endif %}
-
-                        {% if qt.approved_by and qt.approved_by.signature %}
-                            <img src="{{ qt.approved_by.signature.url }}" class="sig-img" alt="ลายเซ็นผู้อนุมัติ">
-                        {% endif %}
+                        <img src="{{ qt.employee.signature.url }}" class="sig-img" alt="ลายเซ็นผู้รับเงิน">
                     {% endif %}
 
                     <div class="sig-line"></div>
-                    <div class="sig-role">ผู้อนุมัติ (Authorized By)</div>
+                    <div class="sig-role">ผู้รับเงิน / ผู้มีอำนาจลงนาม</div>
 
-                    {% if qt.status != 'DRAFT' and qt.status != 'CANCELLED' %}
-                        <div class="sig-name">({% if qt.approved_by and qt.approved_by.first_name %}{{ qt.approved_by.first_name }} {{ qt.approved_by.last_name }}{% else %}................................................{% endif %})</div>
-                        <div class="sig-date">วันที่ {{ qt.date|date:"d/m/Y" }}</div>
-                    {% else %}
-                        <div class="sig-name">(................................................)</div>
-                        <div class="sig-date">(รอการอนุมัติ)</div>
-                    {% endif %}
+                    <div class="sig-name">({% if company.name_th %}{{ company.name_th }}{% else %}บริษัท นีด ช็อปปิ้ง จำกัด{% endif %})</div>
+                    <div class="sig-date">วันที่ {{ qt.deposit_date|date:"d/m/Y" }}</div>
                 </div>
             </div>
 
         </div>
     </div>
 
-    <!-- 🌟 ฟังก์ชันแปลงตัวเลขเป็นภาษาไทย และ คัดลอกลิงก์ 🌟 -->
+    <!-- 🌟 ฟังก์ชันแปลงตัวเลขเป็นภาษาไทย 🌟 -->
     <script>
         document.addEventListener("DOMContentLoaded", function() {
-            const num = {% if qt.grand_total %}{{ qt.grand_total }}{% else %}0{% endif %};
+            const num = {{ qt.deposit_amount|default:"0" }};
             document.getElementById('baht-text').innerText = ThaiBaht(num);
         });
         function ThaiBaht(number) {
@@ -303,14 +299,6 @@
                 }
             }
             return text;
-        }
-
-        function copySignLink(url) {
-            navigator.clipboard.writeText(url).then(function() {
-                alert('🔗 คัดลอกลิงก์เรียบร้อยแล้ว!\nสามารถนำไปส่งให้ลูกค้าทาง LINE หรือ Email ได้เลยครับ');
-            }, function(err) {
-                alert('ไม่สามารถคัดลอกได้: ', err);
-            });
         }
     </script>
 </body>

@@ -16,11 +16,11 @@
         .company-title { font-size: 20px; font-weight: 700; color: #000; line-height: 1.1; margin-bottom: 2px; }
         .company-subtitle { font-size: 13px; color: #555; font-weight: 500; margin-bottom: 4px; }
         .company-details { font-size: 13px; color: #333; line-height: 1.4; }
-        
+
         /* 🌟 ปรับขนาดหัวเอกสารให้เล็กลงนิดนึงเพราะข้อความยาวขึ้น 🌟 */
         .doc-title { font-size: 22px; font-weight: 700; color: var(--primary-dark); text-align: right; line-height: 1.2; margin-top: 5px; }
         .doc-subtitle { font-size: 11px; color: #777; text-align: right; letter-spacing: 1.5px; text-transform: uppercase; font-weight: 600; margin-bottom: 8px; }
-        
+
         .doc-no-group { text-align: right; margin-top: 5px; }
         .doc-no-label { font-size: 10px; color: #666; font-weight: 600; text-transform: uppercase; }
         .doc-no-value { font-size: 16px; font-weight: 700; color: #000; }
@@ -40,14 +40,14 @@
         .total-label { text-align: right; padding-right: 15px; color: #555; font-size: 13px; }
         .total-value { text-align: right; font-weight: 600; width: 120px; font-size: 14px; }
         .grand-total-row td { padding-top: 8px; padding-bottom: 8px; font-size: 18px; font-weight: 700; color: #000; }
-        
+
         .payment-box { font-size: 13px; line-height: 1.4; color: #333; }
-        
+
         /* 🌟 สไตล์สำหรับกล่องเลขบัญชีธนาคาร 🌟 */
         .bank-box { border: 2px solid #e74c3c; border-radius: 8px; padding: 10px; margin-bottom: 15px; background-color: #fff9f9; }
         .bank-title { font-size: 12px; font-weight: 700; color: #e74c3c; margin-bottom: 5px; }
         .bank-details { font-size: 13px; font-weight: 600; color: #333; line-height: 1.5; }
-        
+
         .note-box { font-size: 12px; color: #555; margin-top: 10px; line-height: 1.3; }
 
         .signature-section { margin-top: 40px; }
@@ -57,10 +57,24 @@
         .sig-name { font-size: 11px; position: absolute; bottom: 15px; left: 0; right: 0; }
         .sig-date { font-size: 10px; color: #666; position: absolute; bottom: 0; left: 0; right: 0; }
 
+        /* 🌟 ลายเซ็น 🌟 */
+        .sig-img { position: absolute; bottom: 60px; left: 50%; transform: translateX(-50%); height: 60px; mix-blend-mode: multiply; z-index: 5; }
+
+        /* 🌟 ตราประทับ (ปรับให้ขนาด 150px เอียง -10deg และโปร่งใสขึ้น) 🌟 */
+        .seal-img {
+            position: absolute;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%) rotate(-10deg);
+            width: 150px;
+            opacity: 0.85;
+            pointer-events: none;
+            z-index: 2;
+            mix-blend-mode: multiply;
+        }
+
         /* 🌟 ข้อความเงื่อนไขความสมบูรณ์เอกสาร 🌟 */
         .legal-disclaimer { font-size: 10.5px; color: #6c757d; font-style: italic; line-height: 1.4; border-top: 1px solid #dee2e6; padding-top: 8px; margin-top: 20px; }
-
-        .seal-img { position: absolute; bottom: 70px; left: 50%; transform: translateX(-70%) rotate(-15deg); width: 85px; opacity: 0.25; pointer-events: none; z-index: 5; }
 
         .stamp-paid {
             position: absolute; top: -45px; left: 30px;
@@ -103,7 +117,7 @@
                 <div class="col-5">
                     <div class="doc-title">ใบแจ้งหนี้ / ใบเสร็จรับเงิน</div>
                     <div class="doc-subtitle">INVOICE / RECEIPT</div>
-                    
+
                     <div class="doc-no-group mt-3">
                         <div class="doc-no-label">เลขที่เอกสาร / DOC NO.</div>
                         <div class="doc-no-value">{{ inv.code }}</div>
@@ -168,7 +182,7 @@
                 {% endif %}
 
                 <div class="py-2 px-3 mb-3 bg-light border text-center fw-bold text-dark rounded" style="font-size: 14px;">( <span id="baht-text">...</span> )</div>
-                
+
                 <div class="bank-box">
                     <div class="bank-title"><i class="fas fa-university me-1"></i> ข้อมูลการโอนเงิน (BANK ACCOUNT)</div>
                     <div class="bank-details">
@@ -183,7 +197,7 @@
                     <div class="ps-2 border-start border-3 border-dark" style="white-space: pre-line;">{{ note|default:"-" }}</div>
                 </div>
             </div>
-            
+
             <div class="col-5">
                 <table class="total-table">
                     <tr><td class="total-label">รวมราคาสินค้า</td><td class="total-value">{{ item_total|default:subtotal|floatformat:2|intcomma }}</td></tr>
@@ -215,33 +229,53 @@
         </div>
 
         <div class="row signature-section">
-            <div class="col-4">
+
+            <!-- 🌟 ผู้จัดทำใบแจ้งหนี้ (พนักงานขาย) 🌟 -->
+            <div class="col-4 position-relative">
                 <div class="sig-box">
+                    {% if inv.employee and inv.employee.signature %}
+                        <img src="{{ inv.employee.signature.url }}" class="sig-img" alt="ลายเซ็นผู้จัดทำ">
+                    {% endif %}
                     <div class="sig-line"></div>
-                    <div class="sig-role">ผู้รับสินค้า (Received By)</div>
-                    <div class="sig-name">................................................</div>
-                    <div class="sig-date">วันที่ ........./........./.............</div>
+                    <div class="sig-role">ผู้จัดทำใบแจ้งหนี้ (Prepared By)</div>
+                    <div class="sig-name">({{ inv.employee.first_name|default:"................................................" }})</div>
+                    <div class="sig-date">วันที่ {{ inv.date|date:"d/m/Y" }}</div>
                 </div>
             </div>
 
+            <!-- 🌟 หมายเหตุ 🌟 -->
             <div class="col-4">
                 <div class="legal-disclaimer">
                     <b>* หมายเหตุ:</b> เอกสารฉบับนี้จะสมบูรณ์เป็นใบเสร็จรับเงินที่ถูกต้องตามกฎหมาย ก็ต่อเมื่อบริษัทฯ ได้รับเงินฝากโอนเข้าบัญชี หรือเช็คผ่านการเรียกเก็บเงินจากธนาคารเรียบร้อยแล้วเท่านั้น
                 </div>
             </div>
 
+            <!-- 🌟 ผู้รับเงิน / อำนาจลงนาม (พนักงานบัญชี + ตราประทับ) 🌟 -->
             <div class="col-4 position-relative">
                 <div class="sig-box">
-                    {% if company.seal %}
-                        <img src="{{ company.seal.url }}" class="seal-img">
+                    <!-- โชว์ตราประทับและลายเซ็นบัญชีเฉพาะเมื่อจ่ายเงินครบ (PAID) แล้วเท่านั้น -->
+                    {% if inv.status == 'PAID' %}
+                        {% if company.seal %}
+                            <img src="{{ company.seal.url }}" class="seal-img" alt="ตราประทับบริษัท">
+                        {% endif %}
+                        {% if inv.verified_by and inv.verified_by.signature %}
+                            <img src="{{ inv.verified_by.signature.url }}" class="sig-img" alt="ลายเซ็นบัญชี">
+                        {% endif %}
                     {% endif %}
 
                     <div class="sig-line"></div>
                     <div class="sig-role">ผู้รับเงิน / ผู้มีอำนาจลงนาม</div>
-                    <div class="sig-name">({{ company.name_th }})</div>
-                    <div class="sig-date">วันที่ {{ inv.date|date:"d/m/Y" }}</div>
+                    <div class="sig-name">
+                        {% if inv.status == 'PAID' and inv.verified_by %}
+                            ({{ inv.verified_by.first_name }})
+                        {% else %}
+                            ({{ company.name_th }})
+                        {% endif %}
+                    </div>
+                    <div class="sig-date">วันที่ {% if inv.status == 'PAID' and inv.payment_date %}{{ inv.payment_date|date:"d/m/Y" }}{% else %}........./........./.............{% endif %}</div>
                 </div>
             </div>
+
         </div>
     </div>
 
