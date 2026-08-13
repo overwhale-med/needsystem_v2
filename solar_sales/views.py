@@ -687,7 +687,9 @@ def solar_deposit_list(request):
             pass # หากวันที่ผิดรูปแบบให้ปล่อยผ่าน
 
     # เรียงลำดับและแบ่งหน้า
-    quotations = quotations.order_by('-deposit_date', '-id')
+    # 🌟 [FIXED] เปลี่ยนให้เรียงลำดับตาม 'เลขใบรับเงินมัดจำ' (deposit_code) เป็นหลัก 🌟
+    # เครื่องหมายลบ (-) ด้านหน้าหมายถึงให้เรียงจากมากไปน้อย (ใบใหม่สุดอยู่บนสุด)
+    quotations = quotations.order_by('-deposit_code', '-deposit_date')
     paginator = Paginator(quotations, 15)
     page_obj = paginator.get_page(request.GET.get('page'))
 
