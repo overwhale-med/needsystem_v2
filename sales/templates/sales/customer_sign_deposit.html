@@ -9,16 +9,16 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        html, body { 
-            font-family: 'Sarabun', sans-serif; background: #525659; color: #000; overflow-x: hidden; margin: 0; 
-            -webkit-text-size-adjust: 100%; text-size-adjust: 100%; 
+        html, body {
+            font-family: 'Sarabun', sans-serif; background: #525659; color: #000; overflow-x: hidden; margin: 0;
+            -webkit-text-size-adjust: 100%; text-size-adjust: 100%;
         }
         /* 🌟 [FIXED] เพิ่ม align-items: flex-start เพื่อให้กระดาษยืดหยุ่นได้เต็มที่ 🌟 */
         .zoom-wrapper { width: 100%; overflow-x: hidden; background: #525659; padding-top: 20px; display: flex; justify-content: center; align-items: flex-start; margin-bottom: 80px; }
-        
+
         /* 🌟 [FIXED] เพิ่ม padding-bottom เป็น 70px เพื่อให้ขอบล่างคลุมข้อความได้สวยงาม 🌟 */
         .page-a4 { width: 800px; min-height: 1131px; padding: 40px 50px 70px 50px; background: white; position: relative; box-shadow: 0 10px 30px rgba(0,0,0,0.3); transform-origin: top center; flex-shrink: 0; font-size: 15px; line-height: 1.6; }
-        
+
         .text-indent { text-indent: 40px; }
         .editable-textarea { width: 100%; border: none; padding: 0; font-family: 'Sarabun', sans-serif; font-size: 15px; resize: none; background-color: transparent; border-radius: 4px; }
         .fixed-bottom-bar { position: fixed; bottom: 0; left: 0; right: 0; background: white; padding: 15px 20px; box-shadow: 0 -5px 20px rgba(0,0,0,0.15); z-index: 1000; }
@@ -43,21 +43,26 @@
     <div class="zoom-wrapper" id="zoom-wrapper">
         <div class="page-a4" id="a4-page">
             <div class="d-flex justify-content-center align-items-center mb-4">
-                <div class="pe-4 text-center" style="width: 25%;">
-                    {% if company.logo %}
-                        <img src="{{ company.logo.url }}" alt="Logo" style="max-height: 80px; max-width: 100%; object-fit: contain;">
-                    {% else %}
-                        <h3 class="fw-bold mb-0" style="color: #4b8b9b;">NEED</h3>
-                    {% endif %}
-                </div>
-                <div style="border-left: 2px solid #000; height: 90px; margin: 0 15px;"></div>
-                <div class="ps-3" style="width: 75%;">
-                    <h5 class="fw-bold mb-2">{{ company.name|default:"บริษัท นีด ช็อปปิ้ง จำกัด" }}</h5>
-                    <p class="mb-0" style="font-size: 14px; line-height: 1.4;">{{ company.address|default:"10/10 หมู่ 10 ตำบลบางพระ อำเภอศรีราชา จังหวัดชลบุรี 20110" }}</p>
-                    <p class="mb-0" style="font-size: 14px; line-height: 1.4;">โทร: {{ company.phone|default:"033-1666-99" }} &nbsp; Email: {{ company.email|default:"needshopping.acc@gmail.com" }}</p>
-                    <p class="mb-0" style="font-size: 14px; line-height: 1.4;">เลขประจำตัวผู้เสียภาษีอากร: {{ company.tax_id|default:"0205563029342" }} (สำนักงานใหญ่)</p>
-                </div>
+            <div class="pe-4 text-center" style="width: 25%;">
+                {% if company.logo %}
+                    <!-- 🌟 [UPDATED] ขยาย max-height เป็น 140px ให้โลโก้ใหญ่สะใจ 🌟 -->
+                    <img src="{{ company.logo.url }}" alt="Logo" style="max-height: 140px; max-width: 100%; object-fit: contain;">
+                {% else %}
+                    <h3 class="fw-bold mb-0" style="color: #4b8b9b;">NEED</h3>
+                {% endif %}
             </div>
+
+            <!-- 🌟 [UPDATED] ปรับความสูงเส้นคั่นขยายตามโลโก้เป็น 130px 🌟 -->
+            <div style="border-left: 2px solid #000; height: 130px; margin: 0 15px;"></div>
+
+            <div class="ps-3" style="width: 75%;">
+                <!-- 🌟 [UPDATED] ปรับตัวหนังสือชื่อบริษัทให้ใหญ่ขึ้นนิดนึง เพื่อความสมดุล 🌟 -->
+                <h5 class="fw-bold mb-2" style="font-size: 20px;">{{ company.name|default:"บริษัท นีด ช็อปปิ้ง จำกัด" }}</h5>
+                <p class="mb-0" style="font-size: 14px; line-height: 1.4;">{{ company.address|default:"10/10 หมู่ 10 ตำบลบางพระ อำเภอศรีราชา จังหวัดชลบุรี 20110" }}</p>
+                <p class="mb-0" style="font-size: 14px; line-height: 1.4;">โทร: {{ company.phone|default:"033-1666-99" }} &nbsp; Email: {{ company.email|default:"needshopping.acc@gmail.com" }}</p>
+                <p class="mb-0" style="font-size: 14px; line-height: 1.4;">เลขประจำตัวผู้เสียภาษีอากร: {{ company.tax_id|default:"0205563029342" }} (สำนักงานใหญ่)</p>
+            </div>
+        </div>
 
             <h5 class="fw-bold text-center mb-3">สัญญาจะซื้อจะขายและวางเงินมัดจำตู้สำนักงานสำเร็จรูป</h5>
 
@@ -83,12 +88,12 @@
 
             <p class="mb-2" style="text-align: justify;">
                 <strong>ข้อ 2.</strong> ในวันทำสัญญานี้ผู้จะซื้อได้วางเงินมัดจำไว้ให้กับผู้จะขายเป็นจำนวนเงิน <strong>{{ qt.deposit_amount|floatformat:2|intcomma }}</strong> บาท <strong>(-{{ deposit_amount_text }}-)</strong>
-                
+
                 {% if qt.deposit_method == 'CASH' %} โดยชำระเป็น <strong>เงินสด</strong>
                 {% elif qt.deposit_method == 'TRANSFER' %} โดยชำระเป็น <strong>โอนเงินเข้าบัญชีธนาคาร</strong>
                 {% elif qt.deposit_method == 'CHECK' %} โดยชำระเป็น <strong>เช็คธนาคาร</strong>
                 {% else %} โดยชำระเป็น ................................................................ {% endif %}
-                
+
                 ซึ่งผู้จะขายได้รับไว้แล้วในวันทำสัญญานี้ <br>
                 ส่วนที่ยังค้างอยู่อีกจำนวน <strong>{{ balance_due|floatformat:2|intcomma }}</strong> บาท <strong>(-{{ balance_due_text }}-)</strong> ผู้จะซื้อตกลงจะชำระให้ผู้จะขายก่อนวันที่ส่งมอบสินค้า
             </p>
@@ -130,7 +135,7 @@
             </p>
 
             <div class="row text-center mt-4">
-                
+
                 <div class="col-6 mb-5">
                     <div style="height: 80px; display: flex; align-items: flex-end; justify-content: center;">
                         {% if qt.employee and qt.employee.signature %}
@@ -140,7 +145,7 @@
                     <p class="mb-0" style="position: relative; z-index: 1;">ลงชื่อ ............................................................. ผู้จะขาย</p>
                     <p class="mt-2 mb-0">( บริษัท นีด ช็อปปิ้ง จำกัด )</p>
                 </div>
-                
+
                 <div class="col-6 mb-5">
                     <div style="height: 80px; display: flex; align-items: flex-end; justify-content: center; position: relative;">
                         {% if qt.customer_deposit_signature %}
@@ -152,12 +157,12 @@
                             </button>
                         {% endif %}
                     </div>
-                    
+
                     <p class="mb-0" style="position: relative; z-index: 1;">
                         ลงชื่อ {% if not qt.customer_deposit_signature %}<span id="sig-line-display">.............................................................</span>{% else %}.............................................................{% endif %} ผู้จะซื้อ
                     </p>
                     <p class="mt-2 mb-0">( <strong id="sig-name-display">{{ qt.customer_name|default:"............................................................." }}</strong> )</p>
-                    
+
                     {% if qt.deposit_signature_date %}
                         <p class="mt-1 mb-0" style="font-size: 11px; color: #666;">วันที่ {{ qt.deposit_signature_date|date:"d/m/Y" }}</p>
                     {% else %}
@@ -166,7 +171,7 @@
                 </div>
 
             </div>
-            
+
             <hr class="mt-4 mb-3 border-dark">
             <h6 class="fw-bold">ข้อความท้ายสัญญา</h6>
             <p class="small text-muted mb-1" style="text-align: justify;">- การติดตั้ง และวางสินค้า สำหรับสินค้าที่มีห้องน้ำ หรือต้องเชื่อมต่อระบบสุขาภิบาลภายนอก ผู้จะซื้อต้องวางสินค้าสูงจากพื้นดินไม่น้อยกว่า 40 เซนติเมตร และสำหรับสินค้าที่ไม่มีห้องน้ำ หรือไม่ต้องเชื่อมต่อระบบสุขาภิบาลภายนอก ผู้จะซื้อต้องวางสินค้าสูงจากพื้นดินไม่น้อยกว่า 15 เซนติเมตร</p>
@@ -204,15 +209,15 @@
     <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.0.0/dist/signature_pad.umd.min.js"></script>
     <script>
         document.addEventListener("DOMContentLoaded", function() {
-            
+
             // 🌟 [FIXED] Script บังคับกล่องสีขาวให้ยืดตามความยาวเนื้อหา 🌟
             function scaleA4Page() {
                 var wrapper = document.getElementById('zoom-wrapper');
                 var page = document.getElementById('a4-page');
-                
+
                 page.style.transform = 'none'; // ล้าง scale เดิมเพื่อวัดขนาด
                 page.style.height = 'auto'; // ล้างความสูงเก่า
-                
+
                 var availableWidth = window.innerWidth;
                 var actualHeight = page.scrollHeight; // วัดความสูงจริงของตัวหนังสือทั้งหมด
 
@@ -222,7 +227,7 @@
                 if (availableWidth < 820) {
                     var scaleRatio = (availableWidth - 20) / 800;
                     page.style.transform = 'scale(' + scaleRatio + ')';
-                    wrapper.style.height = (actualHeight * scaleRatio) + 50 + 'px'; 
+                    wrapper.style.height = (actualHeight * scaleRatio) + 50 + 'px';
                 } else {
                     page.style.transform = 'scale(1)';
                     wrapper.style.height = actualHeight + 50 + 'px';
@@ -234,7 +239,7 @@
             {% if not qt.customer_deposit_signature %}
             var canvas = document.getElementById('signature-pad');
             var signaturePad = new SignaturePad(canvas, {
-                backgroundColor: 'rgba(255, 255, 255, 0)', 
+                backgroundColor: 'rgba(255, 255, 255, 0)',
                 penColor: 'rgb(0, 0, 0)'
             });
             var signatureDataToSave = null;
@@ -266,12 +271,12 @@
                     return;
                 }
                 signatureDataToSave = signaturePad.toDataURL("image/png");
-                
+
                 document.getElementById('preview-sig').src = signatureDataToSave;
                 document.getElementById('preview-sig').classList.remove('d-none');
                 document.getElementById('open-modal-btn').classList.add('d-none');
-                document.getElementById('sig-line-display').classList.add('d-none'); 
-                
+                document.getElementById('sig-line-display').classList.add('d-none');
+
                 document.getElementById('sig-name-display').innerText = '({{ qt.customer_name|default:"ไม่ระบุชื่อ" }})';
                 let today = new Date();
                 document.getElementById('sig-date-display').innerText = `วันที่ ${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth() + 1).padStart(2, '0')}/${today.getFullYear() + 543}`;
@@ -284,7 +289,7 @@
 
             document.getElementById('submit-doc-btn').addEventListener('click', function() {
                 if (!signatureDataToSave) return;
-                
+
                 var btn = this;
                 btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> กำลังบันทึกเอกสาร...';
                 btn.disabled = true;
@@ -295,7 +300,7 @@
                     body: JSON.stringify({ signature_data: signatureDataToSave })
                 }).then(response => response.json()).then(data => {
                     if(data.success) {
-                        window.location.reload(); 
+                        window.location.reload();
                     } else {
                         alert("เกิดข้อผิดพลาด: " + data.error);
                         btn.innerHTML = '<i class="fas fa-paper-plane me-2"></i> ยืนยันสัญญามัดจำ';

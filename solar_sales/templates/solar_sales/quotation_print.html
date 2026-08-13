@@ -47,8 +47,21 @@
         .sig-name { font-size: 11px; position: absolute; bottom: 15px; left: 0; right: 0; }
         .sig-date { font-size: 10px; color: #666; position: absolute; bottom: 0; left: 0; right: 0; }
 
-        .sig-img { position: absolute; bottom: 65px; left: 50%; transform: translateX(-50%); height: 60px; width: auto; object-fit: contain; z-index: 5; }
-        .seal-img { position: absolute; bottom: 65px; left: 50%; transform: translateX(-50%) rotate(-15deg); width: 85px; opacity: 0.8; pointer-events: none; z-index: 10; }
+        /* 🌟 ลายเซ็น 🌟 */
+        .sig-img { position: absolute; bottom: 60px; left: 50%; transform: translateX(-50%); height: 60px; mix-blend-mode: multiply; z-index: 5; }
+
+        /* 🌟 ตราประทับ 🌟 */
+        .seal-img {
+            position: absolute;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%) rotate(-12deg);
+            width: 150px;
+            opacity: 0.85;
+            pointer-events: none;
+            z-index: 10;
+            mix-blend-mode: multiply;
+        }
 
         @media print {
             body { background: white; margin: 0; }
@@ -61,6 +74,18 @@
 <body>
     <div class="text-center py-3 no-print sticky-top" style="background: rgba(50,50,50,0.8); backdrop-filter: blur(5px);">
         <button onclick="window.print()" class="btn btn-light fw-bold shadow-sm rounded-pill px-4 me-2"><i class="fas fa-print me-2"></i> พิมพ์เอกสาร</button>
+
+        <!-- 🌟 [FIXED] เพิ่มเงื่อนไข if และ default ป้องกันระบบแครชแบบ 100% 🌟 -->
+        {% if qt.signature_token %}
+        <button onclick="copySignLink('{{ request.scheme }}://{{ request.get_host }}{% url 'solar_customer_sign_quotation' qt.signature_token|default:'WAITING' %}')" class="btn btn-success fw-bold shadow-sm rounded-pill px-4 me-2">
+            <i class="fas fa-link me-2"></i> คัดลอกลิงก์ให้ลูกค้าเซ็น
+        </button>
+        {% else %}
+        <button class="btn btn-secondary fw-bold shadow-sm rounded-pill px-4 me-2" disabled title="กรุณากด 'บันทึก' ในหน้าแก้ไข 1 ครั้ง เพื่อสร้างรหัสเซ็นเอกสาร">
+            <i class="fas fa-link me-2"></i> ยังไม่พร้อมแชร์ลิงก์
+        </button>
+        {% endif %}
+
         <button onclick="window.close()" class="btn btn-outline-light fw-bold shadow-sm rounded-pill px-4">ปิดหน้าต่าง</button>
     </div>
 
@@ -69,7 +94,6 @@
             <div class="row align-items-start">
                 <div class="col-7">
                     <div class="d-flex align-items-center mb-2">
-                        <!-- 🌟 สั่งให้ดึงโลโก้โซล่าเซลล์ ถ้าไม่มีให้ดึงโลโก้บริษัทหลักแทน -->
                         {% if company.solar_logo %}
                             <img src="{{ company.solar_logo.url }}" style="height: 65px; margin-right: 12px;" alt="NEED Solar Logo">
                         {% elif company.logo %}
@@ -77,14 +101,13 @@
                         {% endif %}
 
                         <div>
-                            <!-- 🌟 แบรนดิ้งใหม่ของโซล่าเซลล์ (ล็อคชื่อตายตัว) -->
-                            <div class="company-title">นีด โซล่า ซีสเต็ม</div>
-                            <div class="company-subtitle">NEED SOLAR SYSTEM</div>
+                            <div class="company-title">{% if company.name_th %}{{ company.name_th }}{% else %}บริษัท นีด ช็อปปิ้ง จำกัด{% endif %}</div>
+                            <div class="company-subtitle">{% if company.name_en %}{{ company.name_en }}{% else %}NEED SHOPPING CO., LTD.{% endif %}</div>
                         </div>
                     </div>
                     <div class="company-details ps-1">
-                        {{ company.address|default:"10/10 หมู่ 10 ตำบลบางพระ อำเภอศรีราชา จังหวัดชลบุรี 20110" }}<br>
-                        <strong>โทร:</strong> {{ company.phone|default:"033 166 699" }} &nbsp;|&nbsp; <strong>เลขผู้เสียภาษี:</strong> {{ company.tax_id|default:"0205563029342" }}
+                        {% if company.address %}{{ company.address }}{% else %}10/10 หมู่ 10 ตำบลบางพระ อำเภอศรีราชา จังหวัดชลบุรี 20110{% endif %}<br>
+                        <strong>โทร:</strong> {% if company.phone %}{{ company.phone }}{% else %}033 166 699{% endif %} &nbsp;|&nbsp; <strong>เลขผู้เสียภาษี:</strong> {% if company.tax_id %}{{ company.tax_id }}{% else %}0205563029342{% endif %}
                     </div>
                 </div>
                 <div class="col-5">
@@ -100,23 +123,23 @@
             <div class="row">
                 <div class="col-7 pe-4 border-end border-secondary">
                     <div class="info-group-label"><i class="fas fa-address-book me-1"></i> ลูกค้า / CUSTOMER</div>
-                    <div class="customer-name">{{ qt.customer.name|default:"Walk-in" }}</div>
-                    <div class="customer-addr">{{ qt.customer.address|default:"-" }}</div>
+                    <div class="customer-name">{% if qt.customer and qt.customer.name %}{{ qt.customer.name }}{% else %}Walk-in{% endif %}</div>
+                    <div class="customer-addr">{% if qt.customer and qt.customer.address %}{{ qt.customer.address }}{% else %}-{% endif %}</div>
                     <div class="customer-meta mt-1">
-                        <strong>โทร:</strong> {{ qt.customer.phone|default:"-" }} &nbsp;&nbsp;<strong>เลขผู้เสียภาษี:</strong> {{ qt.customer.tax_id|default:"-" }}
+                        <strong>โทร:</strong> {% if qt.customer and qt.customer.phone %}{{ qt.customer.phone }}{% else %}-{% endif %} &nbsp;&nbsp;<strong>เลขผู้เสียภาษี:</strong> {% if qt.customer and qt.customer.tax_id %}{{ qt.customer.tax_id }}{% else %}-{% endif %}
                     </div>
                 </div>
                 <div class="col-5 ps-4">
                     <div class="info-group-label">ข้อมูลอ้างอิง / REFERENCE</div>
                     <table class="ref-table">
-                        <tr><td class="ref-label">รหัสลูกค้า:</td><td class="ref-value">{{ qt.customer.code|default:"-" }}</td></tr>
+                        <tr><td class="ref-label">รหัสลูกค้า:</td><td class="ref-value">{% if qt.customer and qt.customer.code %}{{ qt.customer.code }}{% else %}-{% endif %}</td></tr>
                         <tr><td class="ref-label">วันที่:</td><td class="ref-value">{{ qt.date|date:"d/m/Y" }}</td></tr>
                         <tr><td class="ref-label">ยืนยันราคาถึง:</td><td class="ref-value">{{ qt.valid_until|date:"d/m/Y" }}</td></tr>
                         <tr>
                             <td class="ref-label">พนักงานขาย:</td>
                             <td class="ref-value">
-                                {{ qt.employee.first_name|default:"-" }}
-                                {% if qt.employee.department %}/ {{ qt.employee.department.name }}{% endif %}
+                                {% if qt.employee and qt.employee.first_name %}{{ qt.employee.first_name }}{% else %}-{% endif %}
+                                {% if qt.employee and qt.employee.department %}/ {{ qt.employee.department.name }}{% endif %}
                             </td>
                         </tr>
                     </table>
@@ -168,8 +191,8 @@
                     </div>
                 </div>
 
-                <div class="note-box mb-2"><strong>เงื่อนไขการชำระเงิน:</strong><br>{{ qt.payment_terms|default:"- ชำระเงินมัดจำ 50% ของยอดรวมเพื่อยืนยันการสั่งซื้อ\n- ส่วนที่เหลือชำระก่อนการติดตั้ง"|linebreaksbr }}</div>
-                <div class="note-box"><strong>หมายเหตุ:</strong><br>{{ qt.note|default:"-ไม่มี-"|linebreaksbr }}</div>
+                <div class="note-box mb-2"><strong>เงื่อนไขการชำระเงิน:</strong><br>{% if qt.payment_terms %}{{ qt.payment_terms|linebreaksbr }}{% else %}- ชำระเงินมัดจำ 50% ของยอดรวมเพื่อยืนยันการสั่งซื้อ<br>- ส่วนที่เหลือชำระก่อนการติดตั้ง{% endif %}</div>
+                <div class="note-box"><strong>หมายเหตุ:</strong><br>{% if qt.note %}{{ qt.note|linebreaksbr }}{% else %}-ไม่มี-{% endif %}</div>
             </div>
 
             <div class="col-5">
@@ -186,42 +209,52 @@
         </div>
 
         <div class="row signature-section">
-            <div class="col-4">
+
+            <!-- 🌟 ผู้สั่งซื้อ (Buyer) 🌟 -->
+            <div class="col-4 position-relative">
                 <div class="sig-box">
+                    {% if qt.customer_signature %}
+                        <img src="{{ qt.customer_signature.url }}" class="sig-img" style="bottom: 55px;" alt="ลายเซ็นผู้สั่งซื้อ">
+                    {% endif %}
                     <div class="sig-line"></div>
                     <div class="sig-role">ผู้สั่งซื้อ (Buyer)</div>
-                    <div class="sig-name">................................................</div>
-                    <div class="sig-date">วันที่ ........./........./.............</div>
+
+                    <div class="sig-name">({% if qt.customer and qt.customer.name %}{{ qt.customer.name }}{% else %}ไม่ระบุชื่อ{% endif %})</div>
+                    <div class="sig-date">วันที่ {% if qt.signature_date %}{{ qt.signature_date|date:"d/m/Y" }}{% else %}........./........./.............{% endif %}</div>
                 </div>
             </div>
 
-            <div class="col-4">
+            <!-- 🌟 ผู้จัดทำ (Prepared By) 🌟 -->
+            <div class="col-4 position-relative">
                 <div class="sig-box">
                     {% if qt.employee and qt.employee.signature %}
-                        <img src="{{ qt.employee.signature.url }}" class="sig-img">
+                        <img src="{{ qt.employee.signature.url }}" class="sig-img" alt="ลายเซ็นผู้จัดทำ">
                     {% endif %}
                     <div class="sig-line"></div>
                     <div class="sig-role">ผู้จัดทำ (Prepared By)</div>
-                    <div class="sig-name">({{ qt.employee.first_name|default:"................................" }} {{ qt.employee.last_name|default:"" }})</div>
+                    <div class="sig-name">({% if qt.employee and qt.employee.first_name %}{{ qt.employee.first_name }} {{ qt.employee.last_name }}{% else %}................................................{% endif %})</div>
                     <div class="sig-date">วันที่ {{ qt.date|date:"d/m/Y" }}</div>
                 </div>
             </div>
 
+            <!-- 🌟 ผู้อนุมัติ (Authorized By) 🌟 -->
             <div class="col-4 position-relative">
                 <div class="sig-box">
-                    {% if qt.status == 'APPROVED' and company.seal %}
-                        <img src="{{ company.seal.url }}" class="seal-img">
-                    {% endif %}
+                    {% if qt.status != 'DRAFT' and qt.status != 'CANCELLED' %}
+                        {% if company.seal %}
+                            <img src="{{ company.seal.url }}" class="seal-img" alt="ตราประทับบริษัท">
+                        {% endif %}
 
-                    {% if qt.status == 'APPROVED' and qt.approved_by and qt.approved_by.signature %}
-                        <img src="{{ qt.approved_by.signature.url }}" class="sig-img">
+                        {% if qt.approved_by and qt.approved_by.signature %}
+                            <img src="{{ qt.approved_by.signature.url }}" class="sig-img" alt="ลายเซ็นผู้อนุมัติ">
+                        {% endif %}
                     {% endif %}
 
                     <div class="sig-line"></div>
                     <div class="sig-role">ผู้อนุมัติ (Authorized By)</div>
 
-                    {% if qt.status == 'APPROVED' %}
-                        <div class="sig-name">({{ qt.approved_by.first_name|default:"................................" }} {{ qt.approved_by.last_name|default:"" }})</div>
+                    {% if qt.status != 'DRAFT' and qt.status != 'CANCELLED' %}
+                        <div class="sig-name">({% if qt.approved_by and qt.approved_by.first_name %}{{ qt.approved_by.first_name }} {{ qt.approved_by.last_name }}{% else %}................................................{% endif %})</div>
                         <div class="sig-date">วันที่ {{ qt.date|date:"d/m/Y" }}</div>
                     {% else %}
                         <div class="sig-name">(................................................)</div>
@@ -233,9 +266,10 @@
         </div>
     </div>
 
+    <!-- 🌟 ฟังก์ชันแปลงตัวเลขเป็นภาษาไทย และ คัดลอกลิงก์ 🌟 -->
     <script>
         document.addEventListener("DOMContentLoaded", function() {
-            const num = {{ qt.grand_total }};
+            const num = {% if qt.grand_total %}{{ qt.grand_total }}{% else %}0{% endif %};
             document.getElementById('baht-text').innerText = ThaiBaht(num);
         });
         function ThaiBaht(number) {
@@ -269,6 +303,14 @@
                 }
             }
             return text;
+        }
+
+        function copySignLink(url) {
+            navigator.clipboard.writeText(url).then(function() {
+                alert('🔗 คัดลอกลิงก์เรียบร้อยแล้ว!\nสามารถนำไปส่งให้ลูกค้าทาง LINE หรือ Email ได้เลยครับ');
+            }, function(err) {
+                alert('ไม่สามารถคัดลอกได้: ', err);
+            });
         }
     </script>
 </body>

@@ -408,10 +408,22 @@ def record_deposit(request, qt_id):
             else: qt.deposit_date = timezone.now().date()
             qt.is_deposit_paid = True
 
+            # 🌟 [NEW] สร้างรหัส RVD สำหรับใบรับเงินมัดจำ (ถ้ายังไม่มี) 🌟
+            if not getattr(qt, 'deposit_code', None):
+                tz_bkk = pytz.timezone('Asia/Bangkok')
+                now_bkk = timezone.now().astimezone(tz_bkk)
+                thai_year = (now_bkk.year + 543) % 100
+                prefix = f"RVD-{thai_year:02d}{now_bkk.strftime('%m')}"
+
+                # หาเลขรันล่าสุดของเดือนนี้
+                last_deposit = Quotation.objects.filter(deposit_code__startswith=prefix).order_by('deposit_code').last()
+                seq = int(last_deposit.deposit_code.split('-')[-1]) + 1 if last_deposit else 1
+                qt.deposit_code = f"{prefix}-{seq:03d}"
+
             if 'deposit_slip' in request.FILES:
                 qt.deposit_slip = request.FILES['deposit_slip']
             qt.save()
-            messages.success(request, f"💰 บันทึกรับมัดจำ {amount:,.2f} บาท สำหรับใบเสนอราคา {qt.code} เรียบร้อยแล้ว")
+            messages.success(request, f"💰 บันทึกรับมัดจำ {amount:,.2f} บาท และสร้างใบเสร็จ {qt.deposit_code} เรียบร้อยแล้ว")
         else:
             messages.error(request, "❌ จำนวนเงินมัดจำต้องมากกว่า 0")
 
@@ -419,13 +431,22 @@ def record_deposit(request, qt_id):
 
     return redirect('quotation_edit', qt_id=qt.id)
 
+# ==========================================
+# 🌟 สมองกลคำนวณวันจัดส่งอัตโนมัติ (แก้ไขใหม่) 🌟
+# ==========================================
 def get_auto_delivery_date(qt):
-    first_item = qt.items.filter(product__isnull=False).first()
-    if not first_item: return timezone.now().date()
+    # 🌟 [FIXED] ดึงสินค้าตัวแรกสุดมาคำนวณทันที ป้องกันกรณีสินค้าไม่ได้ผูกรหัสในคลัง
+    first_item = qt.items.first()
 
+    # ถ้าไม่มีสินค้าเลย ให้คำนวณโควตาจาก 1 หลังเป็นค่าเริ่มต้น
+    total_qty = first_item.quantity if first_item else 1
+
+    from master_data.models import CompanyInfo
+    from manufacturing.models import ProductionOrder
     company_info = CompanyInfo.objects.first()
     max_quota = company_info.weekly_job_quota if company_info and company_info.weekly_job_quota else 25
 
+    # เช็ควันที่รับมัดจำ (ถ้าไม่มีให้ใช้วันนี้)
     deposit_date = qt.deposit_date if qt.deposit_date else timezone.now().date()
     current_check_date = deposit_date
     weeks_pushed = 0
@@ -436,18 +457,23 @@ def get_auto_delivery_date(qt):
 
         total_qty_in_week = ProductionOrder.objects.filter(cohort_week=check_cohort, is_closed=False).aggregate(Sum('quantity'))['quantity__sum'] or 0
 
-        if total_qty_in_week + first_item.quantity <= max_quota:
+        # ถ้าคิวสัปดาห์นั้นบวกจำนวนนี้แล้วไม่ล้นโควตา ให้หยุดคำนวณ
+        if total_qty_in_week + total_qty <= max_quota:
             break
 
+        # ถ้าล้น ให้ปัดไปสัปดาห์ถัดไป
         weeks_pushed += 1
         current_check_date += datetime.timedelta(days=7)
 
+    # คำนวณ Lead Time: 14 วันพื้นฐาน + 7 วันต่อสัปดาห์ที่โดนปัด
     base_lead_time = 14 + (weeks_pushed * 7)
     delivery_start_date = deposit_date + datetime.timedelta(days=base_lead_time)
+
+    # ปัดให้ไปตกวันศุกร์เสมอเพื่อความเป็นระเบียบ
     days_to_monday = delivery_start_date.weekday()
     monday_of_delivery_week = delivery_start_date - datetime.timedelta(days=days_to_monday)
 
-    return monday_of_delivery_week + datetime.timedelta(days=4)
+    return monday_of_delivery_week + datetime.timedelta(days=4) # วันศุกร์
 
 @login_required
 def create_job_order(request, qt_id):
@@ -1460,6 +1486,8 @@ def invoice_list(request):
 
 @login_required
 def confirm_payment(request, doc_type, doc_id):
+    current_emp = getattr(request.user, 'employee', None) # 🌟 ดึงข้อมูลผู้ใช้งานที่กำลังกดปุ่ม
+
     if doc_type == 'pos':
         obj = get_object_or_404(POSOrder, id=doc_id)
         if obj.status != 'PAID':
@@ -1469,6 +1497,7 @@ def confirm_payment(request, doc_type, doc_id):
             if obj.employee:
                 process_commission_logic(sale_amt, obj.employee, obj.code)
         messages.success(request, f"✅ ยืนยันรับชำระเงินเอกสาร {obj.code} ปิดการขายเรียบร้อยแล้ว!")
+
     else:
         obj = get_object_or_404(Invoice, id=doc_id)
         if obj.status == 'PENDING':
@@ -1477,6 +1506,7 @@ def confirm_payment(request, doc_type, doc_id):
 
             if obj.balance_amount <= 0:
                 obj.status = 'PAID'
+                obj.verified_by = current_emp # 🌟 บันทึกพนักงานบัญชีที่กดยืนยัน 🌟
                 obj.save()
                 sale_amt = getattr(obj, 'total_amount', getattr(obj, 'grand_total', 0))
                 if obj.employee:

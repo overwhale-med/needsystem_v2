@@ -15,6 +15,10 @@ from django.db.models import Q
 from hr.models import Department
 import datetime
 import pytz
+from django.views.decorators.csrf import csrf_exempt
+from django.core.files.base import ContentFile
+from master_data.models import CompanyInfo
+import base64
 
 # 🌟 [FIXED] เพิ่มบรรทัดนี้เข้ามา เพื่อให้ระบบรู้จักคำสั่ง timezone 🌟
 from django.utils import timezone
@@ -163,12 +167,17 @@ def calculate_solar_totals(qt):
     if qt.vat_type == 'EXCLUDE':
         qt.vat_amount = total_before_vat * Decimal('0.07')
         qt.grand_total = total_before_vat + qt.vat_amount
+        qt.subtotal = total_before_vat
     elif qt.vat_type == 'INCLUDE':
+        # 🌟 ถอด VAT 7% จากยอดรวม 🌟
         qt.grand_total = total_before_vat
-        qt.vat_amount = total_before_vat - (total_before_vat / Decimal('1.07'))
-    else: # NONE
-        qt.vat_amount = 0
+        qt.vat_amount = (total_before_vat * Decimal('7')) / Decimal('107')
+        qt.subtotal = total_before_vat - qt.vat_amount
+    else:
+        qt.vat_amount = Decimal('0.00')
         qt.grand_total = total_before_vat
+        qt.subtotal = total_before_vat
+
     qt.save()
 
 @login_required
@@ -213,6 +222,12 @@ def solar_quotation_edit(request, qt_id):
             qt.survey_fee = Decimal(request.POST.get('survey_fee', '0').replace(',', '') or 0)
             qt.payment_terms = request.POST.get('payment_terms', '')
             qt.note = request.POST.get('note', '')
+
+            # 🌟 [FIXED] เพิ่มคำสั่งรับค่า VAT จากหน้าเว็บมาบันทึกด้วย 🌟
+            vat_val = request.POST.get('vat_type')
+            if vat_val:
+                qt.vat_type = vat_val
+
             calculate_solar_totals(qt)
             if 'finish_quote' in request.POST:
                 messages.success(request, f"✅ สร้างใบเสนอราคา {qt.code} เสร็จสมบูรณ์แล้ว! (รอผู้อนุมัติ)")
@@ -518,16 +533,32 @@ def solar_record_deposit(request, qt_id):
             qt.deposit_amount = amount
             qt.deposit_method = method
             if date_str:
-                qt.deposit_date = parse_date(date_str) or timezone.now().date()
+                # ลองแปลงวันที่จากรูปแบบที่ได้รับจาก Flatpickr
+                try:
+                    qt.deposit_date = datetime.datetime.strptime(date_str, '%Y-%m-%d').date()
+                except ValueError:
+                    qt.deposit_date = timezone.now().date()
             else:
                 qt.deposit_date = timezone.now().date()
 
             qt.is_deposit_paid = True
 
+            # 🌟 [NEW] สมองกลสร้างรหัส RVD-SOL ให้โดยอัตโนมัติ (เหมือนระบบบ้านน็อคดาวน์) 🌟
+            if not getattr(qt, 'deposit_code', None):
+                tz_bkk = pytz.timezone('Asia/Bangkok')
+                now_bkk = timezone.now().astimezone(tz_bkk)
+                thai_year = (now_bkk.year + 543) % 100
+                prefix = f"RVD-SOL-{thai_year:02d}{now_bkk.strftime('%m')}"
+
+                # หาเลขรันล่าสุดของเดือนนี้ในตารางใบเสนอราคาโซล่า
+                last_deposit = SolarQuotation.objects.filter(deposit_code__startswith=prefix).order_by('deposit_code').last()
+                seq = int(last_deposit.deposit_code.split('-')[-1]) + 1 if last_deposit else 1
+                qt.deposit_code = f"{prefix}-{seq:03d}"
+
             if 'deposit_slip' in request.FILES:
                 qt.deposit_slip = request.FILES['deposit_slip']
             qt.save()
-            messages.success(request, f"💰 บันทึกรับมัดจำ {amount:,.2f} บาท สำหรับใบเสนอราคา {qt.code} เรียบร้อยแล้ว (รอตรวจสอบสลิป)")
+            messages.success(request, f"💰 บันทึกรับมัดจำ {amount:,.2f} บาท และสร้างใบเสร็จ {qt.deposit_code} สำหรับใบเสนอราคา {qt.code} เรียบร้อยแล้ว")
         else:
             messages.error(request, "❌ จำนวนเงินมัดจำต้องมากกว่า 0")
 
@@ -656,7 +687,9 @@ def solar_deposit_list(request):
             pass # หากวันที่ผิดรูปแบบให้ปล่อยผ่าน
 
     # เรียงลำดับและแบ่งหน้า
-    quotations = quotations.order_by('-deposit_date', '-id')
+    # 🌟 [FIXED] เปลี่ยนให้เรียงลำดับตาม 'เลขใบรับเงินมัดจำ' (deposit_code) เป็นหลัก 🌟
+    # เครื่องหมายลบ (-) ด้านหน้าหมายถึงให้เรียงจากมากไปน้อย (ใบใหม่สุดอยู่บนสุด)
+    quotations = quotations.order_by('-deposit_code', '-deposit_date')
     paginator = Paginator(quotations, 15)
     page_obj = paginator.get_page(request.GET.get('page'))
 
@@ -712,3 +745,120 @@ def solar_quotation_create_invoice(request, qt_id):
 
     # 🌟 [FIXED] เปลี่ยนให้เด้งไปหน้า "รายการใบเสร็จรับเงิน" ทันที 🌟
     return redirect('solar_invoice_list')
+
+# ==========================================
+# ✍️ ระบบเซ็นเอกสารออนไลน์ (Online Signature)
+# ==========================================
+@csrf_exempt
+def solar_customer_sign_quotation(request, token):
+    # ดึงใบเสนอราคาตามรหัส Token ลับ
+    qt = get_object_or_404(SolarQuotation, signature_token=token)
+
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            signature_data = data.get('signature_data')
+
+            if signature_data:
+                format, imgstr = signature_data.split(';base64,')
+                ext = format.split('/')[-1]
+                img_data = base64.b64decode(imgstr)
+                file_name = f"sign_QT_SOL_{qt.code}.{ext}"
+
+                qt.customer_signature.save(file_name, ContentFile(img_data), save=False)
+                qt.signature_date = timezone.now()
+                qt.save()
+                return JsonResponse({'success': True})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
+
+    item_total = sum(item.amount for item in qt.items.all())
+    company = CompanyInfo.objects.first()
+
+    return render(request, 'solar_sales/customer_sign.html', {
+        'qt': qt,
+        'company': company,
+        'item_total': item_total
+    })
+
+# 🌟 สำหรับเซ็นสัญญามัดจำ (เตรียมไว้ล่วงหน้าเผื่อใช้งาน)
+@csrf_exempt
+def solar_customer_sign_deposit(request, token):
+    qt = get_object_or_404(SolarQuotation, deposit_signature_token=token)
+
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            signature_data = data.get('signature_data')
+
+            if signature_data:
+                format, imgstr = signature_data.split(';base64,')
+                ext = format.split('/')[-1]
+                img_data = base64.b64decode(imgstr)
+                file_name = f"sign_DEP_SOL_{qt.code}.{ext}"
+
+                qt.customer_deposit_signature.save(file_name, ContentFile(img_data), save=False)
+                qt.deposit_signature_date = timezone.now()
+                qt.save()
+                return JsonResponse({'success': True})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
+
+    company = CompanyInfo.objects.first()
+    grand_total = qt.grand_total if qt.grand_total else Decimal('0.00')
+    deposit_amount = qt.deposit_amount if qt.deposit_amount else Decimal('0.00')
+    balance_due = grand_total - deposit_amount
+
+    # ฟังก์ชันแปลงตัวเลขเป็นอักษรไทย (จำลองมาจากที่เขียนไว้ก่อนหน้า)
+    def get_thai_baht_text(number):
+        if number == 0: return "ศูนย์บาทถ้วน"
+        import math
+        number = round(float(number), 2)
+        baht = math.floor(number)
+        satang = int(round((number - baht) * 100))
+        def read_num(n):
+            if n == 0: return ""
+            numbers = ["", "หนึ่ง", "สอง", "สาม", "สี่", "ห้า", "หก", "เจ็ด", "แปด", "เก้า"]
+            positions = ["", "สิบ", "ร้อย", "พัน", "หมื่น", "แสน", "ล้าน"]
+            s = str(n)
+            length = len(s)
+            res = ""
+            for i, digit in enumerate(s):
+                val = int(digit)
+                pos = length - i - 1
+                if val == 0: continue
+                if pos == 0 and val == 1 and length > 1: res += "เอ็ด"
+                elif pos == 1 and val == 1: res += "สิบ"
+                elif pos == 1 and val == 2: res += "ยี่สิบ"
+                else: res += numbers[val] + positions[pos]
+            return res
+        res = ""
+        if baht > 0: res += read_num(baht) + "บาท"
+        if satang > 0: res += read_num(satang) + "สตางค์"
+        else: res += "ถ้วน"
+        return res
+
+    grand_total_text = get_thai_baht_text(grand_total)
+    deposit_amount_text = get_thai_baht_text(deposit_amount)
+    balance_due_text = get_thai_baht_text(balance_due)
+
+    # ดึงวันที่จัดส่ง
+    job = qt.center_jobs.first()
+    delivery_date = job.target_date if job else None
+
+    return render(request, 'solar_sales/customer_sign_deposit.html', {
+        'qt': qt,
+        'company': company,
+        'grand_total_text': grand_total_text,
+        'deposit_amount_text': deposit_amount_text,
+        'balance_due': balance_due,
+        'balance_due_text': balance_due_text,
+        'delivery_date': delivery_date,
+    })
+
+@login_required
+def solar_deposit_print(request, qt_id):
+    qt = get_object_or_404(SolarQuotation, pk=qt_id)
+    company = CompanyInfo.objects.first()
+    balance_due = qt.grand_total - qt.deposit_amount
+    return render(request, 'solar_sales/deposit_print.html', {'qt': qt, 'company': company, 'balance_due': balance_due})

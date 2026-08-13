@@ -70,8 +70,9 @@ class ProductForm(forms.ModelForm):
             if self.instance.cost_price: self.initial['cost_price'] = f"{self.instance.cost_price:,.2f}"
             if self.instance.sell_price: self.initial['sell_price'] = f"{self.instance.sell_price:,.2f}"
         else:
-            self.initial['cost_price'] = '0.00'
-            self.initial['sell_price'] = '0.00'
+            # 🌟 [FIXED] ปล่อยให้เป็นค่าว่าง เพื่อแก้ปัญหาพิมพ์ 1 แล้วติดเลข 0 เป็น 10.00
+            self.initial['cost_price'] = ''
+            self.initial['sell_price'] = ''
 
     def clean_cost_price(self): return self.cleaned_data['cost_price'].replace(',', '') if self.cleaned_data['cost_price'] else 0
     def clean_sell_price(self): return self.cleaned_data['sell_price'].replace(',', '') if self.cleaned_data['sell_price'] else 0

@@ -30,7 +30,7 @@ class POSOrder(models.Model):
     is_commission_calculated = models.BooleanField(default=False, verbose_name="คำนวณคอมฯแล้ว")
     created_at = models.DateTimeField(default=timezone.now, verbose_name="เวลาที่ขาย")
 
-    def __str__(self): 
+    def __str__(self):
         return str(self.code) if self.code else "ไม่มีเลขที่"
 
     def save(self, *args, **kwargs):
@@ -59,7 +59,7 @@ class POSOrderItem(models.Model):
     quantity = models.IntegerField(default=1, verbose_name="จำนวน")
     price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="ราคาต่อชิ้น")
     total_price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="ราคารวม")
-    
+
     def save(self, *args, **kwargs):
         self.total_price = self.quantity * self.price
         if not self.product_name and self.product: self.product_name = self.product.name
@@ -74,6 +74,10 @@ class Quotation(models.Model):
         ('CANCELLED', 'ยกเลิกแล้ว')
     ]
     code = models.CharField(max_length=20, unique=True, verbose_name="เลขที่ใบเสนอราคา")
+
+    # 🌟 [NEW] เพิ่มฟิลด์ deposit_code สำหรับเก็บเลขที่ใบรับเงินมัดจำ (RVD) 🌟
+    deposit_code = models.CharField(max_length=50, blank=True, null=True, verbose_name="เลขที่ใบรับมัดจำ")
+
     date = models.DateField(default=timezone.now, verbose_name="วันที่เอกสาร")
     valid_until = models.DateField(null=True, blank=True, verbose_name="ยืนราคาถึงวันที่")
     customer = models.ForeignKey(Customer, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="ลูกค้า (Link)")
@@ -109,18 +113,16 @@ class Quotation(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     approved_by = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, blank=True, related_name='approved_quotations', verbose_name="ผู้อนุมัติ")
     approved_at = models.DateTimeField(null=True, blank=True, verbose_name="วันที่อนุมัติ")
-    
-    # 🌟 ฟิลด์ E-Signature สำหรับใบเสนอราคา
+
     signature_token = models.CharField(max_length=64, blank=True, null=True, unique=True)
     customer_signature = models.ImageField(upload_to='customer_signatures/%Y/%m/', null=True, blank=True, verbose_name="ลายเซ็นลูกค้า")
     signature_date = models.DateTimeField(null=True, blank=True, verbose_name="เวลาที่ลูกค้าเซ็น")
 
-    # 🌟 [NEW] ฟิลด์ E-Signature สำหรับสัญญามัดจำ 🌟
     deposit_signature_token = models.CharField(max_length=64, blank=True, null=True, unique=True)
     customer_deposit_signature = models.ImageField(upload_to='deposit_signatures_contract/%Y/%m/', null=True, blank=True, verbose_name="ลายเซ็นสัญญามัดจำ")
     deposit_signature_date = models.DateTimeField(null=True, blank=True, verbose_name="เวลาที่เซ็นสัญญามัดจำ")
 
-    def __str__(self): 
+    def __str__(self):
         return str(self.code) if self.code else "ไม่มีเลขที่ใบเสนอราคา"
 
     @property
@@ -135,12 +137,11 @@ class Quotation(models.Model):
     def save(self, *args, **kwargs):
         if not self.signature_token:
             self.signature_token = secrets.token_urlsafe(32)
-        # 🌟 สร้าง Token สำหรับลิงก์สัญญามัดจำ
         if not self.deposit_signature_token:
             self.deposit_signature_token = secrets.token_urlsafe(32)
-            
+
         super().save(*args, **kwargs)
-        
+
         if self.deposit_slip:
             try:
                 img = Image.open(self.deposit_slip.path)
@@ -148,7 +149,7 @@ class Quotation(models.Model):
                     output_size = (800, 800)
                     img.thumbnail(output_size)
                     img.save(self.deposit_slip.path, quality=85, optimize=True)
-            except Exception: pass    
+            except Exception: pass
 
 class QuotationItem(models.Model):
     quotation = models.ForeignKey(Quotation, related_name='items', on_delete=models.CASCADE)
@@ -158,7 +159,7 @@ class QuotationItem(models.Model):
     quantity = models.IntegerField(default=1, verbose_name="จำนวน")
     unit_price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="ราคาต่อหน่วย")
     amount = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="รวมเงิน")
-    
+
     def save(self, *args, **kwargs):
         self.amount = self.quantity * self.unit_price
         super().save(*args, **kwargs)
@@ -185,8 +186,9 @@ class Invoice(models.Model):
 
     status = models.CharField(max_length=20, choices=[('UNPAID', 'ยังไม่ชำระ'), ('PAID', 'ชำระแล้ว'), ('PENDING', 'รอตรวจสอบ')], default='UNPAID', verbose_name="สถานะ")
     created_at = models.DateTimeField(auto_now_add=True)
+    verified_by = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, blank=True, related_name='verified_invoices', verbose_name="ผู้ตรวจสอบรับเงิน")
 
-    def __str__(self): 
+    def __str__(self):
         return str(self.code) if self.code else "ไม่มีเลขที่บิล"
 
     def save(self, *args, **kwargs):

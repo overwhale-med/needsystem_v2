@@ -15,7 +15,16 @@
                 <div class="card-body p-4 p-md-5">
                     <form method="post" enctype="multipart/form-data">
                         {% csrf_token %}
-                        <div class="d-none">{{ form.product_type|as_crispy_field }}</div>
+                        
+                        <div class="d-none">
+                            {{ form.product_type|as_crispy_field }}
+                            
+                            <!-- 🌟 [FIXED] เพิ่มฟอร์มเซ็ตรายชื่อร้านค้าที่ถูกซ่อน เพื่อป้องกันการ Error แบบเงียบๆ 🌟 -->
+                            {{ formset.management_form }}
+                            {% for inline_form in formset %}
+                                {{ inline_form|crispy }}
+                            {% endfor %}
+                        </div>
 
                         <div class="row g-3 mb-3">
                             <div class="col-md-3">{{ form.code|as_crispy_field }}</div>
@@ -159,6 +168,14 @@
 
 <script>
     document.addEventListener("DOMContentLoaded", function() {
+        
+        // 🌟 [FIXED] ลูกเล่นเสริม: เวลาคลิกที่ช่องตัวเลขใดๆ ให้มันคลุมดำอัตโนมัติ ช่วยให้พิมพ์เลขทับได้ง่ายสุดๆ 🌟
+        document.querySelectorAll('.number-input').forEach(function(input) {
+            input.addEventListener('focus', function() {
+                this.select();
+            });
+        });
+
         // Save Sub Category
         document.getElementById('btnSaveSubCategory').addEventListener('click', function() {
             const name = document.getElementById('newSubCategoryName').value.trim();
@@ -193,7 +210,7 @@
             });
         });
 
-        // ✨ [UPDATED SCRIPT] Save Supplier (ส่งข้อมูลครบทุกฟิลด์)
+        // ✨ Save Supplier (ส่งข้อมูลครบทุกฟิลด์)
         document.getElementById('btnSaveSupplier').addEventListener('click', function() {
             const supplierData = {
                 name: document.getElementById('newSupplierName').value.trim(),

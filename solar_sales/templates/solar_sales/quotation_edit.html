@@ -191,6 +191,8 @@
                 <div class="card-footer bg-white p-3 border-top">
                     <form method="post" autocomplete="off" class="smart-form">
                         {% csrf_token %}
+                        <!-- 🌟 [FIXED] เพิ่ม hidden field ส่งค่า vat กลับไป กรณีที่ select โดน disable ไว้ -->
+                        <input type="hidden" name="vat_type" id="hidden_vat_type" value="{{ qt.vat_type }}">
                         <div class="row">
                             <div class="col-lg-7 border-end pe-lg-4 pb-3 pb-lg-0">
                                 <label class="text-primary fw-bold small mb-1"><i class="fas fa-file-invoice-dollar me-1"></i> เงื่อนไขการชำระเงิน (Payment Terms):</label>
@@ -200,7 +202,7 @@
                                 <textarea name="note" class="form-control form-control-sm mb-2" rows="2" {% if qt.status != 'DRAFT' and qt.status != 'PENDING' %}readonly{% endif %}>{{ qt.note|default:"-ไม่มี-" }}</textarea>
 
                                 <label class="text-primary fw-bold small mb-1 mt-2"><i class="fas fa-percent me-1"></i> การคิดภาษี (VAT):</label>
-                                <select name="vat_type" id="vat_type" class="form-select form-select-sm mb-2" {% if qt.status != 'DRAFT' and qt.status != 'PENDING' %}disabled{% endif %}>
+                                <select id="vat_type" class="form-select form-select-sm mb-2" {% if qt.status != 'DRAFT' and qt.status != 'PENDING' %}disabled{% endif %}>
                                     <option value="NONE" {% if qt.vat_type == 'NONE' %}selected{% endif %}>ไม่มี VAT</option>
                                     <option value="EXCLUDE" {% if qt.vat_type == 'EXCLUDE' %}selected{% endif %}>แยก VAT 7%</option>
                                     <option value="INCLUDE" {% if qt.vat_type == 'INCLUDE' %}selected{% endif %}>รวม VAT 7% แล้ว</option>
@@ -345,9 +347,10 @@
                 grandTotal = totalBeforeVat + taxAmount;
                 subtotal = totalBeforeVat;
             } else if (vatType === 'INCLUDE') {
+                // 🌟 [FIXED] ถอด VAT 7% จากยอดรวม (ตามสูตรบัญชี)
                 grandTotal = totalBeforeVat;
-                subtotal = totalBeforeVat / 1.07;
-                taxAmount = totalBeforeVat - subtotal;
+                taxAmount = (totalBeforeVat * 7) / 107;
+                subtotal = totalBeforeVat - taxAmount;
             } else {
                 grandTotal = totalBeforeVat;
                 subtotal = totalBeforeVat;
@@ -359,13 +362,18 @@
             $('#live_grand_total').text('฿' + formatNumber(grandTotal));
         }
 
-        $('#vat_type').change(calculateLiveTotals);
+        // เมื่อเปลี่ยนค่า Dropdown ให้คำนวณใหม่ และอัปเดตค่าไปยัง hidden field
+        $('#vat_type').change(function() {
+            $('#hidden_vat_type').val($(this).val());
+            calculateLiveTotals();
+        });
 
         // 5. ปลดลูกน้ำออกก่อนกด Submit บันทึก
         $('.smart-form').on('submit', function() {
             $(this).find('.number-format').each(function() {
                 if(this.value) { this.value = this.value.replace(/,/g, ''); }
             });
+            // ปลดล็อก select ทุกตัวที่โดน disable ไว้ เพื่อให้ส่งค่าได้ครบถ้วน
             $(this).find('select').prop('disabled', false);
         });
     });

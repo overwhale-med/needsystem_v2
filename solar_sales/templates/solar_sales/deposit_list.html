@@ -36,8 +36,8 @@
 
 <div class="container-fluid py-4 px-4">
     <div class="row justify-content-center">
-        <div class="col-12"> 
-            
+        <div class="col-12">
+
             <div class="d-flex justify-content-between align-items-end mb-4">
                 <div>
                     <h4 class="fw-bold mb-1 text-dark"><i class="fas fa-hand-holding-usd text-warning me-2"></i>รายการใบรับเงินมัดจำ (Solar Sales)</h4>
@@ -52,7 +52,7 @@
             <div class="card shadow-sm border-0 rounded-4 mb-4">
                 <div class="card-body p-3">
                     <form method="GET" class="row g-2 align-items-center">
-                        
+
                         <!-- 1. ค้นหาชื่อ/เลขที่ -->
                         <div class="col-md-4">
                             <div class="input-group bg-light rounded-pill overflow-hidden border">
@@ -98,31 +98,54 @@
             <!-- 🌟 ตารางข้อมูล 🌟 -->
             <div class="card shadow-sm border-0 rounded-4 overflow-hidden">
                 <div class="table-responsive">
-                    <table class="table table-hover align-middle mb-0">
+                    <table class="table table-hover align-middle mb-0 text-center">
                         <thead class="bg-light text-secondary" style="font-size: 0.8rem; text-transform: uppercase;">
+                            <!-- 🌟 [FIXED] จัดเรียงคอลัมน์ให้เหมือนระบบบ้านน็อคดาวน์ 🌟 -->
                             <tr>
-                                <th class="ps-4 py-3 fw-bold border-bottom-0">อ้างอิงเอกสาร</th>
+                                <th class="ps-4 py-3 fw-bold border-bottom-0 text-start">เลขใบรับเงินมัดจำ</th>
+                                <th class="py-3 fw-bold border-bottom-0 text-start">เลขใบเสนอราคา</th>
                                 <th class="py-3 fw-bold border-bottom-0">วันที่มัดจำ</th>
-                                <th class="py-3 fw-bold border-bottom-0">ลูกค้า</th>
+                                <th class="py-3 fw-bold border-bottom-0 text-start">ลูกค้า</th>
+                                <th class="py-3 fw-bold border-bottom-0">พนักงานขาย/สาขา</th>
                                 <th class="py-3 fw-bold border-bottom-0 text-end">ยอดมัดจำที่รับ</th>
-                                <th class="py-3 fw-bold border-bottom-0 text-center">ช่องทาง</th>
-                                <th class="py-3 fw-bold border-bottom-0 text-center">สถานะ</th>
-                                <th class="py-3 fw-bold border-bottom-0 text-center" style="width: 12%;">ตรวจสอบยอด</th>
-                                <th class="pe-4 py-3 fw-bold border-bottom-0 text-center" style="width: 10%;">เอกสาร</th>
+                                <th class="py-3 fw-bold border-bottom-0">ช่องทาง</th>
+                                <th class="py-3 fw-bold border-bottom-0">สถานะ</th>
+                                <th class="py-3 fw-bold border-bottom-0" style="width: 10%;">ตรวจสอบยอด</th>
+                                <th class="pe-4 py-3 fw-bold border-bottom-0" style="width: 8%;">ใบรับเงิน</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for qt in page_obj %}
                             <tr>
-                                <td class="ps-4">
+                                <!-- 🌟 [FIXED] เพิ่มคอลัมน์ เลขใบรับเงินมัดจำ 🌟 -->
+                                <td class="ps-4 text-start">
+                                    <span class="fw-bold text-info" style="font-family: 'Courier New', monospace;">{{ qt.deposit_code|default:"-" }}</span>
+                                </td>
+                                
+                                <td class="text-start">
                                     <a href="{% url 'solar_quotation_edit' qt.id %}" class="fw-bold text-decoration-none text-primary" style="font-family: 'Courier New', monospace;">{{ qt.code }}</a>
                                 </td>
+                                
                                 <td class="text-muted small"><i class="far fa-calendar-alt me-1"></i> {{ qt.deposit_date|date:"d/m/Y" }}</td>
-                                <td>
-                                    <div class="fw-bold text-dark text-truncate" style="max-width: 180px;">{{ qt.customer.name|default:"-" }}</div>
+                                
+                                <td class="text-start">
+                                    <div class="fw-bold text-dark text-truncate" style="max-width: 150px;">{{ qt.customer.name|default:"-" }}</div>
                                 </td>
+
+                                <!-- 🌟 [FIXED] เพิ่มคอลัมน์ พนักงานขาย/สาขา 🌟 -->
+                                <td class="small">
+                                    {% if qt.employee %}
+                                        <div class="fw-bold text-dark">{{ qt.employee.first_name }}</div>
+                                        <div class="text-muted" style="font-size: 11px;">{{ qt.employee.department.name|default:"สำนักงานใหญ่" }}</div>
+                                    {% else %}
+                                        <div class="text-muted">-</div>
+                                        <div class="text-muted" style="font-size: 11px;">สำนักงานใหญ่</div>
+                                    {% endif %}
+                                </td>
+
                                 <td class="text-end fw-bold text-success fs-6">{{ qt.deposit_amount|intcomma }}</td>
-                                <td class="text-center">
+                                
+                                <td>
                                     <div class="d-flex align-items-center justify-content-center gap-2">
                                         {% if qt.deposit_method == 'TRANSFER' %}
                                             <span class="badge bg-info bg-opacity-10 text-info border border-info rounded-pill"><i class="fas fa-mobile-alt me-1"></i> โอนเงิน</span>
@@ -141,17 +164,19 @@
                                         {% endif %}
                                     </div>
                                 </td>
-                                <td class="text-center">
+                                
+                                <td>
                                     {% if qt.is_deposit_verified %}
                                          <span class="status-badge status-paid"><i class="fas fa-check-double"></i> ตรวจสอบแล้ว</span>
                                     {% else %}
                                          <span class="status-badge status-pending"><i class="fas fa-search-dollar"></i> รอตรวจสอบ</span>
                                     {% endif %}
                                 </td>
-                                <td class="text-center">
+                                
+                                <td>
                                     {% if not qt.is_deposit_verified %}
                                          {% if user.is_superuser or 'บัญชี' in user.employee.department.name|default:'' or 'Accounting' in user.employee.department.name|default:'' %}
-                                            <a href="{% url 'solar_verify_deposit' qt.id %}" class="btn btn-sm btn-warning text-dark fw-bold border-0 px-3 shadow-sm w-100" onclick="return confirm('ยืนยันยอดเงินมัดจำเข้าบัญชีแล้ว?');">
+                                            <a href="{% url 'solar_verify_deposit' qt.id %}" class="btn btn-sm btn-warning text-dark fw-bold border-0 px-2 shadow-sm w-100" onclick="return confirm('ยืนยันยอดเงินมัดจำเข้าบัญชีแล้ว?');">
                                                 <i class="fas fa-check me-1"></i> ยืนยันยอด
                                             </a>
                                          {% else %}
@@ -161,14 +186,15 @@
                                          <span class="text-muted small">-</span>
                                     {% endif %}
                                 </td>
-                                <td class="text-center pe-4">
-                                    <a href="{% url 'solar_quotation_print_contract' qt.id %}" target="_blank" class="btn btn-sm btn-white border text-warning shadow-sm" title="พิมพ์สัญญามัดจำ">
-                                        <i class="fas fa-file-signature"></i>
+                                
+                                <td class="pe-4">
+                                    <a href="{% url 'solar_deposit_print' qt.id %}" target="_blank" class="btn btn-sm btn-light border text-secondary shadow-sm" title="พิมพ์ใบรับเงินมัดจำ">
+                                        <i class="fas fa-print"></i>
                                     </a>
                                 </td>
                             </tr>
                             {% empty %}
-                                <tr><td colspan="8" class="text-center py-5 text-muted"><i class="fas fa-hand-holding-usd fa-3x mb-3 opacity-25"></i><br>ยังไม่มีรายการมัดจำ</td></tr>
+                                <tr><td colspan="10" class="text-center py-5 text-muted"><i class="fas fa-hand-holding-usd fa-3x mb-3 opacity-25"></i><br>ยังไม่มีรายการมัดจำ</td></tr>
                             {% endfor %}
                         </tbody>
                      </table>

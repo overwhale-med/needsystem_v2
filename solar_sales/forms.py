@@ -6,11 +6,13 @@ from .models import SolarQuotation, SolarQuotationItem, SolarProduct
 class SolarQuotationStep1Form(forms.ModelForm):
     class Meta:
         model = SolarQuotation
-        fields = ['customer', 'date', 'valid_until']
+        # 🌟 [FIXED] เพิ่ม 'vat_type' เข้าไปใน fields เพื่อให้บิลใหม่บันทึกประเภทภาษีตั้งแต่ตอนสร้าง 🌟
+        fields = ['customer', 'date', 'valid_until', 'vat_type']
         widgets = {
             'customer': forms.Select(attrs={'class': 'form-select fw-bold text-dark'}),
             'date': forms.DateInput(format='%d/%m/%Y', attrs={'class': 'form-control datepicker', 'placeholder': 'dd/mm/yyyy'}),
             'valid_until': forms.DateInput(format='%d/%m/%Y', attrs={'class': 'form-control datepicker', 'placeholder': 'dd/mm/yyyy'}),
+            'vat_type': forms.Select(attrs={'class': 'form-select fw-bold'}),
         }
 
 # 🌟 สเต็ป 2: ฟอร์มจัดการเงื่อนไขและสรุปยอดเงิน

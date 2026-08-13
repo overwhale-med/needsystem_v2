@@ -3,7 +3,7 @@
 <html lang="th">
 <head>
     <meta charset="UTF-8">
-    <title>ใบรับเงินมัดจำ {{ qt.code }}</title>
+    <title>ใบรับเงินมัดจำ - {{ qt.deposit_code|default:"รอออกรหัส" }}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -16,27 +16,33 @@
         .company-title { font-size: 20px; font-weight: 700; color: #000; line-height: 1.1; margin-bottom: 2px; }
         .company-subtitle { font-size: 13px; color: #555; font-weight: 500; margin-bottom: 4px; }
         .company-details { font-size: 13px; color: #333; line-height: 1.4; }
+
         .doc-title { font-size: 24px; font-weight: 700; color: var(--primary-dark); text-align: right; line-height: 1; margin-top: 5px; }
         .doc-subtitle { font-size: 11px; color: #777; text-align: right; letter-spacing: 2px; text-transform: uppercase; font-weight: 600; margin-bottom: 8px; }
         .doc-no-group { text-align: right; margin-top: 5px; }
         .doc-no-label { font-size: 10px; color: #666; font-weight: 600; text-transform: uppercase; }
         .doc-no-value { font-size: 16px; font-weight: 700; color: #000; }
+
         .customer-divider { border-top: 1px solid #000; margin: 12px 0; opacity: 1; }
         .info-group-label { font-size: 11px; color: #666; font-weight: 700; text-transform: uppercase; margin-bottom: 4px; }
         .customer-name { font-size: 16px; font-weight: 700; color: #000; margin-bottom: 2px; }
         .customer-addr { font-size: 14px; line-height: 1.3; margin-bottom: 4px; }
+
         .ref-table { width: 100%; }
         .ref-table td { padding: 1px 0; font-size: 13px; vertical-align: top; }
         .ref-label { color: #555; width: 90px; font-weight: 500; }
         .ref-value { font-weight: 600; text-align: right; color: #000; }
+
         .premium-table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
         .premium-table th { background-color: #f4f4f4; color: #000; font-weight: 700; text-transform: uppercase; font-size: 12px; padding: 8px; border-top: 1px solid #000; border-bottom: 1px solid #000; text-align: center; }
         .premium-table td { padding: 6px 8px; border-bottom: 1px solid #eee; vertical-align: top; font-size: 13px; }
+
         .total-table { width: 100%; }
         .total-table td { padding: 3px 0; }
         .total-label { text-align: right; padding-right: 15px; color: #555; font-size: 13px; }
         .total-value { text-align: right; font-weight: 600; width: 120px; font-size: 14px; }
-        .grand-total-row td { padding-top: 8px; padding-bottom: 8px; font-size: 18px; font-weight: 700; color: #000; }
+        .grand-total-row td { padding-top: 8px; padding-bottom: 8px; font-size: 16px; font-weight: 700; color: #000; }
+
         .payment-box { font-size: 13px; line-height: 1.4; color: #333; }
 
         .signature-section { margin-top: 40px; }
@@ -46,24 +52,36 @@
         .sig-name { font-size: 11px; position: absolute; bottom: 15px; left: 0; right: 0; }
         .sig-date { font-size: 10px; color: #666; position: absolute; bottom: 0; left: 0; right: 0; }
 
-        /* 🌟 [UPDATED] ปรับขนาดและสีตราประทับให้เหมือนกับใบเสนอราคา 🌟 */
+        .sig-img { position: absolute; bottom: 60px; left: 50%; transform: translateX(-50%); height: 60px; mix-blend-mode: multiply; z-index: 5; }
+
+        /* 🌟 [FIXED] จัดการตราประทับบริษัท ให้อยู่เหนือลายเซ็น 🌟 */
         .seal-img {
             position: absolute;
-            bottom: 70px;
+            bottom: 60px;
             left: 50%;
-            transform: translateX(-70%) rotate(-15deg);
-            width: 150px; /* 👈 ขยายขนาดเป็น 150px ตามที่ต้องการ */
-            opacity: 0.85; /* 👈 ปรับความเข้มสีให้ชัดขึ้น */
-            mix-blend-mode: multiply; /* 👈 เพิ่มความสมจริงเวลาทับตัวหนังสือ */
+            transform: translateX(-50%) rotate(-12deg);
+            width: 150px;
+            opacity: 0.85;
             pointer-events: none;
-            z-index: 5;
+            z-index: 10;
+            mix-blend-mode: multiply; /* ทำให้พื้นหลังตราประทับโปร่งใสทับลายเซ็นได้ */
         }
-        .stamp-paid {
-            position: absolute; top: -45px; left: 30px;
-            color: #17a2b8; border: 4px solid #17a2b8; border-radius: 8px;
-            font-size: 24px; font-weight: 800; text-transform: uppercase;
-            padding: 8px 16px; transform: rotate(-10deg); opacity: 0.6;
-            pointer-events: none; z-index: 20; letter-spacing: 2px;
+
+        /* 🌟 [FIXED] สไตล์ตรายาง "รับมัดจำแล้ว" สีฟ้า ทับกล่องข้อความ 🌟 */
+        .stamp-received {
+            position: absolute;
+            top: -60px;
+            left: 20px;
+            border: 3px solid #4eb6d7;
+            color: #4eb6d7;
+            font-size: 26px;
+            font-weight: 700;
+            padding: 4px 18px;
+            border-radius: 8px;
+            transform: rotate(-10deg);
+            z-index: 10;
+            background: transparent; /* โปร่งใสทะลุเห็นกล่องด้านหลัง */
+            pointer-events: none;
         }
 
         @media print {
@@ -76,7 +94,7 @@
 </head>
 <body>
     <div class="text-center py-3 no-print sticky-top" style="background: rgba(50,50,50,0.8); backdrop-filter: blur(5px);">
-        <button onclick="window.print()" class="btn btn-light fw-bold shadow-sm rounded-pill px-4 me-2"><i class="fas fa-print me-2"></i> พิมพ์เอกสาร</button>
+        <button onclick="window.print()" class="btn btn-light fw-bold shadow-sm rounded-pill px-4 me-2"><i class="fas fa-print me-2"></i> พิมพ์ใบรับเงินมัดจำ</button>
         <button onclick="window.close()" class="btn btn-outline-light fw-bold shadow-sm rounded-pill px-4">ปิดหน้าต่าง</button>
     </div>
 
@@ -85,55 +103,58 @@
             <div class="row align-items-start">
                 <div class="col-7">
                     <div class="d-flex align-items-center mb-2">
-                        {% if company.logo %} <img src="{{ company.logo.url }}" style="height: 55px; margin-right: 12px;" alt="Logo"> {% endif %}
+                        {% if company.solar_logo %}
+                            <img src="{{ company.solar_logo.url }}" style="height: 65px; margin-right: 12px;" alt="NEED Solar Logo">
+                        {% elif company.logo %}
+                            <img src="{{ company.logo.url }}" style="height: 55px; margin-right: 12px;" alt="Logo">
+                        {% endif %}
+
                         <div>
-                            <div class="company-title">{{ company.name_th|default:"บริษัท นีด ช็อปปิ้ง จำกัด" }}</div>
-                            <div class="company-subtitle">{{ company.name_en|default:"NEED SHOPPING CO., LTD." }}</div>
+                            <div class="company-title">{% if company.name_th %}{{ company.name_th }}{% else %}บริษัท นีด ช็อปปิ้ง จำกัด{% endif %}</div>
+                            <div class="company-subtitle">{% if company.name_en %}{{ company.name_en }}{% else %}NEED SHOPPING CO., LTD.{% endif %}</div>
                         </div>
                     </div>
                     <div class="company-details ps-1">
-                        {{ company.address|default:"10/10 หมู่ 10 ตำบลบางพระ อำเภอศรีราชา จังหวัดชลบุรี 20110" }}<br>
-                        <strong>โทร:</strong> {{ company.phone|default:"033 166 699" }} &nbsp;|&nbsp;
-                        <strong>เลขผู้เสียภาษี:</strong> {{ company.tax_id|default:"0205563029342" }}
+                        {% if company.address %}{{ company.address }}{% else %}10/10 หมู่ 10 ตำบลบางพระ อำเภอศรีราชา จังหวัดชลบุรี 20110{% endif %}<br>
+                        <strong>โทร:</strong> {% if company.phone %}{{ company.phone }}{% else %}033 166 699{% endif %} &nbsp;|&nbsp; <strong>เลขผู้เสียภาษี:</strong> {% if company.tax_id %}{{ company.tax_id }}{% else %}0205563029342{% endif %}
                     </div>
                 </div>
-                <!-- มุมบนขวา -->
                 <div class="col-5">
-                    <div class="doc-title text-info">ใบรับเงินมัดจำ</div>
+                    <div class="doc-title">ใบรับเงินมัดจำ</div>
                     <div class="doc-subtitle">DEPOSIT RECEIPT</div>
                     <div class="doc-no-group mt-3">
-                        <!-- 🌟 [UPDATED] เปลี่ยนเป็นเลขที่ใบรับเงินมัดจำ (RVD) 🌟 -->
                         <div class="doc-no-label">เลขที่เอกสาร / RECEIPT NO.</div>
-                        <div class="doc-no-value">{{ qt.deposit_code|default:qt.code }}</div>
+                        <div class="doc-no-value text-danger">{{ qt.deposit_code|default:"รอออกรหัส" }}</div>
                     </div>
                 </div>
             </div>
             <div class="customer-divider"></div>
             <div class="row">
-                <!-- ฝั่งซ้าย (ลูกค้า) เหมือนเดิม -->
                 <div class="col-7 pe-4 border-end border-secondary">
                     <div class="info-group-label"><i class="fas fa-address-book me-1"></i> ลูกค้า / CUSTOMER</div>
-                    <div class="customer-name">{{ qt.customer_name|default:"ลูกค้าทั่วไป" }}</div>
-                    <div class="customer-addr">{{ qt.customer_address|default:"-" }}</div>
+                    <div class="customer-name">{% if qt.customer and qt.customer.name %}{{ qt.customer.name }}{% else %}Walk-in{% endif %}</div>
+                    <div class="customer-addr">{% if qt.customer and qt.customer.address %}{{ qt.customer.address }}{% else %}-{% endif %}</div>
                     <div class="customer-meta mt-1">
-                        <strong>โทร:</strong> {{ qt.customer_phone|default:"-" }} &nbsp;&nbsp;
-                        <strong>เลขผู้เสียภาษี:</strong> {{ qt.customer_tax_id|default:"-" }}
+                        <strong>โทร:</strong> {% if qt.customer and qt.customer.phone %}{{ qt.customer.phone }}{% else %}-{% endif %} &nbsp;&nbsp;<strong>เลขผู้เสียภาษี:</strong> {% if qt.customer and qt.customer.tax_id %}{{ qt.customer.tax_id }}{% else %}-{% endif %}
                     </div>
                 </div>
-                <!-- ฝั่งขวา (ข้อมูลอ้างอิง) -->
                 <div class="col-5 ps-4">
                     <div class="info-group-label">ข้อมูลอ้างอิง / REFERENCE</div>
                     <table class="ref-table">
-                        <!-- 🌟 [UPDATED] ย้ายเลขอ้างอิงใบเสนอราคา (QT) มาไว้ตรงนี้ 🌟 -->
                         <tr><td class="ref-label">อ้างอิงใบเสนอราคา:</td><td class="ref-value">{{ qt.code }}</td></tr>
-                        <tr><td class="ref-label">วันที่รับมัดจำ:</td><td class="ref-value text-info">{{ qt.deposit_date|date:"d/m/Y" }}</td></tr>
-                        <tr><td class="ref-label">พนักงานขาย:</td><td class="ref-value">{{ qt.employee.first_name|default:"-" }}</td></tr>
+                        <tr><td class="ref-label">วันที่รับมัดจำ:</td><td class="ref-value">{{ qt.deposit_date|date:"d/m/Y" }}</td></tr>
+                        <tr>
+                            <td class="ref-label">พนักงานขาย:</td>
+                            <td class="ref-value">
+                                {% if qt.employee and qt.employee.first_name %}{{ qt.employee.first_name }}{% else %}-{% endif %}
+                            </td>
+                        </tr>
                     </table>
                 </div>
             </div>
         </div>
 
-        <div style="min-height: 380px;">
+        <div style="min-height: 250px;">
             <table class="premium-table">
                 <thead>
                     <tr>
@@ -148,78 +169,103 @@
                     {% for item in qt.items.all %}
                     <tr>
                         <td class="text-center text-muted">{{ forloop.counter }}</td>
-                        <td><div class="fw-bold text-dark">{{ item.item_name }}</div></td>
-                        <td class="text-center fw-bold">{{ item.quantity }}</td>
+                        <td>
+                            <div class="fw-bold text-dark">{{ item.item_name }}</div>
+                            {% if item.product and item.product.code %}<div class="small text-muted" style="font-size: 11px;">รหัส: {{ item.product.code }}</div>{% endif %}
+                        </td>
+                        <td class="text-center fw-bold">{{ item.quantity|floatformat:0 }}</td>
                         <td class="text-end">{{ item.unit_price|floatformat:2|intcomma }}</td>
                         <td class="text-end fw-bold">{{ item.amount|floatformat:2|intcomma }}</td>
                     </tr>
+                    {% empty %}
+                    <tr><td colspan="5" class="text-center text-muted py-4">ไม่พบรายการสินค้า</td></tr>
                     {% endfor %}
-                    {% for i in "1234" %}<tr><td colspan="5" style="height: 25px;"></td></tr>{% endfor %}
+
+                    {% for i in "123" %}<tr><td colspan="5" style="height: 25px;"></td></tr>{% endfor %}
                 </tbody>
             </table>
         </div>
 
-        <div class="row">
-            <div class="col-7 pe-5 position-relative">
-                {% if qt.is_deposit_verified %}
-                    <div class="stamp-paid">รับมัดจำแล้ว</div>
-                {% endif %}
+        <div class="row mt-4">
+            <!-- ฝั่งซ้าย: กล่องข้อความ และ รายละเอียดการโอน -->
+            <div class="col-7 pe-5">
+                <div class="position-relative mt-2">
+                    <!-- 🌟 [FIXED] ตราประทับสีฟ้า ย้ายมาทับกล่องข้อความ 🌟 -->
+                    <div class="stamp-received">รับมัดจำแล้ว</div>
+                    <div class="py-2 px-3 mb-4 bg-light border text-center fw-bold text-info rounded" style="font-size: 14px; position: relative; z-index: 1;">( <span id="baht-text">...</span> )</div>
+                </div>
 
-                <div class="py-2 px-3 mb-3 bg-light border text-center fw-bold text-info rounded" style="font-size: 14px;">( <span id="baht-text">...</span> )</div>
                 <div class="payment-box mb-3">
-                    <div class="fw-bold mb-1" style="font-size: 12px; text-transform: uppercase;">รายละเอียดมัดจำ (Deposit Details):</div>
-                    <div class="ps-2 border-start border-3 border-info">
-                        ช่องทาง: {{ qt.deposit_method }} <br>
-                        วันที่รับยอด: {{ qt.deposit_date|date:"d/m/Y" }}
+                    <div class="fw-bold mb-1" style="font-size: 12px; text-transform: uppercase;">รายละเอียดมัดจำ (DEPOSIT DETAILS):</div>
+                    <div class="ps-2 border-start border-3 border-warning">
+                        ช่องทาง:
+                        <strong>
+                            {% if qt.deposit_method == 'TRANSFER' %}โอนเงินเข้าบัญชี
+                            {% elif qt.deposit_method == 'CASH' %}เงินสด
+                            {% elif qt.deposit_method == 'CHECK' %}เช็คธนาคาร
+                            {% else %}{{ qt.deposit_method }}
+                            {% endif %}
+                        </strong><br>
+                        วันที่รับยอด: <strong>{{ qt.deposit_date|date:"d/m/Y" }}</strong>
                     </div>
                 </div>
             </div>
+
+            <!-- ฝั่งขวา: ตารางสรุปยอดเงิน -->
             <div class="col-5">
                 <table class="total-table">
-                    <tr><td class="total-label">รวมราคาสินค้า</td><td class="total-value">{{ item_total|floatformat:2|intcomma }}</td></tr>
-                    {% if qt.discount > 0 %}<tr><td class="total-label text-danger">หักส่วนลด</td><td class="total-value text-danger">-{{ qt.discount|floatformat:2|intcomma }}</td></tr>{% endif %}
-                    {% if qt.shipping_cost > 0 %}<tr><td class="total-label">ค่าขนส่ง</td><td class="total-value">{{ qt.shipping_cost|floatformat:2|intcomma }}</td></tr>{% endif %}
-
+                    <tr><td class="total-label">รวมราคาสินค้า</td><td class="total-value">{{ qt.grand_total|floatformat:2|intcomma }}</td></tr>
                     <tr><td class="total-label">ราคาก่อนภาษี</td><td class="total-value">{{ qt.subtotal|floatformat:2|intcomma }}</td></tr>
-                    <tr><td class="total-label">VAT 7%</td><td class="total-value">{{ qt.tax_amount|floatformat:2|intcomma }}</td></tr>
+                    <tr><td class="total-label">VAT 7%</td><td class="total-value">{{ qt.vat_amount|floatformat:2|intcomma }}</td></tr>
+                    <tr class="grand-total-row"><td class="total-label" style="border-top: 1px solid #000; padding-top: 10px;">จำนวนเงินทั้งหมด</td><td class="total-value" style="border-top: 1px solid #000; padding-top: 10px;">{{ qt.grand_total|floatformat:2|intcomma }}</td></tr>
 
+                    <!-- 🌟 [FIXED] ย้ายโค้ดสีมาใส่ที่ td โดยตรง และเพิ่ม !important เพื่อบังคับทับสีดำเดิม 🌟 -->
                     <tr class="grand-total-row">
-                        <td class="total-label" style="border-top: 1px solid #000; padding-top: 10px;">จำนวนเงินทั้งหมด</td>
-                        <td class="total-value" style="border-top: 1px solid #000; padding-top: 10px;">{{ qt.grand_total|floatformat:2|intcomma }}</td>
+                        <td class="total-label" style="color: #00b0f0 !important;">ยอดชำระมัดจำแล้ว</td>
+                        <td class="total-value" style="color: #00b0f0 !important;">{{ qt.deposit_amount|floatformat:2|intcomma }}</td>
                     </tr>
-
                     <tr class="grand-total-row">
-                        <td class="total-label text-info" style="border-top: 1px dashed #000; padding-top: 10px;">ยอดชำระมัดจำแล้ว</td>
-                        <td class="total-value text-info" style="border-top: 1px dashed #000; padding-top: 10px;">{{ qt.deposit_amount|floatformat:2|intcomma }}</td>
+                        <td class="total-label" style="color: #ff0000 !important;">ยอดคงค้างชำระ</td>
+                        <td class="total-value" style="color: #ff0000 !important; border-bottom: 2px solid #000;">{{ balance_due|floatformat:2|intcomma }}</td>
                     </tr>
-                    <tr>
-                        <td class="total-label text-danger" style="padding-top: 5px;">ยอดคงค้างชำระ</td>
-                        <td class="total-value text-danger" style="padding-top: 5px;">{{ balance_due|floatformat:2|intcomma }}</td>
-                    </tr>
-
-                    <tr><td></td><td><div style="border-bottom: 3px double #000; margin-top: 2px;"></div></td></tr>
                 </table>
             </div>
         </div>
 
-        <div class="row signature-section">
-            <div class="col-4"></div>
-            <div class="col-4"></div>
+        <div class="row signature-section mt-5">
+
+            <div class="col-4 position-relative"></div>
+
+            <div class="col-4 position-relative"></div>
+
+            <!-- 🌟 ผู้รับเงิน (บริษัท) 🌟 -->
             <div class="col-4 position-relative">
                 <div class="sig-box">
-                    {% if company.seal %} <img src="{{ company.seal.url }}" class="seal-img"> {% endif %}
+
+                    <!-- 🌟 [FIXED] ตราประทับและลายเซ็น 🌟 -->
+                    {% if company.seal %}
+                        <img src="{{ company.seal.url }}" class="seal-img" alt="ตราประทับบริษัท">
+                    {% endif %}
+
+                    {% if qt.employee and qt.employee.signature %}
+                        <img src="{{ qt.employee.signature.url }}" class="sig-img" alt="ลายเซ็นผู้รับเงิน">
+                    {% endif %}
+
                     <div class="sig-line"></div>
                     <div class="sig-role">ผู้รับเงิน / ผู้มีอำนาจลงนาม</div>
-                    <div class="sig-name">({{ company.name_th }})</div>
+
+                    <div class="sig-name">({% if company.name_th %}{{ company.name_th }}{% else %}บริษัท นีด ช็อปปิ้ง จำกัด{% endif %})</div>
                     <div class="sig-date">วันที่ {{ qt.deposit_date|date:"d/m/Y" }}</div>
                 </div>
             </div>
+
         </div>
     </div>
 
+    <!-- 🌟 ฟังก์ชันแปลงตัวเลขเป็นภาษาไทย 🌟 -->
     <script>
         document.addEventListener("DOMContentLoaded", function() {
-            const num = {{ qt.deposit_amount }};
+            const num = {{ qt.deposit_amount|default:"0" }};
             document.getElementById('baht-text').innerText = ThaiBaht(num);
         });
         function ThaiBaht(number) {

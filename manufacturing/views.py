@@ -1496,11 +1496,36 @@ def process_logistics(request, pk):
             delivery_status_id = request.POST.get('delivery_status')
             if delivery_status_id:
                 status_obj = DeliveryStatus.objects.get(id=delivery_status_id)
-                if status_obj.name in ['ส่งมอบสำเร็จ', 'ลูกค้าเซ็นรับแล้ว', 'จัดส่งเรียบร้อย']:
+
+                # ตรวจสอบว่าเป็นการส่งมอบสำเร็จหรือไม่
+                is_delivered_success = status_obj.name in ['ส่งมอบสำเร็จ', 'ลูกค้าเซ็นรับแล้ว', 'จัดส่งเรียบร้อย']
+
+                # ถ้าเป็นสถานะส่งมอบสำเร็จ
+                if is_delivered_success:
                     if 'proof_of_delivery' in request.FILES:
                         order.proof_of_delivery = request.FILES['proof_of_delivery']
                         order.delivery_status_id = delivery_status_id
-                        messages.success(request, "📸 อัปโหลดรูปลายเซ็นและปิดงานส่งสำเร็จ!")
+
+                        # 🌟 [NEW] ระบบตัดสต๊อกอัตโนมัติ (Goods Issue: OUT) 🌟
+                        if order.product:
+                            # ป้องกันการตัดสต๊อกซ้ำซ้อน หากเคยตัดไปแล้ว
+                            existing_gi = InventoryDoc.objects.filter(reference=f"ส่งมอบ {order.code}").exists()
+                            if not existing_gi:
+                                doc_out = InventoryDoc.objects.create(
+                                    doc_type='GI',
+                                    reference=f"ส่งมอบ {order.code}",
+                                    description=f"ตัดสต๊อกส่งมอบ {order.product.name} ให้ลูกค้า {order.customer_name or 'ทั่วไป'}",
+                                    created_by=request.user
+                                )
+                                StockMovement.objects.create(
+                                    doc=doc_out,
+                                    product=order.product,
+                                    quantity=Decimal(str(order.quantity)),
+                                    movement_type='OUT',
+                                    created_by=request.user
+                                )
+
+                        messages.success(request, "📸 อัปโหลดรูปลายเซ็น ปิดงานส่ง และตัดสต๊อกสำเร็จ!")
                     elif order.proof_of_delivery:
                         order.delivery_status_id = delivery_status_id
                         messages.success(request, "📦 อัปเดตสถานะการส่งมอบสำเร็จ")

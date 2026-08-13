@@ -3,6 +3,7 @@ from django.utils import timezone
 from django.contrib.auth.models import User
 from decimal import Decimal
 import datetime
+import secrets
 
 from master_data.models import Customer, Supplier
 from hr.models import Employee
@@ -74,7 +75,6 @@ class SolarStockMovement(models.Model):
 # 📝 2. ระบบขายโซล่าเซลล์ (Solar Sales)
 # ==========================================
 class SolarQuotation(models.Model):
-    # 🌟 [FIXED] เพิ่มสถานะ PROCESSING และ READY เข้าไปในฐานข้อมูล เพื่อให้ระบบยอมรับการบันทึก 🌟
     STATUS_CHOICES = [
         ('DRAFT', 'รออนุมัติ'),
         ('APPROVED', 'อนุมัติแล้ว'),
@@ -100,7 +100,9 @@ class SolarQuotation(models.Model):
     subtotal = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="รวมราคาสินค้า")
     discount = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="หักส่วนลด")
     survey_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="ค่าสำรวจหน้างาน / ค่าจัดส่ง")
-    vat_type = models.CharField(max_length=10, choices=VAT_CHOICES, default='NONE', verbose_name="ประเภทภาษี")
+
+    # 🌟 [FIXED] เปลี่ยน default เป็น 'INCLUDE' เพื่อให้ถอด VAT 7% อัตโนมัติ 🌟
+    vat_type = models.CharField(max_length=10, choices=VAT_CHOICES, default='INCLUDE', verbose_name="ประเภทภาษี")
     vat_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="ยอด VAT 7%")
     grand_total = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="ยอดสุทธิ (Grand Total)")
 
@@ -110,6 +112,7 @@ class SolarQuotation(models.Model):
     )
 
     deposit_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="มัดจำ")
+    deposit_code = models.CharField(max_length=20, blank=True, null=True, verbose_name="เลขใบรับเงินมัดจำ")
     deposit_method = models.CharField(max_length=20, default='TRANSFER', verbose_name="ช่องทางรับเงิน")
     deposit_date = models.DateField(null=True, blank=True, verbose_name="วันที่รับเงินมัดจำ")
     deposit_slip = models.ImageField(upload_to='solar_deposits/', null=True, blank=True, verbose_name="สลิปโอนเงิน")
@@ -118,12 +121,28 @@ class SolarQuotation(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='DRAFT')
     note = models.TextField(blank=True, verbose_name="หมายเหตุ")
 
-    # 🌟 [FIXED] เพิ่มฟังก์ชันคำนวณยอดค้างชำระ (Balance Due) 🌟
+    # 🌟 [NEW] เพิ่มฟิลด์สำหรับระบบเซ็นออนไลน์ (เลียนแบบบ้านน็อคดาวน์) 🌟
+    signature_token = models.CharField(max_length=64, blank=True, null=True, unique=True)
+    customer_signature = models.ImageField(upload_to='solar_customer_signatures/%Y/%m/', null=True, blank=True, verbose_name="ลายเซ็นลูกค้า")
+    signature_date = models.DateTimeField(null=True, blank=True, verbose_name="เวลาที่ลูกค้าเซ็น")
+
+    deposit_signature_token = models.CharField(max_length=64, blank=True, null=True, unique=True)
+    customer_deposit_signature = models.ImageField(upload_to='solar_deposit_signatures/%Y/%m/', null=True, blank=True, verbose_name="ลายเซ็นสัญญามัดจำ")
+    deposit_signature_date = models.DateTimeField(null=True, blank=True, verbose_name="เวลาที่เซ็นสัญญามัดจำ")
+
     @property
     def balance_due(self):
+        if hasattr(self, 'solarinvoice'):
+            return self.solarinvoice.balance_amount
         return self.grand_total - self.deposit_amount
 
     def save(self, *args, **kwargs):
+        # 🌟 [NEW] สร้าง Token อัตโนมัติเมื่อกดบันทึก 🌟
+        if not self.signature_token:
+            self.signature_token = secrets.token_urlsafe(32)
+        if not self.deposit_signature_token:
+            self.deposit_signature_token = secrets.token_urlsafe(32)
+
         if not self.code:
             now = timezone.now()
             thai_year = (now.year + 543) % 100
