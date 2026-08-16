@@ -1,0 +1,66 @@
+{% extends 'core/base.html' %}
+{% load humanize %}
+{% block content %}
+<div class="container-fluid py-4 px-4">
+    <div class="d-flex justify-content-between align-items-end mb-4">
+        <div>
+            <h4 class="fw-bold mb-1 text-dark"><i class="fas fa-money-check-alt text-danger me-2"></i>รายการเบิกค่าใช้จ่าย (Expense)</h4>
+            <p class="text-muted small mb-0">ระบบขออนุมัติเบิกจ่ายค่าเดินทางและค่าใช้จ่ายหน้างาน</p>
+        </div>
+        <a href="{% url 'solar_expense_create' 0 %}" class="btn btn-danger rounded-pill px-4 fw-bold shadow-sm">
+            <i class="fas fa-plus me-2"></i>ทำเรื่องเบิกเงิน
+        </a>
+    </div>
+
+    <div class="card shadow-sm border-0 rounded-4 overflow-hidden">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0 text-center">
+                <thead class="bg-light text-secondary" style="font-size: 0.85rem; text-transform: uppercase;">
+                    <tr>
+                        <th class="ps-4 py-3 border-bottom-0 text-start">เลขที่เอกสาร</th>
+                        <th class="py-3 border-bottom-0 text-start">ผู้ขอเบิก</th>
+                        <th class="py-3 border-bottom-0">อ้างอิงใบงาน</th>
+                        <th class="py-3 border-bottom-0 text-end">ยอดเงินเบิก</th>
+                        <th class="py-3 border-bottom-0">สลิป/ใบเสร็จ</th>
+                        <th class="py-3 border-bottom-0">สถานะ</th>
+                        <th class="pe-4 py-3 border-bottom-0">ผู้อนุมัติ</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for exp in page_obj %}
+                    <tr>
+                        <td class="ps-4 text-start fw-bold text-danger">{{ exp.code }}</td>
+                        <td class="text-start fw-bold">{{ exp.requester.first_name }}</td>
+                        <td>{% if exp.survey_job %}<a href="{% url 'solar_survey_detail' exp.survey_job.id %}">{{ exp.survey_job.code }}</a>{% else %}-{% endif %}</td>
+                        <td class="text-end fw-bold text-dark fs-6">{{ exp.amount|intcomma }}</td>
+                        <td>
+                            {% if exp.slip_image %}
+                                <a href="{{ exp.slip_image.url }}" target="_blank" class="badge bg-secondary text-decoration-none"><i class="fas fa-image me-1"></i> ดูรูป</a>
+                            {% else %} - {% endif %}
+                        </td>
+                        <td>
+                            {% if exp.status == 'PENDING' %}<span class="badge bg-warning text-dark">รออนุมัติ</span>
+                            {% elif exp.status == 'APPROVED' %}<span class="badge bg-primary">อนุมัติแล้ว</span>
+                            {% elif exp.status == 'PAID' %}<span class="badge bg-success">จ่ายแล้ว</span>
+                            {% else %}<span class="badge bg-danger">ไม่อนุมัติ</span>{% endif %}
+                        </td>
+                        <td class="pe-4">
+                            {% if exp.status == 'PENDING' and is_manager_or_acc %}
+                                <form method="POST" action="{% url 'solar_expense_approve' exp.id %}">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-sm btn-success rounded-pill fw-bold" onclick="return confirm('ยืนยันการอนุมัติยอดเบิกนี้?');">อนุมัติ</button>
+                                </form>
+                            {% else %}
+                                <span class="text-muted small">{{ exp.approver.first_name|default:"-" }}</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="7" class="text-center py-5 text-muted">ยังไม่มีรายการขอเบิกค่าใช้จ่าย</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -184,3 +184,79 @@ class SolarInvoice(models.Model):
             seq = int(last.code.split('-')[-1]) + 1 if last else 1
             self.code = f"{prefix}-{seq:03d}"
         super().save(*args, **kwargs)
+
+# ==========================================
+# 👷‍♂️ 3. ระบบสำรวจหน้างานและเบิกจ่าย (Solar Survey & Expense)
+# ==========================================
+class SolarSurveyJob(models.Model):
+    STATUS_CHOICES = [
+        ('PENDING', 'รอลงพื้นที่'),
+        ('IN_PROGRESS', 'กำลังดำเนินการ'),
+        ('COMPLETED', 'สำรวจเสร็จสิ้น'),
+        ('CANCELLED', 'ยกเลิก')
+    ]
+    code = models.CharField(max_length=20, unique=True, verbose_name="เลขที่ใบงานสำรวจ")
+
+    # 🌟 [FIXED] เปลี่ยนให้ลูกค้าระบบเป็นค่าว่างได้ เผื่อกรณีพิมพ์ชื่อเอง (Walk-in) 🌟
+    customer = models.ForeignKey(Customer, on_delete=models.CASCADE, null=True, blank=True, verbose_name="ลูกค้า")
+
+    # 🌟 [NEW] เพิ่ม 2 ฟิลด์ใหม่สำหรับเก็บข้อมูลลูกค้า Walk-in 🌟
+    walkin_name = models.CharField(max_length=200, blank=True, null=True, verbose_name="ชื่อลูกค้า (Walk-in)")
+    walkin_phone = models.CharField(max_length=50, blank=True, null=True, verbose_name="เบอร์ติดต่อ (Walk-in)")
+
+    appointment_date = models.DateTimeField(verbose_name="วันเวลานัดหมาย")
+    assigned_by = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, related_name='solar_survey_assigned', verbose_name="ผู้มอบหมาย (Admin)")
+    surveyor = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, related_name='solar_survey_tasks', verbose_name="ผู้สำรวจ (ช่าง)")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING', verbose_name="สถานะงาน")
+    note = models.TextField(blank=True, null=True, verbose_name="รายละเอียด/หมายเหตุ")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def save(self, *args, **kwargs):
+        if not self.code:
+            now = timezone.now()
+            thai_year = (now.year + 543) % 100
+            prefix = f"SV-SOL-{thai_year:02d}{now.strftime('%m')}"
+            last = SolarSurveyJob.objects.filter(code__startswith=prefix).order_by('code').last()
+            seq = int(last.code.split('-')[-1]) + 1 if last else 1
+            self.code = f"{prefix}-{seq:03d}"
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.code
+
+class SolarSurveyItem(models.Model):
+    job = models.ForeignKey(SolarSurveyJob, related_name='items', on_delete=models.CASCADE)
+    item_name = models.CharField(max_length=255, verbose_name="รายการวัสดุ/สเปค")
+    quantity = models.DecimalField(max_digits=10, decimal_places=2, default=1, verbose_name="จำนวน")
+    unit = models.CharField(max_length=50, blank=True, null=True, verbose_name="หน่วยนับ")
+
+class SolarExpenseClaim(models.Model):
+    STATUS_CHOICES = [
+        ('PENDING', 'รอหัวหน้าอนุมัติ'),
+        ('APPROVED', 'อนุมัติแล้ว (รอบัญชีจ่าย)'),
+        ('PAID', 'จ่ายเงินแล้ว'),
+        ('REJECTED', 'ไม่อนุมัติ')
+    ]
+    code = models.CharField(max_length=20, unique=True, verbose_name="เลขที่ใบเบิก")
+    survey_job = models.ForeignKey(SolarSurveyJob, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="อ้างอิงใบงานสำรวจ")
+    requester = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='solar_expenses_requested', verbose_name="ผู้ขอเบิก")
+    amount = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="ยอดเงินเบิก")
+    description = models.TextField(verbose_name="รายละเอียดค่าใช้จ่าย")
+    slip_image = models.ImageField(upload_to='solar_expenses/', null=True, blank=True, verbose_name="รูปสลิป/ใบเสร็จ")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING', verbose_name="สถานะ")
+    approver = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, blank=True, related_name='solar_expenses_approved', verbose_name="ผู้อนุมัติ (หัวหน้า/บัญชี)")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        if not self.code:
+            now = timezone.now()
+            thai_year = (now.year + 543) % 100
+            prefix = f"EXP-SOL-{thai_year:02d}{now.strftime('%m')}"
+            last = SolarExpenseClaim.objects.filter(code__startswith=prefix).order_by('code').last()
+            seq = int(last.code.split('-')[-1]) + 1 if last else 1
+            self.code = f"{prefix}-{seq:03d}"
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.code
