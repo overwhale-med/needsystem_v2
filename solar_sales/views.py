@@ -408,7 +408,15 @@ def solar_quotation_print(request, qt_id):
 @login_required
 def solar_invoice_print(request, inv_id):
     inv = get_object_or_404(SolarInvoice, pk=inv_id)
-    return render(request, 'solar_sales/invoice_print.html', {'inv': inv})
+
+    # 🌟 [FIXED] ดึงข้อมูลบริษัท เพื่อส่งไปแสดง โลโก้, ตราประทับ และชื่อผู้รับเงิน 🌟
+    from master_data.models import CompanyInfo
+    company = CompanyInfo.objects.first()
+
+    return render(request, 'solar_sales/invoice_print.html', {
+        'inv': inv,
+        'company': company
+    })
 
 # ==========================================
 # 📦 คลังสินค้าโซล่า (Inventory & Excel Import)
