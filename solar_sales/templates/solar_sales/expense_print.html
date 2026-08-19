@@ -1,0 +1,141 @@
+{% load humanize %}
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <title>ใบขออนุมัติเบิกค่าใช้จ่าย - {{ expense.code }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Sarabun', sans-serif; background-color: #f8f9fa; font-size: 14px; color: #333; }
+        .a4-container {
+            width: 210mm; min-height: 297mm; padding: 20mm; margin: 10mm auto;
+            background: white; box-shadow: 0 0 10px rgba(0,0,0,0.1); border-radius: 5px; position: relative;
+        }
+        .header-title { font-size: 22px; font-weight: 700; text-align: center; margin-bottom: 5px; letter-spacing: 1px; }
+        .header-sub { font-size: 16px; font-weight: 500; text-align: center; margin-bottom: 30px; color: #666; }
+        .company-logo { max-height: 80px; object-fit: contain; }
+        .doc-info-box { border: 1px solid #ccc; padding: 10px; border-radius: 5px; background-color: #fafafa; }
+        .table-custom { border: 1px solid #000; margin-top: 20px; }
+        .table-custom th, .table-custom td { border: 1px solid #000; padding: 10px; vertical-align: middle; }
+        .table-custom th { background-color: #eee; font-weight: 600; text-align: center; }
+        .signature-box { border-top: 1px dotted #000; width: 100%; margin-top: 40px; padding-top: 10px; text-align: center; }
+        .amount-text { font-style: italic; color: #555; background: #eee; padding: 5px 15px; border-radius: 20px; display: inline-block; }
+        @media print {
+            body { background: white; margin: 0; padding: 0; }
+            .a4-container { margin: 0; padding: 15mm; box-shadow: none; border-radius: 0; width: 100%; }
+        }
+    </style>
+</head>
+<body onload="window.print()">
+
+<div class="a4-container">
+    <!-- Header -->
+    <div class="row align-items-center mb-4">
+        <div class="col-3">
+            {% if company.logo %}
+                <img src="{{ company.logo.url }}" class="company-logo">
+            {% else %}
+                <h4 class="fw-bold mb-0">COMPANY LOGO</h4>
+            {% endif %}
+        </div>
+        <div class="col-9 text-end">
+            <h5 class="fw-bold mb-1">{{ company.company_name|default:"บริษัท นีด ช็อปปิ้ง จำกัด" }}</h5>
+            <p class="mb-0 small text-muted">{{ company.address|default:"ที่อยู่บริษัท" }}</p>
+            <p class="mb-0 small text-muted">เลขประจำตัวผู้เสียภาษี: {{ company.tax_id|default:"-" }}</p>
+        </div>
+    </div>
+
+    <div class="header-title">ใบขออนุมัติเบิกค่าใช้จ่าย</div>
+    <div class="header-sub">(Payment Voucher / Expense Claim)</div>
+
+    <!-- Info -->
+    <div class="row mb-4">
+        <div class="col-7">
+            <p class="mb-1"><strong>ผู้ขอเบิก:</strong> {{ expense.requester.first_name }} {{ expense.requester.last_name }}</p>
+            <p class="mb-1"><strong>แผนก:</strong> {{ expense.requester.department.name|default:"-" }}</p>
+            <p class="mb-1"><strong>อ้างอิงใบงาน (Job Ref.):</strong> {% if expense.survey_job %}{{ expense.survey_job.code }}{% else %}-{% endif %}</p>
+        </div>
+        <div class="col-5">
+            <div class="doc-info-box">
+                <div class="d-flex justify-content-between mb-1"><span>เลขที่เอกสาร:</span> <strong class="text-danger">{{ expense.code }}</strong></div>
+                <div class="d-flex justify-content-between mb-1"><span>วันที่ขอเบิก:</span> <strong>{{ expense.created_at|date:"d/m/Y" }}</strong></div>
+                <div class="d-flex justify-content-between"><span>สถานะ:</span>
+                    <strong>
+                        {% if expense.status == 'PENDING' %}รออนุมัติ
+                        {% elif expense.status == 'APPROVED' %}รอจ่ายเงิน
+                        {% elif expense.status == 'PAID' %}จ่ายเงินแล้ว
+                        {% else %}ไม่อนุมัติ{% endif %}
+                    </strong>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Table -->
+    <table class="table table-custom mb-2">
+        <thead>
+            <tr>
+                <th width="10%">ลำดับ</th>
+                <th width="65%">รายละเอียดค่าใช้จ่าย (Description)</th>
+                <th width="25%">ยอดเงิน (บาท)</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td class="text-center">1</td>
+                <td>{{ expense.description|linebreaksbr }}</td>
+                <td class="text-end fw-bold">{{ expense.amount|floatformat:2|intcomma }}</td>
+            </tr>
+            <!-- สร้างบรรทัดว่างๆ เพื่อความสวยงาม -->
+            <tr><td style="color:transparent;">-</td><td></td><td></td></tr>
+            <tr><td style="color:transparent;">-</td><td></td><td></td></tr>
+        </tbody>
+        <tfoot>
+            <tr>
+                <td colspan="2" class="text-end border-end-0 pe-4"><strong>ยอดรวมทั้งสิ้น (Grand Total):</strong></td>
+                <td class="text-end fw-bold" style="font-size: 16px;">{{ expense.amount|floatformat:2|intcomma }}</td>
+            </tr>
+        </tfoot>
+    </table>
+
+    <div class="mb-5">
+        <strong>ตัวอักษร:</strong> <span class="amount-text">({{ amount_text }})</span>
+    </div>
+
+    <!-- Signatures -->
+    <div class="row mt-5 pt-4">
+        <div class="col-3">
+            <div class="signature-box">
+                <p class="mb-1 fw-bold">{{ expense.requester.first_name|default:"............................." }}</p>
+                <p class="small text-muted mb-0">ผู้ขอเบิก (Requester)</p>
+                <p class="small text-muted">วันที่: ____/____/______</p>
+            </div>
+        </div>
+        <div class="col-3">
+            <div class="signature-box">
+                <p class="mb-1 fw-bold">{% if expense.approver %}{{ expense.approver.first_name }}{% else %}.............................{% endif %}</p>
+                <p class="small text-muted mb-0">ผู้อนุมัติ (Approver)</p>
+                <p class="small text-muted">วันที่: ____/____/______</p>
+            </div>
+        </div>
+        <div class="col-3">
+            <div class="signature-box">
+                <p class="mb-1 fw-bold">.............................</p>
+                <p class="small text-muted mb-0">ผู้จ่ายเงิน (Payer)</p>
+                <p class="small text-muted">วันที่: ____/____/______</p>
+            </div>
+        </div>
+        <div class="col-3">
+            <div class="signature-box">
+                <p class="mb-1 fw-bold">.............................</p>
+                <p class="small text-muted mb-0">ผู้รับเงิน (Receiver)</p>
+                <p class="small text-muted">วันที่: ____/____/______</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

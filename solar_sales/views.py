@@ -5,7 +5,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 # แก้ไขบรรทัด import โมเดล ให้มีโมเดลสำรวจและเบิกจ่ายเพิ่มเข้ามาด้วย
-from .models import SolarQuotation, SolarQuotationItem, SolarInvoice, SolarProduct, SolarProductCategory, SolarRawMaterialCategory, SolarSurveyJob, SolarSurveyItem, SolarExpenseClaim
+from .models import SolarQuotation, SolarQuotationItem, SolarInvoice, SolarProduct, SolarProductCategory, SolarRawMaterialCategory, SolarSurveyJob, SolarSurveyItem, SolarExpenseClaim, SolarExpenseSlip
 # แก้ไขบรรทัด import ฟอร์ม ให้มีฟอร์มสำรวจและเบิกจ่ายเพิ่มเข้ามาด้วย
 from .forms import SolarQuotationStep1Form, SolarProductForm, SolarSurveyJobForm, SolarExpenseClaimForm
 from solar_jobs.models import SolarJob
@@ -967,7 +967,6 @@ def solar_expense_list(request):
 
 @login_required
 def solar_expense_create(request, job_id=None):
-    # 🌟 [FIXED] ดักจับกรณี job_id เป็น 0 (เบิกลอยๆ ไม่ได้อ้างอิงใบงาน) ป้องกัน Error 404 🌟
     if job_id and str(job_id) != '0':
         job = get_object_or_404(SolarSurveyJob, pk=job_id)
     else:
@@ -979,15 +978,20 @@ def solar_expense_create(request, job_id=None):
             expense = form.save(commit=False)
             expense.survey_job = job
 
-            # 🌟 [FIXED] ดักจับ Error กรณี User ที่ล็อกอินยังไม่ได้ผูกกับข้อมูลพนักงาน (Employee) 🌟
             employee_profile = getattr(request.user, 'employee', None)
             if not employee_profile:
-                messages.error(request, "❌ ไม่สามารถบันทึกได้: บัญชีของคุณยังไม่ได้ผูกกับข้อมูล 'พนักงาน (Employee)' ในระบบครับ (ติดต่อ Admin)")
+                messages.error(request, "❌ ไม่สามารถบันทึกได้: บัญชีของคุณยังไม่ได้ผูกกับข้อมูลพนักงานในระบบครับ")
                 return render(request, 'solar_sales/expense_form.html', {'form': form, 'job': job})
 
             expense.requester = employee_profile
-            expense.save()
-            messages.success(request, f"✅ ส่งเรื่องเบิกค่าใช้จ่าย {expense.code} สำเร็จ! (กรุณารอหัวหน้าอนุมัติ)")
+            expense.save() # บันทึกใบเบิกหลักให้เสร็จก่อน
+
+            # 🌟 [NEW] ดึงไฟล์ทั้งหมดที่อัปโหลดมา แล้ววนลูปบันทึกทีละรูป 🌟
+            files = request.FILES.getlist('slip_images')
+            for f in files:
+                SolarExpenseSlip.objects.create(expense=expense, image=f)
+
+            messages.success(request, f"✅ ส่งเรื่องเบิกค่าใช้จ่าย {expense.code} พร้อมแนบสลิป {len(files)} ใบ สำเร็จ!")
             return redirect('solar_expense_list')
     else:
         form = SolarExpenseClaimForm()
@@ -1002,3 +1006,45 @@ def solar_expense_approve(request, exp_id):
     expense.save()
     messages.success(request, f"✅ อนุมัติใบเบิก {expense.code} เรียบร้อยแล้ว! (เอกสารถูกส่งให้บัญชีดำเนินการจ่ายเงิน)")
     return redirect('solar_expense_list')
+
+@login_required
+def solar_expense_print(request, exp_id):
+    expense = get_object_or_404(SolarExpenseClaim, pk=exp_id)
+    company = CompanyInfo.objects.first()
+
+    # ฟังก์ชันแปลงตัวเลขเป็นตัวหนังสือ (Thai Baht Text)
+    def get_thai_baht_text(number):
+        if number == 0: return "ศูนย์บาทถ้วน"
+        import math
+        number = round(float(number), 2)
+        baht = math.floor(number)
+        satang = int(round((number - baht) * 100))
+        def read_num(n):
+            if n == 0: return ""
+            numbers = ["", "หนึ่ง", "สอง", "สาม", "สี่", "ห้า", "หก", "เจ็ด", "แปด", "เก้า"]
+            positions = ["", "สิบ", "ร้อย", "พัน", "หมื่น", "แสน", "ล้าน"]
+            s = str(n)
+            length = len(s)
+            res = ""
+            for i, digit in enumerate(s):
+                val = int(digit)
+                pos = length - i - 1
+                if val == 0: continue
+                if pos == 0 and val == 1 and length > 1: res += "เอ็ด"
+                elif pos == 1 and val == 1: res += "สิบ"
+                elif pos == 1 and val == 2: res += "ยี่สิบ"
+                else: res += numbers[val] + positions[pos]
+            return res
+        res = ""
+        if baht > 0: res += read_num(baht) + "บาท"
+        if satang > 0: res += read_num(satang) + "สตางค์"
+        else: res += "ถ้วน"
+        return res
+
+    amount_text = get_thai_baht_text(expense.amount)
+
+    return render(request, 'solar_sales/expense_print.html', {
+        'expense': expense,
+        'company': company,
+        'amount_text': amount_text
+    })

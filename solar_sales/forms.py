@@ -98,11 +98,17 @@ class SolarSurveyJobForm(forms.ModelForm):
         ).order_by('first_name')
 
 class SolarExpenseClaimForm(forms.ModelForm):
+    # 🌟 [FIXED] เอา multiple: True ออกจาก attrs แล้วให้ไปใส่ใน HTML แทน 🌟
+    slip_images = forms.FileField(
+        widget=forms.ClearableFileInput(attrs={'class': 'form-control'}),
+        required=False,
+        label="แนบรูปใบเสร็จ / สลิปหลักฐาน (ลากคลุมเลือกได้หลายรูป)"
+    )
+
     class Meta:
         model = SolarExpenseClaim
-        fields = ['amount', 'description', 'slip_image']
+        fields = ['amount', 'description']
         widgets = {
-            'amount': forms.NumberInput(attrs={'class': 'form-control text-end', 'step': '0.01'}),
-            'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 3, 'placeholder': 'เช่น ค่าน้ำมัน, ค่าทางด่วน...'}),
-            'slip_image': forms.FileInput(attrs={'class': 'form-control'}),
+            'amount': forms.NumberInput(attrs={'class': 'form-control text-end fs-5 fw-bold text-danger', 'step': '0.01'}),
+            'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 4, 'placeholder': 'เช่น \n- ค่าน้ำมันรถ 500 บาท\n- ค่าทางด่วน 150 บาท...'}),
         }

@@ -18,9 +18,12 @@
                         <label class="form-label fw-bold text-muted small">รายละเอียดค่าใช้จ่าย (เบิกค่าอะไรบ้าง?)</label>
                         {{ form.description }}
                     </div>
+                    <!-- (โค้ดช่องยอดเงิน/รายละเอียดด้านบน ปล่อยไว้เหมือนเดิม) -->
                     <div class="col-md-12">
-                        <label class="form-label fw-bold text-muted small">แนบรูปใบเสร็จ / สลิปหลักฐาน (ถ้ามี)</label>
-                        {{ form.slip_image }}
+                        <label class="form-label fw-bold text-muted small">แนบรูปใบเสร็จ / สลิปหลักฐาน (เลือกได้หลายรูป)</label>
+                        <!-- 🌟 [FIXED] บังคับใส่ attribute multiple เข้าไปใน HTML โดยตรง 🌟 -->
+                        <input type="file" name="slip_images" class="form-control" multiple accept="image/*">
+                        <div class="form-text text-danger mt-1"><i class="fas fa-info-circle"></i> กดปุ่ม Ctrl หรือลากเมาส์คลุมเพื่อเลือกหลายไฟล์พร้อมกันได้</div>
                     </div>
                 </div>
                 <div class="d-flex justify-content-between mt-4">

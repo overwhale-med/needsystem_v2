@@ -51,4 +51,5 @@ urlpatterns = [
     path('expenses/create/<int:job_id>/', views.solar_expense_create, name='solar_expense_create'),
     # หัวหน้า/แอดมิน กดอนุมัติ
     path('expenses/<int:exp_id>/approve/', views.solar_expense_approve, name='solar_expense_approve'),
+    path('expenses/<int:exp_id>/print/', views.solar_expense_print, name='solar_expense_print'),
 ]

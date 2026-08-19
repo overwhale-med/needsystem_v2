@@ -214,8 +214,10 @@
 
         {% endwith %}
 
-        <!-- 🌟 [NEW] การ์ดสำหรับช่างสำรวจโซล่าเซลล์ (เช็กคิวงาน) 🌟 -->
+        <!-- 🌟 [NEW] การ์ดสำหรับทีมช่างโซล่าเซลล์ (เช็กคิวงาน + ประวัติเบิกเงิน) 🌟 -->
         {% if user.is_superuser or 'ช่าง' in user.employee.department.name or 'ผลิต' in user.employee.department.name or 'โซล่า' in user.employee.department.name %}
+
+        <!-- การ์ดที่ 1: คิวงานสำรวจ -->
         <div class="col-6 col-md-3 col-lg-3">
             <a href="{% url 'solar_survey_list' %}" class="menu-btn position-relative">
                 <!-- แจ้งเตือน Badge งานค้าง -->
@@ -228,9 +230,19 @@
 
                 <div class="menu-icon-box bg-warning bg-opacity-10"><i class="fas fa-hard-hat menu-icon text-warning"></i></div>
                 <div class="menu-title">ช่างสำรวจหน้างาน</div>
-                <div class="menu-desc">เช็กคิวงาน / เบิกค่าใช้จ่าย</div>
+                <div class="menu-desc">เช็กคิวงาน / จัดการงาน</div>
             </a>
         </div>
+
+        <!-- การ์ดที่ 2: รายการเบิกค่าใช้จ่าย -->
+        <div class="col-6 col-md-3 col-lg-3">
+            <a href="{% url 'solar_expense_list' %}" class="menu-btn">
+                <div class="menu-icon-box bg-danger bg-opacity-10"><i class="fas fa-file-invoice-dollar menu-icon text-danger"></i></div>
+                <div class="menu-title">ประวัติเบิกค่าใช้จ่าย</div>
+                <div class="menu-desc">ติดตามสถานะอนุมัติเงิน</div>
+            </a>
+        </div>
+
         {% endif %}
 
         <!-- (โค้ดศูนย์โซล่าเซลล์) -->

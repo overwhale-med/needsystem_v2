@@ -260,3 +260,12 @@ class SolarExpenseClaim(models.Model):
 
     def __str__(self):
         return self.code
+
+# 🌟 [NEW] สร้างตารางใหม่สำหรับเก็บรูปสลิป/ใบเสร็จ (รองรับการแนบหลายรูป) 🌟
+class SolarExpenseSlip(models.Model):
+    expense = models.ForeignKey(SolarExpenseClaim, related_name='slips', on_delete=models.CASCADE)
+    image = models.ImageField(upload_to='solar_expenses/slips/', verbose_name="รูปสลิป/ใบเสร็จ")
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Slip for {self.expense.code}"
