@@ -6,9 +6,13 @@
             <h4 class="fw-bold mb-1 text-dark"><i class="fas fa-map-marked-alt text-primary me-2"></i>รายการใบงานสำรวจ (Solar Survey)</h4>
             <p class="text-muted small mb-0">ระบบจัดการคิวงานสำรวจพื้นที่และประเมินหน้างาน</p>
         </div>
+
+        <!-- 🌟 [FIXED] ซ่อนปุ่มสร้างใบงานจากทีมช่าง ให้เห็นเฉพาะแอดมิน, ฝ่ายขาย และผู้บริหาร 🌟 -->
+        {% if user.is_superuser or user.groups.all.0.name == 'Executive' or user.groups.all.0.name == 'Sales' or user.groups.all.0.name == 'Center' %}
         <a href="{% url 'solar_survey_create' %}" class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm">
             <i class="fas fa-plus me-2"></i>สร้างใบงานสำรวจ
         </a>
+        {% endif %}
     </div>
 
     <div class="card shadow-sm border-0 rounded-4 overflow-hidden">
@@ -28,7 +32,7 @@
                     {% for job in page_obj %}
                     <tr>
                         <td class="ps-4 text-start fw-bold text-primary">{{ job.code }}</td>
-                        
+
                         <!-- 🌟 [FIXED] ดึงชื่อลูกค้ามาแสดงให้ถูกต้อง ทั้งแบบมีในระบบและแบบ Walk-in 🌟 -->
                         <td class="text-start fw-bold">
                             {% if job.customer %}
@@ -37,7 +41,7 @@
                                 {{ job.walkin_name }} <span class="badge bg-secondary ms-1 fw-normal" style="font-size: 0.7rem;">Walk-in</span>
                             {% endif %}
                         </td>
-                        
+
                         <td>{{ job.appointment_date|date:"d/m/Y H:i" }}</td>
                         <td>{{ job.surveyor.first_name|default:"-" }}</td>
                         <td>
