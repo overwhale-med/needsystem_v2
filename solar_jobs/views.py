@@ -33,6 +33,8 @@ def center_dashboard(request):
     preparing_jobs = all_jobs.filter(status='PREPARING').count()
     in_progress_jobs = all_jobs.filter(status='IN_PROGRESS').count()
     pending_expenses = SolarExpense.objects.filter(status='PENDING').count()
+    from solar_sales.models import SolarExpenseClaim
+    approved_expenses = SolarExpenseClaim.objects.filter(status='APPROVED').order_by('created_at')
 
     context = {
         'jobs': all_jobs[:30], # โหลดมาแสดง 30 งานล่าสุด
@@ -40,6 +42,7 @@ def center_dashboard(request):
         'preparing_jobs': preparing_jobs,
         'in_progress_jobs': in_progress_jobs,
         'pending_expenses': pending_expenses,
+        'approved_expenses': approved_expenses,  # 🌟 [FIX] เติมข้อมูลชุดนี้เข้าไปในห่อ context ครับ 🌟
     }
     return render(request, 'solar_jobs/center_dashboard.html', context)
 
@@ -233,3 +236,29 @@ def update_job_status(request):
             print(f"Error updating job: {str(e)}") # ปริ้นท์ error ลง Console ไว้เช็ค
             return JsonResponse({'success': False, 'error': str(e)})
     return JsonResponse({'success': False, 'error': 'Invalid request'})
+
+# 🌟 [NEW] ฟังก์ชันสำหรับให้แผนก Center/บัญชี จ่ายเงินและแนบสลิปให้ช่าง 🌟
+@login_required
+def center_pay_expense(request, expense_id):
+    if not (is_center_staff(request.user) or is_accounting_staff(request.user)):
+        messages.error(request, "❌ คุณไม่มีสิทธิ์ทำรายการนี้")
+        return redirect('solar_center_dashboard')
+
+    # 🌟 [FIXED] ดึงโมเดล SolarExpenseClaim ของฝั่งช่างโซล่าเซลล์มาใช้
+    from solar_sales.models import SolarExpenseClaim
+    from django.utils import timezone
+
+    expense = get_object_or_404(SolarExpenseClaim, id=expense_id)
+
+    if request.method == 'POST':
+        if 'transfer_slip' in request.FILES:
+            expense.transfer_slip = request.FILES['transfer_slip']
+            expense.status = 'PAID'
+            expense.paid_at = timezone.now()
+            expense.save()
+            messages.success(request, f"✅ บันทึกการโอนเงินและแนบสลิปสำหรับ {expense.code} สำเร็จแล้ว!")
+        else:
+            messages.error(request, "❌ กรุณาแนบรูปสลิปโอนเงินด้วยครับ")
+
+    # หลังจากอัปเดตเสร็จ ให้เด้งกลับไปที่หน้า Dashboard ของ Center
+    return redirect('solar_center_dashboard')

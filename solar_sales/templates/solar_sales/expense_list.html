@@ -50,7 +50,12 @@
                         <td>
                             {% if exp.status == 'PENDING' %}<span class="badge bg-warning text-dark">รออนุมัติ</span>
                             {% elif exp.status == 'APPROVED' %}<span class="badge bg-primary">อนุมัติแล้ว</span>
-                            {% elif exp.status == 'PAID' %}<span class="badge bg-success">จ่ายแล้ว</span>
+                            {% elif exp.status == 'PAID' %}
+                                <span class="badge bg-success mb-1">จ่ายแล้ว</span>
+                                <!-- 🌟 [NEW] ปุ่มกดดูสลิปโอนเงิน (แสดงเฉพาะตอนจ่ายเงินและแนบสลิปแล้ว) 🌟 -->
+                                {% if exp.transfer_slip %}
+                                    <br><a href="{{ exp.transfer_slip.url }}" target="_blank" class="badge bg-success bg-opacity-75 text-decoration-none shadow-sm"><i class="fas fa-hand-holding-usd me-1"></i> สลิปเงินเข้า</a>
+                                {% endif %}
                             {% else %}<span class="badge bg-danger">ไม่อนุมัติ</span>{% endif %}
                         </td>
                         <td class="pe-4">

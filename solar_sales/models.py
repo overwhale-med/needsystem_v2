@@ -245,6 +245,8 @@ class SolarExpenseClaim(models.Model):
     slip_image = models.ImageField(upload_to='solar_expenses/', null=True, blank=True, verbose_name="รูปสลิป/ใบเสร็จ")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING', verbose_name="สถานะ")
     approver = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, blank=True, related_name='solar_expenses_approved', verbose_name="ผู้อนุมัติ (หัวหน้า/บัญชี)")
+    transfer_slip = models.ImageField(upload_to='solar_expenses/transfers/', null=True, blank=True, verbose_name="สลิปโอนเงินให้ช่าง")
+    paid_at = models.DateTimeField(null=True, blank=True, verbose_name="วันที่โอนเงิน")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
