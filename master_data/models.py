@@ -26,10 +26,10 @@ class CompanyInfo(models.Model):
     tax_id = models.CharField(max_length=20, verbose_name="เลขผู้เสียภาษี")
     branch = models.CharField(max_length=50, default="สำนักงานใหญ่", verbose_name="สาขา")
     address = models.TextField(verbose_name="ที่อยู่ (ไทย)")
-    
+
     # 🌟 [NEW] ช่องที่อยู่ภาษาอังกฤษสำหรับออกเอกสารต่างประเทศ
-    address_en = models.TextField(blank=True, verbose_name="ที่อยู่ (อังกฤษ)") 
-    
+    address_en = models.TextField(blank=True, verbose_name="ที่อยู่ (อังกฤษ)")
+
     phone = models.CharField(max_length=50, blank=True, verbose_name="เบอร์โทร")
     email = models.EmailField(blank=True, verbose_name="อีเมล")
     website = models.URLField(blank=True, verbose_name="เว็บไซต์")
@@ -37,10 +37,11 @@ class CompanyInfo(models.Model):
     logo = models.ImageField(upload_to='company/', blank=True, null=True, verbose_name="โลโก้")
     # 🌟 เพิ่มช่องอัปโหลดโลโก้สำหรับระบบโซล่าเซลล์
     solar_logo = models.ImageField(upload_to='company/', blank=True, null=True, verbose_name="โลโก้ (ระบบโซล่าเซลล์)")
-    
+
     login_image = models.ImageField(upload_to='company/', blank=True, null=True, verbose_name="รูปหน้า Login")
     navbar_image = models.ImageField(upload_to='company/', blank=True, null=True, verbose_name="โลโก้บนแถบเมนู")
     seal = models.ImageField(upload_to='company/', blank=True, null=True, verbose_name="ตราประทับบริษัท (Seal)")
+    signature = models.ImageField(upload_to='company/', blank=True, null=True, verbose_name="รูปลายเซ็นกรรมการ (Signature)")
 
     weekly_job_quota = models.IntegerField(default=25, verbose_name="โควตางานผลิตต่อสัปดาห์ (Jobs)")
 

@@ -1,0 +1,63 @@
+{% extends 'core/base.html' %}
+{% block content %}
+<!-- 🌟 เพิ่ม Library ปฏิทิน Flatpickr 🌟 -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+
+<div class="container py-5" style="max-width: 800px;">
+    <div class="card border-0 shadow-sm rounded-4 bg-white overflow-hidden">
+        <div class="card-header py-4 border-bottom-0 bg-primary text-white text-center">
+            <h4 class="fw-bold mb-0"><i class="fas fa-calendar-plus me-2"></i>สร้างใบงานสำรวจหน้างาน</h4>
+        </div>
+        <div class="card-body p-5 pt-4">
+            <form method="POST">
+                {% csrf_token %}
+                <div class="row g-4 mb-4">
+                    <div class="col-md-12">
+                        <label class="form-label fw-bold text-muted small">เลือกลูกค้า (จากฐานข้อมูล)</label>
+                        {{ form.customer }}
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold text-muted small">หรือ พิมพ์ชื่อลูกค้า (Walk-in)</label>
+                        {{ form.walkin_name }}
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold text-muted small">เบอร์ติดต่อ</label>
+                        {{ form.walkin_phone }}
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold text-muted small">วันเวลานัดหมาย</label>
+                        {{ form.appointment_date }}
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold text-muted small">มอบหมายช่างผู้สำรวจ</label>
+                        {{ form.surveyor }}
+                    </div>
+                    <div class="col-md-12">
+                        <label class="form-label fw-bold text-muted small">รายละเอียด/หมายเหตุ</label>
+                        {{ form.note }}
+                    </div>
+                </div>
+                <div class="d-flex justify-content-between mt-4">
+                    <a href="{% url 'solar_survey_list' %}" class="btn btn-light border rounded-pill px-4 fw-bold">ยกเลิก</a>
+                    <button type="submit" class="btn btn-primary rounded-pill px-5 fw-bold shadow-sm">บันทึกใบงาน <i class="fas fa-save ms-2"></i></button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- 🌟 ตั้งค่าให้ปฏิทินโชว์เป็นรูปแบบ DD/MM/YYYY 🌟 -->
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        flatpickr(".datetimepicker", {
+            enableTime: true,
+            time_24hr: true,
+            dateFormat: "Y-m-d H:i", // ส่งหลังบ้านเป็นปี ค.ศ. เพื่อไม่ให้ Error
+            altInput: true,
+            altFormat: "d/m/Y H:i",  // โชว์หน้าบ้านเป็นแบบ DD/MM/YYYY
+            placeholder: "คลิกเพื่อเลือกวัน/เวลา",
+        });
+    });
+</script>
+{% endblock %}

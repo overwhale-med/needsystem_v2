@@ -39,4 +39,17 @@ urlpatterns = [
     path('solar-sales/sign-quotation/<str:token>/', views.solar_customer_sign_quotation, name='solar_customer_sign_quotation'),
     # ในไฟล์ urls.py เพิ่มลิงก์นี้
     path('deposits/<int:qt_id>/print/', views.solar_deposit_print, name='solar_deposit_print'),
+    # ==========================================
+    # 🌟 ระบบสำรวจหน้างานและเบิกจ่ายโซล่าเซลล์
+    # ==========================================
+    path('surveys/', views.solar_survey_list, name='solar_survey_list'),
+    path('surveys/create/', views.solar_survey_create, name='solar_survey_create'),
+    path('surveys/<int:job_id>/', views.solar_survey_detail, name='solar_survey_detail'),
+
+    path('expenses/', views.solar_expense_list, name='solar_expense_list'),
+    # ช่างสามารถกดเบิกเงินโดยอ้างอิงจากใบงานได้
+    path('expenses/create/<int:job_id>/', views.solar_expense_create, name='solar_expense_create'),
+    # หัวหน้า/แอดมิน กดอนุมัติ
+    path('expenses/<int:exp_id>/approve/', views.solar_expense_approve, name='solar_expense_approve'),
+    path('expenses/<int:exp_id>/print/', views.solar_expense_print, name='solar_expense_print'),
 ]

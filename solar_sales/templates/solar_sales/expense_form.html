@@ -1,0 +1,37 @@
+{% extends 'core/base.html' %}
+{% block content %}
+<div class="container py-5" style="max-width: 700px;">
+    <div class="card border-0 shadow-sm rounded-4 bg-white overflow-hidden">
+        <div class="card-header py-4 border-bottom-0 bg-danger text-white text-center">
+            <h4 class="fw-bold mb-0"><i class="fas fa-file-invoice-dollar me-2"></i>ทำเรื่องเบิกค่าใช้จ่าย</h4>
+            {% if job %}<p class="mb-0 mt-2 small opacity-75">อ้างอิงใบงาน: {{ job.code }}</p>{% endif %}
+        </div>
+        <div class="card-body p-5 pt-4">
+            <form method="POST" enctype="multipart/form-data">
+                {% csrf_token %}
+                <div class="row g-4 mb-4">
+                    <div class="col-md-12">
+                        <label class="form-label fw-bold text-muted small">ยอดเงินขอเบิก (บาท)</label>
+                        {{ form.amount }}
+                    </div>
+                    <div class="col-md-12">
+                        <label class="form-label fw-bold text-muted small">รายละเอียดค่าใช้จ่าย (เบิกค่าอะไรบ้าง?)</label>
+                        {{ form.description }}
+                    </div>
+                    <!-- (โค้ดช่องยอดเงิน/รายละเอียดด้านบน ปล่อยไว้เหมือนเดิม) -->
+                    <div class="col-md-12">
+                        <label class="form-label fw-bold text-muted small">แนบรูปใบเสร็จ / สลิปหลักฐาน (เลือกได้หลายรูป)</label>
+                        <!-- 🌟 [FIXED] บังคับใส่ attribute multiple เข้าไปใน HTML โดยตรง 🌟 -->
+                        <input type="file" name="slip_images" class="form-control" multiple accept="image/*">
+                        <div class="form-text text-danger mt-1"><i class="fas fa-info-circle"></i> กดปุ่ม Ctrl หรือลากเมาส์คลุมเพื่อเลือกหลายไฟล์พร้อมกันได้</div>
+                    </div>
+                </div>
+                <div class="d-flex justify-content-between mt-4">
+                    <a href="{% url 'solar_expense_list' %}" class="btn btn-light border rounded-pill px-4 fw-bold">ยกเลิก</a>
+                    <button type="submit" class="btn btn-danger rounded-pill px-5 fw-bold shadow-sm">ส่งเรื่องขออนุมัติ <i class="fas fa-paper-plane ms-2"></i></button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

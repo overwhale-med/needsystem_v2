@@ -25,7 +25,7 @@ class CustomerForm(forms.ModelForm):
                 self.fields[field].widget.attrs.update({'class': 'form-control'})
         if 'is_active' in self.fields:
             self.fields['is_active'].widget.attrs.update({'class': 'form-check-input ms-2'})
-    
+
     def clean_phone(self):
         data = self.cleaned_data.get('phone')
         if not data: return data
@@ -60,10 +60,19 @@ class CompanyInfoForm(forms.ModelForm):
             'tax_id': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'เลขประจำตัวผู้เสียภาษี'}),
             'branch': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'เช่น สำนักงานใหญ่'}),
             'address': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+            'address_en': forms.Textarea(attrs={'class': 'form-control', 'rows': 2}), # 🌟
             'phone': forms.TextInput(attrs={'class': 'form-control'}),
             'email': forms.EmailInput(attrs={'class': 'form-control'}),
             'website': forms.URLInput(attrs={'class': 'form-control'}),
-            # 🌟 [UPDATE] ทำให้ช่องโควตารวมอ่านได้อย่างเดียว (Readonly) และเปลี่ยนสีให้ดูรู้ว่าเป็นช่อง Auto
+
+            # 🌟 [FIXED] เพิ่ม Widget ของช่องอัปโหลดรูปภาพ 🌟
+            'logo': forms.FileInput(attrs={'class': 'form-control'}),
+            'solar_logo': forms.FileInput(attrs={'class': 'form-control'}),
+            'login_image': forms.FileInput(attrs={'class': 'form-control'}),
+            'navbar_image': forms.FileInput(attrs={'class': 'form-control'}),
+            'seal': forms.FileInput(attrs={'class': 'form-control'}), # 🌟 ใช้ช่องนี้แหละครับอัปโหลดลายเซ็น!
+            'signature': forms.FileInput(attrs={'class': 'form-control'}),
+
             'weekly_job_quota': forms.NumberInput(attrs={'class': 'form-control fw-bold text-primary bg-light', 'style': 'font-size: 1.5rem; text-align: center;', 'readonly': 'readonly', 'id': 'global-quota-input'}),
         }
 
@@ -83,5 +92,5 @@ MfgBranchFormSet = forms.modelformset_factory(
     MfgBranch,
     form=MfgBranchForm,
     extra=0,
-    can_delete=True 
+    can_delete=True
 )

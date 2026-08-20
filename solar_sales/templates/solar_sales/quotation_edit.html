@@ -27,7 +27,7 @@
     </div>
 
     <div class="row g-3">
-        <!-- 🌟 ฝั่งซ้าย: ข้อมูลลูกค้า -->
+        <!-- 🌟 ฝั่งซ้าย: ข้อมูลลูกค้า (FIXED Variables) -->
         <div class="col-lg-4">
             <div class="card shadow-sm border-0 rounded-3 h-100">
                 <div class="card-header bg-white py-3 border-bottom">
@@ -36,15 +36,15 @@
                 <div class="card-body bg-light bg-opacity-10 p-3">
                     <div class="mb-2">
                         <label class="text-muted fw-bold custom-label small">ชื่อลูกค้า / บริษัท</label>
-                        <input type="text" class="form-control custom-input bg-white" value="{{ qt.customer_name }}" readonly>
+                        <input type="text" class="form-control custom-input bg-white" value="{{ qt.customer.name|default:'-' }}" readonly>
                     </div>
                     <div class="mb-2">
                         <label class="text-muted fw-bold custom-label small">เบอร์โทรศัพท์</label>
-                        <input type="text" class="form-control custom-input bg-white" value="{{ qt.customer_phone|default:'-' }}" readonly>
+                        <input type="text" class="form-control custom-input bg-white" value="{{ qt.customer.phone|default:'-' }}" readonly>
                     </div>
                     <div class="mb-2">
                         <label class="text-muted fw-bold custom-label small">ที่อยู่</label>
-                        <textarea class="form-control custom-input bg-white" rows="3" readonly>{{ qt.customer_address }}</textarea>
+                        <textarea class="form-control custom-input bg-white" rows="3" readonly>{{ qt.customer.address|default:'-' }}</textarea>
                     </div>
                 </div>
             </div>
@@ -239,7 +239,7 @@
                                     </tr>
                                     <tr>
                                         <td class="text-end text-muted small">VAT 7%:</td>
-                                        <td class="text-end text-danger small" id="live_tax">{{ qt.tax_amount|floatformat:2|intcomma }}</td>
+                                        <td class="text-end text-danger small" id="live_tax">{{ qt.vat_amount|floatformat:2|intcomma }}</td>
                                     </tr>
                                     <tr class="border-top border-dark border-2">
                                         <td class="text-end align-middle pt-2"><span class="fw-bold text-dark fs-6">ยอดรวมสุทธิ:</span></td>

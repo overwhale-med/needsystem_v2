@@ -172,7 +172,6 @@
                                     <i class="fas fa-file-signature text-primary me-2" style="width: 20px;"></i> ใบเสนอราคา (Sales)
                                 </a>
                             </li>
-                            <!-- 🌟 [NEW] เพิ่มปุ่ม ใบรับเงินมัดจำ (Deposit) 🌟 -->
                             <li>
                                 <a class="dropdown-item py-2 fw-bold text-secondary" href="{% url 'solar_deposit_list' %}">
                                     <i class="fas fa-hand-holding-usd text-info me-2" style="width: 20px;"></i> ใบรับเงินมัดจำ (Deposit)
@@ -196,9 +195,15 @@
                                 </a>
                             </li>
                             <li><hr class="dropdown-divider opacity-25"></li>
+                            <!-- 🌟 [NEW] เมนู ใบงานสำรวจหน้างาน และ ตั้งเบิกค่าใช้จ่าย 🌟 -->
+                            <li>
+                                <a class="dropdown-item py-2 fw-bold text-secondary" href="{% url 'solar_survey_list' %}">
+                                    <i class="fas fa-map-marked-alt text-primary me-2" style="width: 20px; text-align: center;"></i> ใบงานสำรวจ (Survey)
+                                </a>
+                            </li>
                             <li>
                                 <a class="dropdown-item py-2 fw-bold text-secondary" href="{% url 'solar_expense_list' %}">
-                                    <i class="fas fa-file-invoice-dollar text-warning me-2" style="width: 20px;"></i> ตั้งเบิกค่าใช้จ่าย (Expenses)
+                                    <i class="fas fa-file-invoice-dollar text-danger me-2" style="width: 20px; text-align: center;"></i> ตั้งเบิกค่าใช้จ่าย (Expenses)
                                 </a>
                             </li>
                         </ul>

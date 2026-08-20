@@ -4,8 +4,10 @@ from django.db.models import Sum
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from .models import SolarQuotation, SolarQuotationItem, SolarInvoice, SolarProduct, SolarProductCategory, SolarRawMaterialCategory
-from .forms import SolarQuotationStep1Form, SolarProductForm
+# แก้ไขบรรทัด import โมเดล ให้มีโมเดลสำรวจและเบิกจ่ายเพิ่มเข้ามาด้วย
+from .models import SolarQuotation, SolarQuotationItem, SolarInvoice, SolarProduct, SolarProductCategory, SolarRawMaterialCategory, SolarSurveyJob, SolarSurveyItem, SolarExpenseClaim, SolarExpenseSlip
+# แก้ไขบรรทัด import ฟอร์ม ให้มีฟอร์มสำรวจและเบิกจ่ายเพิ่มเข้ามาด้วย
+from .forms import SolarQuotationStep1Form, SolarProductForm, SolarSurveyJobForm, SolarExpenseClaimForm
 from solar_jobs.models import SolarJob
 import openpyxl
 from django.http import HttpResponse
@@ -408,7 +410,15 @@ def solar_quotation_print(request, qt_id):
 @login_required
 def solar_invoice_print(request, inv_id):
     inv = get_object_or_404(SolarInvoice, pk=inv_id)
-    return render(request, 'solar_sales/invoice_print.html', {'inv': inv})
+
+    # 🌟 [FIXED] ดึงข้อมูลบริษัท เพื่อส่งไปแสดง โลโก้, ตราประทับ และชื่อผู้รับเงิน 🌟
+    from master_data.models import CompanyInfo
+    company = CompanyInfo.objects.first()
+
+    return render(request, 'solar_sales/invoice_print.html', {
+        'inv': inv,
+        'company': company
+    })
 
 # ==========================================
 # 📦 คลังสินค้าโซล่า (Inventory & Excel Import)
@@ -862,3 +872,179 @@ def solar_deposit_print(request, qt_id):
     company = CompanyInfo.objects.first()
     balance_due = qt.grand_total - qt.deposit_amount
     return render(request, 'solar_sales/deposit_print.html', {'qt': qt, 'company': company, 'balance_due': balance_due})
+
+# ==========================================
+# 👷‍♂️ 4. ระบบสำรวจหน้างานและเบิกจ่าย (Solar Survey & Expense)
+# ==========================================
+
+@login_required
+def solar_survey_list(request):
+    jobs = SolarSurveyJob.objects.all().order_by('-created_at')
+
+    # กรองให้ช่างเห็นแค่งานตัวเอง (ถ้าไม่ใช่แอดมินหรือหัวหน้า)
+    current_emp = getattr(request.user, 'employee', None)
+    if not request.user.is_superuser and current_emp:
+        rank = current_emp.business_rank.lower() if current_emp.business_rank else ""
+        if rank not in ['manager', 'director'] and 'บัญชี' not in getattr(current_emp.department, 'name', ''):
+            jobs = jobs.filter(surveyor=current_emp)
+
+    paginator = Paginator(jobs, 15)
+    page_obj = paginator.get_page(request.GET.get('page'))
+    return render(request, 'solar_sales/survey_list.html', {'page_obj': page_obj})
+
+@login_required
+def solar_survey_create(request):
+    if request.method == 'POST':
+        form = SolarSurveyJobForm(request.POST)
+        if form.is_valid():
+            job = form.save(commit=False)
+
+            # 🌟 [FIXED] ดักไว้ว่าถ้าไม่เลือกลูกค้าระบบ และไม่พิมพ์ชื่อเองด้วย ให้แจ้งเตือน 🌟
+            if not job.customer and not job.walkin_name:
+                messages.error(request, "❌ กรุณาเลือกลูกค้าจากระบบ หรือ พิมพ์ชื่อลูกค้า (Walk-in) อย่างใดอย่างหนึ่งครับ")
+                return render(request, 'solar_sales/survey_form.html', {'form': form})
+
+            job.assigned_by = getattr(request.user, 'employee', None)
+            job.save()
+            messages.success(request, f"✅ สร้างใบงานสำรวจ {job.code} และมอบหมายให้ช่างสำเร็จ!")
+            return redirect('solar_survey_list')
+    else:
+        form = SolarSurveyJobForm()
+    return render(request, 'solar_sales/survey_form.html', {'form': form})
+
+@login_required
+def solar_survey_detail(request, job_id):
+    job = get_object_or_404(SolarSurveyJob, pk=job_id)
+
+    if request.method == 'POST':
+        # จัดการเพิ่มรายการวัสดุ/สเปค
+        if 'add_item' in request.POST:
+            item_name = request.POST.get('item_name')
+            qty = request.POST.get('quantity', 1)
+            unit = request.POST.get('unit', 'ชิ้น')
+            SolarSurveyItem.objects.create(job=job, item_name=item_name, quantity=qty, unit=unit)
+            messages.success(request, "✅ เพิ่มรายการสเปควัสดุเรียบร้อย")
+            return redirect('solar_survey_detail', job_id=job.id)
+
+        # จัดการอัปเดตสถานะงาน (เช่น กดเสร็จสิ้น)
+        elif 'update_status' in request.POST:
+            new_status = request.POST.get('status')
+            job.status = new_status
+            job.save()
+            messages.success(request, f"✅ อัปเดตสถานะงานเป็น '{job.get_status_display()}' เรียบร้อย")
+            return redirect('solar_survey_detail', job_id=job.id)
+
+        # 🌟 [NEW] เพิ่มส่วนนี้เพื่อจัดการปุ่ม "บันทึกหมายเหตุ" 🌟
+        elif 'update_note' in request.POST:
+            job.note = request.POST.get('note', '')
+            job.save()
+            messages.success(request, "✅ บันทึกหมายเหตุเพิ่มเติมเรียบร้อยแล้ว")
+            return redirect('solar_survey_detail', job_id=job.id)
+
+    return render(request, 'solar_sales/survey_detail.html', {'job': job})
+
+@login_required
+def solar_expense_list(request):
+    expenses = SolarExpenseClaim.objects.all().order_by('-created_at')
+
+    # ตรวจสอบสิทธิ์ (ถ้าเป็นแอดมิน, บัญชี, หรือหัวหน้า จะเห็นทั้งหมด)
+    current_emp = getattr(request.user, 'employee', None)
+    is_manager_or_acc = request.user.is_superuser
+    if current_emp and not is_manager_or_acc:
+        rank = current_emp.business_rank.lower() if current_emp.business_rank else ""
+        if rank in ['manager', 'director'] or 'บัญชี' in getattr(current_emp.department, 'name', ''):
+            is_manager_or_acc = True
+
+    # ถ้าเป็นช่างทั่วไป ให้เห็นแค่ใบเบิกของตัวเอง
+    if not is_manager_or_acc and current_emp:
+        expenses = expenses.filter(requester=current_emp)
+
+    paginator = Paginator(expenses, 15)
+    page_obj = paginator.get_page(request.GET.get('page'))
+    return render(request, 'solar_sales/expense_list.html', {
+        'page_obj': page_obj, 'is_manager_or_acc': is_manager_or_acc
+    })
+
+@login_required
+def solar_expense_create(request, job_id=None):
+    if job_id and str(job_id) != '0':
+        job = get_object_or_404(SolarSurveyJob, pk=job_id)
+    else:
+        job = None
+
+    if request.method == 'POST':
+        form = SolarExpenseClaimForm(request.POST, request.FILES)
+        if form.is_valid():
+            expense = form.save(commit=False)
+            expense.survey_job = job
+
+            employee_profile = getattr(request.user, 'employee', None)
+            if not employee_profile:
+                messages.error(request, "❌ ไม่สามารถบันทึกได้: บัญชีของคุณยังไม่ได้ผูกกับข้อมูลพนักงานในระบบครับ")
+                return render(request, 'solar_sales/expense_form.html', {'form': form, 'job': job})
+
+            expense.requester = employee_profile
+            expense.save() # บันทึกใบเบิกหลักให้เสร็จก่อน
+
+            # 🌟 [NEW] ดึงไฟล์ทั้งหมดที่อัปโหลดมา แล้ววนลูปบันทึกทีละรูป 🌟
+            files = request.FILES.getlist('slip_images')
+            for f in files:
+                SolarExpenseSlip.objects.create(expense=expense, image=f)
+
+            messages.success(request, f"✅ ส่งเรื่องเบิกค่าใช้จ่าย {expense.code} พร้อมแนบสลิป {len(files)} ใบ สำเร็จ!")
+            return redirect('solar_expense_list')
+    else:
+        form = SolarExpenseClaimForm()
+
+    return render(request, 'solar_sales/expense_form.html', {'form': form, 'job': job})
+
+@login_required
+def solar_expense_approve(request, exp_id):
+    expense = get_object_or_404(SolarExpenseClaim, pk=exp_id)
+    expense.status = 'APPROVED'
+    expense.approver = getattr(request.user, 'employee', None)
+    expense.save()
+    messages.success(request, f"✅ อนุมัติใบเบิก {expense.code} เรียบร้อยแล้ว! (เอกสารถูกส่งให้บัญชีดำเนินการจ่ายเงิน)")
+    return redirect('solar_expense_list')
+
+@login_required
+def solar_expense_print(request, exp_id):
+    expense = get_object_or_404(SolarExpenseClaim, pk=exp_id)
+    company = CompanyInfo.objects.first()
+
+    # ฟังก์ชันแปลงตัวเลขเป็นตัวหนังสือ (Thai Baht Text)
+    def get_thai_baht_text(number):
+        if number == 0: return "ศูนย์บาทถ้วน"
+        import math
+        number = round(float(number), 2)
+        baht = math.floor(number)
+        satang = int(round((number - baht) * 100))
+        def read_num(n):
+            if n == 0: return ""
+            numbers = ["", "หนึ่ง", "สอง", "สาม", "สี่", "ห้า", "หก", "เจ็ด", "แปด", "เก้า"]
+            positions = ["", "สิบ", "ร้อย", "พัน", "หมื่น", "แสน", "ล้าน"]
+            s = str(n)
+            length = len(s)
+            res = ""
+            for i, digit in enumerate(s):
+                val = int(digit)
+                pos = length - i - 1
+                if val == 0: continue
+                if pos == 0 and val == 1 and length > 1: res += "เอ็ด"
+                elif pos == 1 and val == 1: res += "สิบ"
+                elif pos == 1 and val == 2: res += "ยี่สิบ"
+                else: res += numbers[val] + positions[pos]
+            return res
+        res = ""
+        if baht > 0: res += read_num(baht) + "บาท"
+        if satang > 0: res += read_num(satang) + "สตางค์"
+        else: res += "ถ้วน"
+        return res
+
+    amount_text = get_thai_baht_text(expense.amount)
+
+    return render(request, 'solar_sales/expense_print.html', {
+        'expense': expense,
+        'company': company,
+        'amount_text': amount_text
+    })

@@ -214,16 +214,49 @@
 
         {% endwith %}
 
+        <!-- 🌟 [NEW] การ์ดสำหรับทีมช่างโซล่าเซลล์ (เช็กคิวงาน + ประวัติเบิกเงิน) 🌟 -->
+        {% if user.is_superuser or 'ช่าง' in user.employee.department.name or 'ผลิต' in user.employee.department.name or 'โซล่า' in user.employee.department.name %}
+
+        <!-- การ์ดที่ 1: คิวงานสำรวจ -->
+        <div class="col-6 col-md-3 col-lg-3">
+            <a href="{% url 'solar_survey_list' %}" class="menu-btn position-relative">
+                <!-- แจ้งเตือน Badge งานค้าง -->
+                {% if pending_solar_surveys > 0 %}
+                <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger shadow" style="font-size: 0.9rem; z-index: 5;">
+                    {{ pending_solar_surveys }} งานด่วน
+                    <span class="visually-hidden">คิวงานยังไม่เสร็จ</span>
+                </span>
+                {% endif %}
+
+                <div class="menu-icon-box bg-warning bg-opacity-10"><i class="fas fa-hard-hat menu-icon text-warning"></i></div>
+                <div class="menu-title">ช่างสำรวจหน้างาน</div>
+                <div class="menu-desc">เช็กคิวงาน / จัดการงาน</div>
+            </a>
+        </div>
+
+        <!-- การ์ดที่ 2: รายการเบิกค่าใช้จ่าย -->
+        <div class="col-6 col-md-3 col-lg-3">
+            <a href="{% url 'solar_expense_list' %}" class="menu-btn">
+                <div class="menu-icon-box bg-danger bg-opacity-10"><i class="fas fa-file-invoice-dollar menu-icon text-danger"></i></div>
+                <div class="menu-title">ประวัติเบิกค่าใช้จ่าย</div>
+                <div class="menu-desc">ติดตามสถานะอนุมัติเงิน</div>
+            </a>
+        </div>
+
+        {% endif %}
+
+        <!-- (โค้ดศูนย์โซล่าเซลล์) -->
         {% if user.is_superuser or user.groups.all.0.name == 'Executive' or user.groups.all.0.name == 'Center' or user.groups.all.0.name == 'Purchasing' %}
         <div class="col-6 col-md-3 col-lg-3">
             <a href="{% url 'solar_center_dashboard' %}" class="menu-btn">
                 <div class="menu-icon-box"><i class="fas fa-solar-panel menu-icon"></i></div>
-                <div class="menu-title">ระบบโซล่าเซลล์</div>
+                <div class="menu-title">ศูนย์โซล่าเซลล์</div>
                 <div class="menu-desc">จัดซื้อ / คุมงาน / เบิกจ่าย</div>
             </a>
         </div>
         {% endif %}
 
+        <!-- (โค้ดตั้งค่าองค์กร) -->
         {% if user.is_superuser %}
         <div class="col-6 col-md-3 col-lg-3">
             <a href="{% url 'company_settings' %}" class="menu-btn">

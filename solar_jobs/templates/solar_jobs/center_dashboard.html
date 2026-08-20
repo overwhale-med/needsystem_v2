@@ -9,8 +9,28 @@
     .btn-gold { background: linear-gradient(135deg, #d4af37 0%, #aa8c2c 100%); color: #ffffff !important; border: none; }
     .btn-gold:hover { background: linear-gradient(135deg, #aa8c2c 0%, #8c7324 100%); transform: translateY(-2px); box-shadow: 0 4px 8px rgba(212, 175, 55, 0.3) !important; }
 
-    .kanban-board { display: flex; overflow-x: auto; padding-bottom: 20px; gap: 20px; align-items: flex-start; min-height: 70vh; }
-    .kanban-column { background-color: #f4f5f7; border-radius: 12px; min-width: 330px; max-width: 330px; display: flex; flex-direction: column; border: 1px solid #e1e4e8; }
+    .kanban-board {
+        display: flex;
+        overflow-x: auto;
+        padding-bottom: 20px;
+        gap: 20px;
+        align-items: flex-start;
+        min-height: 70vh;
+        /* ลบ margin และ padding ที่ดึงขอบออกไปทิ้งทั้งหมด เพื่อให้ขอบตรงกับกล่องด้านบน */
+    }
+
+    .kanban-column {
+        background-color: #f4f5f7;
+        border-radius: 12px;
+
+        /* 🌟 [FIX] สั่งให้คอลัมน์ยืดขยายอัตโนมัติเพื่อเติมพื้นที่ว่างให้เต็ม 🌟 */
+        flex: 1;
+        min-width: 280px; /* กำหนดขนาดขั้นต่ำไว้เพื่อไม่ให้การ์ดบีบเกินไปเวลาจอเล็ก */
+
+        display: flex;
+        flex-direction: column;
+        border: 1px solid #e1e4e8;
+    }
     .kanban-header { padding: 15px 20px; border-bottom: 2px solid transparent; font-weight: 700; color: #333; display: flex; justify-content: space-between; align-items: center; }
     .kanban-cards { padding: 15px; flex-grow: 1; min-height: 150px; display: flex; flex-direction: column; gap: 15px; }
 
@@ -27,6 +47,10 @@
     .border-preparing { border-left-color: #0d6efd; }
     .border-progress { border-left-color: #c5a059; }
     .border-completed { border-left-color: #198754; }
+
+    /* 🌟 เพิ่มสีกรอบการ์ดสำหรับรายการเบิกค่าใช้จ่าย 🌟 */
+    .border-expense { border-left-color: #dc3545; cursor: default !important; }
+    .border-expense:active { cursor: default !important; }
 
     .kanban-board::-webkit-scrollbar { height: 8px; }
     .kanban-board::-webkit-scrollbar-thumb { background-color: #ccc; border-radius: 4px; }
@@ -188,11 +212,56 @@
             </div>
         </div>
 
+        <!-- คอลัมน์ที่ 5: รายการเบิกค่าใช้จ่าย (รอโอนเงิน) -->
+        <div class="kanban-column">
+            <div class="kanban-header bg-danger text-white" style="border-top-left-radius: 12px; border-top-right-radius: 12px;">
+                <span><i class="fas fa-hand-holding-usd me-2"></i> รอโอนเงินช่าง (Expenses)</span>
+            </div>
+            <div class="kanban-cards bg-white bg-opacity-50">
+                {% for exp in approved_expenses %}
+                <div class="kanban-card border-expense">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <div class="fw-bold text-danger fs-6">{{ exp.code }}</div>
+                        <span class="badge bg-danger small shadow-sm">รอโอนเงิน</span>
+                    </div>
+
+                    <div class="info-box border-danger border-opacity-25 bg-danger bg-opacity-10">
+                        <div class="small text-dark mb-1 text-truncate"><i class="fas fa-user-tie text-danger me-2" style="width:14px;"></i><strong>ผู้ขอเบิก:</strong> {{ exp.requester.first_name }}</div>
+                        <div class="small text-dark mb-1 text-truncate"><i class="fas fa-link text-danger me-2" style="width:14px;"></i><strong>อ้างอิง:</strong> {% if exp.survey_job %}{{ exp.survey_job.code }}{% else %}-{% endif %}</div>
+                        <div class="small text-dark mb-1 text-truncate"><i class="far fa-calendar-alt text-danger me-2" style="width:14px;"></i><strong>วันที่:</strong> {{ exp.created_at|date:"d/m/Y" }}</div>
+                        <div class="small text-dark mt-2 border-top border-danger border-opacity-25 pt-2">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <strong>ยอดเงิน:</strong>
+                                <span class="text-danger fw-bold fs-6">{{ exp.amount|intcomma }} ฿</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <form method="POST" action="{% url 'center_pay_expense' exp.id %}" enctype="multipart/form-data" class="mt-2">
+                        {% csrf_token %}
+                        <div class="mb-2">
+                            <label class="small text-muted mb-1">แนบสลิปโอนเงิน:</label>
+                            <input type="file" name="transfer_slip" class="form-control form-control-sm border-danger border-opacity-50" accept="image/*" required>
+                        </div>
+                        <button type="submit" class="btn btn-sm btn-danger w-100 rounded-pill fw-bold shadow-sm" onclick="return confirm('ยืนยันว่าโอนเงินให้ช่างเรียบร้อยแล้วใช่หรือไม่?');">
+                            <i class="fas fa-check-circle me-1"></i> โอนแล้ว
+                        </button>
+                    </form>
+                </div>
+                {% empty %}
+                <div class="text-center text-muted py-5 small">
+                    <i class="fas fa-check-circle me-1 text-success fs-3 mb-2"></i><br>
+                    ไม่มีรายการรอโอนเงิน<br>(เคลียร์งานหมดแล้ว!)
+                </div>
+                {% endfor %}
+            </div>
+        </div>
     </div>
 </div>
 
 <script>
     document.addEventListener("DOMContentLoaded", function() {
+        // กำหนดเฉพาะ 4 คอลัมน์แรกให้ลากหากันได้ คอลัมน์เบิกเงินจะไม่ถูกรวมอยู่ในการลาก
         const columns = ['col-draft', 'col-preparing', 'col-progress', 'col-completed'];
 
         columns.forEach(colId => {
@@ -208,7 +277,6 @@
                         const newStatus = toEl.getAttribute('data-status');
                         const jobId = itemEl.getAttribute('data-id');
 
-                        // 🌟 ยิง API ไปบันทึกในฐานข้อมูลทันทีที่ลากเสร็จ 🌟
                         fetch("{% url 'update_job_status' %}", {
                             method: "POST",
                             headers: {
@@ -223,19 +291,17 @@
                         .then(response => response.json())
                         .then(data => {
                             if (data.success) {
-                                // เปลี่ยนสีกรอบการ์ดตามสถานะใหม่
                                 itemEl.classList.remove('border-draft', 'border-preparing', 'border-progress', 'border-completed');
                                 if (newStatus === 'DRAFT') itemEl.classList.add('border-draft');
                                 else if (newStatus === 'PREPARING') itemEl.classList.add('border-preparing');
                                 else if (newStatus === 'IN_PROGRESS') itemEl.classList.add('border-progress');
                                 else if (newStatus === 'COMPLETED') {
                                     itemEl.classList.add('border-completed');
-                                    // ถ้าย้ายมาสำเร็จ ให้โหลดหน้าเว็บใหม่ 1 ครั้งเพื่อรีเฟรชตัวเลขและสคริปต์
                                     setTimeout(() => location.reload(), 500);
                                 }
                             } else {
                                 alert("เกิดข้อผิดพลาดในการบันทึก: " + data.error);
-                                location.reload(); // ถ้าย้ายไม่สำเร็จให้เด้งกลับไปที่เดิม
+                                location.reload();
                             }
                         })
                         .catch(error => {

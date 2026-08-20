@@ -188,30 +188,40 @@
         </div>
 
         <div class="keep-together row text-center mt-5">
-            <div class="col-6 mb-5 position-relative">
-                <div style="height: 120px; position: relative;">
+            <!-- 🌟 ฝั่งซ้าย: ผู้จะขาย (ดึงฟอร์แมตมาจากโซล่าเซลล์) 🌟 -->
+            <div class="col-6 mb-5">
+                <div style="position: relative; margin-top: 70px;">
+                    <!-- ตราประทับบริษัท (อยู่ด้านหลัง เยื้องขวา) -->
                     {% if company.seal %}
-                        <img src="{{ company.seal.url }}" class="seal-img" alt="ตราประทับบริษัท">
+                    <img src="{{ company.seal.url }}" alt="Seal" style="max-height: 120px; position: absolute; top: -120px; left: 70%; transform: translateX(-50%); z-index: 1; opacity: 0.85;">
                     {% endif %}
-                    {% if qt.employee and qt.employee.signature %}
-                        <img src="{{ qt.employee.signature.url }}" class="sig-img" alt="ลายเซ็นผู้ขาย">
+
+                    <!-- รูปลายเซ็น (อยู่ด้านหน้า ตรงกลาง) -->
+                    {% if company.signature %}
+                    <img src="{{ company.signature.url }}" alt="Signature" style="max-height: 60px; position: absolute; top: -80px; left: 30%; transform: translateX(-50%); z-index: 2;">
                     {% endif %}
+
+                    <div style="border-bottom: 1px solid #000; width: 80%; margin: 0 auto; position: relative; z-index: 3;"></div>
+                    <div class="mt-2 mb-1">( เบญจณัฎฐ์ ชัยทัศธนโชค )</div>
+                    <div class="fw-bold">ผู้จะขาย (บริษัท นีด ช็อปปิ้ง จำกัด)</div>
                 </div>
-                <p style="position: relative; z-index: 1;">ลงชื่อ ............................................................. ผู้จะขาย</p>
-                <p class="mt-2">( {{ company.name_th|default:"บริษัท นีด ช็อปปิ้ง จำกัด" }} )</p>
             </div>
 
-            <div class="col-6 mb-5 position-relative">
-                <div style="height: 120px; position: relative;">
+            <!-- 🌟 ฝั่งขวา: ผู้จะซื้อ (ปรับเส้นบรรทัดให้สวยงามเข้าคู่กัน) 🌟 -->
+            <div class="col-6 mb-5">
+                <div style="position: relative; margin-top: 70px;">
+                    <!-- ลายเซ็นผู้จะซื้อ -->
                     {% if qt.customer_deposit_signature %}
-                        <img src="{{ qt.customer_deposit_signature.url }}" class="sig-img" style="bottom: 40px; height: 80px;" alt="ลายเซ็นสัญญามัดจำ">
+                    <img src="{{ qt.customer_deposit_signature.url }}" alt="ลายเซ็นสัญญามัดจำ" style="max-height: 70px; position: absolute; top: -60px; left: 50%; transform: translateX(-50%); z-index: 2;">
+                    {% endif %}
+
+                    <div style="border-bottom: 1px solid #000; width: 80%; margin: 0 auto; position: relative; z-index: 3;"></div>
+                    <div class="mt-2 mb-1">( <strong>{{ qt.customer_name|default:"............................................................." }}</strong> )</div>
+                    <div class="fw-bold">ผู้จะซื้อ (Customer)</div>
+                    {% if qt.deposit_signature_date %}
+                    <div class="small text-muted mt-1">วันที่: {{ qt.deposit_signature_date|date:"d/m/Y" }}</div>
                     {% endif %}
                 </div>
-                <p style="position: relative; z-index: 1;">ลงชื่อ ............................................................. ผู้จะซื้อ</p>
-                <p class="mt-2">( <strong>{{ qt.customer_name|default:"............................................................." }}</strong> )</p>
-                {% if qt.deposit_signature_date %}
-                    <p class="mt-0" style="font-size: 11px; color: #666;">วันที่ {{ qt.deposit_signature_date|date:"d/m/Y" }}</p>
-                {% endif %}
             </div>
         </div>
 
