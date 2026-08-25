@@ -33,6 +33,8 @@ urlpatterns = [
     path('inventory/', views.solar_inventory_list, name='solar_inventory_list'),
     path('inventory/create/', views.solar_product_create, name='solar_product_create'),
     path('inventory/edit/<int:pk>/', views.solar_product_edit, name='solar_product_edit'),
+    path('inventory/category/add-fg-ajax/', views.add_fg_category_ajax, name='add_fg_category_ajax'),
+    path('inventory/category/add-rm-ajax/', views.add_rm_category_ajax, name='add_rm_category_ajax'),
     path('inventory/download-template/', views.solar_inventory_download_template, name='solar_inventory_download_template'),
     path('inventory/import/', views.solar_inventory_import, name='solar_inventory_import'),
     # เพิ่ม URL นี้สำหรับการเซ็นใบเสนอราคาออนไลน์ของฝั่งโซล่าเซลล์

@@ -10,7 +10,7 @@ from .models import SolarQuotation, SolarQuotationItem, SolarInvoice, SolarProdu
 from .forms import SolarQuotationStep1Form, SolarProductForm, SolarSurveyJobForm, SolarExpenseClaimForm
 from solar_jobs.models import SolarJob
 import openpyxl
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.utils.dateparse import parse_date
 from django.core.paginator import Paginator
 from django.db.models import Q
@@ -1048,3 +1048,33 @@ def solar_expense_print(request, exp_id):
         'company': company,
         'amount_text': amount_text
     })
+
+# ------------------------------------------
+# 🌟 API สำหรับเพิ่มหมวดหมู่แบบ Popup (AJAX)
+# ------------------------------------------
+@login_required
+def add_fg_category_ajax(request):
+    if request.method == 'POST':
+        category_name = request.POST.get('name')
+        if category_name:
+            from .models import SolarProductCategory
+            # ตรวจสอบว่ามีชื่อนี้อยู่แล้วหรือไม่ ถ้าไม่มีก็สร้างใหม่
+            cat, created = SolarProductCategory.objects.get_or_create(name=category_name.strip())
+            return JsonResponse({'success': True, 'id': cat.id, 'name': cat.name})
+        return JsonResponse({'success': False, 'error': 'กรุณาระบุชื่อหมวดหมู่'})
+    return JsonResponse({'success': False, 'error': 'Invalid request'})
+
+# ------------------------------------------
+# 🌟 API สำหรับเพิ่มหมวดหมู่ RM แบบ Popup (AJAX)
+# ------------------------------------------
+@login_required
+def add_rm_category_ajax(request):
+    if request.method == 'POST':
+        category_name = request.POST.get('name')
+        if category_name:
+            from .models import SolarRawMaterialCategory
+            # ตรวจสอบว่ามีชื่อนี้อยู่แล้วหรือไม่ ถ้าไม่มีก็สร้างใหม่
+            cat, created = SolarRawMaterialCategory.objects.get_or_create(name=category_name.strip())
+            return JsonResponse({'success': True, 'id': cat.id, 'name': cat.name})
+        return JsonResponse({'success': False, 'error': 'กรุณาระบุชื่อหมวดหมู่'})
+    return JsonResponse({'success': False, 'error': 'Invalid request'})

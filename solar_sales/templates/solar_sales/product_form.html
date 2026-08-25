@@ -2,8 +2,11 @@
 
 {% block content %}
 <style>
+    .text-gold { color: #d4af37; }
     .btn-gold { background: linear-gradient(135deg, #d4af37 0%, #aa8c2c 100%); color: #ffffff !important; border: none; transition: all 0.3s ease; }
     .btn-gold:hover { background: linear-gradient(135deg, #aa8c2c 0%, #8c7324 100%); transform: translateY(-2px); box-shadow: 0 4px 8px rgba(212, 175, 55, 0.3) !important; }
+    .btn-outline-gold { border: 1px solid #d4af37; color: #d4af37; background: transparent; }
+    .btn-outline-gold:hover { background: #d4af37; color: white; }
 </style>
 
 <div class="container py-5" style="max-width: 700px;">
@@ -11,7 +14,7 @@
         <div class="card-header bg-white py-4 border-bottom text-center">
             <h4 class="fw-bold text-dark mb-0"><i class="fas fa-box-open text-gold me-2"></i>{{ title }}</h4>
         </div>
-        
+
         <div class="card-body p-5 pt-4">
             <form method="POST">
                 {% csrf_token %}
@@ -19,14 +22,31 @@
                     {% for field in form %}
                     <div class="col-md-{% if field.name == 'name' or field.name == 'product_type' %}12{% elif field.name == 'is_active' %}12{% else %}6{% endif %}" id="wrapper_{{ field.name }}">
                         <label class="form-label fw-bold text-muted small text-uppercase">{{ field.label }}</label>
+
                         {% if field.name == 'is_active' %}
                             <div class="form-check form-switch mt-2">
                                 {{ field }}
                                 <label class="form-check-label ms-2 fw-bold text-success" for="{{ field.id_for_label }}">เปิดให้แสดงผลในระบบ</label>
                             </div>
+                        {% elif field.name == 'category' %}
+                            <div class="input-group">
+                                {{ field }}
+                                <button class="btn btn-outline-gold px-3 fw-bold" type="button" data-bs-toggle="modal" data-bs-target="#addFgCategoryModal">
+                                    <i class="fas fa-plus"></i> เพิ่ม
+                                </button>
+                            </div>
+                        {% elif field.name == 'rm_category' %}
+                            <!-- 🌟 [NEW] เพิ่ม Input Group และปุ่ม Add สำหรับหมวดหมู่ RM 🌟 -->
+                            <div class="input-group">
+                                {{ field }}
+                                <button class="btn btn-outline-gold px-3 fw-bold" type="button" data-bs-toggle="modal" data-bs-target="#addRmCategoryModal">
+                                    <i class="fas fa-plus"></i> เพิ่ม
+                                </button>
+                            </div>
                         {% else %}
                             {{ field }}
                         {% endif %}
+
                         {% if field.errors %}
                             <div class="text-danger small mt-1"><i class="fas fa-exclamation-circle me-1"></i>{{ field.errors|striptags }}</div>
                         {% endif %}
@@ -45,6 +65,50 @@
     </div>
 </div>
 
+<!-- Modal สำหรับเพิ่มหมวดหมู่ FG -->
+<div class="modal fade" id="addFgCategoryModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <div class="modal-header border-bottom-0 py-3">
+                <h5 class="modal-title fw-bold text-dark"><i class="fas fa-folder-plus text-gold me-2"></i>เพิ่มหมวดหมู่แพ็กเกจ (FG)</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body bg-light rounded-bottom-4 p-4">
+                <label class="form-label fw-bold text-muted small">ชื่อหมวดหมู่ใหม่</label>
+                <input type="text" id="newFgCategoryName" class="form-control" placeholder="เช่น ชุด On-Grid 5kW, แผง Mono 550W...">
+                <div id="fgCategoryError" class="text-danger small mt-2" style="display:none;"><i class="fas fa-exclamation-triangle me-1"></i><span></span></div>
+
+                <div class="d-flex justify-content-end mt-4">
+                    <button type="button" class="btn btn-light rounded-pill px-4 me-2 border" data-bs-dismiss="modal">ยกเลิก</button>
+                    <button type="button" id="btnSaveFgCategory" class="btn btn-gold rounded-pill px-4 fw-bold shadow-sm">บันทึกหมวดหมู่</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 🌟 [NEW] Modal สำหรับเพิ่มหมวดหมู่ RM 🌟 -->
+<div class="modal fade" id="addRmCategoryModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <div class="modal-header border-bottom-0 py-3">
+                <h5 class="modal-title fw-bold text-dark"><i class="fas fa-folder-plus text-gold me-2"></i>เพิ่มหมวดหมู่วัตถุดิบ/อุปกรณ์ (RM)</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body bg-light rounded-bottom-4 p-4">
+                <label class="form-label fw-bold text-muted small">ชื่อหมวดหมู่ใหม่</label>
+                <input type="text" id="newRmCategoryName" class="form-control" placeholder="เช่น สายไฟ, ท่อร้อยสาย, แบตเตอรี่...">
+                <div id="rmCategoryError" class="text-danger small mt-2" style="display:none;"><i class="fas fa-exclamation-triangle me-1"></i><span></span></div>
+
+                <div class="d-flex justify-content-end mt-4">
+                    <button type="button" class="btn btn-light rounded-pill px-4 me-2 border" data-bs-dismiss="modal">ยกเลิก</button>
+                    <button type="button" id="btnSaveRmCategory" class="btn btn-gold rounded-pill px-4 fw-bold shadow-sm">บันทึกหมวดหมู่</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
     document.addEventListener("DOMContentLoaded", function() {
         const typeSelect = document.getElementById('id_product_type');
@@ -54,26 +118,165 @@
         function toggleCategories() {
             if (typeSelect && fgWrapper && rmWrapper) {
                 if (typeSelect.value === 'FG') {
-                    // ถ้าเลือก FG: โชว์หมวดหมู่ FG และ ซ่อนหมวดหมู่ RM
                     fgWrapper.style.display = 'block';
                     rmWrapper.style.display = 'none';
-                    // ล้างค่าหมวดหมู่ RM ทิ้ง ป้องกันการแอบบันทึกข้อมูลตกค้าง
                     document.getElementById('id_rm_category').value = '';
                 } else if (typeSelect.value === 'RM') {
-                    // ถ้าเลือก RM: ซ่อนหมวดหมู่ FG และ โชว์หมวดหมู่ RM
                     fgWrapper.style.display = 'none';
                     rmWrapper.style.display = 'block';
-                    // ล้างค่าหมวดหมู่ FG ทิ้ง
                     document.getElementById('id_category').value = '';
                 }
             }
         }
 
         if (typeSelect) {
-            // สั่งทำงานครั้งแรกทันทีที่เปิดหน้าเว็บ
             toggleCategories();
-            // สั่งทำงานทุกครั้งที่ผู้ใช้คลิกเปลี่ยนค่าประเภทสินค้า
             typeSelect.addEventListener('change', toggleCategories);
+        }
+
+        // ระบบ AJAX สำหรับบันทึกหมวดหมู่ FG
+        const btnSaveFg = document.getElementById('btnSaveFgCategory');
+        if (btnSaveFg) {
+            btnSaveFg.addEventListener('click', function() {
+                const nameInput = document.getElementById('newFgCategoryName');
+                const errorDiv = document.getElementById('fgCategoryError');
+                const errorSpan = errorDiv.querySelector('span');
+                const nameVal = nameInput.value.trim();
+
+                if (!nameVal) {
+                    errorSpan.innerText = "กรุณาระบุชื่อหมวดหมู่ที่ต้องการเพิ่ม";
+                    errorDiv.style.display = 'block';
+                    return;
+                }
+                errorDiv.style.display = 'none';
+
+                fetch("{% url 'add_fg_category_ajax' %}", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/x-www-form-urlencoded",
+                        "X-CSRFToken": "{{ csrf_token }}"
+                    },
+                    body: new URLSearchParams({ 'name': nameVal })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        const select = document.getElementById('id_category');
+                        const option = document.createElement('option');
+                        option.value = data.id;
+                        option.text = data.name;
+                        select.add(option);
+                        select.value = data.id;
+
+                        nameInput.value = '';
+                        const modalEl = document.getElementById('addFgCategoryModal');
+                        const modal = bootstrap.Modal.getInstance(modalEl);
+                        modal.hide();
+                    } else {
+                        errorSpan.innerText = data.error;
+                        errorDiv.style.display = 'block';
+                    }
+                })
+                .catch(error => {
+                    errorSpan.innerText = "เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์";
+                    errorDiv.style.display = 'block';
+                });
+            });
+        }
+
+        // 🌟 [NEW] ระบบ AJAX สำหรับบันทึกหมวดหมู่ RM 🌟
+        const btnSaveRm = document.getElementById('btnSaveRmCategory');
+        if (btnSaveRm) {
+            btnSaveRm.addEventListener('click', function() {
+                const nameInput = document.getElementById('newRmCategoryName');
+                const errorDiv = document.getElementById('rmCategoryError');
+                const errorSpan = errorDiv.querySelector('span');
+                const nameVal = nameInput.value.trim();
+
+                if (!nameVal) {
+                    errorSpan.innerText = "กรุณาระบุชื่อหมวดหมู่ที่ต้องการเพิ่ม";
+                    errorDiv.style.display = 'block';
+                    return;
+                }
+                errorDiv.style.display = 'none';
+
+                fetch("{% url 'add_rm_category_ajax' %}", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/x-www-form-urlencoded",
+                        "X-CSRFToken": "{{ csrf_token }}"
+                    },
+                    body: new URLSearchParams({ 'name': nameVal })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        const select = document.getElementById('id_rm_category');
+                        const option = document.createElement('option');
+                        option.value = data.id;
+                        option.text = data.name;
+                        select.add(option);
+                        select.value = data.id;
+
+                        nameInput.value = '';
+                        const modalEl = document.getElementById('addRmCategoryModal');
+                        const modal = bootstrap.Modal.getInstance(modalEl);
+                        modal.hide();
+                    } else {
+                        errorSpan.innerText = data.error;
+                        errorDiv.style.display = 'block';
+                    }
+                })
+                .catch(error => {
+                    errorSpan.innerText = "เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์";
+                    errorDiv.style.display = 'block';
+                });
+            });
+        }
+
+        // ระบบจัดการตัวเลข (ลบ 0 อัตโนมัติ และใส่ลูกน้ำ)
+        document.querySelectorAll('.auto-comma').forEach(function(input) {
+            if (input.value) {
+                let val = input.value.replace(/[^0-9.]/g, '');
+                let parts = val.split('.');
+                if (parts[0].length > 0) {
+                    parts[0] = parseInt(parts[0], 10).toLocaleString('en-US');
+                }
+                input.value = parts.join('.');
+            }
+
+            input.addEventListener('focus', function() {
+                if (this.value === '0' || this.value === '0.00' || this.value === '0.0') {
+                    this.value = '';
+                }
+            });
+
+            input.addEventListener('input', function() {
+                let val = this.value.replace(/[^0-9.]/g, '');
+                let parts = val.split('.');
+                if (parts.length > 2) {
+                    parts = [parts[0], parts.slice(1).join('')];
+                }
+                if (parts[0].length > 0) {
+                    parts[0] = parseInt(parts[0], 10).toLocaleString('en-US');
+                }
+                this.value = parts.join('.');
+            });
+
+            input.addEventListener('blur', function() {
+                if (this.value.trim() === '') {
+                    this.value = '0';
+                }
+            });
+        });
+
+        const form = document.querySelector('form');
+        if (form) {
+            form.addEventListener('submit', function() {
+                document.querySelectorAll('.auto-comma').forEach(function(input) {
+                    input.value = input.value.replace(/,/g, '');
+                });
+            });
         }
     });
 </script>
