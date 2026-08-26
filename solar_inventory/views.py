@@ -7,7 +7,7 @@ import openpyxl
 # 🌟 Import ข้อมูลจากแอปตัวเอง (เฉพาะเรื่องคลังสินค้า)
 from .models import SolarProduct, SolarProductCategory, SolarRawMaterialCategory, SolarStockMovement
 from django.core.paginator import Paginator
-from .forms import SolarProductForm, SolarStockMovementForm
+from .forms import SolarProductForm, SolarStockMovementForm, SolarStandardBOMFormSet
 
 # ==========================================
 # 📦 คลังสินค้าโซล่า (Inventory & Excel Import)
@@ -30,29 +30,51 @@ def solar_product_create(request):
         form = SolarProductForm(request.POST)
         if form.is_valid():
             prod = form.save()
+            # 🌟 ถ่ายโอนข้อมูล Formset ไปยังแพ็กเกจนี้
+            formset = SolarStandardBOMFormSet(request.POST, instance=prod)
+            if formset.is_valid() and default_type == 'FG':
+                formset.save()
             messages.success(request, f"✅ เพิ่มรายการ '{prod.name}' ลงในคลังสินค้าเรียบร้อยแล้ว")
             return redirect('solar_inventory_list')
         else:
             messages.error(request, "❌ กรุณาตรวจสอบความถูกต้องของข้อมูล")
+            formset = SolarStandardBOMFormSet(request.POST)
     else:
         form = SolarProductForm(initial={'product_type': default_type})
+        formset = SolarStandardBOMFormSet()
 
-    return render(request, 'solar_inventory/product_form.html', {'form': form, 'title': page_title})
+    return render(request, 'solar_inventory/product_form.html', {
+        'form': form,
+        'formset': formset,
+        'default_type': default_type,
+        'title': page_title
+    })
 
 @login_required
 def solar_product_edit(request, pk):
     product = get_object_or_404(SolarProduct, pk=pk)
     if request.method == 'POST':
         form = SolarProductForm(request.POST, instance=product)
-        if form.is_valid():
+        formset = SolarStandardBOMFormSet(request.POST, instance=product)
+        if form.is_valid() and (product.product_type != 'FG' or formset.is_valid()):
             form.save()
+            if product.product_type == 'FG':
+                formset.save()
             messages.success(request, f"✅ อัปเดตข้อมูล '{product.name}' เรียบร้อยแล้ว")
             return redirect('solar_inventory_list')
         else:
             messages.error(request, "❌ กรุณาตรวจสอบความถูกต้องของข้อมูล")
     else:
         form = SolarProductForm(instance=product)
-    return render(request, 'solar_inventory/product_form.html', {'form': form, 'product': product, 'title': f'แก้ไข: {product.name}'})
+        formset = SolarStandardBOMFormSet(instance=product)
+
+    return render(request, 'solar_inventory/product_form.html', {
+        'form': form,
+        'formset': formset,
+        'default_type': product.product_type,
+        'product': product,
+        'title': f'แก้ไข: {product.name}'
+    })
 
 # ------------------------------------------
 # 🌟 API สำหรับเพิ่มหมวดหมู่แบบ Popup (AJAX)

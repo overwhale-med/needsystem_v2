@@ -7,63 +7,160 @@
     .btn-gold:hover { background: linear-gradient(135deg, #aa8c2c 0%, #8c7324 100%); transform: translateY(-2px); box-shadow: 0 4px 8px rgba(212, 175, 55, 0.3) !important; }
     .btn-outline-gold { border: 1px solid #d4af37; color: #d4af37; background: transparent; }
     .btn-outline-gold:hover { background: #d4af37; color: white; }
+    /* 🌟 แต่งสไตล์ให้ช่องค้นหา Select2 เข้ากับ Bootstrap */
+    .select2-container--bootstrap-5 .select2-selection {
+        border: 1px solid #ced4da;
+        border-radius: 0.375rem;
+        min-height: calc(1.5em + 0.75rem + 2px);
+        padding: 0.375rem 0.75rem;
+    }
+    .select2-container--bootstrap-5 .select2-selection--single .select2-selection__rendered {
+        color: #212529; font-weight: bold;
+    }
 </style>
 
-<div class="container py-5" style="max-width: 700px;">
-    <div class="card border-0 shadow-sm rounded-4 bg-white">
-        <div class="card-header bg-white py-4 border-bottom text-center">
-            <h4 class="fw-bold text-dark mb-0"><i class="fas fa-box-open text-gold me-2"></i>{{ title }}</h4>
+<div class="container-fluid py-4 px-4">
+    <div class="d-flex justify-content-between align-items-end mb-4">
+        <div>
+            <h4 class="fw-bold mb-1 text-dark">
+                {% if default_type == 'FG' %}
+                    <i class="fas fa-solar-panel text-primary me-2"></i>จัดการแพ็กเกจสินค้า (FG)
+                {% else %}
+                    <i class="fas fa-boxes text-warning me-2"></i>จัดการวัตถุดิบ (RM)
+                {% endif %}
+            </h4>
+            <p class="text-muted small mb-0">{{ title }}</p>
         </div>
-
-        <div class="card-body p-5 pt-4">
-            <form method="POST">
-                {% csrf_token %}
-                <div class="row g-4">
-                    {% for field in form %}
-                    <div class="col-md-{% if field.name == 'name' or field.name == 'product_type' %}12{% elif field.name == 'is_active' %}12{% else %}6{% endif %}" id="wrapper_{{ field.name }}">
-                        <label class="form-label fw-bold text-muted small text-uppercase">{{ field.label }}</label>
-
-                        {% if field.name == 'is_active' %}
-                            <div class="form-check form-switch mt-2">
-                                {{ field }}
-                                <label class="form-check-label ms-2 fw-bold text-success" for="{{ field.id_for_label }}">เปิดให้แสดงผลในระบบ</label>
-                            </div>
-                        {% elif field.name == 'category' %}
-                            <div class="input-group">
-                                {{ field }}
-                                <button class="btn btn-outline-gold px-3 fw-bold" type="button" data-bs-toggle="modal" data-bs-target="#addFgCategoryModal">
-                                    <i class="fas fa-plus"></i> เพิ่ม
-                                </button>
-                            </div>
-                        {% elif field.name == 'rm_category' %}
-                            <!-- 🌟 [NEW] เพิ่ม Input Group และปุ่ม Add สำหรับหมวดหมู่ RM 🌟 -->
-                            <div class="input-group">
-                                {{ field }}
-                                <button class="btn btn-outline-gold px-3 fw-bold" type="button" data-bs-toggle="modal" data-bs-target="#addRmCategoryModal">
-                                    <i class="fas fa-plus"></i> เพิ่ม
-                                </button>
-                            </div>
-                        {% else %}
-                            {{ field }}
-                        {% endif %}
-
-                        {% if field.errors %}
-                            <div class="text-danger small mt-1"><i class="fas fa-exclamation-circle me-1"></i>{{ field.errors|striptags }}</div>
-                        {% endif %}
-                    </div>
-                    {% endfor %}
-                </div>
-
-                <div class="d-flex justify-content-between mt-5 pt-3 border-top">
-                    <a href="{% url 'solar_inventory_list' %}" class="btn btn-light border rounded-pill px-4 fw-bold">ยกเลิก</a>
-                    <button type="submit" class="btn btn-gold rounded-pill px-5 fw-bold shadow-sm fs-6">
-                        <i class="fas fa-save me-2"></i> บันทึกข้อมูล
-                    </button>
-                </div>
-            </form>
+        <div>
+            <a href="{% url 'solar_inventory_list' %}" class="btn btn-outline-secondary rounded-pill px-4 fw-bold shadow-sm">
+                <i class="fas fa-arrow-left me-2"></i> กลับคลังสินค้า
+            </a>
         </div>
     </div>
+
+    <form method="POST" id="productForm">
+        {% csrf_token %}
+        <div class="row g-4">
+            <!-- 📦 ข้อมูลสินค้าพื้นฐาน (อิงจากโครงสร้างเดิมของคุณ) -->
+            <div class="{% if default_type == 'FG' %}col-lg-5{% else %}col-lg-8 mx-auto{% endif %}">
+                <div class="card border-0 shadow-sm rounded-4 bg-white h-100">
+                    <div class="card-header bg-white py-3 border-bottom-0">
+                        <h6 class="fw-bold mb-0 text-dark"><i class="fas fa-info-circle text-info me-2"></i>ข้อมูลพื้นฐาน</h6>
+                    </div>
+                    <div class="card-body pt-0">
+                        <div class="row g-3">
+                            {% for field in form %}
+                            <div class="col-md-{% if field.name == 'name' or field.name == 'product_type' %}12{% elif field.name == 'is_active' %}12{% else %}6{% endif %}" id="wrapper_{{ field.name }}">
+                                <label class="form-label fw-bold text-muted small text-uppercase">{{ field.label }}</label>
+
+                                {% if field.name == 'is_active' %}
+                                    <div class="form-check form-switch mt-2">
+                                        {{ field }}
+                                        <label class="form-check-label ms-2 fw-bold text-success" for="{{ field.id_for_label }}">เปิดให้แสดงผลในระบบ</label>
+                                    </div>
+                                {% elif field.name == 'category' %}
+                                    <div class="input-group">
+                                        {{ field }}
+                                        <button class="btn btn-outline-gold px-3 fw-bold" type="button" data-bs-toggle="modal" data-bs-target="#addFgCategoryModal">
+                                            <i class="fas fa-plus"></i> เพิ่ม
+                                        </button>
+                                    </div>
+                                {% elif field.name == 'rm_category' %}
+                                    <div class="input-group">
+                                        {{ field }}
+                                        <button class="btn btn-outline-gold px-3 fw-bold" type="button" data-bs-toggle="modal" data-bs-target="#addRmCategoryModal">
+                                            <i class="fas fa-plus"></i> เพิ่ม
+                                        </button>
+                                    </div>
+                                {% else %}
+                                    {{ field }}
+                                {% endif %}
+
+                                {% if field.errors %}
+                                    <div class="text-danger small mt-1"><i class="fas fa-exclamation-circle me-1"></i>{{ field.errors|striptags }}</div>
+                                {% endif %}
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 📝 ตารางสูตรผลิต (Standard BOM) แสดงเฉพาะตอนเป็น FG -->
+            {% if default_type == 'FG' %}
+            <div class="col-lg-7">
+                <div class="card border-0 shadow-sm rounded-4 bg-white h-100">
+                    <div class="card-header bg-white py-3 border-bottom-0 d-flex justify-content-between align-items-center">
+                        <h6 class="fw-bold mb-0 text-dark"><i class="fas fa-cubes text-warning me-2"></i>สูตรผลิตมาตรฐาน (Standard BOM)</h6>
+                        <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3 fw-bold" id="add-bom-btn">
+                            <i class="fas fa-plus me-1"></i> เพิ่มรายการ
+                        </button>
+                    </div>
+                    <div class="card-body pt-0">
+                        <p class="small text-muted mb-2"><i class="fas fa-info-circle me-1"></i> ระบุวัตถุดิบ (RM) ที่ต้องใช้เป็นค่าเริ่มต้นสำหรับแพ็กเกจนี้</p>
+
+                        {{ formset.management_form }}
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0 border rounded">
+                                <thead class="bg-light text-secondary small">
+                                    <tr>
+                                        <th style="width: 45%;">วัตถุดิบ (RM)</th>
+                                        <th class="text-center" style="width: 15%;">จำนวน/ชุด</th>
+                                        <th style="width: 30%;">หมายเหตุ</th>
+                                        <th class="text-center" style="width: 10%;">ลบ</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="bom-formset-body">
+                                    {% for f in formset %}
+                                    <tr class="bom-row {% if f.instance.pk and f.DELETE.value %}d-none{% endif %}">
+                                        <td>
+                                            {% for hidden in f.hidden_fields %}{{ hidden }}{% endfor %}
+                                            {{ f.raw_material }}
+                                        </td>
+                                        <td>{{ f.quantity }}</td>
+                                        <td>{{ f.note }}</td>
+                                        <td class="text-center">
+                                            <div class="d-none">{{ f.DELETE }}</div>
+                                            <button type="button" class="btn btn-sm btn-outline-danger border-0 remove-row-btn" title="ลบรายการนี้"><i class="fas fa-trash"></i></button>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="text-end mt-4 pb-5">
+            <button type="submit" class="btn btn-gold rounded-pill px-5 fw-bold shadow-sm fs-6">
+                <i class="fas fa-save me-2"></i> บันทึกข้อมูล
+            </button>
+        </div>
+    </form>
 </div>
+
+<!-- 📦 Template สำหรับสร้างแถวสูตรใหม่ -->
+{% if default_type == 'FG' %}
+<table style="display: none;">
+    <tbody id="empty-bom-template">
+        <tr class="bom-row bg-light bg-opacity-50 border-bottom">
+            <td>
+                {% for hidden in formset.empty_form.hidden_fields %}{{ hidden }}{% endfor %}
+                {{ formset.empty_form.raw_material }}
+            </td>
+            <td>{{ formset.empty_form.quantity }}</td>
+            <td>{{ formset.empty_form.note }}</td>
+            <td class="text-center">
+                <div class="d-none">{{ formset.empty_form.DELETE }}</div>
+                <button type="button" class="btn btn-sm btn-outline-danger border-0 remove-row-btn" title="ลบรายการนี้"><i class="fas fa-trash"></i></button>
+            </td>
+        </tr>
+    </tbody>
+</table>
+{% endif %}
 
 <!-- Modal สำหรับเพิ่มหมวดหมู่ FG -->
 <div class="modal fade" id="addFgCategoryModal" tabindex="-1" aria-hidden="true">
@@ -87,7 +184,7 @@
     </div>
 </div>
 
-<!-- 🌟 [NEW] Modal สำหรับเพิ่มหมวดหมู่ RM 🌟 -->
+<!-- Modal สำหรับเพิ่มหมวดหมู่ RM -->
 <div class="modal fade" id="addRmCategoryModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content border-0 shadow-lg rounded-4">
@@ -114,17 +211,25 @@
         const typeSelect = document.getElementById('id_product_type');
         const fgWrapper = document.getElementById('wrapper_category');
         const rmWrapper = document.getElementById('wrapper_rm_category');
+        const stockWrapper = document.getElementById('wrapper_stock_qty');
+        const minLevelWrapper = document.getElementById('wrapper_min_level');
 
         function toggleCategories() {
             if (typeSelect && fgWrapper && rmWrapper) {
                 if (typeSelect.value === 'FG') {
                     fgWrapper.style.display = 'block';
                     rmWrapper.style.display = 'none';
-                    document.getElementById('id_rm_category').value = '';
+                    if(stockWrapper) stockWrapper.style.display = 'none';
+                    if(minLevelWrapper) minLevelWrapper.style.display = 'none';
+                    const rmCat = document.getElementById('id_rm_category');
+                    if(rmCat) rmCat.value = '';
                 } else if (typeSelect.value === 'RM') {
                     fgWrapper.style.display = 'none';
                     rmWrapper.style.display = 'block';
-                    document.getElementById('id_category').value = '';
+                    if(stockWrapper) stockWrapper.style.display = 'block';
+                    if(minLevelWrapper) minLevelWrapper.style.display = 'block';
+                    const fgCat = document.getElementById('id_category');
+                    if(fgCat) fgCat.value = '';
                 }
             }
         }
@@ -133,6 +238,38 @@
             toggleCategories();
             typeSelect.addEventListener('change', toggleCategories);
         }
+
+        // ระบบเพิ่ม/ลบ แถวสูตร BOM
+        {% if default_type == 'FG' %}
+        const formsetBody = document.getElementById("bom-formset-body");
+        const addBtn = document.getElementById("add-bom-btn");
+        const totalFormsInput = document.getElementById("id_standard_boms-TOTAL_FORMS"); // ชื่อ prefix ของ related_name
+
+        if (addBtn && formsetBody && totalFormsInput) {
+            addBtn.addEventListener("click", function() {
+                const currentFormCount = parseInt(totalFormsInput.value);
+                const templateHtml = document.getElementById("empty-bom-template").innerHTML;
+                const newRowHtml = templateHtml.replace(/__prefix__/g, currentFormCount);
+
+                formsetBody.insertAdjacentHTML('beforeend', newRowHtml);
+                totalFormsInput.value = currentFormCount + 1;
+            });
+
+            formsetBody.addEventListener("click", function(e) {
+                if (e.target.closest(".remove-row-btn")) {
+                    const row = e.target.closest(".bom-row");
+                    const deleteCheckbox = row.querySelector('input[type="checkbox"][name$="-DELETE"]');
+
+                    if (deleteCheckbox) {
+                        deleteCheckbox.checked = true;
+                        row.style.display = 'none';
+                    } else {
+                        row.remove();
+                    }
+                }
+            });
+        }
+        {% endif %}
 
         // ระบบ AJAX สำหรับบันทึกหมวดหมู่ FG
         const btnSaveFg = document.getElementById('btnSaveFgCategory');
@@ -184,7 +321,7 @@
             });
         }
 
-        // 🌟 [NEW] ระบบ AJAX สำหรับบันทึกหมวดหมู่ RM 🌟
+        // ระบบ AJAX สำหรับบันทึกหมวดหมู่ RM
         const btnSaveRm = document.getElementById('btnSaveRmCategory');
         if (btnSaveRm) {
             btnSaveRm.addEventListener('click', function() {
@@ -270,7 +407,7 @@
             });
         });
 
-        const form = document.querySelector('form');
+        const form = document.getElementById('productForm');
         if (form) {
             form.addEventListener('submit', function() {
                 document.querySelectorAll('.auto-comma').forEach(function(input) {
@@ -278,6 +415,57 @@
                 });
             });
         }
+    });
+</script>
+<!-- 🌟 นำเข้าไลบรารี Select2 (สำหรับทำ Dropdown ค้นหาได้) 🌟 -->
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" />
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+<script>
+    $(document).ready(function() {
+        // ฟังก์ชันสำหรับเปิดใช้งาน Select2 ให้กับช่องที่มีคลาส searchable-select
+        function initSelect2() {
+            // 🌟 [FIXED] เจาะจงเป้าหมายให้ Select2 ทำงานเฉพาะในตาราง #bom-formset-body เท่านั้น
+            $('#bom-formset-body .searchable-select').not('.select2-hidden-accessible').select2({
+                theme: 'bootstrap-5',
+                placeholder: "-- พิมพ์เพื่อค้นหาวัตถุดิบ (RM) --",
+                allowClear: true,
+                width: '100%'
+            });
+        }
+
+        // เปิดใช้งานรอบแรกเมื่อโหลดหน้าเว็บ (เฉพาะ FG ที่ตาราง BOM แสดง)
+        {% if default_type == 'FG' %}
+            initSelect2();
+        {% endif %}
+
+        // 🌟 ปรับปรุงปุ่มเพิ่มรายการ ให้รองรับ Select2 แถวใหม่
+        {% if default_type == 'FG' %}
+        const addBtn = document.getElementById("add-bom-btn");
+        const formsetBody = document.getElementById("bom-formset-body");
+        const totalFormsInput = document.getElementById("id_standard_boms-TOTAL_FORMS");
+
+        if (addBtn && formsetBody && totalFormsInput) {
+            // ปิดการทำงานเดิมของปุ่มเพิ่มแถวในสคริปต์เก่า
+            const oldCloneBtn = addBtn.cloneNode(true);
+            addBtn.parentNode.replaceChild(oldCloneBtn, addBtn);
+
+            oldCloneBtn.addEventListener("click", function() {
+                const currentFormCount = parseInt(totalFormsInput.value);
+                const templateHtml = document.getElementById("empty-bom-template").innerHTML;
+                const newRowHtml = templateHtml.replace(/__prefix__/g, currentFormCount);
+
+                // นำ HTML แถวใหม่ไปต่อท้ายตาราง
+                formsetBody.insertAdjacentHTML('beforeend', newRowHtml);
+                totalFormsInput.value = currentFormCount + 1;
+
+                // 🌟 เรียกใช้ Select2 ให้กับช่องค้นหาในแถวที่เพิ่งสร้างขึ้นมาใหม่
+                initSelect2();
+            });
+        }
+        {% endif %}
     });
 </script>
 {% endblock %}

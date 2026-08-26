@@ -4,10 +4,11 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.db.models import Count, Sum
-from .models import SolarJob, SolarExpense, SubcontractorTeam
+from .models import SolarJob, SolarExpense, SubcontractorTeam, SolarJobBOM # 🌟 เพิ่ม SolarJobBOM
 from .forms import SolarJobForm, SolarBOMFormSet, SolarExpenseForm
 from master_data.models import Customer
 from solar_sales.models import SolarProduct, SolarQuotation
+from solar_inventory.models import SolarStandardBOM # 🌟 ดึงโมเดลสูตรมาตรฐานมาจากคลังสินค้า
 from django.http import JsonResponse
 import json
 
@@ -156,8 +157,25 @@ def solar_job_create(request):
         package_id = request.POST.get('package_id')
         customer = Customer.objects.filter(id=customer_id).first()
         package = SolarProduct.objects.filter(id=package_id).first()
+        
+        # 1. สร้างใบสั่งงาน (Job)
         job = SolarJob.objects.create(customer=customer, package_sold=package, status='DRAFT')
-        messages.success(request, f"✅ สร้างใบสั่งงาน {job.code} เรียบร้อยแล้ว ระบบกำลังพาไปหน้าจัดการงาน")
+
+        # 🌟 2. [NEW] ระบบกางสูตร BOM อัตโนมัติ 🌟
+        if package:
+            # ค้นหาสูตรมาตรฐานที่ผูกกับแพ็กเกจนี้
+            standard_boms = SolarStandardBOM.objects.filter(package=package)
+            for std_bom in standard_boms:
+                # คัดลอกมาสร้างเป็นสูตรของงานนี้ (Job BOM)
+                SolarJobBOM.objects.create(
+                    job=job,
+                    product=std_bom.raw_material,
+                    planned_quantity=std_bom.quantity,
+                    actual_used_quantity=0, # เริ่มต้นเบิกจริงเป็น 0
+                    unit_cost=std_bom.raw_material.cost_price # ดึงต้นทุนปัจจุบันมาเป็นฐาน
+                )
+
+        messages.success(request, f"✅ สร้างใบสั่งงาน {job.code} พร้อมกางสูตรเบิกของ (BOM) อัตโนมัติเรียบร้อยแล้ว")
         return redirect('solar_job_manage', job_id=job.id)
 
     customers = Customer.objects.all()
