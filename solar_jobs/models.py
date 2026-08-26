@@ -5,7 +5,8 @@ import datetime
 from master_data.models import Customer
 from hr.models import Employee
 # 🌟 [FIXED] นำเข้า SolarQuotation มาเพื่อเชื่อมโยงฐานข้อมูล 🌟
-from solar_sales.models import SolarProduct, SolarQuotation
+from solar_sales.models import SolarQuotation
+from solar_inventory.models import SolarProduct
 
 class SubcontractorTeam(models.Model):
     name = models.CharField(max_length=150, unique=True, verbose_name="ชื่อทีมรับเหมา / ชื่อบริษัท")

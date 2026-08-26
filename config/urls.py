@@ -27,6 +27,7 @@ urlpatterns = [
     path('solar-purchasing/', include('solar_purchasing.urls')),
     path('solar-jobs/', include('solar_jobs.urls')),
     path('solar-sales/', include('solar_sales.urls')),
+    path('solar-inventory/', include('solar_inventory.urls')),
 ]
 
 if settings.DEBUG:

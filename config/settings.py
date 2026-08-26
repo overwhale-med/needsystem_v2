@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     'solar_purchasing',
     'solar_jobs',
     'solar_sales',
+    'solar_inventory',
 
     # --- 3rd Party Tools ---
     'import_export',           # สำหรับนำเข้า/ส่งออก Excel

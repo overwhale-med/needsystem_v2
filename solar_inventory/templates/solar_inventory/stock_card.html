@@ -1,0 +1,107 @@
+{% extends 'core/base.html' %}
+
+{% block content %}
+<style>
+    .text-gold { color: #d4af37; }
+    .btn-outline-gold { border: 1px solid #d4af37; color: #d4af37; background: transparent; }
+    .btn-outline-gold:hover { background: #d4af37; color: white; }
+</style>
+
+<div class="container py-4">
+    <!-- Header Section -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h3 class="fw-bold text-dark mb-1">
+                <i class="fas fa-history text-gold me-2"></i>รายการเคลื่อนไหวอุปกรณ์ (Stock Card)
+            </h3>
+            <p class="text-muted mb-0">ประวัติการรับเข้าและเบิกออกของสินค้า</p>
+        </div>
+        <a href="{% url 'solar_inventory_list' %}" class="btn btn-light border rounded-pill px-4 fw-bold shadow-sm">
+            <i class="fas fa-arrow-left me-2"></i>กลับหน้าคลังสินค้า
+        </a>
+    </div>
+
+    <!-- Product Info Card -->
+    <div class="card border-0 shadow-sm rounded-4 mb-4 bg-white">
+        <div class="card-body p-4">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <span class="badge bg-{% if product.product_type == 'FG' %}primary{% else %}secondary{% endif %} mb-2 px-3 py-2 rounded-pill">
+                        {{ product.get_product_type_display }}
+                    </span>
+                    <h4 class="fw-bold mb-1">{{ product.code|default:"ไม่มีรหัส" }} : {{ product.name }}</h4>
+                    <p class="text-muted mb-0">หมวดหมู่: {{ product.category.name|default:product.rm_category.name|default:"-" }}</p>
+                </div>
+                <div class="col-md-4 text-md-end mt-3 mt-md-0 border-start ps-md-4">
+                    <p class="text-muted small mb-1">ยอดคงเหลือปัจจุบัน</p>
+                    <h2 class="fw-bold text-{% if product.stock_qty <= product.min_level %}danger{% else %}success{% endif %} mb-0">
+                        {{ product.stock_qty|floatformat:2 }} <span class="fs-6 fw-normal text-muted">{{ product.unit }}</span>
+                    </h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Movement Table -->
+    <div class="card border-0 shadow-sm rounded-4 bg-white">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="bg-light text-muted small text-uppercase">
+                        <tr>
+                            <th class="px-4 py-3">วัน/เวลา ที่ทำรายการ</th>
+                            <th class="py-3">ประเภท</th>
+                            <th class="py-3 text-center">จำนวน</th>
+                            <th class="py-3">อ้างอิงเอกสาร</th>
+                        </tr>
+                    </thead>
+                    <tbody class="border-top-0">
+                        {% for move in page_obj %}
+                        <tr>
+                            <td class="px-4 py-3">{{ move.created_at|date:"d/m/Y H:i" }}</td>
+                            <td class="py-3">
+                                {% if move.movement_type == 'IN' %}
+                                    <span class="badge bg-success bg-opacity-10 text-success border border-success rounded-pill px-3"><i class="fas fa-arrow-down me-1"></i> รับเข้า</span>
+                                {% else %}
+                                    <span class="badge bg-danger bg-opacity-10 text-danger border border-danger rounded-pill px-3"><i class="fas fa-arrow-up me-1"></i> เบิกออก</span>
+                                {% endif %}
+                            </td>
+                            <td class="py-3 text-center fw-bold {% if move.movement_type == 'IN' %}text-success{% else %}text-danger{% endif %}">
+                                {% if move.movement_type == 'IN' %}+{% else %}-{% endif %} {{ move.quantity|floatformat:2 }}
+                            </td>
+                            <td class="py-3">
+                                <span class="text-dark fw-semibold">{{ move.reference_doc|default:"-" }}</span>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4" class="text-center py-5 text-muted">
+                                <i class="fas fa-box-open fs-1 text-light mb-3 d-block"></i>
+                                ยังไม่มีประวัติการเคลื่อนไหวของสินค้านี้
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- Pagination -->
+        {% if page_obj.has_other_pages %}
+        <div class="card-footer bg-white border-top py-3">
+            <nav>
+                <ul class="pagination justify-content-center mb-0">
+                    {% if page_obj.has_previous %}
+                        <li class="page-item"><a class="page-link text-gold" href="?page={{ page_obj.previous_page_number }}">ก่อนหน้า</a></li>
+                    {% endif %}
+                    <li class="page-item active"><span class="page-link bg-gold border-gold text-white">{{ page_obj.number }}</span></li>
+                    {% if page_obj.has_next %}
+                        <li class="page-item"><a class="page-link text-gold" href="?page={{ page_obj.next_page_number }}">ถัดไป</a></li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

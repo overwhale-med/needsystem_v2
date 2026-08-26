@@ -4,10 +4,16 @@ from django.db.models import Sum
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-# แก้ไขบรรทัด import โมเดล ให้มีโมเดลสำรวจและเบิกจ่ายเพิ่มเข้ามาด้วย
-from .models import SolarQuotation, SolarQuotationItem, SolarInvoice, SolarProduct, SolarProductCategory, SolarRawMaterialCategory, SolarSurveyJob, SolarSurveyItem, SolarExpenseClaim, SolarExpenseSlip
-# แก้ไขบรรทัด import ฟอร์ม ให้มีฟอร์มสำรวจและเบิกจ่ายเพิ่มเข้ามาด้วย
-from .forms import SolarQuotationStep1Form, SolarProductForm, SolarSurveyJobForm, SolarExpenseClaimForm
+
+# 🌟 [FIXED] แก้ไขบรรทัด import โมเดล ให้เหลือเฉพาะของระบบขายและปฏิบัติการ
+from .models import SolarQuotation, SolarQuotationItem, SolarInvoice, SolarSurveyJob, SolarSurveyItem, SolarExpenseClaim, SolarExpenseSlip
+
+# 🌟 [FIXED] แก้ไขบรรทัด import ฟอร์ม ให้เหลือเฉพาะของระบบขายและปฏิบัติการ
+from .forms import SolarQuotationStep1Form, SolarSurveyJobForm, SolarExpenseClaimForm
+
+# 🌟 [FIXED] ดึงโมเดลสินค้าและหมวดหมู่ทั้งหมดมาจากแอป solar_inventory ที่เราแยกใหม่
+from solar_inventory.models import SolarProduct, SolarProductCategory, SolarRawMaterialCategory
+
 from solar_jobs.models import SolarJob
 import openpyxl
 from django.http import HttpResponse, JsonResponse
@@ -420,113 +426,7 @@ def solar_invoice_print(request, inv_id):
         'company': company
     })
 
-# ==========================================
-# 📦 คลังสินค้าโซล่า (Inventory & Excel Import)
-# ==========================================
-@login_required
-def solar_inventory_list(request):
-    fg_products = SolarProduct.objects.filter(product_type='FG').order_by('-is_active', '-created_at')
-    rm_products = SolarProduct.objects.filter(product_type='RM').order_by('-is_active', '-created_at')
-    return render(request, 'solar_sales/inventory_list.html', {
-        'fg_products': fg_products,
-        'rm_products': rm_products
-    })
 
-@login_required
-def solar_product_create(request):
-    default_type = request.GET.get('type', 'FG')
-    page_title = 'เพิ่มวัตถุดิบ/อุปกรณ์เสริม' if default_type == 'RM' else 'เพิ่มสินค้า/แพ็กเกจใหม่'
-
-    if request.method == 'POST':
-        form = SolarProductForm(request.POST)
-        if form.is_valid():
-            prod = form.save()
-            messages.success(request, f"✅ เพิ่มรายการ '{prod.name}' ลงในคลังสินค้าเรียบร้อยแล้ว")
-            return redirect('solar_inventory_list')
-        else:
-            messages.error(request, "❌ กรุณาตรวจสอบความถูกต้องของข้อมูล")
-    else:
-        form = SolarProductForm(initial={'product_type': default_type})
-
-    return render(request, 'solar_sales/product_form.html', {'form': form, 'title': page_title})
-
-@login_required
-def solar_product_edit(request, pk):
-    product = get_object_or_404(SolarProduct, pk=pk)
-    if request.method == 'POST':
-        form = SolarProductForm(request.POST, instance=product)
-        if form.is_valid():
-            form.save()
-            messages.success(request, f"✅ อัปเดตข้อมูล '{product.name}' เรียบร้อยแล้ว")
-            return redirect('solar_inventory_list')
-        else:
-            messages.error(request, "❌ กรุณาตรวจสอบความถูกต้องของข้อมูล")
-    else:
-        form = SolarProductForm(instance=product)
-    return render(request, 'solar_sales/product_form.html', {'form': form, 'product': product, 'title': f'แก้ไข: {product.name}'})
-
-@login_required
-def solar_inventory_download_template(request):
-    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-    response['Content-Disposition'] = 'attachment; filename="inventory_template.xlsx"'
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "Solar Inventory"
-    headers = ['ประเภท (FG หรือ RM)', 'รหัสสินค้า (เว้นว่างได้)', 'หมวดหมู่ (Category)', 'ชื่อสินค้า/แพ็กเกจ', 'หน่วยนับ', 'ราคาทุน', 'ราคาขาย', 'จำนวนคงเหลือ', 'จุดสั่งซื้อ']
-    ws.append(headers)
-    ws.append(['RM', 'RM-001', 'อุปกรณ์สายไฟ', 'สายไฟ DC 4mm (ตัวอย่าง)', 'เมตร', 15, 25, 100, 20])
-    ws.append(['FG', '', 'แพ็กเกจ 5kW', 'แพ็กเกจ 5kW 1 Phase (ตัวอย่าง)', 'ชุด', 100000, 150000, 5, 2])
-    wb.save(response)
-    return response
-
-@login_required
-def solar_inventory_import(request):
-    if request.method == 'POST' and request.FILES.get('excel_file'):
-        excel_file = request.FILES['excel_file']
-        if not excel_file.name.endswith('.xlsx'):
-            messages.error(request, '❌ ไฟล์ไม่ถูกต้อง กรุณาอัปโหลดไฟล์นามสกุล .xlsx เท่านั้น')
-            return redirect('solar_inventory_list')
-
-        try:
-            wb = openpyxl.load_workbook(excel_file, data_only=True)
-            sheet = wb.active
-            count_created, count_updated = 0, 0
-
-            for row in sheet.iter_rows(min_row=2, values_only=True):
-                product_type = str(row[0]).strip().upper() if row[0] else 'RM'
-                code = str(row[1]).strip() if row[1] else None
-                cat_name = str(row[2]).strip() if row[2] else None
-                name = str(row[3]).strip() if row[3] else None
-                unit = str(row[4]).strip() if row[4] else 'ชิ้น'
-                cost_price = float(row[5]) if row[5] else 0.0
-                sell_price = float(row[6]) if row[6] else 0.0
-                stock_qty = float(row[7]) if row[7] else 0.0
-                min_level = float(row[8]) if row[8] else 0.0
-
-                if name and name != 'None':
-                    if product_type not in ['FG', 'RM']: product_type = 'RM'
-                    fg_cat, rm_cat = None, None
-                    if cat_name and cat_name != 'None':
-                        if product_type == 'FG': fg_cat, _ = SolarProductCategory.objects.get_or_create(name=cat_name)
-                        else: rm_cat, _ = SolarRawMaterialCategory.objects.get_or_create(name=cat_name)
-
-                    defaults_data = {
-                        'product_type': product_type, 'name': name, 'category': fg_cat, 'rm_category': rm_cat,
-                        'unit': unit, 'cost_price': cost_price, 'sell_price': sell_price, 'stock_qty': stock_qty,
-                        'min_level': min_level, 'is_active': True
-                    }
-                    if code and code != 'None':
-                        obj, created = SolarProduct.objects.update_or_create(code=code, defaults=defaults_data)
-                        if created: count_created += 1
-                        else: count_updated += 1
-                    else:
-                        SolarProduct.objects.create(**defaults_data)
-                        count_created += 1
-
-            messages.success(request, f'✅ นำเข้าข้อมูลสำเร็จ! สร้างใหม่ {count_created} รายการ, อัปเดต {count_updated} รายการ')
-        except Exception as e:
-            messages.error(request, f'❌ เกิดข้อผิดพลาดในการอ่านไฟล์: {str(e)}')
-    return redirect('solar_inventory_list')
 
 @login_required
 def solar_record_deposit(request, qt_id):
@@ -833,7 +733,7 @@ def solar_customer_sign_deposit(request, token):
             s = str(n)
             length = len(s)
             res = ""
-            for i, digit in enumerate(s):
+            for i, enumerate in enumerate(s):
                 val = int(digit)
                 pos = length - i - 1
                 if val == 0: continue
@@ -1048,33 +948,3 @@ def solar_expense_print(request, exp_id):
         'company': company,
         'amount_text': amount_text
     })
-
-# ------------------------------------------
-# 🌟 API สำหรับเพิ่มหมวดหมู่แบบ Popup (AJAX)
-# ------------------------------------------
-@login_required
-def add_fg_category_ajax(request):
-    if request.method == 'POST':
-        category_name = request.POST.get('name')
-        if category_name:
-            from .models import SolarProductCategory
-            # ตรวจสอบว่ามีชื่อนี้อยู่แล้วหรือไม่ ถ้าไม่มีก็สร้างใหม่
-            cat, created = SolarProductCategory.objects.get_or_create(name=category_name.strip())
-            return JsonResponse({'success': True, 'id': cat.id, 'name': cat.name})
-        return JsonResponse({'success': False, 'error': 'กรุณาระบุชื่อหมวดหมู่'})
-    return JsonResponse({'success': False, 'error': 'Invalid request'})
-
-# ------------------------------------------
-# 🌟 API สำหรับเพิ่มหมวดหมู่ RM แบบ Popup (AJAX)
-# ------------------------------------------
-@login_required
-def add_rm_category_ajax(request):
-    if request.method == 'POST':
-        category_name = request.POST.get('name')
-        if category_name:
-            from .models import SolarRawMaterialCategory
-            # ตรวจสอบว่ามีชื่อนี้อยู่แล้วหรือไม่ ถ้าไม่มีก็สร้างใหม่
-            cat, created = SolarRawMaterialCategory.objects.get_or_create(name=category_name.strip())
-            return JsonResponse({'success': True, 'id': cat.id, 'name': cat.name})
-        return JsonResponse({'success': False, 'error': 'กรุณาระบุชื่อหมวดหมู่'})
-    return JsonResponse({'success': False, 'error': 'Invalid request'})
