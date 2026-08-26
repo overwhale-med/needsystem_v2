@@ -19,4 +19,5 @@ urlpatterns = [
 
     # 🌟 [NEW] เพิ่มเส้นทาง API สำหรับลากการ์ด 🌟
     path('api/update-job-status/', views.update_job_status, name='update_job_status'),
+    path('overview/', views.solar_job_overview, name='solar_job_overview'),
 ]

@@ -1,6 +1,6 @@
 from django import forms
 from django.forms import inlineformset_factory
-from .models import SolarJob, SolarJobMaterial, SolarExpense
+from .models import SolarJob, SolarJobBOM, SolarExpense
 # 🌟 ดึงตารางสินค้ามาเพื่อกรองข้อมูล
 from solar_sales.models import SolarProduct 
 
@@ -29,26 +29,27 @@ class SolarExpenseForm(forms.ModelForm):
             'receipt_image': forms.FileInput(attrs={'class': 'form-control'}),
         }
 
-# 🌟 สร้างแบบฟอร์มย่อยสำหรับจัดการวัตถุดิบ เพื่อนำไปใช้กับ FormSet
-class SolarJobMaterialForm(forms.ModelForm):
+# 🌟 อัปเดตแบบฟอร์มย่อยเป็น SolarJobBOMForm
+class SolarJobBOMForm(forms.ModelForm):
     class Meta:
-        model = SolarJobMaterial
-        fields = ['product', 'quantity', 'unit_cost']
+        model = SolarJobBOM
+        fields = ['product', 'planned_quantity', 'actual_used_quantity', 'unit_cost']
         widgets = {
             'product': forms.Select(attrs={'class': 'form-select form-select-sm fw-bold'}),
-            'quantity': forms.NumberInput(attrs={'class': 'form-control text-center', 'step': '0.01'}),
+            'planned_quantity': forms.NumberInput(attrs={'class': 'form-control text-center', 'step': '0.01'}),
+            'actual_used_quantity': forms.NumberInput(attrs={'class': 'form-control text-center fw-bold text-primary', 'step': '0.01'}),
             'unit_cost': forms.NumberInput(attrs={'class': 'form-control text-end', 'step': '0.01'}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # 🌟 ล็อคให้เลือกได้เฉพาะสินค้าประเภทวัตถุดิบ (RM) ที่เปิดใช้งานอยู่เท่านั้น
+        # ล็อคให้เลือกได้เฉพาะสินค้าประเภทวัตถุดิบ (RM) ที่เปิดใช้งานอยู่เท่านั้น
         self.fields['product'].queryset = SolarProduct.objects.filter(is_active=True, product_type='RM')
 
-# ฟอร์มสำหรับการเบิกวัตถุดิบแบบเพิ่ม/ลดแถวได้
-SolarMaterialFormSet = inlineformset_factory(
-    SolarJob, SolarJobMaterial,
-    form=SolarJobMaterialForm, # 🌟 เรียกใช้ฟอร์มที่เราสร้างไว้ด้านบน
+# 🌟 อัปเดต FormSet เป็น SolarBOMFormSet
+SolarBOMFormSet = inlineformset_factory(
+    SolarJob, SolarJobBOM,
+    form=SolarJobBOMForm,
     extra=1,
     can_delete=True
 )

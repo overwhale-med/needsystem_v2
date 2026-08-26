@@ -57,3 +57,16 @@ class SolarStockMovement(models.Model):
         if self.movement_type == 'IN': self.product.stock_qty += self.quantity
         elif self.movement_type == 'OUT': self.product.stock_qty -= self.quantity
         self.product.save()
+
+class SolarStandardBOM(models.Model):
+    package = models.ForeignKey(SolarProduct, on_delete=models.CASCADE, related_name='standard_boms', limit_choices_to={'product_type': 'FG'}, verbose_name="แพ็กเกจสินค้า (FG)")
+    raw_material = models.ForeignKey(SolarProduct, on_delete=models.CASCADE, related_name='used_in_standard_boms', limit_choices_to={'product_type': 'RM'}, verbose_name="วัตถุดิบ (RM)")
+    quantity = models.DecimalField(max_digits=10, decimal_places=2, default=1, verbose_name="จำนวนที่ใช้ต่อ 1 แพ็กเกจ")
+    note = models.CharField(max_length=255, blank=True, null=True, verbose_name="หมายเหตุ")
+
+    class Meta:
+        verbose_name = "สูตรการผลิตมาตรฐาน (Standard BOM)"
+        verbose_name_plural = "สูตรการผลิตมาตรฐาน"
+
+    def __str__(self):
+        return f"{self.package.name} -> {self.raw_material.name} ({self.quantity})"

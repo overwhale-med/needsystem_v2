@@ -74,25 +74,32 @@ class SolarJob(models.Model):
 
     @property
     def total_material_cost(self):
-        return sum(item.total_cost for item in self.materials.all())
+        # 🌟 [FIXED] เปลี่ยนจาก self.materials.all() เป็น self.job_boms.all() เพื่อคำนวณต้นทุนให้ถูกต้อง 🌟
+        return sum(item.total_cost for item in self.job_boms.all())
 
     @property
     def total_job_cost(self):
         return self.total_material_cost + self.labor_cost_budget
 
-class SolarJobMaterial(models.Model):
-    job = models.ForeignKey(SolarJob, related_name='materials', on_delete=models.CASCADE)
-    product = models.ForeignKey(SolarProduct, on_delete=models.PROTECT, verbose_name="วัตถุดิบ (RM)")
-    quantity = models.DecimalField(max_digits=10, decimal_places=2, default=1, verbose_name="จำนวนที่เบิก")
+class SolarJobBOM(models.Model):
+    job = models.ForeignKey(SolarJob, related_name='job_boms', on_delete=models.CASCADE, verbose_name="อ้างอิงใบสั่งงาน")
+    product = models.ForeignKey(SolarProduct, on_delete=models.PROTECT, limit_choices_to={'product_type': 'RM'}, verbose_name="วัตถุดิบ (RM)")
+
+    planned_quantity = models.DecimalField(max_digits=10, decimal_places=2, default=1, verbose_name="จำนวนตามแผน (BOM)")
+    actual_used_quantity = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="จำนวนที่เบิกใช้จริง")
+
     unit_cost = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="ต้นทุนต่อหน่วย (ณ วันที่เบิก)")
 
     @property
     def total_cost(self):
-        return self.quantity * self.unit_cost
+        return self.actual_used_quantity * self.unit_cost
 
     class Meta:
-        verbose_name = "รายการเบิกวัตถุดิบโซล่า"
-        verbose_name_plural = "รายการเบิกวัตถุดิบโซล่า"
+        verbose_name = "รายการเบิกวัตถุดิบเฉพาะงาน (Job BOM)"
+        verbose_name_plural = "รายการเบิกวัตถุดิบเฉพาะงาน"
+
+    def __str__(self):
+        return f"{self.job.code} - {self.product.name} (แผน: {self.planned_quantity}, เบิกจริง: {self.actual_used_quantity})"
 
 class SolarExpense(models.Model):
     EXPENSE_TYPES = [

@@ -1,9 +1,11 @@
+from django.db.models import Q
+from hr.models import Employee # ใช้สำหรับดึงรายชื่อเซลส์มาลงในตัวกรอง
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.db.models import Count, Sum
 from .models import SolarJob, SolarExpense, SubcontractorTeam
-from .forms import SolarJobForm, SolarMaterialFormSet, SolarExpenseForm
+from .forms import SolarJobForm, SolarBOMFormSet, SolarExpenseForm
 from master_data.models import Customer
 from solar_sales.models import SolarProduct, SolarQuotation
 from django.http import JsonResponse
@@ -26,25 +28,124 @@ def center_dashboard(request):
         messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์เข้าถึงระบบ Center (Solar)")
         return redirect('dashboard')
 
-    # 🌟 [FIXED] ใช้ select_related เพื่อดึงข้อมูลเชิงลึกมาไว้ในการ์ดแบบไม่กินสเปคเซิร์ฟเวอร์ 🌟
-    all_jobs = SolarJob.objects.select_related('customer', 'package_sold', 'salesperson', 'quotation_ref', 'technician_team').all().order_by('-created_at')
+    # 🌟 1. รับค่าจากฟอร์มค้นหา
+    search_q = request.GET.get('q', '').strip()
+    team_id = request.GET.get('team', '')
+    sales_id = request.GET.get('salesperson', '')
+    start_date = request.GET.get('start_date', '')
+    end_date = request.GET.get('end_date', '')
 
-    draft_jobs = all_jobs.filter(status='DRAFT').count()
-    preparing_jobs = all_jobs.filter(status='PREPARING').count()
-    in_progress_jobs = all_jobs.filter(status='IN_PROGRESS').count()
+    # 🌟 2. ดึงข้อมูลพื้นฐานทั้งหมด
+    jobs = SolarJob.objects.select_related('customer', 'package_sold', 'salesperson', 'quotation_ref', 'technician_team').all().order_by('-created_at')
+
+    # 🌟 3. นำข้อมูลมากรองตามเงื่อนไข (Filters)
+    if search_q:
+        jobs = jobs.filter(Q(code__icontains=search_q) | Q(customer__name__icontains=search_q))
+    if team_id:
+        jobs = jobs.filter(technician_team_id=team_id)
+    if sales_id:
+        jobs = jobs.filter(salesperson_id=sales_id)
+    if start_date and end_date:
+        # สมมติใช้ created_at เป็นเกณฑ์ในการค้นหาช่วงเวลา
+        jobs = jobs.filter(created_at__date__gte=start_date, created_at__date__lte=end_date)
+
+    # 🌟 4. นับจำนวนและแยกการ์ด (อ้างอิงจากข้อมูลที่ถูกกรองแล้ว)
+    draft_jobs = jobs.filter(status='DRAFT').count()
+    preparing_jobs = jobs.filter(status='PREPARING').count()
+    in_progress_jobs = jobs.filter(status='IN_PROGRESS').count()
+
     pending_expenses = SolarExpense.objects.filter(status='PENDING').count()
     from solar_sales.models import SolarExpenseClaim
     approved_expenses = SolarExpenseClaim.objects.filter(status='APPROVED').order_by('created_at')
 
+    # 🌟 5. เตรียมข้อมูลตัวเลือกสำหรับ Dropdown ค้นหา
+    teams = SubcontractorTeam.objects.filter(is_active=True)
+    # สมมติกรองเซลส์ด้วยชื่อแผนก หรือดึงมาทั้งหมดถ้าไม่ได้แยก
+    salespersons = Employee.objects.filter(department__name__icontains='ขาย') if hasattr(Employee, 'department') else Employee.objects.all()
+
     context = {
-        'jobs': all_jobs[:30], # โหลดมาแสดง 30 งานล่าสุด
+        'jobs': jobs[:50], # ลิมิตไว้ 50 งานเพื่อไม่ให้โหลดช้า
         'draft_jobs': draft_jobs,
         'preparing_jobs': preparing_jobs,
         'in_progress_jobs': in_progress_jobs,
         'pending_expenses': pending_expenses,
-        'approved_expenses': approved_expenses,  # 🌟 [FIX] เติมข้อมูลชุดนี้เข้าไปในห่อ context ครับ 🌟
+        'approved_expenses': approved_expenses,
+
+        # ส่งค่าตัวกรองกลับไปที่หน้าเว็บ
+        'teams': teams,
+        'salespersons': salespersons,
+        'search_q': search_q,
+        'team_id': team_id,
+        'sales_id': sales_id,
+        'start_date': start_date,
+        'end_date': end_date,
     }
     return render(request, 'solar_jobs/center_dashboard.html', context)
+
+# ------------------------------------------
+# 📊 กระดานควบคุมงานติดตั้ง (ดูภาพรวม / Overview Board)
+# ------------------------------------------
+@login_required
+def solar_job_overview(request):
+    if not is_center_staff(request.user):
+        messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์เข้าถึงระบบควบคุมงานติดตั้ง")
+        return redirect('dashboard')
+
+    # 1. รับค่าตัวกรองและค้นหา
+    search_q = request.GET.get('q', '').strip()
+    team_id = request.GET.get('team', '')
+    sales_id = request.GET.get('salesperson', '')
+    status_filter = request.GET.get('status', '')
+    start_date = request.GET.get('start_date', '')
+    end_date = request.GET.get('end_date', '')
+    tab = request.GET.get('tab', 'active') # active หรือ history
+
+    # 2. Query ข้อมูลพื้นฐาน
+    base_jobs = SolarJob.objects.select_related(
+        'customer', 'package_sold', 'salesperson', 'quotation_ref', 'technician_team'
+    ).prefetch_related('job_boms').all()
+
+    # 3. กรองตามเงื่อนไขการค้นหา
+    if search_q:
+        base_jobs = base_jobs.filter(Q(code__icontains=search_q) | Q(customer__name__icontains=search_q))
+    if team_id:
+        base_jobs = base_jobs.filter(technician_team_id=team_id)
+    if sales_id:
+        base_jobs = base_jobs.filter(salesperson_id=sales_id)
+    if status_filter:
+        base_jobs = base_jobs.filter(status=status_filter)
+    if start_date and end_date:
+        base_jobs = base_jobs.filter(created_at__date__gte=start_date, created_at__date__lte=end_date)
+
+    # 4. นับจำนวนสำหรับแสดงบนปุ่มแท็บ
+    active_count = base_jobs.filter(status__in=['DRAFT', 'PREPARING', 'IN_PROGRESS']).count()
+    completed_count = base_jobs.filter(status__in=['COMPLETED', 'CANCELLED']).count()
+
+    # 5. แยกข้อมูลตามแท็บที่เลือก
+    if tab == 'history':
+        jobs = base_jobs.filter(status__in=['COMPLETED', 'CANCELLED']).order_by('-created_at')
+    else:
+        jobs = base_jobs.filter(status__in=['DRAFT', 'PREPARING', 'IN_PROGRESS']).order_by('created_at')
+
+    # 6. ข้อมูลสำหรับ Dropdowns
+    teams = SubcontractorTeam.objects.filter(is_active=True)
+    salespersons = Employee.objects.filter(department__name__icontains='ขาย') if hasattr(Employee, 'department') else Employee.objects.all()
+
+    context = {
+        'jobs': jobs,
+        'tab': tab,
+        'active_count': active_count,
+        'completed_count': completed_count,
+        'teams': teams,
+        'salespersons': salespersons,
+        'search_q': search_q,
+        'team_id': team_id,
+        'sales_id': sales_id,
+        'status_filter': status_filter,
+        'start_date': start_date,
+        'end_date': end_date,
+    }
+    return render(request, 'solar_jobs/job_overview.html', context)
 
 @login_required
 def solar_job_create(request):
@@ -71,7 +172,7 @@ def solar_job_manage(request, job_id):
 
     if request.method == 'POST':
         form = SolarJobForm(request.POST, instance=job)
-        formset = SolarMaterialFormSet(request.POST, instance=job)
+        formset = SolarBOMFormSet(request.POST, instance=job)
 
         if form.is_valid() and formset.is_valid():
             form.save()
@@ -95,7 +196,7 @@ def solar_job_manage(request, job_id):
             'placeholder': '0.00'
         })
 
-        formset = SolarMaterialFormSet(instance=job)
+        formset = SolarBOMFormSet(instance=job)
 
     raw_materials = SolarProduct.objects.filter(is_active=True, product_type='RM')
     teams = SubcontractorTeam.objects.filter(is_active=True)
