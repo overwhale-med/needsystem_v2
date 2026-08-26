@@ -7,7 +7,7 @@ import openpyxl
 # 🌟 Import ข้อมูลจากแอปตัวเอง (เฉพาะเรื่องคลังสินค้า)
 from .models import SolarProduct, SolarProductCategory, SolarRawMaterialCategory, SolarStockMovement
 from django.core.paginator import Paginator
-from .forms import SolarProductForm
+from .forms import SolarProductForm, SolarStockMovementForm
 
 # ==========================================
 # 📦 คลังสินค้าโซล่า (Inventory & Excel Import)
@@ -163,3 +163,28 @@ def solar_stock_card(request, pk):
         'product': product,
         'page_obj': page_obj
     })
+
+# ------------------------------------------
+# 📥/📤 ระบบรับเข้า - เบิกออก แมนนวล
+# ------------------------------------------
+@login_required
+def solar_stock_movement_create(request):
+    if request.method == 'POST':
+        form = SolarStockMovementForm(request.POST)
+        if form.is_valid():
+            movement = form.save()
+            action = "รับเข้า" if movement.movement_type == 'IN' else "เบิกออก"
+            messages.success(request, f"✅ บันทึกรายการ {action} จำนวน {movement.quantity} สำหรับ '{movement.product.name}' เรียบร้อยแล้ว")
+            return redirect('solar_inventory_list')
+        else:
+            messages.error(request, "❌ กรุณาตรวจสอบความถูกต้องของข้อมูล")
+    else:
+        # สามารถรับค่า product_id จาก URL เพื่อเลือกสินค้าใน Dropdown อัตโนมัติได้
+        initial_data = {}
+        product_id = request.GET.get('product_id')
+        if product_id:
+            initial_data['product'] = product_id
+
+        form = SolarStockMovementForm(initial=initial_data)
+
+    return render(request, 'solar_inventory/stock_movement_form.html', {'form': form})

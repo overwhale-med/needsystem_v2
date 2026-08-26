@@ -1,0 +1,62 @@
+{% extends 'core/base.html' %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-6">
+            <div class="card border-0 shadow-sm rounded-4 bg-white">
+                <div class="card-header bg-white pt-4 pb-3 border-bottom-0 text-center">
+                    <h4 class="fw-bold mb-0 text-dark">
+                        <i class="fas fa-exchange-alt text-primary me-2"></i>บันทึกรับเข้า / เบิกออก (Manual)
+                    </h4>
+                    <p class="text-muted small mt-2 mb-0">บันทึกความเคลื่อนไหวของคลังสินค้าโซล่าเซลล์</p>
+                </div>
+                <div class="card-body p-4">
+                    <form method="POST">
+                        {% csrf_token %}
+                        
+                        <!-- เลือกสินค้า -->
+                        <div class="mb-3">
+                            <label class="form-label fw-bold text-dark">สินค้า / แพ็กเกจ <span class="text-danger">*</span></label>
+                            {{ form.product }}
+                            {% if form.product.errors %}<div class="text-danger small mt-1">{{ form.product.errors }}</div>{% endif %}
+                        </div>
+
+                        <!-- ประเภท และ จำนวน -->
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label fw-bold text-dark">ประเภทรายการ <span class="text-danger">*</span></label>
+                                {{ form.movement_type }}
+                                {% if form.movement_type.errors %}<div class="text-danger small mt-1">{{ form.movement_type.errors }}</div>{% endif %}
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label fw-bold text-dark">จำนวน <span class="text-danger">*</span></label>
+                                {{ form.quantity }}
+                                {% if form.quantity.errors %}<div class="text-danger small mt-1">{{ form.quantity.errors }}</div>{% endif %}
+                            </div>
+                        </div>
+
+                        <!-- อ้างอิงเอกสาร -->
+                        <div class="mb-4">
+                            <label class="form-label fw-bold text-dark">เอกสารอ้างอิง / หมายเหตุ</label>
+                            {{ form.reference_doc }}
+                            <div class="form-text">ระบุเลขที่ PO, รหัสบิล หรือสาเหตุการรับ/เบิกออก</div>
+                            {% if form.reference_doc.errors %}<div class="text-danger small mt-1">{{ form.reference_doc.errors }}</div>{% endif %}
+                        </div>
+
+                        <hr class="text-muted mb-4">
+
+                        <!-- ปุ่มกด -->
+                        <div class="d-flex justify-content-end gap-2">
+                            <a href="{% url 'solar_inventory_list' %}" class="btn btn-light rounded-pill px-4 border fw-bold">ยกเลิก</a>
+                            <button type="submit" class="btn btn-dark rounded-pill px-5 fw-bold shadow-sm" style="transition: 0.3s;" onmouseover="this.style.backgroundColor='#d4af37'; this.style.borderColor='#d4af37';" onmouseout="this.style.backgroundColor='#212529'; this.style.borderColor='#212529';">
+                                <i class="fas fa-save me-1"></i> บันทึกข้อมูล
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

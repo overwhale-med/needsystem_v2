@@ -28,6 +28,10 @@
             <a href="{% url 'solar_product_create' %}?type=RM" class="btn btn-secondary rounded-pill px-4 fw-bold shadow-sm">
                 <i class="fas fa-plus me-1"></i> เพิ่มอุปกรณ์เสริม (RM)
             </a>
+            <!-- ปุ่มรับเข้า/เบิกออก -->
+            <a href="{% url 'solar_stock_movement_create' %}" class="btn btn-outline-primary rounded-pill px-4 fw-bold shadow-sm">
+                <i class="fas fa-exchange-alt me-1"></i> รับเข้า/เบิกออก
+            </a>
         </div>
     </div>
 
@@ -50,6 +54,7 @@
         <div class="card-body p-0">
             <div class="tab-content" id="inventoryTabsContent">
 
+                <!-- 🌟 แท็บ แพ็กเกจหลัก (FG) ปรับให้เหมือน RM 🌟 -->
                 <div class="tab-pane fade show active" id="fg-pane" role="tabpanel" tabindex="0">
                     <div class="table-responsive">
                         <table class="table table-hover align-middle mb-0">
@@ -58,7 +63,10 @@
                                     <th class="ps-4 py-3 border-0">รหัส / สถานะ</th>
                                     <th class="py-3 border-0">ชื่อแพ็กเกจ (FG)</th>
                                     <th class="py-3 border-0">หมวดหมู่</th>
-                                    <th class="text-end py-3 border-0">ราคาขาย (บาท)</th>
+                                    <th class="text-end py-3 border-0">ราคาขาย</th>
+                                    <th class="text-end py-3 border-0">ราคาทุน</th>
+                                    <th class="text-center py-3 border-0">คงเหลือ</th>
+                                    <th class="text-end py-3 border-0">มูลค่าคงเหลือ</th>
                                     <th class="text-center pe-4 py-3 border-0">จัดการ</th>
                                 </tr>
                             </thead>
@@ -76,18 +84,29 @@
                                     <td class="py-3 fw-bold text-primary">{{ item.name }}</td>
                                     <td class="py-3"><span class="badge bg-light text-dark border">{{ item.category.name|default:"-" }}</span></td>
                                     <td class="py-3 text-end fw-bold text-success">฿{{ item.sell_price|floatformat:2|intcomma }}</td>
+                                    <td class="py-3 text-end text-muted">฿{{ item.cost_price|floatformat:2|intcomma }}</td>
+                                    <td class="py-3 text-center fw-bold {% if item.stock_qty <= item.min_level %}text-danger{% else %}text-dark{% endif %}">
+                                        {{ item.stock_qty|floatformat:2|intcomma }} {{ item.unit|default:"ชิ้น" }}
+                                    </td>
+                                    <td class="py-3 text-end text-primary fw-bold">
+                                        ฿{{ item.total_value|floatformat:2|intcomma }}
+                                    </td>
                                     <td class="py-3 text-center pe-4">
-                                        <a href="{% url 'solar_product_edit' item.id %}" class="btn btn-sm btn-outline-secondary rounded-pill px-3"><i class="fas fa-pen me-1"></i>แก้ไข</a>
+                                        <div class="d-flex justify-content-center gap-1">
+                                            <a href="{% url 'solar_stock_card' item.id %}" class="btn btn-sm btn-outline-info rounded-pill px-3"><i class="fas fa-history me-1"></i>ประวัติ</a>
+                                            <a href="{% url 'solar_product_edit' item.id %}" class="btn btn-sm btn-outline-secondary rounded-pill px-3"><i class="fas fa-pen me-1"></i>แก้ไข</a>
+                                        </div>
                                     </td>
                                 </tr>
                                 {% empty %}
-                                <tr><td colspan="5" class="text-center py-5 text-muted">ไม่มีข้อมูลแพ็กเกจในระบบ</td></tr>
+                                <tr><td colspan="8" class="text-center py-5 text-muted">ไม่มีข้อมูลแพ็กเกจในระบบ</td></tr>
                                 {% endfor %}
                             </tbody>
                         </table>
                     </div>
                 </div>
 
+                <!-- แท็บ อุปกรณ์เสริม (RM) -->
                 <div class="tab-pane fade" id="rm-pane" role="tabpanel" tabindex="0">
                     <div class="table-responsive">
                         <table class="table table-hover align-middle mb-0">
@@ -96,9 +115,9 @@
                                     <th class="ps-4 py-3 border-0">รหัส / สถานะ</th>
                                     <th class="py-3 border-0">ชื่ออุปกรณ์ (RM)</th>
                                     <th class="py-3 border-0">หมวดหมู่</th>
+                                    <th class="text-end py-3 border-0">ราคาขาย</th>
                                     <th class="text-end py-3 border-0">ราคาทุน</th>
                                     <th class="text-center py-3 border-0">คงเหลือ</th>
-                                    <!-- 🌟 [NEW] เพิ่มหัวข้อมูลค่าคงเหลือ 🌟 -->
                                     <th class="text-end py-3 border-0">มูลค่าคงเหลือ</th>
                                     <th class="text-center pe-4 py-3 border-0">จัดการ</th>
                                 </tr>
@@ -116,16 +135,15 @@
                                     </td>
                                     <td class="py-3 fw-bold text-secondary">{{ item.name }}</td>
                                     <td class="py-3"><span class="badge bg-light text-dark border">{{ item.rm_category.name|default:"-" }}</span></td>
+                                    <td class="py-3 text-end fw-bold text-success">฿{{ item.sell_price|floatformat:2|intcomma }}</td>
                                     <td class="py-3 text-end text-muted">฿{{ item.cost_price|floatformat:2|intcomma }}</td>
                                     <td class="py-3 text-center fw-bold {% if item.stock_qty <= item.min_level %}text-danger{% else %}text-dark{% endif %}">
                                         {{ item.stock_qty|floatformat:2|intcomma }} {{ item.unit|default:"ชิ้น" }}
                                     </td>
-                                    <!-- 🌟 [NEW] แสดงผลมูลค่ารวม 🌟 -->
                                     <td class="py-3 text-end text-primary fw-bold">
                                         ฿{{ item.total_value|floatformat:2|intcomma }}
                                     </td>
                                     <td class="py-3 text-center pe-4">
-                                        <!-- 🌟 [NEW] เพิ่มปุ่มประวัติ (Stock Card) 🌟 -->
                                         <div class="d-flex justify-content-center gap-1">
                                             <a href="{% url 'solar_stock_card' item.id %}" class="btn btn-sm btn-outline-info rounded-pill px-3"><i class="fas fa-history me-1"></i>ประวัติ</a>
                                             <a href="{% url 'solar_product_edit' item.id %}" class="btn btn-sm btn-outline-secondary rounded-pill px-3"><i class="fas fa-pen me-1"></i>แก้ไข</a>
@@ -133,7 +151,7 @@
                                     </td>
                                 </tr>
                                 {% empty %}
-                                <tr><td colspan="7" class="text-center py-5 text-muted">ไม่มีข้อมูลอุปกรณ์เสริมในระบบ</td></tr>
+                                <tr><td colspan="8" class="text-center py-5 text-muted">ไม่มีข้อมูลอุปกรณ์เสริมในระบบ</td></tr>
                                 {% endfor %}
                             </tbody>
                         </table>

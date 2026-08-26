@@ -3,6 +3,7 @@ from . import views
 
 urlpatterns = [
     path('', views.solar_inventory_list, name='solar_inventory_list'),
+    path('movement/create/', views.solar_stock_movement_create, name='solar_stock_movement_create'),
     path('create/', views.solar_product_create, name='solar_product_create'),
     path('edit/<int:pk>/', views.solar_product_edit, name='solar_product_edit'),
     path('stock-card/<int:pk>/', views.solar_stock_card, name='solar_stock_card'),

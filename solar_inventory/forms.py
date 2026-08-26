@@ -1,5 +1,5 @@
 from django import forms
-from .models import SolarProduct
+from .models import SolarProduct, SolarStockMovement
 
 # 🌟 ฟอร์มสำหรับจัดการสินค้าในคลัง (Solar Inventory)
 class SolarProductForm(forms.ModelForm):
@@ -13,13 +13,13 @@ class SolarProductForm(forms.ModelForm):
             'rm_category': forms.Select(attrs={'class': 'form-select'}),
             'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'ระบุชื่อแพ็กเกจ หรือ อุปกรณ์เสริม'}),
             'unit': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'เช่น ชุด, แผง, เมตร'}),
-            
+
             # 🌟 ช่องตัวเลขที่ใช้คลาส auto-comma สำหรับจัดการเครื่องหมายลูกน้ำ 🌟
             'cost_price': forms.TextInput(attrs={'class': 'form-control text-end auto-comma', 'placeholder': '0.00'}),
             'sell_price': forms.TextInput(attrs={'class': 'form-control text-end fw-bold text-success auto-comma', 'placeholder': '0.00'}),
             'stock_qty': forms.TextInput(attrs={'class': 'form-control text-end auto-comma', 'placeholder': '0'}),
             'min_level': forms.TextInput(attrs={'class': 'form-control text-end auto-comma', 'placeholder': '0'}),
-            
+
             'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input', 'style': 'transform: scale(1.5);'}),
         }
 
@@ -38,3 +38,14 @@ class SolarProductForm(forms.ModelForm):
                     data[field] = str(data[field]).replace(',', '')
             kwargs['data'] = data
         super().__init__(*args, **kwargs)
+
+class SolarStockMovementForm(forms.ModelForm):
+    class Meta:
+        model = SolarStockMovement
+        fields = ['product', 'movement_type', 'quantity', 'reference_doc']
+        widgets = {
+            'product': forms.Select(attrs={'class': 'form-select fw-bold'}),
+            'movement_type': forms.Select(attrs={'class': 'form-select'}),
+            'quantity': forms.TextInput(attrs={'class': 'form-control text-end', 'placeholder': '0.00'}),
+            'reference_doc': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'เช่น ยอดยกมา, เลขที่ PO, ปรับปรุงสต็อก'}),
+        }
