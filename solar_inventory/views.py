@@ -10,6 +10,9 @@ from .models import SolarProduct, SolarProductCategory, SolarRawMaterialCategory
 from django.core.paginator import Paginator
 from .forms import SolarProductForm, SolarStockMovementForm, SolarStandardBOMFormSet
 
+# 🌟 [NEW] นำเข้าโมเดลใบสั่งงานมาใช้ตัดสต็อก
+from solar_jobs.models import SolarJob, SolarJobBOM
+
 # ==========================================
 # 📦 คลังสินค้าโซล่า (Inventory & Excel Import)
 # ==========================================
@@ -17,9 +20,14 @@ from .forms import SolarProductForm, SolarStockMovementForm, SolarStandardBOMFor
 def solar_inventory_list(request):
     fg_products = SolarProduct.objects.filter(product_type='FG').order_by('-is_active', '-created_at')
     rm_products = SolarProduct.objects.filter(product_type='RM').order_by('-is_active', '-created_at')
+
+    # 🌟 [NEW] นับจำนวนงานที่รอสโตร์จ่ายของ
+    requisition_count = SolarJob.objects.filter(status='WAITING_STORE').count()
+
     return render(request, 'solar_inventory/inventory_list.html', {
         'fg_products': fg_products,
-        'rm_products': rm_products
+        'rm_products': rm_products,
+        'requisition_count': requisition_count # 🌟 [NEW] ส่งตัวแปรนับจำนวนไปที่เทมเพลต
     })
 
 @login_required
@@ -27,7 +35,6 @@ def solar_product_create(request):
     default_type = request.GET.get('type', 'FG')
     page_title = 'เพิ่มวัตถุดิบ/อุปกรณ์เสริม' if default_type == 'RM' else 'เพิ่มสินค้า/แพ็กเกจใหม่'
 
-    # 🌟 [NEW] ดึงราคาทุนของ RM ทั้งหมด ส่งไปเป็น JSON ให้หน้าเว็บคำนวณ Real-time
     rm_prices = {str(rm.id): float(rm.cost_price) for rm in SolarProduct.objects.filter(product_type='RM', is_active=True)}
     rm_prices_json = json.dumps(rm_prices)
 
@@ -35,7 +42,6 @@ def solar_product_create(request):
         form = SolarProductForm(request.POST)
         if form.is_valid():
             prod = form.save()
-            # 🌟 ถ่ายโอนข้อมูล Formset ไปยังแพ็กเกจนี้
             formset = SolarStandardBOMFormSet(request.POST, instance=prod)
             if formset.is_valid() and default_type == 'FG':
                 formset.save()
@@ -53,14 +59,13 @@ def solar_product_create(request):
         'formset': formset,
         'default_type': default_type,
         'title': page_title,
-        'rm_prices_json': rm_prices_json # 🌟 ส่งตัวแปรนี้ไป
+        'rm_prices_json': rm_prices_json
     })
 
 @login_required
 def solar_product_edit(request, pk):
     product = get_object_or_404(SolarProduct, pk=pk)
 
-    # 🌟 [NEW] ดึงราคาทุนของ RM ทั้งหมด ส่งไปเป็น JSON ให้หน้าเว็บคำนวณ Real-time
     rm_prices = {str(rm.id): float(rm.cost_price) for rm in SolarProduct.objects.filter(product_type='RM', is_active=True)}
     rm_prices_json = json.dumps(rm_prices)
 
@@ -85,7 +90,7 @@ def solar_product_edit(request, pk):
         'default_type': product.product_type,
         'product': product,
         'title': f'แก้ไข: {product.name}',
-        'rm_prices_json': rm_prices_json # 🌟 ส่งตัวแปรนี้ไป
+        'rm_prices_json': rm_prices_json
     })
 
 # ------------------------------------------
@@ -96,21 +101,16 @@ def add_fg_category_ajax(request):
     if request.method == 'POST':
         category_name = request.POST.get('name')
         if category_name:
-            # ตรวจสอบว่ามีชื่อนี้อยู่แล้วหรือไม่ ถ้าไม่มีก็สร้างใหม่
             cat, created = SolarProductCategory.objects.get_or_create(name=category_name.strip())
             return JsonResponse({'success': True, 'id': cat.id, 'name': cat.name})
         return JsonResponse({'success': False, 'error': 'กรุณาระบุชื่อหมวดหมู่'})
     return JsonResponse({'success': False, 'error': 'Invalid request'})
 
-# ------------------------------------------
-# 🌟 API สำหรับเพิ่มหมวดหมู่ RM แบบ Popup (AJAX)
-# ------------------------------------------
 @login_required
 def add_rm_category_ajax(request):
     if request.method == 'POST':
         category_name = request.POST.get('name')
         if category_name:
-            # ตรวจสอบว่ามีชื่อนี้อยู่แล้วหรือไม่ ถ้าไม่มีก็สร้างใหม่
             cat, created = SolarRawMaterialCategory.objects.get_or_create(name=category_name.strip())
             return JsonResponse({'success': True, 'id': cat.id, 'name': cat.name})
         return JsonResponse({'success': False, 'error': 'กรุณาระบุชื่อหมวดหมู่'})
@@ -185,11 +185,7 @@ def solar_inventory_import(request):
 @login_required
 def solar_stock_card(request, pk):
     product = get_object_or_404(SolarProduct, pk=pk)
-
-    # ดึงประวัติการเคลื่อนไหวทั้งหมดของสินค้านี้ เรียงจากล่าสุดไปเก่าสุด
     movements = SolarStockMovement.objects.filter(product=product).order_by('-created_at', '-id')
-
-    # ระบบแบ่งหน้า (หน้าละ 20 รายการ)
     paginator = Paginator(movements, 20)
     page_obj = paginator.get_page(request.GET.get('page'))
 
@@ -213,12 +209,65 @@ def solar_stock_movement_create(request):
         else:
             messages.error(request, "❌ กรุณาตรวจสอบความถูกต้องของข้อมูล")
     else:
-        # สามารถรับค่า product_id จาก URL เพื่อเลือกสินค้าใน Dropdown อัตโนมัติได้
         initial_data = {}
         product_id = request.GET.get('product_id')
         if product_id:
             initial_data['product'] = product_id
-
         form = SolarStockMovementForm(initial=initial_data)
 
     return render(request, 'solar_inventory/stock_movement_form.html', {'form': form})
+
+# ==========================================
+# 📦 หน้าจอสำหรับสโตร์: จัดการใบขอเบิกวัสดุ (Requisitions)
+# ==========================================
+@login_required
+def store_requisition_list(request):
+    # ดึงเฉพาะงานที่แผนก Center กด "ส่งใบขอเบิก" (WAITING_STORE)
+    jobs_waiting = SolarJob.objects.filter(status='WAITING_STORE').prefetch_related('job_boms__product').order_by('created_at')
+
+    return render(request, 'solar_inventory/store_requisition_list.html', {
+        'jobs_waiting': jobs_waiting
+    })
+
+# 🌟 [NEW] ฟังก์ชันสำหรับแสดงหน้า Detail รายการวัสดุของใบสั่งงาน 1 ใบ
+@login_required
+def store_requisition_detail(request, job_id):
+    job = get_object_or_404(SolarJob, id=job_id, status='WAITING_STORE')
+    return render(request, 'solar_inventory/store_requisition_detail.html', {
+        'job': job
+    })
+
+@login_required
+def store_confirm_deduction(request, job_id):
+    if request.method == 'POST':
+        job = get_object_or_404(SolarJob, id=job_id, status='WAITING_STORE')
+
+        # 🌟 ลูปดึงรายการวัสดุ (BOM) ของงานนี้มาตัดสต็อก
+        for bom in job.job_boms.all():
+            # ถ้าแผนก Center ระบุยอด "เบิกจริง" มาให้ยึดยอดนั้น แต่ถ้าเป็น 0 ให้ดึงยอด "ตามแผน" มาหักแทน
+            qty_to_deduct = bom.actual_used_quantity if bom.actual_used_quantity > 0 else bom.planned_quantity
+
+            if qty_to_deduct > 0 and bom.product:
+                # 1. หักลบจำนวนคงเหลือในคลัง (Stock Deduction)
+                bom.product.stock_qty -= qty_to_deduct
+                bom.product.save()
+
+                # 2. บันทึกประวัติลง Stock Card อัตโนมัติ (Auto-Movement)
+                SolarStockMovement.objects.create(
+                    product=bom.product,
+                    quantity=qty_to_deduct,
+                    movement_type='OUT',
+                    reference_doc=f"จ่ายของสำหรับงาน: {job.code}"
+                )
+
+                # 3. อัปเดตยอดเบิกจริงใน BOM ให้ตรงกัน (กรณีที่ดึงยอดตามแผนมาใช้)
+                if bom.actual_used_quantity == 0:
+                    bom.actual_used_quantity = qty_to_deduct
+                    bom.save()
+
+        # 🌟 คืนสถานะงานกลับไปเป็น "เตรียมของ" เพื่อให้ Center รู้ว่าสโตร์จ่ายของครบแล้ว
+        job.status = 'PREPARING'
+        job.save()
+
+        messages.success(request, f"✅ ตัดสต็อกและจ่ายวัตถุดิบสำหรับงาน {job.code} เรียบร้อยแล้ว!")
+    return redirect('store_requisition_list')

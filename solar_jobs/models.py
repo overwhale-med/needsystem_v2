@@ -26,6 +26,7 @@ class SolarJob(models.Model):
     STATUS_CHOICES = [
         ('DRAFT', 'ร่าง (รอรับงาน)'),
         ('PREPARING', 'Center กำลังเตรียมของ/จัดช่าง'),
+        ('WAITING_STORE', 'รอสโตร์จ่ายของ (เบิกวัสดุ)'), # 🌟 [NEW] เพิ่มสถานะนี้
         ('IN_PROGRESS', 'กำลังดำเนินการติดตั้ง'),
         ('COMPLETED', 'ติดตั้งเสร็จสมบูรณ์'),
         ('CANCELLED', 'ยกเลิก')

@@ -52,7 +52,10 @@ def center_dashboard(request):
 
     # 🌟 4. นับจำนวนและแยกการ์ด (อ้างอิงจากข้อมูลที่ถูกกรองแล้ว)
     draft_jobs = jobs.filter(status='DRAFT').count()
-    preparing_jobs = jobs.filter(status='PREPARING').count()
+
+    # 🌟 [FIXED] ให้นับรวมงานที่รอสโตร์เบิกของ (WAITING_STORE) เข้าไปในกล่อง 'เตรียมของ' ด้วย
+    preparing_jobs = jobs.filter(status__in=['PREPARING', 'WAITING_STORE']).count()
+
     in_progress_jobs = jobs.filter(status='IN_PROGRESS').count()
 
     pending_expenses = SolarExpense.objects.filter(status='PENDING').count()
@@ -157,7 +160,7 @@ def solar_job_create(request):
         package_id = request.POST.get('package_id')
         customer = Customer.objects.filter(id=customer_id).first()
         package = SolarProduct.objects.filter(id=package_id).first()
-        
+
         # 1. สร้างใบสั่งงาน (Job)
         job = SolarJob.objects.create(customer=customer, package_sold=package, status='DRAFT')
 
@@ -381,3 +384,23 @@ def center_pay_expense(request, expense_id):
 
     # หลังจากอัปเดตเสร็จ ให้เด้งกลับไปที่หน้า Dashboard ของ Center
     return redirect('solar_center_dashboard')
+
+# ------------------------------------------
+# 🚀 ฟังก์ชันสำหรับ Center ส่งใบขอเบิกให้สโตร์
+# ------------------------------------------
+@login_required
+def center_submit_requisition(request, job_id):
+    if not is_center_staff(request.user):
+        messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์ทำรายการนี้")
+        return redirect('solar_center_dashboard')
+
+    job = get_object_or_404(SolarJob, id=job_id)
+
+    if job.status == 'PREPARING' or job.status == 'DRAFT':
+        job.status = 'WAITING_STORE'
+        job.save()
+        messages.success(request, f"✅ ส่งใบเบิกวัสดุสำหรับงาน {job.code} ไปยังสโตร์เรียบร้อยแล้ว")
+    else:
+        messages.warning(request, "⚠️ ไม่สามารถส่งใบเบิกได้ เนื่องจากสถานะงานไม่ถูกต้อง")
+
+    return redirect('solar_job_manage', job_id=job.id)

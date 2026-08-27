@@ -28,6 +28,18 @@
             <a href="{% url 'solar_product_create' %}?type=RM" class="btn btn-secondary rounded-pill px-4 fw-bold shadow-sm">
                 <i class="fas fa-plus me-1"></i> เพิ่มอุปกรณ์เสริม (RM)
             </a>
+            <!-- 🌟 [NEW] ปุ่มลัดเข้าหน้าจอสำหรับสโตร์ (พร้อมระบบแสดงจำนวนถ้าต้องการในอนาคต) -->
+            <a href="{% url 'store_requisition_list' %}" class="btn btn-outline-danger rounded-pill px-4 fw-bold shadow-sm position-relative">
+                <i class="fas fa-clipboard-list me-1"></i> รายการขอเบิก
+
+                <!-- 🌟 [NEW] Badge แจ้งเตือนจำนวนงานที่รอเบิก -->
+                {% if requisition_count > 0 %}
+                <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger shadow-sm border border-light" style="font-size: 0.75rem;">
+                    {{ requisition_count }}
+                    <span class="visually-hidden">unread messages</span>
+                </span>
+                {% endif %}
+            </a>
             <!-- ปุ่มรับเข้า/เบิกออก -->
             <a href="{% url 'solar_stock_movement_create' %}" class="btn btn-outline-primary rounded-pill px-4 fw-bold shadow-sm">
                 <i class="fas fa-exchange-alt me-1"></i> รับเข้า/เบิกออก

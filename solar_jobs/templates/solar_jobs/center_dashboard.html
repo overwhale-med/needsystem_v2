@@ -173,10 +173,14 @@
             <div class="kanban-header" style="border-top: 4px solid #0d6efd; border-top-left-radius: 12px; border-top-right-radius: 12px;">
                 <span><i class="fas fa-tools text-primary me-2"></i> เตรียมของ (Preparing)</span>
             </div>
+
+            <!-- 🌟 [FIXED] อนุญาตให้สถานะ WAITING_STORE โผล่ในคอลัมน์นี้ และอัปเดต Drag&Drop -->
             <div class="kanban-cards" id="col-preparing" data-status="PREPARING">
                 {% for job in jobs %}
-                    {% if job.status == 'PREPARING' %}
-                    <div class="kanban-card border-preparing" data-id="{{ job.id }}">
+                    {% if job.status == 'PREPARING' or job.status == 'WAITING_STORE' %}
+
+                    <!-- เปลี่ยนสีขอบการ์ดถ้าเป็นสถานะรอเบิกของ -->
+                    <div class="kanban-card {% if job.status == 'WAITING_STORE' %}border-warning{% else %}border-preparing{% endif %}" data-id="{{ job.id }}">
                         <div class="d-flex justify-content-between align-items-start mb-2">
                             <div>
                                 <div class="fw-bold text-dark fs-6">{{ job.code }}</div>
@@ -184,10 +188,16 @@
                                 <div class="text-primary small" style="font-size: 0.75rem;"><i class="fas fa-link me-1"></i>{{ job.quotation_ref.code }}</div>
                                 {% endif %}
                             </div>
-                            <span class="badge bg-primary small shadow-sm">เตรียมของ</span>
+
+                            <!-- 🌟 [FIXED] เปลี่ยนสี Badge แจ้งเตือนสถานะให้ชัดเจน -->
+                            {% if job.status == 'WAITING_STORE' %}
+                                <span class="badge bg-danger bg-opacity-10 text-danger border border-danger small shadow-sm"><i class="fas fa-box-open me-1"></i> รอสโตร์จ่ายของ</span>
+                            {% else %}
+                                <span class="badge bg-primary small shadow-sm">เตรียมของ</span>
+                            {% endif %}
                         </div>
 
-                        <div class="info-box">
+                        <div class="info-box {% if job.status == 'WAITING_STORE' %}bg-warning bg-opacity-10 border-warning border-opacity-25{% endif %}">
                             <div class="small text-dark mb-1 text-truncate"><i class="fas fa-user-circle text-muted me-2" style="width:14px;"></i><strong>ลค:</strong> {{ job.customer.name|default:"ไม่ระบุ" }}</div>
                             <div class="small text-dark mb-1 text-truncate"><i class="fas fa-users-cog text-primary me-2" style="width:14px;"></i><strong>ช่าง:</strong> {{ job.technician_team.name|default:"ยังไม่จัดทีม"|truncatechars:25 }}</div>
                             <div class="small text-dark mb-1 text-truncate"><i class="fas fa-user-tie text-muted me-2" style="width:14px;"></i><strong>เซลส์:</strong> {{ job.salesperson.first_name|default:"ไม่ระบุ" }}</div>

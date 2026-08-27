@@ -142,10 +142,19 @@
             </div>
         </div>
 
-        <div class="text-end mt-4 pb-5">
+        <!-- 🌟 [FIXED] จัดกลุ่มปุ่มกดด้านล่างให้สวยงามและเพิ่มปุ่มส่งใบเบิก -->
+        <div class="d-flex justify-content-end gap-3 mt-4 pb-5">
+            <!-- ปุ่มบันทึกข้อมูล (ของเดิม) -->
             <button type="submit" class="btn btn-gold rounded-pill px-5 fw-bold shadow-sm fs-6">
                 <i class="fas fa-save me-2"></i> บันทึกข้อมูลงานและสูตรเบิกของ
             </button>
+
+            <!-- 🌟 [NEW] ปุ่มส่งใบขอเบิกวัสดุ จะแสดงเฉพาะตอนที่สถานะงานยังเป็น DRAFT หรือ PREPARING -->
+            {% if job.status == 'DRAFT' or job.status == 'PREPARING' %}
+            <a href="{% url 'center_submit_requisition' job.id %}" class="btn btn-primary rounded-pill px-5 fw-bold shadow-sm fs-6" onclick="return confirm('ยืนยันการส่งใบขอเบิกวัสดุไปให้แผนกสโตร์ตัดสต็อกใช่หรือไม่? \n\n* กรุณากดบันทึกข้อมูลก่อนหากมีการแก้ไขรายการ');">
+                <i class="fas fa-paper-plane me-2"></i> ส่งใบขอเบิกวัสดุ (ให้สโตร์จ่ายของ)
+            </a>
+            {% endif %}
         </div>
     </form>
 </div>
@@ -200,7 +209,7 @@
             if (e.target.closest(".remove-row-btn")) {
                 const row = e.target.closest(".item-row");
                 const deleteCheckbox = row.querySelector('input[type="checkbox"][name$="-DELETE"]');
-                
+
                 if (deleteCheckbox) {
                     // ถ้าเป็นแถวเก่าที่มีใน Database ให้ติ๊กถูก Checkbox แล้วซ่อนแถว (Django จะลบให้ตอน Save)
                     deleteCheckbox.checked = true;
