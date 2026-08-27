@@ -34,6 +34,28 @@ class SolarProduct(models.Model):
     def total_value(self):
         return self.stock_qty * self.cost_price
 
+    # 🌟 [NEW] คำนวณต้นทุนวัตถุดิบรวมจากสูตรมาตรฐาน (BOM)
+    @property
+    def total_bom_cost(self):
+        if self.product_type == 'FG':
+            boms = self.standard_boms.all()
+            total = sum(bom.quantity * bom.raw_material.cost_price for bom in boms if bom.raw_material)
+            return total
+        return self.cost_price
+
+    # 🌟 [NEW] คำนวณกำไรขั้นต้น (Gross Profit)
+    @property
+    def gross_profit(self):
+        return self.sell_price - self.total_bom_cost
+
+    # 🌟 [NEW] คำนวณเปอร์เซ็นต์กำไรขั้นต้น (Gross Margin)
+    @property
+    def gross_margin_percent(self):
+        if self.sell_price > 0:
+            return (self.gross_profit / self.sell_price) * 100
+        return 0
+
+    # 🌟 [FIXED] เติมโค้ดในฟังก์ชัน save กลับคืนมาให้ครบ
     def save(self, *args, **kwargs):
         if not self.code:
             today = datetime.date.today()

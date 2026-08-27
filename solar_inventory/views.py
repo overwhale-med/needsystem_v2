@@ -3,6 +3,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.http import JsonResponse, HttpResponse
 import openpyxl
+import json
 
 # 🌟 Import ข้อมูลจากแอปตัวเอง (เฉพาะเรื่องคลังสินค้า)
 from .models import SolarProduct, SolarProductCategory, SolarRawMaterialCategory, SolarStockMovement
@@ -26,6 +27,10 @@ def solar_product_create(request):
     default_type = request.GET.get('type', 'FG')
     page_title = 'เพิ่มวัตถุดิบ/อุปกรณ์เสริม' if default_type == 'RM' else 'เพิ่มสินค้า/แพ็กเกจใหม่'
 
+    # 🌟 [NEW] ดึงราคาทุนของ RM ทั้งหมด ส่งไปเป็น JSON ให้หน้าเว็บคำนวณ Real-time
+    rm_prices = {str(rm.id): float(rm.cost_price) for rm in SolarProduct.objects.filter(product_type='RM', is_active=True)}
+    rm_prices_json = json.dumps(rm_prices)
+
     if request.method == 'POST':
         form = SolarProductForm(request.POST)
         if form.is_valid():
@@ -47,12 +52,18 @@ def solar_product_create(request):
         'form': form,
         'formset': formset,
         'default_type': default_type,
-        'title': page_title
+        'title': page_title,
+        'rm_prices_json': rm_prices_json # 🌟 ส่งตัวแปรนี้ไป
     })
 
 @login_required
 def solar_product_edit(request, pk):
     product = get_object_or_404(SolarProduct, pk=pk)
+
+    # 🌟 [NEW] ดึงราคาทุนของ RM ทั้งหมด ส่งไปเป็น JSON ให้หน้าเว็บคำนวณ Real-time
+    rm_prices = {str(rm.id): float(rm.cost_price) for rm in SolarProduct.objects.filter(product_type='RM', is_active=True)}
+    rm_prices_json = json.dumps(rm_prices)
+
     if request.method == 'POST':
         form = SolarProductForm(request.POST, instance=product)
         formset = SolarStandardBOMFormSet(request.POST, instance=product)
@@ -73,7 +84,8 @@ def solar_product_edit(request, pk):
         'formset': formset,
         'default_type': product.product_type,
         'product': product,
-        'title': f'แก้ไข: {product.name}'
+        'title': f'แก้ไข: {product.name}',
+        'rm_prices_json': rm_prices_json # 🌟 ส่งตัวแปรนี้ไป
     })
 
 # ------------------------------------------

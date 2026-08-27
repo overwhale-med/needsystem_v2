@@ -5,6 +5,8 @@
     .text-gold { color: #d4af37; }
     .btn-outline-gold { border: 1px solid #d4af37; color: #d4af37; background: transparent; }
     .btn-outline-gold:hover { background: #d4af37; color: white; }
+    .bg-gold { background-color: #d4af37 !important; }
+    .border-gold { border-color: #d4af37 !important; }
 </style>
 
 <div class="container py-4">
@@ -30,7 +32,16 @@
                         {{ product.get_product_type_display }}
                     </span>
                     <h4 class="fw-bold mb-1">{{ product.code|default:"ไม่มีรหัส" }} : {{ product.name }}</h4>
-                    <p class="text-muted mb-0">หมวดหมู่: {{ product.category.name|default:product.rm_category.name|default:"-" }}</p>
+                    <p class="text-muted mb-0">หมวดหมู่: 
+                        <!-- 🌟 [FIXED] ดักจับค่าว่างอย่างปลอดภัย -->
+                        {% if product.category %}
+                            {{ product.category.name }}
+                        {% elif product.rm_category %}
+                            {{ product.rm_category.name }}
+                        {% else %}
+                            -
+                        {% endif %}
+                    </p>
                 </div>
                 <div class="col-md-4 text-md-end mt-3 mt-md-0 border-start ps-md-4">
                     <p class="text-muted small mb-1">ยอดคงเหลือปัจจุบัน</p>
