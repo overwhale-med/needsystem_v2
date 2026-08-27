@@ -65,7 +65,7 @@
                                     <th class="py-3 border-0">หมวดหมู่</th>
                                     <th class="text-end py-3 border-0 text-success">กำไรขั้นต้น</th> <!-- 🌟 ย้ายมาตรงนี้ -->
                                     <th class="text-end py-3 border-0">ราคาขาย</th>
-                                    <th class="text-end py-3 border-0">ต้นทุนวัตถุดิบ</th> 
+                                    <th class="text-end py-3 border-0">ต้นทุนวัตถุดิบ</th>
                                     <th class="text-center py-3 border-0">คงเหลือ</th> <!-- 🌟 เอากลับมา -->
                                     <th class="text-end py-3 border-0">มูลค่าคงเหลือ</th> <!-- 🌟 เอากลับมา -->
                                     <th class="text-center pe-4 py-3 border-0">จัดการ</th>
@@ -84,7 +84,7 @@
                                     </td>
                                     <td class="py-3 fw-bold text-primary">{{ item.name }}</td>
                                     <td class="py-3"><span class="badge bg-light text-dark border">{{ item.category.name|default:"-" }}</span></td>
-                                    
+
                                     <!-- 🌟 ดึงกำไรขั้นต้น และ % มาแสดง -->
                                     <td class="py-3 text-end text-success fw-bold">
                                         ฿{{ item.gross_profit|floatformat:2|intcomma }}<br>
@@ -92,17 +92,17 @@
                                     </td>
 
                                     <td class="py-3 text-end fw-bold text-dark">฿{{ item.sell_price|floatformat:2|intcomma }}</td>
-                                    
+
                                     <!-- 🌟 ดึงต้นทุนจาก Property ที่เขียนใหม่ -->
                                     <td class="py-3 text-end text-danger fw-bold">฿{{ item.total_bom_cost|floatformat:2|intcomma }}</td>
-                                    
+
                                     <td class="py-3 text-center fw-bold {% if item.stock_qty <= item.min_level %}text-danger{% else %}text-dark{% endif %}">
                                         {{ item.stock_qty|floatformat:2|intcomma }} {{ item.unit|default:"ชุด" }}
                                     </td>
                                     <td class="py-3 text-end text-primary fw-bold">
                                         ฿{{ item.total_value|floatformat:2|intcomma }}
                                     </td>
-                                    
+
                                     <td class="py-3 text-center pe-4">
                                         <div class="d-flex justify-content-center gap-1">
                                             <a href="{% url 'solar_stock_card' item.id %}" class="btn btn-sm btn-outline-info rounded-pill px-3"><i class="fas fa-history me-1"></i>ประวัติ</a> <!-- 🌟 เอาปุ่มประวัติกลับมา -->
@@ -127,8 +127,9 @@
                                     <th class="ps-4 py-3 border-0">รหัส / สถานะ</th>
                                     <th class="py-3 border-0">ชื่ออุปกรณ์ (RM)</th>
                                     <th class="py-3 border-0">หมวดหมู่</th>
+                                    <th class="text-end py-3 border-0 text-success">กำไรขั้นต้น</th> <!-- 🌟 เพิ่มคอลัมน์กำไรขั้นต้น -->
                                     <th class="text-end py-3 border-0">ราคาขาย</th>
-                                    <th class="text-end py-3 border-0">ราคาทุน</th>
+                                    <th class="text-end py-3 border-0">ต้นทุนวัตถุดิบ</th> <!-- 🌟 เปลี่ยนชื่อเป็น ต้นทุนวัตถุดิบ -->
                                     <th class="text-center py-3 border-0">คงเหลือ</th>
                                     <th class="text-end py-3 border-0">มูลค่าคงเหลือ</th>
                                     <th class="text-center pe-4 py-3 border-0">จัดการ</th>
@@ -147,14 +148,23 @@
                                     </td>
                                     <td class="py-3 fw-bold text-secondary">{{ item.name }}</td>
                                     <td class="py-3"><span class="badge bg-light text-dark border">{{ item.rm_category.name|default:"-" }}</span></td>
-                                    <td class="py-3 text-end fw-bold text-success">฿{{ item.sell_price|floatformat:2|intcomma }}</td>
-                                    <td class="py-3 text-end text-muted">฿{{ item.cost_price|floatformat:2|intcomma }}</td>
+
+                                    <!-- 🌟 ดึงกำไรขั้นต้น และ % มาแสดง -->
+                                    <td class="py-3 text-end text-success fw-bold">
+                                        ฿{{ item.gross_profit|floatformat:2|intcomma }}<br>
+                                        <small class="text-muted">({{ item.gross_margin_percent|floatformat:2 }}%)</small>
+                                    </td>
+
+                                    <td class="py-3 text-end fw-bold text-dark">฿{{ item.sell_price|floatformat:2|intcomma }}</td>
+                                    <td class="py-3 text-end text-danger fw-bold">฿{{ item.cost_price|floatformat:2|intcomma }}</td> <!-- 🌟 RM ใช้ cost_price ตรงๆ -->
+
                                     <td class="py-3 text-center fw-bold {% if item.stock_qty <= item.min_level %}text-danger{% else %}text-dark{% endif %}">
                                         {{ item.stock_qty|floatformat:2|intcomma }} {{ item.unit|default:"ชิ้น" }}
                                     </td>
                                     <td class="py-3 text-end text-primary fw-bold">
                                         ฿{{ item.total_value|floatformat:2|intcomma }}
                                     </td>
+
                                     <td class="py-3 text-center pe-4">
                                         <div class="d-flex justify-content-center gap-1">
                                             <a href="{% url 'solar_stock_card' item.id %}" class="btn btn-sm btn-outline-info rounded-pill px-3"><i class="fas fa-history me-1"></i>ประวัติ</a>
@@ -163,7 +173,7 @@
                                     </td>
                                 </tr>
                                 {% empty %}
-                                <tr><td colspan="8" class="text-center py-5 text-muted">ไม่มีข้อมูลอุปกรณ์เสริมในระบบ</td></tr>
+                                <tr><td colspan="9" class="text-center py-5 text-muted">ไม่มีข้อมูลอุปกรณ์เสริมในระบบ</td></tr>
                                 {% endfor %}
                             </tbody>
                         </table>
