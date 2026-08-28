@@ -26,7 +26,8 @@ class SolarJob(models.Model):
     STATUS_CHOICES = [
         ('DRAFT', 'ร่าง (รอรับงาน)'),
         ('PREPARING', 'Center กำลังเตรียมของ/จัดช่าง'),
-        ('WAITING_STORE', 'รอสโตร์จ่ายของ (เบิกวัสดุ)'), # 🌟 [NEW] เพิ่มสถานะนี้
+        ('WAITING_STORE', 'รอสโตร์จ่ายของ (เบิกวัสดุ)'),
+        ('WAITING_PURCHASE', 'รอจัดซื้อสั่งของ (ของขาด)'), # 🌟 [NEW] เพิ่มสถานะนี้
         ('IN_PROGRESS', 'กำลังดำเนินการติดตั้ง'),
         ('COMPLETED', 'ติดตั้งเสร็จสมบูรณ์'),
         ('CANCELLED', 'ยกเลิก')
@@ -135,3 +136,43 @@ class SolarExpense(models.Model):
 
     def __str__(self):
         return f"{self.job.code} - {self.get_expense_type_display()} ({self.amount} บาท)"
+
+# ==========================================
+# 🛒 ระบบใบเตรียมสั่งซื้อสำหรับโซล่าเซลล์ (Solar PPO)
+# ==========================================
+class SolarPurchasePreparation(models.Model):
+    code = models.CharField(max_length=20, unique=True, verbose_name="เลขที่ใบเตรียมสั่งซื้อ (Solar PPO)")
+    job = models.ForeignKey(SolarJob, on_delete=models.CASCADE, related_name='ppos', verbose_name="อ้างอิงใบสั่งงาน (JOB)")
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, verbose_name="ผู้จัดทำ (สโตร์)")
+    status = models.CharField(max_length=20, choices=[('PENDING', 'รอจัดซื้อดำเนินการ'), ('ORDERED', 'สั่งซื้อแล้ว')], default='PENDING')
+
+    class Meta:
+        verbose_name = "ใบเตรียมสั่งซื้อโซล่า (Solar PPO)"
+        verbose_name_plural = "ใบเตรียมสั่งซื้อโซล่า (Solar PPO)"
+
+    def __str__(self):
+        return self.code
+
+    def save(self, *args, **kwargs):
+        if not self.code:
+            today = datetime.date.today()
+            thai_year = (today.year + 543) % 100
+            prefix = f"SPPO{thai_year:02d}{today.strftime('%m')}"
+
+            last_ppo = SolarPurchasePreparation.objects.filter(code__startswith=prefix).order_by('code').last()
+            if last_ppo:
+                try: seq = int(last_ppo.code.replace(prefix, '')) + 1
+                except: seq = 1
+            else:
+                seq = 1
+            self.code = f"{prefix}{seq:03d}"
+        super().save(*args, **kwargs)
+
+class SolarPurchasePreparationItem(models.Model):
+    ppo = models.ForeignKey(SolarPurchasePreparation, on_delete=models.CASCADE, related_name='items')
+    product = models.ForeignKey(SolarProduct, on_delete=models.CASCADE, verbose_name="วัสดุที่ขาด")
+    quantity_needed = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="จำนวนที่ต้องการสั่งเพิ่ม")
+
+    def __str__(self):
+        return f"{self.product.name} ({self.quantity_needed})"

@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <title>ใบสั่งซื้อ {{ po.code }}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    {% load humanize %}
+    <style>
+        :root {
+            --primary-color: #0d6efd;
+            --accent-color: #fd7e14;
+            --text-dark: #212529;
+            --text-muted: #6c757d;
+            --bg-light: #f8f9fa;
+            --border-color: #e9ecef;
+        }
+
+        body {
+            font-family: 'Sarabun', sans-serif;
+            background: #555;
+            color: var(--text-dark);
+            font-size: 14px;
+            line-height: 1.4;
+            margin: 0;
+            padding: 20px;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+        }
+
+        .page {
+            width: 210mm;
+            min-height: 297mm;
+            padding: 15mm 20mm;
+            margin: 0 auto;
+            background: white;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            border-radius: 4px;
+            box-sizing: border-box;
+            position: relative;
+        }
+
+        /* ปุ่มพิมพ์ */
+        .btn-print {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 12px 24px;
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            text-decoration: none;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: background 0.3s, transform 0.2s;
+            z-index: 1000;
+        }
+        .btn-print:hover {
+            background: #0b5ed7;
+            transform: translateY(-2px);
+        }
+
+        /* หัวเอกสาร */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 20px;
+            border-bottom: 3px solid var(--bg-light);
+            padding-bottom: 15px;
+        }
+        .company-info {
+            max-width: 60%;
+        }
+        .company-logo {
+            height: 55px;
+            margin-bottom: 8px;
+        }
+        .company-name {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--primary-color);
+            margin: 0 0 5px 0;
+        }
+        .company-address {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin: 0;
+        }
+        
+        /* ชื่อเอกสาร */
+        .doc-title {
+            text-align: right;
+        }
+        .doc-title h1 {
+            margin: 0;
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--accent-color);
+            letter-spacing: 1px;
+        }
+        .doc-title h2 {
+            margin: 0;
+            font-size: 15px;
+            font-weight: 500;
+            color: var(--text-muted);
+            letter-spacing: 2px;
+        }
+
+        /* ข้อมูลคู่ค้าและเอกสาร */
+        .info-section {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            gap: 15px;
+        }
+        .info-box {
+            flex: 1;
+            background: var(--bg-light);
+            padding: 12px 15px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+        .info-box h4 {
+            margin: 0 0 8px 0;
+            font-size: 13px;
+            color: var(--text-muted);
+            border-bottom: 2px solid #dee2e6;
+            padding-bottom: 5px;
+            text-transform: uppercase;
+        }
+        .info-row {
+            display: flex;
+            margin-bottom: 4px;
+            font-size: 13px;
+        }
+        .info-label {
+            width: 90px;
+            font-weight: 600;
+            color: var(--text-dark);
+        }
+        .info-value {
+            flex: 1;
+            color: #495057;
+        }
+
+        /* ตารางรายการสินค้า */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 15px;
+        }
+        th {
+            background-color: var(--primary-color) !important;
+            color: white !important;
+            padding: 8px;
+            font-weight: 500;
+            font-size: 13px;
+            border: 1px solid var(--primary-color);
+        }
+        td {
+            padding: 7px 8px;
+            border: 1px solid var(--border-color);
+            border-top: none;
+            color: #495057;
+            font-size: 13px;
+        }
+        tbody tr:nth-child(even) {
+            background-color: #fdfdfd !important;
+        }
+        .text-center { text-align: center; }
+        .text-right { text-align: right; }
+        
+        /* สรุปยอดรวม */
+        .total-row td {
+            font-size: 14px;
+            font-weight: 700;
+            background-color: var(--bg-light) !important;
+            color: var(--primary-color) !important;
+            border-top: 2px solid #dee2e6;
+            border-bottom: 2px solid #dee2e6;
+        }
+
+        /* ลายเซ็น */
+        .signatures {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 50px;
+            page-break-inside: avoid;
+        }
+        .signature-box {
+            text-align: center;
+            width: 220px;
+        }
+        .signature-line {
+            border-bottom: 1px dashed var(--text-muted);
+            height: 35px;
+            margin-bottom: 8px;
+        }
+        .signature-title {
+            font-weight: 600;
+            color: var(--text-dark);
+            margin-bottom: 5px;
+            font-size: 13px;
+        }
+        .signature-date {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        /* การตั้งค่าตอนสั่งพิมพ์ */
+        @media print {
+            @page {
+                size: A4;
+                margin: 10mm;
+            }
+            body { background: white; padding: 0; }
+            .page { margin: 0; box-shadow: none; width: 100%; padding: 0; min-height: auto; }
+            .btn-print { display: none; }
+            
+            * {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <a href="javascript:window.print()" class="btn-print no-print">
+        <svg style="width:18px; height:18px; vertical-align: middle; margin-right: 5px;" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+        พิมพ์ใบสั่งซื้อ
+    </a>
+
+    <div class="page">
+        <div class="header">
+            <div class="company-info">
+                {% if company.logo %}
+                    <img src="{{ company.logo.url }}" class="company-logo" alt="Company Logo">
+                {% endif %}
+                <h3 class="company-name">{{ company.name_th }}</h3>
+                <p class="company-address">{{ company.address }}<br>โทรศัพท์: {{ company.phone }}</p>
+            </div>
+            <div class="doc-title">
+                <h1>ใบสั่งซื้อ</h1>
+                <h2>PURCHASE ORDER</h2>
+            </div>
+        </div>
+
+        <div class="info-section">
+            <div class="info-box">
+                <h4>ผู้จำหน่าย (Supplier)</h4>
+                <div class="info-row">
+                    <div class="info-value">
+                        {% if po.supplier %}
+                            <strong style="font-size: 14px;">{{ po.supplier.name }}</strong><br>
+                            {{ po.supplier.address }}<br>
+                            <span style="color: var(--text-muted);">โทร: {{ po.supplier.phone|default:"-" }}</span>
+                        {% else %}
+                            <strong style="font-size: 14px;">{{ po.supplier_name_free_text|default:"-" }}</strong><br>
+                            <span style="color: var(--text-muted); font-size: 12px;">(สั่งซื้อด่วนนอกระบบ)</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            <div class="info-box">
+                <h4>ข้อมูลอ้างอิง (Reference)</h4>
+                <div class="info-row">
+                    <div class="info-label">เลขที่ PO:</div>
+                    <div class="info-value font-monospace"><strong style="color: var(--primary-color);">{{ po.code }}</strong></div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">วันที่:</div>
+                    <div class="info-value">{{ po.date|date:"d/m/Y" }}</div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">กำหนดรับของ:</div>
+                    <div class="info-value">{{ po.expected_date|date:"d/m/Y"|default:"-" }}</div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">ผู้จัดซื้อ:</div>
+                    <div class="info-value">{{ po.buyer.first_name|default:"-" }}</div>
+                </div>
+            </div>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th width="5%" class="text-center">ลำดับ</th>
+                    <th width="45%">รายการสินค้า / วัตถุดิบ</th>
+                    <th width="15%" class="text-center">จำนวน</th>
+                    <th width="15%" class="text-right">ราคา/หน่วย</th>
+                    <th width="20%" class="text-right">รวมเป็นเงิน</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in po.items.all %}
+                <tr>
+                    <td class="text-center">{{ forloop.counter }}</td>
+                    <td>
+                        {% if item.product %}
+                            <strong style="color: var(--text-dark);">{{ item.product.name }}</strong>
+                            {% if item.product.code %}<br><small style="color: var(--text-muted); font-size: 11px;">{{ item.product.code }}</small>{% endif %}
+                        {% else %}
+                            <strong style="color: var(--text-dark);">{{ item.item_name_free_text }}</strong>
+                        {% endif %}
+                    </td>
+                    <td class="text-center">{{ item.quantity|floatformat:2|intcomma }}</td>
+                    <td class="text-right">{{ item.unit_cost|floatformat:2|intcomma }}</td>
+                    <td class="text-right"><strong style="color: var(--text-dark);">{{ item.total_cost|floatformat:2|intcomma }}</strong></td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="5" class="text-center py-4 text-muted">ไม่พบรายการสินค้า</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr class="total-row">
+                    <td colspan="4" class="text-right" style="padding: 10px;">ยอดรวมสุทธิ (Grand Total)</td>
+                    <td class="text-right" style="padding: 10px;">{{ po.total_amount|floatformat:2|intcomma }}</td>
+                </tr>
+            </tfoot>
+        </table>
+
+        {% if po.note %}
+        <div style="margin-top: 15px; padding: 12px 15px; background: var(--bg-light); border-radius: 4px; border-left: 4px solid var(--accent-color); font-size: 13px;">
+            <strong style="color: var(--text-dark);">หมายเหตุ:</strong> <span style="color: #495057;">{{ po.note }}</span>
+        </div>
+        {% endif %}
+
+        <div class="signatures">
+            <div class="signature-box">
+                <div class="signature-title">ผู้มีอำนาจสั่งซื้อ (Authorized By)</div>
+                <div class="signature-line"></div>
+                <div class="signature-date">วันที่ (Date) ......../......../........</div>
+            </div>
+            <div class="signature-box">
+                <div class="signature-title">ผู้ขาย / ผู้รับใบสั่งซื้อ (Accepted By)</div>
+                <div class="signature-line"></div>
+                <div class="signature-date">วันที่ (Date) ......../......../........</div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

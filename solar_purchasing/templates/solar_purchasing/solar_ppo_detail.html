@@ -1,0 +1,74 @@
+{% extends 'core/base.html' %}
+
+{% block content %}
+<style>
+    .btn-gold { background: linear-gradient(135deg, #d4af37 0%, #aa8c2c 100%); color: #ffffff !important; border: none; }
+    .btn-gold:hover { background: linear-gradient(135deg, #aa8c2c 0%, #8c7324 100%); transform: translateY(-2px); box-shadow: 0 4px 8px rgba(212, 175, 55, 0.3) !important; }
+</style>
+
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-end mb-4">
+        <div>
+            <h4 class="fw-bold mb-1 text-dark"><i class="fas fa-file-invoice-dollar text-primary me-2"></i>สร้างใบสั่งซื้อจาก: <span class="text-warning">{{ ppo.code }}</span></h4>
+            <p class="text-muted small mb-0">อ้างอิงงานติดตั้ง: {{ ppo.job.code }} | ลูกค้า: {{ ppo.job.customer.name }}</p>
+        </div>
+        <a href="{% url 'solar_ppo_list' %}" class="btn btn-outline-secondary rounded-pill px-4 fw-bold shadow-sm">
+            <i class="fas fa-arrow-left me-2"></i> กลับหน้ารายการ
+        </a>
+    </div>
+
+    <form method="POST" action="{% url 'solar_ppo_detail' ppo.id %}">
+        {% csrf_token %}
+        <div class="card border-0 shadow-sm rounded-4 bg-white overflow-hidden mb-4">
+            <div class="card-header bg-white py-3 border-bottom d-flex align-items-center">
+                <i class="fas fa-clipboard-list text-danger me-2"></i> <strong class="text-dark">รายการวัสดุที่ต้องสั่งซื้อด่วน</strong>
+            </div>
+            <div class="table-responsive p-0">
+                <table class="table align-middle mb-0">
+                    <thead class="bg-light text-secondary small">
+                        <tr>
+                            <th class="ps-4 py-3 border-0" style="width: 25%;">รหัส / ชื่อวัสดุ (RM)</th>
+                            <th class="text-center py-3 border-0" style="width: 10%;">จำนวนที่สั่ง</th>
+                            <th class="py-3 border-0" style="width: 30%;">เลือกร้านค้า (Supplier)</th>
+                            <th class="text-center py-3 border-0" style="width: 15%;">ราคาต่อหน่วย</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in ppo.items.all %}
+                        <tr class="border-bottom bg-danger bg-opacity-10">
+                            <td class="ps-4 py-3 fw-bold text-dark">
+                                <input type="hidden" name="item_id[]" value="{{ item.id }}">
+                                {{ item.product.code }} - {{ item.product.name }}
+                            </td>
+                            <td class="text-center py-3">
+                                <input type="number" step="0.01" name="quantity[]" value="{{ item.quantity_needed }}" class="form-control form-control-sm text-center fw-bold text-danger bg-white" required>
+                            </td>
+                            <td class="py-3">
+                                <select name="supplier_id[]" class="form-select form-select-sm text-secondary border-danger border-opacity-25 shadow-sm" required>
+                                    <option value="">-- เลือกร้านค้า --</option>
+                                    {% for sup in suppliers %}
+                                        <option value="{{ sup.id }}">{{ sup.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </td>
+                            <td class="text-center py-3 pe-4">
+                                <div class="input-group input-group-sm shadow-sm">
+                                    <span class="input-group-text bg-white border-danger border-opacity-25">฿</span>
+                                    <input type="number" step="0.01" name="unit_cost[]" class="form-control text-end border-danger border-opacity-25" placeholder="0.00" value="{{ item.product.cost_price }}" required>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="text-end">
+            <button type="submit" class="btn btn-primary rounded-pill px-5 py-2 fw-bold shadow-sm fs-5" onclick="return confirm('ระบบจะทำการสร้างใบสั่งซื้อ (PO) ตามร้านค้าที่เลือกไว้ \nยืนยันการทำรายการหรือไม่?');">
+                <i class="fas fa-magic me-2"></i> สร้างใบสั่งซื้อ (PO) อัตโนมัติ
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

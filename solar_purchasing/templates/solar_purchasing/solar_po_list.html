@@ -6,7 +6,7 @@
     /* 🌟 สไตล์ปุ่มและเอฟเฟกต์สีทองแบบพรีเมียม 🌟 */
     .hover-card { transition: all 0.3s ease; cursor: pointer; }
     .hover-card:hover { transform: translateY(-3px); box-shadow: 0 10px 20px rgba(212, 175, 55, 0.15) !important; }
-    
+
     .btn-gold { background: linear-gradient(135deg, #d4af37 0%, #aa8c2c 100%); color: #ffffff !important; border: none; transition: all 0.3s ease; }
     .btn-gold:hover { background: linear-gradient(135deg, #aa8c2c 0%, #8c7324 100%); transform: translateY(-2px); box-shadow: 0 6px 12px rgba(212, 175, 55, 0.3) !important; }
 </style>
@@ -38,9 +38,23 @@
                 <button type="submit" class="btn btn-sm btn-dark rounded-pill px-4 shadow-sm fw-bold">ค้นหา</button>
             </form>
 
-            <a href="{% url 'solar_po_create' %}" class="btn btn-sm btn-gold rounded-pill px-4 shadow-sm fw-bold d-flex align-items-center hover-card">
-                <i class="fas fa-plus-circle me-2"></i> สร้างใบสั่งซื้อด่วน (Fast Track PO)
-            </a>
+            <div class="d-flex gap-2">
+                <!-- 🌟 [NEW] ปุ่มแจ้งเตือนงานขอซื้อจากสโตร์ (PPO) 🌟 -->
+                <a href="{% url 'solar_ppo_list' %}" class="btn btn-sm btn-warning text-dark rounded-pill px-4 shadow-sm fw-bold position-relative d-flex align-items-center hover-card">
+                    <i class="fas fa-file-invoice-dollar me-2"></i> คิวงานขอซื้อจากสโตร์ (PPO)
+
+                    {% if pending_solar_ppo_count > 0 %}
+                    <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger shadow-sm border border-2 border-white">
+                        {{ pending_solar_ppo_count }}
+                        <span class="visually-hidden">รอจัดซื้อ</span>
+                    </span>
+                    {% endif %}
+                </a>
+
+                <a href="{% url 'solar_po_create' %}" class="btn btn-sm btn-gold rounded-pill px-4 shadow-sm fw-bold d-flex align-items-center hover-card">
+                    <i class="fas fa-plus-circle me-2"></i> สร้างใบสั่งซื้อด่วน (Fast Track PO)
+                </a>
+            </div>
         </div>
     </div>
 
@@ -87,25 +101,30 @@
                             {% endif %}
                         </td>
                         <td class="pe-4 text-center">
-                            <div class="d-flex justify-content-center gap-2">
-                                <a href="{% url 'solar_po_edit' po.id %}" class="btn btn-sm btn-outline-primary rounded-circle shadow-sm" style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;" title="ดูรายละเอียด / แก้ไข">
-                                    <i class="fas fa-search"></i>
+                            <div class="d-flex justify-content-center align-items-center gap-2">
+                                <a href="{% url 'solar_po_edit' po.id %}" class="btn btn-sm btn-outline-primary rounded-pill px-3 shadow-sm fw-bold d-flex align-items-center" title="ดูรายละเอียด / แก้ไข">
+                                    <i class="fas fa-search me-1"></i> เปิดดู
                                 </a>
-                                
+
                                 {% if is_manager and po.status == 'DRAFT' %}
                                 <form method="POST" action="{% url 'solar_po_approve' po.id %}" style="display:inline;">
                                     {% csrf_token %}
-                                    <button type="submit" class="btn btn-sm btn-outline-success rounded-circle shadow-sm" style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;" title="อนุมัติเอกสาร" onclick="return confirm('ยืนยันการอนุมัติใบสั่งซื้อ {{ po.code }} ใช่หรือไม่?');">
-                                        <i class="fas fa-check"></i>
+                                    <button type="submit" class="btn btn-sm btn-success rounded-pill px-3 shadow-sm fw-bold d-flex align-items-center" onclick="return confirm('ยืนยันการอนุมัติใบสั่งซื้อ {{ po.code }} ใช่หรือไม่?');">
+                                        <i class="fas fa-check-circle me-1"></i> อนุมัติ
                                     </button>
                                 </form>
                                 <form method="POST" action="{% url 'solar_po_cancel' po.id %}" style="display:inline;">
                                     {% csrf_token %}
-                                    <button type="submit" class="btn btn-sm btn-outline-danger rounded-circle shadow-sm" style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;" title="ยกเลิกเอกสาร" onclick="return confirm('คำเตือน: ยืนยันการยกเลิกใบสั่งซื้อ {{ po.code }} ใช่หรือไม่?');">
-                                        <i class="fas fa-trash-alt"></i>
+                                    <button type="submit" class="btn btn-sm btn-outline-danger rounded-pill px-3 shadow-sm fw-bold d-flex align-items-center" onclick="return confirm('คำเตือน: ยืนยันการยกเลิกใบสั่งซื้อ {{ po.code }} ใช่หรือไม่?');">
+                                        <i class="fas fa-times-circle me-1"></i> ยกเลิก
                                     </button>
                                 </form>
                                 {% endif %}
+
+                                <!-- 🌟 [NEW] ปุ่มพิมพ์ใบสั่งซื้อ (แสดงเฉพาะตอนอนุมัติแล้ว หรือร่างก็พิมพ์ตรวจดูได้) -->
+                                <a href="{% url 'solar_po_print' po.id %}" target="_blank" class="btn btn-sm btn-secondary rounded-pill px-3 shadow-sm fw-bold d-flex align-items-center text-white" title="พิมพ์ใบสั่งซื้อเป็นเอกสาร A4">
+                                    <i class="fas fa-print me-1"></i> พิมพ์
+                                </a>
                             </div>
                         </td>
                     </tr>

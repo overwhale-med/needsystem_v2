@@ -25,12 +25,8 @@ from inventory.models import (
     Product, ProductSupplier, SupplierPriceHistory,
     Category, RawMaterialCategory
 )
-# 🌟 [NEW] เพิ่มการนำเข้า ProductionOrder เพื่อใช้นับจำนวนงานรอ PPO 🌟
 from manufacturing.models import BOM, ProductionOrder
 
-# ------------------------------------------
-# 🛡️ ระบบนายทวาร (Gatekeeper) แบ่งสิทธิ์การทำงาน
-# ------------------------------------------
 def can_view_and_pay(user):
     if user.is_superuser: return True
     user_groups = list(user.groups.values_list('name', flat=True))
@@ -60,9 +56,6 @@ def check_is_approver(user):
         if rank in ['manager', 'director', 'executive']: return True
     return False
 
-# ------------------------------------------
-# 🛒 ระบบจัดซื้อ (Purchasing)
-# ------------------------------------------
 @login_required
 def purchasing_dashboard(request):
     if not can_view_and_pay(request.user):
@@ -82,14 +75,15 @@ def purchasing_dashboard(request):
     recent_pos = pos.order_by('-created_at')[:10]
     is_approver = check_is_approver(request.user)
 
-    # 🌟 [NEW] นับจำนวนใบสั่งผลิต (JOB) ที่รอเปิดใบเตรียม (PPO) 🌟
     pending_ppo_count = ProductionOrder.objects.filter(status='WAITING_MATERIALS', is_materials_ordered=False).count()
+
+    # 🌟 [FIXED] นำ PPO ของโซล่าออกไป เพราะเราจะไปใช้ในแอปใหม่แล้ว
 
     context = {
         'draft_count': draft_count, 'pending_payment_count': pending_payment_count,
         'pending_payment_amount': actual_pending_amount, 'pending_receipt_count': pending_receipt_count,
         'recent_pos': recent_pos, 'is_approver': is_approver,
-        'pending_ppo_count': pending_ppo_count, # ส่งยอดไปแสดงเป็น Badge แดงๆ
+        'pending_ppo_count': pending_ppo_count,
     }
     return render(request, 'purchasing/purchasing_dashboard.html', context)
 
@@ -110,11 +104,9 @@ def po_list(request):
     if payment_filter:
         pos = pos.filter(payment_status=payment_filter)
 
-    # 🌟 [NEW] ปรับการรับค่าว้นที่ ให้ Default เป็น "ช่วง 7 วันก่อนหน้า" 🌟
     start_date = request.GET.get('start_date')
     end_date = request.GET.get('end_date')
 
-    # ถ้าย้งไม่มีการเลือกวันที่ (โหลดหน้าเว็บครั้งแรก) ให้ตั้งค่าเป็นย้อนหลัง 6 วัน (รวมวันนี้ = 7 วัน)
     if not start_date or start_date == 'None':
         start_date = (timezone.now().date() - datetime.timedelta(days=6)).strftime('%Y-%m-%d')
     if not end_date or end_date == 'None':
@@ -265,7 +257,6 @@ def po_payment(request, po_id):
             else: po.payment_status = 'DEPOSIT'
             po.save()
 
-            # 🌟 [NEW] เชื่อมโยงบัญชี: สร้างบันทึกรายจ่ายอัตโนมัติ ส่งไปแสดงที่ Dashboard บัญชี 🌟
             from accounting.models import Expense
             Expense.objects.create(
                 title=f"ทำจ่ายใบสั่งซื้อ #{po.code} (PV: {payment_record.reference_no})",
@@ -276,7 +267,6 @@ def po_payment(request, po_id):
 
             messages.success(request, f"✅ บันทึกทำจ่ายเงิน {amount:,.2f} บาท พร้อมออก PV สำเร็จ! (ระบบลงบัญชีรายจ่ายให้อัตโนมัติแล้ว)")
 
-            # เมื่อจ่ายสำเร็จ ให้เด้งกลับไปที่หน้าศูนย์บัญชี เพื่อความต่อเนื่องในการทำงานของพนักงานบัญชี
             return redirect('accounting_verification_hub', task_type='po_payments')
         else:
             messages.error(request, "❌ จำนวนเงินไม่ถูกต้อง หรือเกินยอดคงค้าง")
@@ -665,10 +655,6 @@ def overseas_supplier_delete(request, pk):
     messages.success(request, "🗑️ ลบข้อมูลร้านค้าต่างประเทศเรียบร้อยแล้ว")
     return redirect('overseas_supplier_list')
 
-
-# ------------------------------------------
-# 🌟 ทำเนียบซัพพลายเออร์ในประเทศ
-# ------------------------------------------
 @login_required
 def supplier_list(request):
     if not can_view_and_pay(request.user): return redirect('dashboard')

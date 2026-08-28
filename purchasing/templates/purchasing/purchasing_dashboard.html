@@ -26,10 +26,9 @@
 
             <div class="d-flex flex-wrap align-items-center gap-2">
 
-                <!-- 🌟 เพิ่ม class position-relative และ Badge ตรงนี้ 🌟 -->
+                <!-- ปุ่ม PPO เดิม -->
                 <a href="{% url 'ppo_list' %}" class="btn btn-info text-dark rounded-pill px-4 shadow-sm fw-bold position-relative" style="background-color: #aed6f1; border-color: #aed6f1;">
                     <i class="fas fa-folder-open me-1"></i> สร้างใบเตรียม (PPO)
-                    
                     {% if pending_ppo_count > 0 %}
                     <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger shadow-sm border border-2 border-white">
                         {{ pending_ppo_count }}
@@ -45,7 +44,7 @@
                 </a>
 
                 <i class="fas fa-chevron-right text-muted mx-1 d-none d-md-inline opacity-50"></i>
-                
+
                 <a href="{% url 'overseas_po_list' %}" class="btn btn-dark text-white rounded-pill px-4 shadow-sm fw-bold" style="background-color: #2c3e50;">
                     <i class="fas fa-globe-asia me-1"></i> นำเข้า (Import)
                 </a>
@@ -64,7 +63,7 @@
                         <div class="text-muted small fw-bold mb-2">PO รออนุมัติ / ร่าง</div>
                         <h2 class="fw-bold text-dark mb-0">{{ draft_count }} <span class="fs-6 fw-normal text-muted">ใบ</span></h2>
                         <i class="fas fa-file-signature position-absolute text-secondary opacity-10" style="font-size: 5rem; bottom: -10px; right: -10px;"></i>
-                        
+
                         {% if is_approver %}
                         <div class="position-absolute top-0 end-0 p-3">
                             <i class="fas fa-external-link-alt text-primary opacity-50" title="คลิกเพื่อดูรายการรออนุมัติ"></i>

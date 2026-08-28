@@ -1,4 +1,5 @@
 import datetime
+from decimal import Decimal
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
@@ -7,8 +8,11 @@ from django.utils import timezone
 
 from .models import SolarPurchaseOrder, SolarPurchaseOrderItem
 from .forms import SolarPurchaseOrderForm, SolarOrderItemFormSet
-from inventory.models import Product
 from master_data.models import Supplier
+
+# 🌟 [FIXED] นำเข้า SolarProduct และระบบ PPO จากฝั่งโซล่าเซลล์
+from solar_inventory.models import SolarProduct
+from solar_jobs.models import SolarPurchasePreparation, SolarPurchasePreparationItem
 
 # ------------------------------------------
 # 🛡️ ระบบเช็คสิทธิ์ (Gatekeeper)
@@ -54,11 +58,14 @@ def solar_po_list(request):
 
     is_manager = is_purchasing_manager(request.user)
 
+    pending_solar_ppo_count = SolarPurchasePreparation.objects.filter(status='PENDING').count()
+
     context = {
         'pos': pos,
         'search_query': search_query,
         'status_filter': status_filter,
         'is_manager': is_manager,
+        'pending_solar_ppo_count': pending_solar_ppo_count,
     }
     return render(request, 'solar_purchasing/solar_po_list.html', context)
 
@@ -72,14 +79,13 @@ def solar_po_create(request):
 
         if form.is_valid() and formset.is_valid():
             po = form.save(commit=False)
-            po.status = 'DRAFT' # บังคับเป็นร่างเพื่อรอผู้จัดการอนุมัติ
+            po.status = 'DRAFT'
             po.buyer = getattr(request.user, 'employee', None)
             po.save()
 
             formset.instance = po
             formset.save()
 
-            # คำนวณยอดรวมสุทธิ
             total = sum(item.total_cost for item in po.items.all() if item.total_cost)
             po.total_amount = total
             po.save()
@@ -92,8 +98,8 @@ def solar_po_create(request):
         form = SolarPurchaseOrderForm(initial={'date': timezone.now().date()})
         formset = SolarOrderItemFormSet()
 
-    # ส่งลิสต์สินค้าหมวดหมู่โซล่าไปให้หน้าเว็บ
-    solar_products = Product.objects.filter(is_active=True)
+    # 🌟 [FIXED] ดึงข้อมูลสินค้าจาก SolarProduct
+    solar_products = SolarProduct.objects.filter(is_active=True)
     suppliers = Supplier.objects.all()
 
     return render(request, 'solar_purchasing/solar_po_form.html', {
@@ -130,7 +136,8 @@ def solar_po_edit(request, po_id):
         form = SolarPurchaseOrderForm(instance=po)
         formset = SolarOrderItemFormSet(instance=po)
 
-    solar_products = Product.objects.filter(is_active=True)
+    # 🌟 [FIXED] ดึงข้อมูลสินค้าจาก SolarProduct
+    solar_products = SolarProduct.objects.filter(is_active=True)
     suppliers = Supplier.objects.all()
 
     return render(request, 'solar_purchasing/solar_po_form.html', {
@@ -163,3 +170,106 @@ def solar_po_cancel(request, po_id):
     else:
         messages.error(request, "❌ คุณไม่มีสิทธิ์ยกเลิกเอกสารนี้")
     return redirect('solar_po_list')
+
+@login_required
+def solar_po_print(request, po_id):
+    if not is_purchasing_staff(request.user):
+        return redirect('solar_po_list')
+
+    po = get_object_or_404(SolarPurchaseOrder, id=po_id)
+
+    # 🌟 ดึงข้อมูลบริษัท เพื่อไปทำเป็นหัวกระดาษแบบ Official
+    from master_data.models import CompanyInfo
+    company = CompanyInfo.objects.first()
+
+    return render(request, 'solar_purchasing/solar_po_print.html', {
+        'po': po,
+        'company': company
+    })
+
+# ==========================================
+# ☀️ ระบบใบเตรียมสั่งซื้อโซล่าเซลล์ (Solar PPO)
+# ==========================================
+@login_required
+def solar_ppo_list(request):
+    if not is_purchasing_staff(request.user): return redirect('dashboard')
+    ppos = SolarPurchasePreparation.objects.all().order_by('-id')
+    return render(request, 'solar_purchasing/solar_ppo_list.html', {'ppos': ppos})
+
+@login_required
+def solar_ppo_detail(request, pk):
+    if not is_purchasing_staff(request.user): return redirect('dashboard')
+    ppo = get_object_or_404(SolarPurchasePreparation, pk=pk)
+
+    if request.method == 'POST':
+        item_ids = request.POST.getlist('item_id[]')
+        supplier_ids = request.POST.getlist('supplier_id[]')
+        unit_costs = request.POST.getlist('unit_cost[]')
+        quantities = request.POST.getlist('quantity[]')
+
+        supplier_orders = {}
+        for i in range(len(item_ids)):
+            sup_id = supplier_ids[i]
+            if not sup_id: continue
+            if sup_id not in supplier_orders: supplier_orders[sup_id] = []
+            supplier_orders[sup_id].append({
+                'item_id': item_ids[i],
+                'cost': unit_costs[i],
+                'qty': quantities[i]
+            })
+
+        created_po_codes = []
+        for sup_id, items in supplier_orders.items():
+            supplier = Supplier.objects.filter(id=sup_id).first()
+            if not supplier: continue
+
+            now = datetime.datetime.now()
+            thai_year = (now.year + 543) % 100
+            prefix = f"POS-{thai_year:02d}{now.strftime('%m')}"
+
+            # 🌟 [FIXED] ใช้รหัสของ SolarPurchaseOrder แบบ POS-
+            last_po = SolarPurchaseOrder.objects.filter(code__startswith=prefix).order_by('code').last()
+            if last_po:
+                try: seq = int(last_po.code.split('-')[-1]) + 1
+                except: seq = 1
+            else:
+                seq = 1
+            po_code = f"{prefix}-{seq:03d}"
+
+            po = SolarPurchaseOrder.objects.create(
+                code=po_code,
+                supplier=supplier,
+                buyer=getattr(request.user, 'employee', None),
+                status='DRAFT',
+                total_amount=0,
+                note=f"อ้างอิงจากใบขอซื้อ (PPO): {ppo.code}"
+            )
+
+            total_amount = Decimal('0.00')
+            for item in items:
+                ppo_item = SolarPurchasePreparationItem.objects.get(id=item['item_id'])
+                qty = Decimal(str(item['qty']).replace(',', ''))
+                cost = Decimal(str(item['cost']).replace(',', ''))
+                line_total = qty * cost
+
+                SolarPurchaseOrderItem.objects.create(
+                    po=po, product=ppo_item.product, quantity=qty,
+                    unit_cost=cost, total_cost=line_total
+                )
+                total_amount += line_total
+
+            po.total_amount = total_amount
+            po.save()
+            created_po_codes.append(po.code)
+
+        if created_po_codes:
+            ppo.status = 'ORDERED'
+            ppo.save()
+            messages.success(request, f"✅ สร้างใบสั่งซื้อโซล่า (Solar PO) สำเร็จ: {', '.join(created_po_codes)}")
+        else:
+            messages.warning(request, "⚠️ ไม่มีการสร้างใบสั่งซื้อ กรุณาเลือกร้านค้าและกรอกข้อมูลให้ครบ")
+
+        return redirect('solar_ppo_list')
+
+    suppliers = Supplier.objects.all().order_by('name')
+    return render(request, 'solar_purchasing/solar_ppo_detail.html', {'ppo': ppo, 'suppliers': suppliers})

@@ -229,13 +229,64 @@ def store_requisition_list(request):
         'jobs_waiting': jobs_waiting
     })
 
-# 🌟 [NEW] ฟังก์ชันสำหรับแสดงหน้า Detail รายการวัสดุของใบสั่งงาน 1 ใบ
+# 🌟 [FIXED] ฟังก์ชันแสดงหน้า Detail พร้อมระบบคำนวณของขาดอัตโนมัติ
 @login_required
 def store_requisition_detail(request, job_id):
     job = get_object_or_404(SolarJob, id=job_id, status='WAITING_STORE')
+
+    has_shortage = False
+    bom_list = []
+
+    # 🌟 ลูปเพื่อคำนวณว่ามีวัสดุตัวไหนบ้างที่ "สต็อกไม่พอ"
+    for bom in job.job_boms.all():
+        qty_to_deduct = bom.actual_used_quantity if bom.actual_used_quantity > 0 else bom.planned_quantity
+        missing_qty = 0
+
+        if qty_to_deduct > bom.product.stock_qty:
+            missing_qty = qty_to_deduct - bom.product.stock_qty
+            has_shortage = True # เจอของขาดแล้ว! แจ้งเตือนสโตร์
+
+        bom.qty_to_deduct = qty_to_deduct
+        bom.missing_qty = missing_qty
+        bom_list.append(bom)
+
     return render(request, 'solar_inventory/store_requisition_detail.html', {
-        'job': job
+        'job': job,
+        'bom_list': bom_list,
+        'has_shortage': has_shortage
     })
+
+# 🌟 [NEW] ฟังก์ชันสำหรับให้สโตร์กด "ส่งใบขอซื้อ (PR)" ให้จัดซื้อ
+@login_required
+def store_trigger_pr(request, job_id):
+    if request.method == 'POST':
+        job = get_object_or_404(SolarJob, id=job_id, status='WAITING_STORE')
+
+        from solar_jobs.models import SolarPurchasePreparation, SolarPurchasePreparationItem
+
+        # 1. สร้างใบเตรียมสั่งซื้อ (PPO) อัตโนมัติ
+        ppo = SolarPurchasePreparation.objects.create(
+            job=job,
+            created_by=getattr(request.user, 'employee', None)
+        )
+
+        # 2. คัดเฉพาะของที่ "ขาด" ใส่เข้าไปในเอกสาร PPO
+        for bom in job.job_boms.all():
+            qty_to_deduct = bom.actual_used_quantity if bom.actual_used_quantity > 0 else bom.planned_quantity
+            if qty_to_deduct > bom.product.stock_qty:
+                missing_qty = qty_to_deduct - bom.product.stock_qty
+                SolarPurchasePreparationItem.objects.create(
+                    ppo=ppo,
+                    product=bom.product,
+                    quantity_needed=missing_qty
+                )
+
+        # 3. เปลี่ยนสถานะงาน เพื่อรอของมาเติม
+        job.status = 'WAITING_PURCHASE'
+        job.save()
+
+        messages.success(request, f"✅ ระบบได้สร้างใบขอซื้อ (PPO) รหัส {ppo.code} สำหรับวัสดุที่ขาด และส่งเรื่องให้แผนกจัดซื้อเรียบร้อยแล้ว!")
+        return redirect('store_requisition_list')
 
 @login_required
 def store_confirm_deduction(request, job_id):

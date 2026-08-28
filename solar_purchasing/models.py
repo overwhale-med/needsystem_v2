@@ -4,7 +4,7 @@ import datetime
 
 # ดึงข้อมูล Master Data จากแอปอื่นๆ มาใช้ร่วมกัน
 from master_data.models import Supplier
-from inventory.models import Product
+from solar_inventory.models import SolarProduct # 🌟 [FIXED] เปลี่ยนเป็น SolarProduct
 from hr.models import Employee
 
 class SolarPurchaseOrder(models.Model):
@@ -65,8 +65,8 @@ class SolarPurchaseOrder(models.Model):
 class SolarPurchaseOrderItem(models.Model):
     po = models.ForeignKey(SolarPurchaseOrder, related_name='items', on_delete=models.CASCADE)
     
-    # 🌟 รองรับสินค้าในคลัง และ สินค้าเฉพาะกิจ (Free Text)
-    product = models.ForeignKey(Product, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="รหัสวัตถุดิบ (จากคลัง)")
+    # 🌟 [FIXED] เปลี่ยน Foreign Key ไปหา SolarProduct
+    product = models.ForeignKey(SolarProduct, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="รหัสวัตถุดิบ (จากคลังโซล่า)")
     item_name_free_text = models.CharField(max_length=255, blank=True, verbose_name="ชื่อสินค้า (กรณีด่วน/ไม่มีรหัสคลัง)")
 
     quantity = models.DecimalField(max_digits=10, decimal_places=2, default=1, verbose_name="จำนวนที่สั่ง")

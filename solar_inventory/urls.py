@@ -16,4 +16,5 @@ urlpatterns = [
     path('requisitions/', views.store_requisition_list, name='store_requisition_list'),
     path('requisitions/<int:job_id>/', views.store_requisition_detail, name='store_requisition_detail'), # <-- เพิ่มบรรทัดนี้
     path('requisitions/confirm/<int:job_id>/', views.store_confirm_deduction, name='store_confirm_deduction'),
+    path('requisitions/trigger-pr/<int:job_id>/', views.store_trigger_pr, name='store_trigger_pr'),
 ]
