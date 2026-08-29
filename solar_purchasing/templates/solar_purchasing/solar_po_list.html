@@ -50,10 +50,24 @@
                     </span>
                     {% endif %}
                 </a>
-
-                <a href="{% url 'solar_po_create' %}" class="btn btn-sm btn-gold rounded-pill px-4 shadow-sm fw-bold d-flex align-items-center hover-card">
-                    <i class="fas fa-plus-circle me-2"></i> สร้างใบสั่งซื้อด่วน (Fast Track PO)
-                </a>
+                <!-- 🌟 [NEW] ปุ่มสร้างใบสั่งซื้อด่วนแบบแยกประเภท (Dropdown) 🌟 -->
+                <div class="dropdown">
+                    <button class="btn btn-sm btn-gold rounded-pill px-4 shadow-sm fw-bold d-flex align-items-center hover-card dropdown-toggle" type="button" id="fastTrackDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="fas fa-plus-circle me-2"></i> สร้างใบสั่งซื้อด่วน (Fast Track PO)
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0 mt-2 rounded-4" aria-labelledby="fastTrackDropdown">
+                        <li>
+                            <a class="dropdown-item fw-bold text-success py-2 px-3" href="{% url 'solar_po_create' %}?type=FG">
+                                <i class="fas fa-box-open me-2"></i> สั่งซื้อแพ็กเกจสินค้า (FG)
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item fw-bold text-primary py-2 px-3" href="{% url 'solar_po_create' %}?type=RM">
+                                <i class="fas fa-tools me-2"></i> สั่งซื้อวัตถุดิบ/อุปกรณ์ (RM)
+                            </a>
+                        </li>
+                    </ul>
+                </div>
             </div>
         </div>
     </div>

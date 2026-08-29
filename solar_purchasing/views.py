@@ -1,5 +1,6 @@
 import datetime
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
+from solar_inventory.models import SolarStockMovement # ต้อง import เพิ่มเพื่อบันทึกประวัติการเข้าออกคลัง
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
@@ -98,15 +99,19 @@ def solar_po_create(request):
         form = SolarPurchaseOrderForm(initial={'date': timezone.now().date()})
         formset = SolarOrderItemFormSet()
 
-    # 🌟 [FIXED] ดึงข้อมูลสินค้าจาก SolarProduct
-    solar_products = SolarProduct.objects.filter(is_active=True)
+    # 🌟 [NEW] รับพารามิเตอร์ประเภทสินค้าจาก URL (ค่าเริ่มต้นเป็น RM)
+    po_type = request.GET.get('type', 'RM')
+
+    # 🌟 [FIXED] ดึงข้อมูลสินค้าโดยกรองตาม product_type
+    solar_products = SolarProduct.objects.filter(is_active=True, product_type=po_type)
     suppliers = Supplier.objects.all()
 
     return render(request, 'solar_purchasing/solar_po_form.html', {
         'form': form,
         'formset': formset,
         'products': solar_products,
-        'suppliers': suppliers
+        'suppliers': suppliers,
+        'po_type': po_type  # ส่งค่าให้ HTML ใช้แสดงผล
     })
 
 @login_required
@@ -136,8 +141,12 @@ def solar_po_edit(request, po_id):
         form = SolarPurchaseOrderForm(instance=po)
         formset = SolarOrderItemFormSet(instance=po)
 
-    # 🌟 [FIXED] ดึงข้อมูลสินค้าจาก SolarProduct
-    solar_products = SolarProduct.objects.filter(is_active=True)
+    # 🌟 [NEW] ตรวจสอบว่าบิลนี้ซื้อสินค้าประเภทไหนเป็นหลัก (อ้างอิงจากไอเทมแรก)
+    first_item = po.items.first()
+    po_type = first_item.product.product_type if first_item and first_item.product else 'RM'
+
+    # 🌟 [FIXED] ดึงข้อมูลสินค้าโดยกรองตาม product_type
+    solar_products = SolarProduct.objects.filter(is_active=True, product_type=po_type)
     suppliers = Supplier.objects.all()
 
     return render(request, 'solar_purchasing/solar_po_form.html', {
@@ -146,7 +155,8 @@ def solar_po_edit(request, po_id):
         'po': po,
         'is_manager': is_manager,
         'products': solar_products,
-        'suppliers': suppliers
+        'suppliers': suppliers,
+        'po_type': po_type  # ส่งค่าให้ HTML ใช้แสดงผล
     })
 
 @login_required
@@ -273,3 +283,64 @@ def solar_ppo_detail(request, pk):
 
     suppliers = Supplier.objects.all().order_by('name')
     return render(request, 'solar_purchasing/solar_ppo_detail.html', {'ppo': ppo, 'suppliers': suppliers})
+
+@login_required
+def solar_po_receive(request, po_id):
+    # เช็คสิทธิ์ว่าใช่พนักงานจัดซื้อ/คลังสินค้าหรือไม่
+    if not is_purchasing_staff(request.user):
+        messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์เข้าถึงระบบรับสินค้า")
+        return redirect('solar_po_list')
+
+    # ดึงข้อมูล PO ใบที่ต้องการรับของ
+    po = get_object_or_404(SolarPurchaseOrder, id=po_id)
+
+    # 🛑 ดักจับ: ต้องเป็น PO ที่อนุมัติแล้ว และยังรับของไม่ครบเท่านั้น
+    if po.status != 'APPROVED' or po.receipt_status == 'COMPLETED':
+        messages.error(request, "❌ ไม่สามารถรับสินค้าสำหรับเอกสารใบนี้ได้ (อาจยังไม่อนุมัติ หรือรับของครบแล้ว)")
+        return redirect('solar_po_list')
+
+    if request.method == 'POST':
+        all_completed = True
+        has_received_any = False
+
+        for item in po.items.all():
+            # ดึงจำนวนที่สโตร์กรอกมาจากหน้าฟอร์มรับของ HTML
+            receive_val = request.POST.get(f'receive_qty_{item.id}')
+
+            if receive_val:
+                try:
+                    qty_to_receive = Decimal(receive_val)
+                    if qty_to_receive > 0:
+                        # 1. อัปเดตยอดรับสะสมใน PO Item
+                        item.received_qty += qty_to_receive
+                        item.save()
+
+                        # 2. บันทึก Stock Movement และบวกยอดสต็อกคงเหลืออัตโนมัติ
+                        # (ตัวโมเดล SolarStockMovement มีฟังก์ชัน save ที่ไปบวกยอดให้เองอยู่แล้ว)
+                        if item.product:
+                            SolarStockMovement.objects.create(
+                                product=item.product,
+                                quantity=qty_to_receive,
+                                movement_type='IN',
+                                reference_doc=po.code
+                            )
+                        has_received_any = True
+                except (ValueError, InvalidOperation):
+                    pass # ข้ามไปหากกรอกตัวเลขไม่ถูกต้อง
+
+            # ตรวจสอบว่าหลังจากรับของรอบนี้แล้ว ไอเทมนี้รับครบตามจำนวนสั่งหรือยัง
+            if item.received_qty < item.quantity:
+                all_completed = False
+
+        if has_received_any:
+            # 3. อัปเดตสถานะภาพรวมของ PO
+            po.receipt_status = 'COMPLETED' if all_completed else 'PARTIAL'
+            po.save()
+            messages.success(request, f"📦 บันทึกรับสินค้าเข้าคลังสำหรับ {po.code} เรียบร้อยแล้ว")
+        else:
+            messages.warning(request, "⚠️ ไม่มียอดรับสินค้าใหม่ถูกบันทึก")
+
+        return redirect('solar_po_list')
+
+    # ถ้าเป็น GET Request ให้เปิดหน้าฟอร์มรับสินค้า
+    return render(request, 'solar_purchasing/solar_po_receive.html', {'po': po})

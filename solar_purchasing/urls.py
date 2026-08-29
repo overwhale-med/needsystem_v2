@@ -9,6 +9,7 @@ urlpatterns = [
     path('create/', views.solar_po_create, name='solar_po_create'),
     path('edit/<int:po_id>/', views.solar_po_edit, name='solar_po_edit'),
     path('print/<int:po_id>/', views.solar_po_print, name='solar_po_print'),
+    path('receive/<int:po_id>/', views.solar_po_receive, name='solar_po_receive'),
 
     # 🌟 ระบบอนุมัติสำหรับผู้จัดการ
     path('approve/<int:po_id>/', views.solar_po_approve, name='solar_po_approve'),

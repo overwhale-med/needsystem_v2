@@ -6,7 +6,7 @@
     /* 🌟 สไตล์ปุ่มและเอฟเฟกต์สีทองแบบพรีเมียม 🌟 */
     .btn-gold { background: linear-gradient(135deg, #d4af37 0%, #aa8c2c 100%); color: #ffffff !important; border: none; transition: all 0.3s ease; }
     .btn-gold:hover { background: linear-gradient(135deg, #aa8c2c 0%, #8c7324 100%); transform: translateY(-2px); box-shadow: 0 6px 12px rgba(212, 175, 55, 0.3) !important; }
-    
+
     .form-control:focus, .form-select:focus { border-color: #d4af37; box-shadow: 0 0 0 0.25rem rgba(212, 175, 55, 0.25); }
     .table-items th { background-color: #f8f9fa; font-weight: 600; color: #495057; border-bottom: 2px solid #dee2e6; }
 </style>
@@ -14,9 +14,19 @@
 <div class="container-fluid py-4 px-4">
     <div class="d-flex justify-content-between align-items-end mb-4">
         <div>
+            <!-- แทนที่หัวกระดาษบรรทัดที่ 16-19 (ใต้แท็ก h4) -->
             <h4 class="fw-bold mb-1 text-dark">
                 <i class="fas fa-edit text-warning me-2"></i>
-                {% if po %}แก้ไขใบสั่งซื้อ: <span class="text-primary">{{ po.code }}</span>{% else %}สร้างใบสั่งซื้อด่วน (Fast Track PO){% endif %}
+                {% if po %}
+                    แก้ไขใบสั่งซื้อ: <span class="text-primary">{{ po.code }}</span>
+                {% else %}
+                    สร้างใบสั่งซื้อด่วน -
+                    {% if po_type == 'FG' %}
+                        <span class="text-success">หมวดหมู่แพ็กเกจ (FG)</span>
+                    {% else %}
+                        <span class="text-primary">หมวดหมู่วัตถุดิบ (RM)</span>
+                    {% endif %}
+                {% endif %}
             </h4>
             <p class="text-muted small mb-0">ระบบจัดซื้อโซล่าเซลล์ (Solar Purchasing)</p>
         </div>
@@ -25,7 +35,7 @@
 
     <form method="POST" enctype="multipart/form-data" id="poForm">
         {% csrf_token %}
-        
+
         <div class="row g-4">
             <div class="col-lg-4 col-md-12">
                 <div class="card border-0 shadow-sm rounded-4 bg-white h-100">
@@ -68,7 +78,10 @@
             <div class="col-lg-8 col-md-12">
                 <div class="card border-0 shadow-sm rounded-4 bg-white h-100">
                     <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center border-bottom-0">
-                        <h6 class="fw-bold mb-0 text-dark"><i class="fas fa-boxes me-2 text-success"></i>รายการสั่งซื้อวัตถุดิบ</h6>
+                        <h6 class="fw-bold mb-0 text-dark">
+                            <i class="fas fa-boxes me-2 {% if po_type == 'FG' %}text-success{% else %}text-primary{% endif %}"></i>
+                            รายการสั่งซื้อ{% if po_type == 'FG' %}แพ็กเกจสินค้า (FG){% else %}วัตถุดิบ/อุปกรณ์ (RM){% endif %}
+                        </h6>
                         <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3 fw-bold" id="add-item-btn">
                             <i class="fas fa-plus me-1"></i> เพิ่มรายการ
                         </button>
@@ -168,7 +181,7 @@
         function calculateTotals() {
             let grandTotal = 0;
             const rows = formsetBody.querySelectorAll(".item-row");
-            
+
             rows.forEach(row => {
                 // ข้ามแถวที่ถูกทำเครื่องหมายว่าลบ (กรณี Edit)
                 const deleteInput = row.querySelector("input[type='checkbox'][name$='-DELETE']");
@@ -212,7 +225,7 @@
             const currentFormCount = parseInt(totalFormsInput.value);
             const templateHtml = document.getElementById("empty-row-template").innerHTML;
             const newRowHtml = templateHtml.replace(/__prefix__/g, currentFormCount);
-            
+
             formsetBody.insertAdjacentHTML('beforeend', newRowHtml);
             totalFormsInput.value = currentFormCount + 1;
             calculateTotals();
