@@ -67,7 +67,7 @@
                         <th class="py-3 border-0 fw-bold">ร้านค้า (Supplier)</th>
                         <th class="py-3 border-0 text-end fw-bold">ยอดรวมสุทธิ (บาท)</th>
                         <th class="py-3 border-0 text-center fw-bold">สถานะเอกสาร</th>
-                        <th class="pe-4 py-3 border-0 text-center fw-bold" style="width: 200px;">จัดการ</th>
+                        <th class="pe-4 py-3 border-0 text-center fw-bold" style="min-width: 320px;">จัดการ</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -102,27 +102,27 @@
                         </td>
                         <td class="pe-4 text-center">
                             <div class="d-flex justify-content-center align-items-center gap-2">
-                                <a href="{% url 'solar_po_edit' po.id %}" class="btn btn-sm btn-outline-primary rounded-pill px-3 shadow-sm fw-bold d-flex align-items-center" title="ดูรายละเอียด / แก้ไข">
+                                <a href="{% url 'solar_po_edit' po.id %}" class="btn btn-sm btn-outline-primary rounded-pill px-3 shadow-sm fw-bold d-flex align-items-center text-nowrap" title="ดูรายละเอียด / แก้ไข">
                                     <i class="fas fa-search me-1"></i> เปิดดู
                                 </a>
 
                                 {% if is_manager and po.status == 'DRAFT' %}
                                 <form method="POST" action="{% url 'solar_po_approve' po.id %}" style="display:inline;">
                                     {% csrf_token %}
-                                    <button type="submit" class="btn btn-sm btn-success rounded-pill px-3 shadow-sm fw-bold d-flex align-items-center" onclick="return confirm('ยืนยันการอนุมัติใบสั่งซื้อ {{ po.code }} ใช่หรือไม่?');">
+                                    <button type="submit" class="btn btn-sm btn-success rounded-pill px-3 shadow-sm fw-bold d-flex align-items-center text-nowrap" onclick="return confirm('ยืนยันการอนุมัติใบสั่งซื้อ {{ po.code }} ใช่หรือไม่?');">
                                         <i class="fas fa-check-circle me-1"></i> อนุมัติ
                                     </button>
                                 </form>
                                 <form method="POST" action="{% url 'solar_po_cancel' po.id %}" style="display:inline;">
                                     {% csrf_token %}
-                                    <button type="submit" class="btn btn-sm btn-outline-danger rounded-pill px-3 shadow-sm fw-bold d-flex align-items-center" onclick="return confirm('คำเตือน: ยืนยันการยกเลิกใบสั่งซื้อ {{ po.code }} ใช่หรือไม่?');">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger rounded-pill px-3 shadow-sm fw-bold d-flex align-items-center text-nowrap" onclick="return confirm('คำเตือน: ยืนยันการยกเลิกใบสั่งซื้อ {{ po.code }} ใช่หรือไม่?');">
                                         <i class="fas fa-times-circle me-1"></i> ยกเลิก
                                     </button>
                                 </form>
                                 {% endif %}
 
-                                <!-- 🌟 [NEW] ปุ่มพิมพ์ใบสั่งซื้อ (แสดงเฉพาะตอนอนุมัติแล้ว หรือร่างก็พิมพ์ตรวจดูได้) -->
-                                <a href="{% url 'solar_po_print' po.id %}" target="_blank" class="btn btn-sm btn-secondary rounded-pill px-3 shadow-sm fw-bold d-flex align-items-center text-white" title="พิมพ์ใบสั่งซื้อเป็นเอกสาร A4">
+                                <!-- 🌟 ปุ่มพิมพ์ใบสั่งซื้อ -->
+                                <a href="{% url 'solar_po_print' po.id %}" target="_blank" class="btn btn-sm btn-secondary rounded-pill px-3 shadow-sm fw-bold d-flex align-items-center text-white text-nowrap" title="พิมพ์ใบสั่งซื้อเป็นเอกสาร A4">
                                     <i class="fas fa-print me-1"></i> พิมพ์
                                 </a>
                             </div>
