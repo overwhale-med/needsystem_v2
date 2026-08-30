@@ -36,6 +36,14 @@
     <form method="POST" enctype="multipart/form-data" id="poForm">
         {% csrf_token %}
 
+        <!-- 🌟 [NEW] แจ้งเตือน และครอบ Fieldset เพื่อล็อกช่องกรอกข้อมูลทั้งหมด -->
+        {% if is_readonly %}
+        <div class="alert alert-warning shadow-sm border-0 rounded-4 mb-4">
+            <i class="fas fa-lock me-2"></i> <strong>เอกสารถูกล็อก:</strong> ใบสั่งซื้อนี้ถูกตรวจรับสินค้าเข้าคลังแล้ว ระบบระงับการแก้ไขข้อมูลเพื่อป้องกันข้อผิดพลาดของสต็อก
+        </div>
+        {% endif %}
+        <fieldset {% if is_readonly %}disabled{% endif %}>
+
         <div class="row g-4">
             <div class="col-lg-4 col-md-12">
                 <div class="card border-0 shadow-sm rounded-4 bg-white h-100">
@@ -82,9 +90,12 @@
                             <i class="fas fa-boxes me-2 {% if po_type == 'FG' %}text-success{% else %}text-primary{% endif %}"></i>
                             รายการสั่งซื้อ{% if po_type == 'FG' %}แพ็กเกจสินค้า (FG){% else %}วัตถุดิบ/อุปกรณ์ (RM){% endif %}
                         </h6>
+                        <!-- เปลี่ยนบรรทัด 72 เป็น: -->
+                        {% if not is_readonly %}
                         <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3 fw-bold" id="add-item-btn">
                             <i class="fas fa-plus me-1"></i> เพิ่มรายการ
                         </button>
+                        {% endif %}
                     </div>
                     <div class="card-body pt-0">
                         {{ formset.management_form }}
@@ -139,11 +150,20 @@
             </div>
         </div>
 
+        <!-- 🌟 [NEW] ปิด Fieldset -->
+        </fieldset>
+
         <div class="d-flex justify-content-end mt-4 gap-2">
-            <a href="{% url 'solar_po_list' %}" class="btn btn-light rounded-pill px-4 fw-bold shadow-sm text-secondary">ยกเลิก</a>
+            <a href="{% url 'solar_po_list' %}" class="btn btn-light rounded-pill px-4 fw-bold shadow-sm text-secondary">
+                {% if is_readonly %}กลับหน้ารายการ{% else %}ยกเลิก{% endif %}
+            </a>
+
+            <!-- 🌟 [NEW] ซ่อนปุ่มเซฟ ถ้าถูกล็อก -->
+            {% if not is_readonly %}
             <button type="submit" class="btn btn-gold rounded-pill px-5 fw-bold shadow-sm fs-6">
                 <i class="fas fa-save me-2"></i> บันทึกใบสั่งซื้อ
             </button>
+            {% endif %}
         </div>
     </form>
 </div>

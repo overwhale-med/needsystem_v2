@@ -89,7 +89,7 @@
             color: var(--text-muted);
             margin: 0;
         }
-        
+
         /* ชื่อเอกสาร */
         .doc-title {
             text-align: right;
@@ -172,7 +172,7 @@
         }
         .text-center { text-align: center; }
         .text-right { text-align: right; }
-        
+
         /* สรุปยอดรวม */
         .total-row td {
             font-size: 14px;
@@ -219,8 +219,35 @@
             body { background: white; padding: 0; }
             .page { margin: 0; box-shadow: none; width: 100%; padding: 0; min-height: auto; }
             .btn-print { display: none; }
-            
+
             * {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+        }
+
+        /* 🌟 [NEW] ตราประทับรับของครบแล้ว */
+        .stamp-completed {
+            position: absolute;
+            top: 45%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-25deg);
+            font-size: 60px;
+            font-weight: 700;
+            color: rgba(13, 110, 253, 0.15); /* สีน้ำเงินโปร่งใส */
+            border: 8px solid rgba(13, 110, 253, 0.15);
+            border-radius: 15px;
+            padding: 15px 40px;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            z-index: 100;
+            pointer-events: none;
+            white-space: nowrap;
+        }
+        @media print {
+            .stamp-completed {
+                color: rgba(13, 110, 253, 0.3) !important;
+                border-color: rgba(13, 110, 253, 0.3) !important;
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
             }
@@ -234,6 +261,10 @@
     </a>
 
     <div class="page">
+        <!-- 🌟 [NEW] เงื่อนไขแสดงตราประทับ -->
+        {% if po.receipt_status == 'COMPLETED' %}
+        <div class="stamp-completed">รับสินค้าครบแล้ว</div>
+        {% endif %}
         <div class="header">
             <div class="company-info">
                 {% if company.logo %}

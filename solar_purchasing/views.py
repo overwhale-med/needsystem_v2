@@ -121,7 +121,15 @@ def solar_po_edit(request, po_id):
     po = get_object_or_404(SolarPurchaseOrder, id=po_id)
     is_manager = is_purchasing_manager(request.user)
 
+    # 🌟 [NEW] เช็คว่าเอกสารถูกล็อกหรือไม่ (มีการรับของไปแล้ว)
+    is_readonly = po.receipt_status != 'PENDING'
+
     if request.method == 'POST':
+        # 🛑 [NEW] ถ้าเอกสารถูกล็อก ห้ามเซฟเด็ดขาด!
+        if is_readonly:
+            messages.error(request, "❌ ไม่อนุญาตให้แก้ไขใบสั่งซื้อที่มีการรับสินค้าเข้าคลังแล้ว")
+            return redirect('solar_po_list')
+
         form = SolarPurchaseOrderForm(request.POST, instance=po)
         formset = SolarOrderItemFormSet(request.POST, instance=po)
 
@@ -141,11 +149,9 @@ def solar_po_edit(request, po_id):
         form = SolarPurchaseOrderForm(instance=po)
         formset = SolarOrderItemFormSet(instance=po)
 
-    # 🌟 [NEW] ตรวจสอบว่าบิลนี้ซื้อสินค้าประเภทไหนเป็นหลัก (อ้างอิงจากไอเทมแรก)
     first_item = po.items.first()
     po_type = first_item.product.product_type if first_item and first_item.product else 'RM'
 
-    # 🌟 [FIXED] ดึงข้อมูลสินค้าโดยกรองตาม product_type
     solar_products = SolarProduct.objects.filter(is_active=True, product_type=po_type)
     suppliers = Supplier.objects.all()
 
@@ -156,7 +162,8 @@ def solar_po_edit(request, po_id):
         'is_manager': is_manager,
         'products': solar_products,
         'suppliers': suppliers,
-        'po_type': po_type  # ส่งค่าให้ HTML ใช้แสดงผล
+        'po_type': po_type,
+        'is_readonly': is_readonly  # 🌟 [NEW] ส่งค่าตัวแปรนี้ไปบอกหน้าจอ HTML ว่าให้ล็อกฟอร์ม
     })
 
 @login_required
@@ -316,7 +323,6 @@ def solar_po_receive(request, po_id):
                         item.save()
 
                         # 2. บันทึก Stock Movement และบวกยอดสต็อกคงเหลืออัตโนมัติ
-                        # (ตัวโมเดล SolarStockMovement มีฟังก์ชัน save ที่ไปบวกยอดให้เองอยู่แล้ว)
                         if item.product:
                             SolarStockMovement.objects.create(
                                 product=item.product,
@@ -337,10 +343,31 @@ def solar_po_receive(request, po_id):
             po.receipt_status = 'COMPLETED' if all_completed else 'PARTIAL'
             po.save()
             messages.success(request, f"📦 บันทึกรับสินค้าเข้าคลังสำหรับ {po.code} เรียบร้อยแล้ว")
+
+            # =========================================================
+            # 🚀 [NEW] AUTOMATION: ปลดล็อกใบสั่งงานโซล่า (Unlocking Solar Job)
+            # =========================================================
+            if po.receipt_status == 'COMPLETED' and po.note:
+                # นำเข้าโมเดลใบเตรียมสั่งซื้อเพื่อวิ่งย้อนกลับไปหางานต้นทาง
+                from solar_jobs.models import SolarPurchasePreparation
+
+                # เช็คว่ามีโค้ด PPO ไหนบ้างที่อยู่ในหมายเหตุของใบสั่งซื้อนี้
+                ppos = SolarPurchasePreparation.objects.all()
+                for ppo in ppos:
+                    if ppo.code in po.note:
+                        job = ppo.job
+                        # ถ้างานต้นทางติดสถานะรอของอยู่ ให้ปลดล็อกทันที!
+                        if job and job.status == 'WAITING_PURCHASE':
+                            job.status = 'WAITING_STORE'
+                            job.save()
+                            messages.success(request, f"🚀 ออโต้เมชั่น: สินค้าครบแล้ว! ระบบได้ปลดล็อกใบสั่งงาน {job.code} กลับไปรอเบิกเรียบร้อย")
+                        break # เจอใบที่ตรงแล้ว หยุดการค้นหาลูปนี้ได้เลย
+            # =========================================================
+
         else:
             messages.warning(request, "⚠️ ไม่มียอดรับสินค้าใหม่ถูกบันทึก")
 
         return redirect('solar_po_list')
 
-    # ถ้าเป็น GET Request ให้เปิดหน้าฟอร์มรับสินค้า
+    # 🌟 นี่คือบรรทัดที่หายไปครับ ต้องมีบรรทัดนี้เพื่อเปิดหน้าจอ 🌟
     return render(request, 'solar_purchasing/solar_po_receive.html', {'po': po})
