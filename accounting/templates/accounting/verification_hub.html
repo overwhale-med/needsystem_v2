@@ -58,6 +58,8 @@
                                     {% else %}
                                         <span class="badge bg-primary text-white" style="font-size: 0.65rem;">น็อคดาวน์</span>
                                     {% endif %}
+                                {% elif task_type == 'solar_po_payments' %}
+                                    <span class="badge bg-warning text-dark" style="font-size: 0.65rem;">Solar PO</span>
                                 {% endif %}
                             </div>
 
@@ -84,7 +86,7 @@
 
                         <td>
                             <div class="fw-bold text-dark text-truncate" style="max-width: 200px;">
-                                {% if task_type == 'po_payments' %}
+                                {% if task_type == 'po_payments' or task_type == 'solar_po_payments' %}
                                     {{ item.supplier.name|default:"ไม่ระบุร้านค้า" }}
                                 {% else %}
                                     {% if item.customer %}
@@ -200,7 +202,7 @@
                                 <span class="fw-bold text-primary fs-6">
                                     {% if task_type == 'deposits' %}
                                         ฿ {{ item.deposit_amount|floatformat:2|intcomma }}
-                                    {% elif task_type == 'po_payments' %}
+                                    {% elif task_type == 'po_payments' or task_type == 'solar_po_payments' %}
                                         ฿ {{ item.total_amount|floatformat:2|intcomma }}
                                     {% endif %}
                                 </span>
@@ -238,6 +240,40 @@
                                 <a href="{% url 'po_payment' item.id %}" class="btn btn-sm btn-primary rounded-pill px-3 shadow-sm fw-bold w-100">
                                     <i class="fas fa-file-invoice-dollar me-1"></i> บันทึกทำจ่าย / PV
                                 </a>
+                            <!-- 🌟 [NEW] เพิ่มปุ่มทำจ่ายสำหรับระบบโซล่า 🌟 -->
+                            {% elif task_type == 'solar_po_payments' %}
+                                <!-- 🌟 [NOTE]  ตรงนี้เจนี่ใช้ Modal แทนการไปที่หน้าใหม่เพื่อให้บัญชีทำจ่ายได้ง่ายขึ้นครับ  🌟 -->
+                                <button type="button" class="btn btn-sm btn-warning rounded-pill px-3 shadow-sm fw-bold w-100 text-dark" data-bs-toggle="modal" data-bs-target="#paymentModal{{ item.id }}">
+                                    <i class="fas fa-hand-holding-usd me-1"></i> ทำจ่าย Solar PO
+                                </button>
+                                
+                                <!-- Modal ป๊อปอัปสำหรับอัปเดตสถานะชำระเงิน Solar PO -->
+                                <div class="modal fade" id="paymentModal{{ item.id }}" tabindex="-1" aria-hidden="true">
+                                    <div class="modal-dialog modal-dialog-centered modal-sm">
+                                        <div class="modal-content border-0 shadow rounded-4 text-start">
+                                            <div class="modal-header bg-warning text-dark border-0 rounded-top-4">
+                                                <h5 class="modal-title fw-bold"><i class="fas fa-money-check-alt me-2"></i> บันทึกชำระเงิน</h5>
+                                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                            </div>
+                                            <!-- วิ่งไปทำงานที่ฟังก์ชันใน accounting/views.py -->
+                                            <form method="POST" action="{% url 'accounting_approve_transaction' task_type item.id %}">
+                                                {% csrf_token %}
+                                                <div class="modal-body p-4">
+                                                    <p class="text-muted mb-3">ใบสั่งซื้อโซล่า: <strong class="text-dark">{{ item.code }}</strong></p>
+                                                    <p class="text-muted mb-4">ยอดรอทำจ่ายสุทธิ: <strong class="text-danger fs-5">฿{{ item.total_amount|floatformat:2|intcomma }}</strong></p>
+
+                                                    <div class="alert alert-info border-0 shadow-sm rounded-3 py-2 px-3 small">
+                                                        <i class="fas fa-info-circle me-1"></i> เมื่อกดยืนยัน ระบบจะปรับสถานะเป็น "จ่ายครบแล้ว" และลงบันทึกรายจ่ายให้อัตโนมัติ
+                                                    </div>
+                                                </div>
+                                                <div class="modal-footer border-0 pb-4 pe-4 bg-light rounded-bottom-4">
+                                                    <button type="button" class="btn btn-outline-secondary rounded-pill px-4 fw-bold" data-bs-dismiss="modal">ยกเลิก</button>
+                                                    <button type="submit" class="btn btn-warning text-dark rounded-pill px-4 fw-bold shadow-sm">ยืนยันทำจ่าย</button>
+                                                </div>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div>
                             {% else %}
                                 <form method="POST" action="{% url 'accounting_approve_transaction' task_type item.id %}">
                                     {% csrf_token %}

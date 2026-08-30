@@ -8,6 +8,7 @@ from .models import Income, Expense
 from sales.models import POSOrder, Invoice, Quotation
 from solar_sales.models import SolarQuotation
 from purchasing.models import PurchaseOrder
+from solar_purchasing.models import SolarPurchaseOrder
 from manufacturing.models import LogisticsClaim, BlueprintClaim
 
 @login_required
@@ -24,13 +25,18 @@ def accounting_dashboard(request):
     total_expense = expenses.aggregate(Sum('amount'))['amount__sum'] or 0
     net_balance = total_income - total_expense
 
-    # 2. นับจำนวนงานด่วนข้ามแผนก (รวมมัดจำทั้งบ้านน็อคดาวน์และโซล่าเซลล์)[cite: 16]
+    # 2. นับจำนวนงานด่วนข้ามแผนก (รวมมัดจำทั้งบ้านน็อคดาวน์และโซล่าเซลล์)
     pending_deposits_quotation = Quotation.objects.filter(is_deposit_paid=True, is_deposit_verified=False).count()
     pending_deposits_solar = SolarQuotation.objects.filter(is_deposit_paid=True, is_deposit_verified=False).count()
     pending_deposits = pending_deposits_quotation + pending_deposits_solar
 
     pending_sales = Invoice.objects.filter(status='PENDING').count() + POSOrder.objects.filter(status='PENDING').count()
-    pending_purchases = PurchaseOrder.objects.filter(status='APPROVED', payment_status__in=['PENDING', 'DEPOSIT']).count()
+    
+    # 🌟 [FIXED] แยกนับบิล PO น็อคดาวน์และโซล่าเซลล์ 🌟
+    pending_purchases_normal = PurchaseOrder.objects.filter(status='APPROVED', payment_status__in=['PENDING', 'DEPOSIT']).count()
+    pending_purchases_solar = SolarPurchaseOrder.objects.filter(status='APPROVED', payment_status__in=['PENDING', 'DEPOSIT']).count()
+    pending_purchases = pending_purchases_normal + pending_purchases_solar
+    
     pending_logistics = LogisticsClaim.objects.filter(status='PENDING').count()
     pending_blueprints = BlueprintClaim.objects.filter(status='PENDING').count()
 
@@ -48,11 +54,17 @@ def accounting_dashboard(request):
     context = {
         'total_income': total_income, 'total_expense': total_expense, 'net_balance': net_balance,
         'pending_deposits': pending_deposits, 'pending_sales': pending_sales,
-        'pending_purchases': pending_purchases, 'pending_logistics': pending_logistics,
+        
+        # 🌟 [FIXED] ส่งตัวแปรแยกกันไปแสดงผลที่หน้าเว็บ 🌟
+        'pending_purchases_normal': pending_purchases_normal,
+        'pending_purchases_solar': pending_purchases_solar,
+        
+        'pending_logistics': pending_logistics,
         'pending_blueprints': pending_blueprints, 'total_pending_payments': total_pending_payments,
         'recent_transactions': recent_transactions,
     }
     return render(request, 'accounting/dashboard.html', context)
+
 
 # 🌟 ศูนย์รวมการตรวจสอบเอกสาร (ดึงข้อมูลมาจากฝ่ายอื่น รวมโซล่าเซลล์) 🌟
 @login_required
@@ -89,12 +101,21 @@ def verification_hub(request, task_type):
         context['items'] = sorted(inv_list + pos_list, key=lambda x: x.created_at, reverse=True)
         context['title'] = 'ตรวจสอบรับชำระบิลขาย (Invoices & POS)'
         context['icon'] = 'fa-file-invoice-dollar text-primary'
+        
     elif task_type == 'po_payments':
+        # 🌟 ดึงแค่บิลระบบปกติ (บ้านน็อคดาวน์)
         context['items'] = PurchaseOrder.objects.filter(status='APPROVED', payment_status__in=['PENDING', 'DEPOSIT']).order_by('-created_at')
-        context['title'] = 'ทำจ่ายเงินร้านค้า (PO Suppliers)'
+        context['title'] = 'ทำจ่ายเงินร้านค้า (PO Suppliers) - บ้านน็อคดาวน์'
         context['icon'] = 'fa-shopping-cart text-danger'
 
+    # 🌟 เพิ่มเงื่อนไขสำหรับดึงหน้าจ่ายเงิน Solar PO โดยเฉพาะ 🌟
+    elif task_type == 'solar_po_payments':
+        context['items'] = SolarPurchaseOrder.objects.filter(status='APPROVED', payment_status__in=['PENDING', 'DEPOSIT']).order_by('-created_at')
+        context['title'] = 'ทำจ่ายเงินร้านค้า (Solar PO) - ระบบโซล่าเซลล์'
+        context['icon'] = 'fa-solar-panel text-warning'
+
     return render(request, 'accounting/verification_hub.html', context)
+
 
 # 🌟 ฟังก์ชันกดยืนยันอนุมัติและลงบันทึกบัญชีอัตโนมัติ (รองรับทั้งน็อคดาวน์และโซล่าเซลล์) 🌟
 @login_required
@@ -103,7 +124,6 @@ def approve_transaction(request, task_type, item_id):
         if task_type == 'deposits':
             doc_system = request.POST.get('doc_system', '').strip()
 
-            # 🌟 [FIXED] เช็คเงื่อนไขแยกระหว่างระบบโซล่าเซลล์และบ้านน็อคดาวน์ให้ถูกต้อง 🌟
             if doc_system == 'solar':
                 qt = get_object_or_404(SolarQuotation, id=item_id)
                 qt.is_deposit_verified = True
@@ -160,5 +180,22 @@ def approve_transaction(request, task_type, item_id):
             po.save()
             Expense.objects.create(title=f"ทำจ่ายใบสั่งซื้อ #{po.code}", amount=balance, date=timezone.now().date(), note=f"จ่ายให้ร้าน {po.supplier.name if po.supplier else ''}")
             messages.success(request, f"✅ ทำจ่ายบิล {po.code} และลงบันทึกรายจ่ายเรียบร้อย")
+
+        elif task_type == 'solar_po_payments':
+            po = get_object_or_404(SolarPurchaseOrder, id=item_id)
+
+            balance = float(po.total_amount)
+
+            po.payment_status = 'PAID'
+            po.save()
+
+            supplier_name = po.supplier.name if po.supplier else po.supplier_name_free_text
+            Expense.objects.create(
+                title=f"ทำจ่ายใบสั่งซื้อโซล่าเซลล์ #{po.code}",
+                amount=balance,
+                date=timezone.now().date(),
+                note=f"จ่ายให้ร้าน {supplier_name}"
+            )
+            messages.success(request, f"✅ ทำจ่ายบิล {po.code} และลงบันทึกรายจ่ายเข้าระบบเรียบร้อย")
 
     return redirect('accounting_verification_hub', task_type=task_type)

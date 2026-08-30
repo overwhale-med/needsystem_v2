@@ -120,6 +120,14 @@
                             {% elif po.receipt_status == 'PARTIAL' %}
                                 <div class="mt-2"><span class="badge bg-secondary text-white rounded-pill px-2 shadow-sm" style="font-size: 0.75rem;"><i class="fas fa-box-open me-1"></i> รับบางส่วน</span></div>
                             {% endif %}
+
+                            {% if po.payment_status == 'PAID' %}
+                                <div class="mt-1"><span class="badge bg-success bg-opacity-75 text-white rounded-pill px-2 shadow-sm" style="font-size: 0.75rem;"><i class="fas fa-money-bill-wave me-1"></i> จ่ายครบแล้ว</span></div>
+                            {% elif po.payment_status == 'DEPOSIT' %}
+                                <div class="mt-1"><span class="badge bg-primary bg-opacity-75 text-white rounded-pill px-2 shadow-sm" style="font-size: 0.75rem;"><i class="fas fa-coins me-1"></i> จ่ายมัดจำแล้ว</span></div>
+                            {% else %}
+                                <div class="mt-1"><span class="badge bg-light text-secondary border rounded-pill px-2 shadow-sm" style="font-size: 0.75rem;"><i class="fas fa-clock me-1"></i> รอชำระเงิน</span></div>
+                            {% endif %}
                         </td>
                         <td class="pe-4 text-center">
                             <div class="d-flex justify-content-center align-items-center gap-2">

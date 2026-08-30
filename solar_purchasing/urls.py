@@ -18,4 +18,5 @@ urlpatterns = [
     # 🌟 [NEW] ระบบใบเตรียมสั่งซื้อโซล่าเซลล์ (Solar PPO) ที่ย้ายมาใหม่
     path('ppo/list/', views.solar_ppo_list, name='solar_ppo_list'),
     path('ppo/<int:pk>/', views.solar_ppo_detail, name='solar_ppo_detail'),
+    path('payment/<int:po_id>/', views.solar_po_payment, name='solar_po_payment'),
 ]

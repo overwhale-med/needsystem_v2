@@ -371,3 +371,32 @@ def solar_po_receive(request, po_id):
 
     # 🌟 นี่คือบรรทัดที่หายไปครับ ต้องมีบรรทัดนี้เพื่อเปิดหน้าจอ 🌟
     return render(request, 'solar_purchasing/solar_po_receive.html', {'po': po})
+
+# ==========================================
+# 💸 ระบบบันทึกการชำระเงิน (Payment Tracking)
+# ==========================================
+@login_required
+def solar_po_payment(request, po_id):
+    # เช็คสิทธิ์ (ใช้สิทธิ์ฝ่ายจัดซื้อหรือบัญชีก็ได้ แล้วแต่นโยบายบริษัทครับ ในที่นี้เจนี่ให้สิทธิ์จัดซื้อ/ผู้จัดการก่อน)
+    if not is_purchasing_staff(request.user):
+        messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์เข้าถึงระบบชำระเงิน")
+        return redirect('solar_po_list')
+
+    po = get_object_or_404(SolarPurchaseOrder, id=po_id)
+
+    if request.method == 'POST':
+        # รับค่าสถานะที่ส่งมาจากหน้าเว็บ
+        new_payment_status = request.POST.get('payment_status')
+
+        # ตรวจสอบว่าส่งค่ามาถูกต้องตามตัวเลือกในโมเดลหรือไม่
+        if new_payment_status in ['PENDING', 'DEPOSIT', 'PAID']:
+            po.payment_status = new_payment_status
+            po.save()
+            messages.success(request, f"💸 อัปเดตสถานะการชำระเงินสำหรับ {po.code} เรียบร้อยแล้ว")
+        else:
+            messages.error(request, "❌ สถานะการชำระเงินไม่ถูกต้อง")
+
+        return redirect('solar_po_list')
+
+    # ถ้าเปิดมาแบบ GET ให้แสดงหน้าต่าง (เราจะใช้ Modal หน้าเดิม ดังนั้นจุดนี้อาจไม่ได้ใช้ แต่เขียนเผื่อไว้ครับ)
+    return redirect('solar_po_list')

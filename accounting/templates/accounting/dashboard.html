@@ -146,7 +146,24 @@
                                 <small class="text-muted">บิลสั่งซื้อวัตถุดิบ (PO)</small>
                             </div>
                         </div>
-                        <span class="badge bg-danger rounded-pill px-3 shadow-sm">{{ pending_purchases }} รายการ</span>
+                        <!-- 🌟 [FIXED] ใช้ตัวแปร pending_purchases_normal 🌟 -->
+                        <span class="badge bg-danger rounded-pill px-3 shadow-sm">{{ pending_purchases_normal }} รายการ</span>
+                    </div>
+                </a>
+                
+                <a href="{% url 'accounting_verification_hub' 'solar_po_payments' %}" class="text-decoration-none">
+                    <div class="d-flex justify-content-between align-items-center p-3 mb-3 bg-white rounded-3 border modal-task-btn border-warning">
+                        <div class="d-flex align-items-center">
+                            <div class="bg-warning bg-opacity-10 text-warning rounded-circle d-flex justify-content-center align-items-center me-3" style="width: 45px; height: 45px; font-size: 1.2rem;">
+                                <i class="fas fa-solar-panel"></i>
+                            </div>
+                            <div>
+                                <h6 class="fw-bold text-dark mb-0">จ่ายเงินร้านค้าโซล่า (Solar PO)</h6>
+                                <small class="text-muted">บิลสั่งซื้ออุปกรณ์โซล่าเซลล์</small>
+                            </div>
+                        </div>
+                        <!-- 🌟 [FIXED] ใช้ตัวแปร pending_purchases_solar 🌟 -->
+                        <span class="badge bg-danger rounded-pill px-3 shadow-sm">{{ pending_purchases_solar }} รายการ</span>
                     </div>
                 </a>
 
