@@ -230,6 +230,57 @@ def solar_job_manage(request, job_id):
         'teams': teams
     })
 
+# 🌟 [NEW] ฟังก์ชันดึงสูตรมาตรฐาน (BOM) มาใส่ในใบสั่งงานอัตโนมัติ 🌟
+@login_required
+def fetch_standard_bom(request, job_id):
+    if not is_center_staff(request.user):
+        messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์ดึงสูตรการผลิต")
+        return redirect('solar_center_dashboard')
+
+    job = get_object_or_404(SolarJob, id=job_id)
+
+    # 1. เช็คว่าใบสั่งงานนี้เลือก "แพ็กเกจ" แล้วหรือยัง
+    if not job.package_sold:
+        messages.error(request, "❌ ไม่สามารถดึงสูตรได้! กรุณาเลือก 'แพ็กเกจที่ต้องติดตั้ง' และกดบันทึกข้อมูลก่อนครับ")
+        return redirect('solar_job_manage', job_id=job.id)
+
+    # 2. ค้นหาสูตรมาตรฐานทั้งหมดที่ผูกกับแพ็กเกจนี้
+    standard_boms = SolarStandardBOM.objects.filter(package=job.package_sold)
+
+    if not standard_boms.exists():
+        messages.warning(request, f"⚠️ ไม่พบสูตรมาตรฐานสำหรับแพ็กเกจ '{job.package_sold.name}' ในฐานข้อมูลคลังสินค้า")
+        return redirect('solar_job_manage', job_id=job.id)
+
+    # 3. ตรวจสอบว่าในงานนี้ (Job BOM) มีการดึงข้อมูลไปแล้วหรือยัง เพื่อป้องกันการกดปุ่มเบิ้ลแล้วได้สูตรซ้ำซ้อน
+    existing_items_count = SolarJobBOM.objects.filter(job=job).count()
+    if existing_items_count > 0:
+        # ถ้าระบบเจอว่ามีแถววัตถุดิบอยู่แล้ว จะถามยืนยันผ่าน UI แต่อันนี้เป็นการดักหลังบ้านครับ
+        pass
+
+    # 4. วนลูปกางสูตร: คัดลอกข้อมูลจาก Standard BOM มาใส่ Job BOM
+    added_count = 0
+    for std_bom in standard_boms:
+        # เช็คว่ามีวัตถุดิบตัวนี้ในรายการอยู่แล้วหรือไม่ (ป้องกันการดึงซ้ำทีละรายการ)
+        obj, created = SolarJobBOM.objects.get_or_create(
+            job=job,
+            product=std_bom.raw_material,
+            defaults={
+                'planned_quantity': std_bom.quantity,
+                'actual_used_quantity': 0, # ยังไม่ได้เบิกจริง
+                'unit_cost': std_bom.raw_material.cost_price # ดึงต้นทุนปัจจุบันมาเป็นฐานเบื้องต้น
+            }
+        )
+        if created:
+            added_count += 1
+
+    if added_count > 0:
+        messages.success(request, f"✅ ดึงรายการวัตถุดิบตามสูตร '{job.package_sold.name}' เข้ามาเพิ่ม {added_count} รายการ สำเร็จแล้ว!")
+    else:
+        messages.info(request, "ℹ️ ไม่มีการเพิ่มรายการใหม่ (วัตถุดิบตามสูตรมีอยู่ในตารางครบแล้ว)")
+
+    # 5. รีโหลดกลับไปหน้าจัดการงานเดิม เพื่อให้ตาราง Formset แสดงข้อมูลใหม่
+    return redirect('solar_job_manage', job_id=job.id)
+
 # ------------------------------------------
 # 🛠️ ฟังก์ชันจัดการทีมช่างรับเหมา
 # ------------------------------------------

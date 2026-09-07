@@ -103,10 +103,18 @@
         <div class="card border-0 shadow-sm rounded-4 bg-white mt-4">
             <div class="card-header bg-white py-3 border-bottom-0 d-flex justify-content-between align-items-center">
                 <h6 class="fw-bold mb-0 text-dark">รายการเบิกวัตถุดิบ (Job BOM)</h6>
-                <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3 fw-bold" id="add-material-btn">
-                    <i class="fas fa-plus me-1"></i> เพิ่มวัตถุดิบลงสูตร
-                </button>
+
+                <!-- 🌟 [NEW] เพิ่มปุ่มใหม่ วางคู่กัน 🌟 -->
+                <div class="d-flex gap-2">
+                    <a href="{% url 'fetch_standard_bom' job.id %}" class="btn btn-sm btn-outline-warning text-dark fw-bold rounded-pill px-3 shadow-sm hover-card" onclick="return confirm('ระบบจะดึงสูตรมาตรฐานของแพ็กเกจ [{{ job.package_sold.name|default:"ไม่มีแพ็กเกจ" }}] มาใส่ในตาราง\n\nต้องการดำเนินการต่อหรือไม่?');">
+                        <i class="fas fa-magic me-1"></i> ดึงรายการวัตถุดิบ (BOM)
+                    </a>
+                    <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3 fw-bold" id="add-material-btn">
+                        <i class="fas fa-plus me-1"></i> เพิ่มวัตถุดิบลงสูตร
+                    </button>
+                </div>
             </div>
+
             <div class="card-body pt-0">
                 {{ formset.management_form }}
                 <div class="table-responsive">

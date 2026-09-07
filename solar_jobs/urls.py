@@ -6,7 +6,10 @@ urlpatterns = [
 
     path('create-quick-job/', views.solar_job_create, name='solar_job_create'),
     path('manage/<int:job_id>/', views.solar_job_manage, name='solar_job_manage'),
-    
+
+    # 🌟 [NEW] เพิ่มเส้นทางสำหรับดึงสูตร BOM อัตโนมัติ 🌟
+    path('manage/<int:job_id>/fetch-bom/', views.fetch_standard_bom, name='fetch_standard_bom'),
+
     # 🌟 [NEW] เพิ่มเส้นทางสำหรับให้ Center กดส่งใบขอเบิกไปที่สโตร์ 🌟
     path('manage/<int:job_id>/submit-requisition/', views.center_submit_requisition, name='center_submit_requisition'),
 
