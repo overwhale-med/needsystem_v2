@@ -264,6 +264,10 @@
                         <div class="info-box border-success border-opacity-25 bg-success bg-opacity-10">
                             <div class="small text-dark mb-1 text-truncate"><i class="fas fa-user-circle text-success me-2" style="width:14px;"></i><strong>ลค:</strong> {{ job.customer.name|default:"ไม่ระบุ" }}</div>
                             <div class="small text-dark mb-1 text-truncate"><i class="fas fa-box text-success me-2" style="width:14px;"></i><strong>ชุด:</strong> {{ job.package_sold.name|default:"-"|truncatechars:25 }}</div>
+
+                            <!-- 🌟 [NEW] เพิ่มชื่อทีมช่างที่นี่ -->
+                            <div class="small text-dark mb-1 text-truncate"><i class="fas fa-hard-hat text-success me-2" style="width:14px;"></i><strong>ช่าง:</strong> {{ job.technician_team.name|default:"-"|truncatechars:25 }}</div>
+
                             <div class="small text-dark text-truncate"><i class="far fa-calendar-check text-success me-2" style="width:14px;"></i><strong>ส่งงาน:</strong> {{ job.expected_finish_date|date:"d/m/Y"|default:"-" }}</div>
                         </div>
 

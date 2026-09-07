@@ -623,7 +623,7 @@ def solar_invoice_detail(request, inv_id):
     return render(request, 'solar_sales/invoice_detail.html', {'inv': inv})
 
 # ------------------------------------------
-# 🌟 ฟังก์ชันสำหรับปุ่ม "เปิดบิลขาย" (Invoice Creation) 🌟
+# 🌟 ฟังก์ชันสำหรับปุ่ม "เปิดบิลขาย" (Invoice Creation & Auto-Archive) 🌟
 # ------------------------------------------
 @login_required
 def solar_quotation_create_invoice(request, qt_id):
@@ -638,22 +638,31 @@ def solar_quotation_create_invoice(request, qt_id):
         messages.warning(request, "⚠️ ใบเสนอราคานี้มีการเปิดบิลไปแล้ว")
         return redirect('solar_quotation_list')
 
-    # สร้าง Invoice
+    # 1. สร้าง Invoice
     SolarInvoice.objects.create(
         quotation_ref=qt,
         customer=qt.customer,
         grand_total=qt.grand_total,
         balance_amount=qt.grand_total - qt.deposit_amount,
-        status='UNPAID' if (qt.grand_total - qt.deposit_amount) > 0 else 'PAID'
+
+        # 🌟 [FIXED] บังคับให้เป็น 'PENDING' เสมอ เพื่อให้บัญชีต้องตรวจรับทราบก่อนทุกบิล
+        status='PENDING'
     )
 
-    # อัปเดตสถานะใบเสนอราคาเป็น เปิดบิลแล้ว
+    # 2. อัปเดตสถานะใบเสนอราคาเป็น เปิดบิลแล้ว (CONVERTED)
     qt.status = 'CONVERTED'
     qt.save()
 
-    messages.success(request, f"🎉 สร้างใบเสร็จรับเงินสำหรับ {qt.code} สำเร็จ! สามารถเพิ่มการรับชำระเงินได้ทันที")
+    # 🌟 [NEW] AUTOMATION 4: เปลี่ยนสถานะ Job ฝั่ง Center เป็น CLOSED เพื่อซ่อนการ์ด 🌟
+    # ค้นหาใบสั่งงานของ Center ที่อ้างอิงถึง Quotation นี้ และมีสถานะ COMPLETED
+    related_jobs = SolarJob.objects.filter(quotation_ref=qt, status='COMPLETED')
+    for job in related_jobs:
+        job.status = 'CLOSED'
+        job.save()
 
-    # 🌟 [FIXED] เปลี่ยนให้เด้งไปหน้า "รายการใบเสร็จรับเงิน" ทันที 🌟
+    messages.success(request, f"🎉 สร้างใบแจ้งหนี้สำหรับ {qt.code} สำเร็จ! และระบบได้ซ่อนการ์ดติดตั้งในหน้ากระดาน Center เรียบร้อยแล้ว (บิลถูกส่งให้บัญชีตรวจสอบ)")
+
+    # 🌟 เปลี่ยนให้เด้งไปหน้า "รายการใบแจ้งหนี้" ทันที 🌟
     return redirect('solar_invoice_list')
 
 # ==========================================

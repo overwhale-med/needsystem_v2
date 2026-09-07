@@ -123,11 +123,14 @@ def solar_job_overview(request):
 
     # 4. นับจำนวนสำหรับแสดงบนปุ่มแท็บ
     active_count = base_jobs.filter(status__in=['DRAFT', 'PREPARING', 'WAITING_STORE', 'WAITING_PURCHASE', 'IN_PROGRESS']).count()
-    completed_count = base_jobs.filter(status__in=['COMPLETED', 'CANCELLED']).count()
+
+    # 🌟 [FIXED] ให้นับรวม 'CLOSED' เข้าไปในยอดปุ่มประวัติด้วย
+    completed_count = base_jobs.filter(status__in=['COMPLETED', 'CLOSED', 'CANCELLED']).count()
 
     # 5. แยกข้อมูลตามแท็บที่เลือก
     if tab == 'history':
-        jobs = base_jobs.filter(status__in=['COMPLETED', 'CANCELLED']).order_by('-created_at')
+        # 🌟 [FIXED] เพิ่ม 'CLOSED' เข้าไปในเงื่อนไข เพื่อให้แสดงในประวัติปิดจ๊อบ
+        jobs = base_jobs.filter(status__in=['COMPLETED', 'CLOSED', 'CANCELLED']).order_by('-created_at')
     else:
         jobs = base_jobs.filter(status__in=['DRAFT', 'PREPARING', 'WAITING_STORE', 'WAITING_PURCHASE', 'IN_PROGRESS']).order_by('created_at')
 
@@ -191,7 +194,6 @@ def solar_job_manage(request, job_id):
 
     job = get_object_or_404(SolarJob, id=job_id)
 
-    # ใน views.py บรรทัดประมาณ 155
     if request.method == 'POST':
         form = SolarJobForm(request.POST, instance=job)
         formset = SolarBOMFormSet(request.POST, instance=job)
@@ -205,6 +207,38 @@ def solar_job_manage(request, job_id):
 
             saved_job.save()
             formset.save()
+
+            # 🌟 [FIXED] เช็คว่าพนักงานกดปุ่ม "ดึงรายการวัตถุดิบ (BOM)" หรือไม่ 🌟
+            if 'action_fetch_bom' in request.POST:
+                if not saved_job.package_sold:
+                    messages.error(request, "❌ ไม่สามารถดึงสูตรได้! งานนี้ยังไม่ได้ผูกกับแพ็กเกจหลัก")
+                else:
+                    standard_boms = SolarStandardBOM.objects.filter(package=saved_job.package_sold)
+                    if not standard_boms.exists():
+                        messages.warning(request, f"⚠️ ไม่พบสูตรมาตรฐานสำหรับแพ็กเกจ '{saved_job.package_sold.name}'")
+                    else:
+                        added_count = 0
+                        for std_bom in standard_boms:
+                            obj, created = SolarJobBOM.objects.get_or_create(
+                                job=saved_job,
+                                product=std_bom.raw_material,
+                                defaults={
+                                    'planned_quantity': std_bom.quantity,
+                                    'actual_used_quantity': 0,
+                                    'unit_cost': std_bom.raw_material.cost_price
+                                }
+                            )
+                            if created: added_count += 1
+
+                        if added_count > 0:
+                            messages.success(request, f"✅ บันทึกข้อมูล และ ดึงสูตร BOM เพิ่ม {added_count} รายการ สำเร็จ!")
+                        else:
+                            messages.info(request, "✅ บันทึกข้อมูลสำเร็จ! (วัตถุดิบตามสูตรมีอยู่ในตารางครบแล้ว)")
+
+                # รีโหลดกลับหน้าเดิมเพื่อแสดงตาราง BOM ที่อัปเดตใหม่
+                return redirect('solar_job_manage', job_id=saved_job.id)
+
+            # ถ้ากดปุ่ม "บันทึกข้อมูลงาน" ปกติ ให้เด้งกลับหน้า Dashboard
             messages.success(request, f"✅ บันทึกข้อมูลงาน {job.code} เรียบร้อยแล้ว")
             return redirect('solar_center_dashboard')
         else:
@@ -236,57 +270,6 @@ def solar_job_manage(request, job_id):
         'raw_materials': raw_materials,
         'teams': teams
     })
-
-# 🌟 [NEW] ฟังก์ชันดึงสูตรมาตรฐาน (BOM) มาใส่ในใบสั่งงานอัตโนมัติ 🌟
-@login_required
-def fetch_standard_bom(request, job_id):
-    if not is_center_staff(request.user):
-        messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์ดึงสูตรการผลิต")
-        return redirect('solar_center_dashboard')
-
-    job = get_object_or_404(SolarJob, id=job_id)
-
-    # 1. เช็คว่าใบสั่งงานนี้เลือก "แพ็กเกจ" แล้วหรือยัง
-    if not job.package_sold:
-        messages.error(request, "❌ ไม่สามารถดึงสูตรได้! กรุณาเลือก 'แพ็กเกจที่ต้องติดตั้ง' และกดบันทึกข้อมูลก่อนครับ")
-        return redirect('solar_job_manage', job_id=job.id)
-
-    # 2. ค้นหาสูตรมาตรฐานทั้งหมดที่ผูกกับแพ็กเกจนี้
-    standard_boms = SolarStandardBOM.objects.filter(package=job.package_sold)
-
-    if not standard_boms.exists():
-        messages.warning(request, f"⚠️ ไม่พบสูตรมาตรฐานสำหรับแพ็กเกจ '{job.package_sold.name}' ในฐานข้อมูลคลังสินค้า")
-        return redirect('solar_job_manage', job_id=job.id)
-
-    # 3. ตรวจสอบว่าในงานนี้ (Job BOM) มีการดึงข้อมูลไปแล้วหรือยัง เพื่อป้องกันการกดปุ่มเบิ้ลแล้วได้สูตรซ้ำซ้อน
-    existing_items_count = SolarJobBOM.objects.filter(job=job).count()
-    if existing_items_count > 0:
-        # ถ้าระบบเจอว่ามีแถววัตถุดิบอยู่แล้ว จะถามยืนยันผ่าน UI แต่อันนี้เป็นการดักหลังบ้านครับ
-        pass
-
-    # 4. วนลูปกางสูตร: คัดลอกข้อมูลจาก Standard BOM มาใส่ Job BOM
-    added_count = 0
-    for std_bom in standard_boms:
-        # เช็คว่ามีวัตถุดิบตัวนี้ในรายการอยู่แล้วหรือไม่ (ป้องกันการดึงซ้ำทีละรายการ)
-        obj, created = SolarJobBOM.objects.get_or_create(
-            job=job,
-            product=std_bom.raw_material,
-            defaults={
-                'planned_quantity': std_bom.quantity,
-                'actual_used_quantity': 0, # ยังไม่ได้เบิกจริง
-                'unit_cost': std_bom.raw_material.cost_price # ดึงต้นทุนปัจจุบันมาเป็นฐานเบื้องต้น
-            }
-        )
-        if created:
-            added_count += 1
-
-    if added_count > 0:
-        messages.success(request, f"✅ ดึงรายการวัตถุดิบตามสูตร '{job.package_sold.name}' เข้ามาเพิ่ม {added_count} รายการ สำเร็จแล้ว!")
-    else:
-        messages.info(request, "ℹ️ ไม่มีการเพิ่มรายการใหม่ (วัตถุดิบตามสูตรมีอยู่ในตารางครบแล้ว)")
-
-    # 5. รีโหลดกลับไปหน้าจัดการงานเดิม เพื่อให้ตาราง Formset แสดงข้อมูลใหม่
-    return redirect('solar_job_manage', job_id=job.id)
 
 # ------------------------------------------
 # 🛠️ ฟังก์ชันจัดการทีมช่างรับเหมา

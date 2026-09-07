@@ -116,9 +116,10 @@
 
                 <!-- 🌟 [NEW] เพิ่มปุ่มใหม่ วางคู่กัน 🌟 -->
                 <div class="d-flex gap-2">
-                    <a href="{% url 'fetch_standard_bom' job.id %}" class="btn btn-sm btn-outline-warning text-dark fw-bold rounded-pill px-3 shadow-sm hover-card" onclick="return confirm('ระบบจะดึงสูตรมาตรฐานของแพ็กเกจ [{{ job.package_sold.name|default:"ไม่มีแพ็กเกจ" }}] มาใส่ในตาราง\n\nต้องการดำเนินการต่อหรือไม่?');">
+                    <!-- 🌟 [FIXED] เปลี่ยนเป็นปุ่ม Submit ที่แนบชื่อเพื่อเช็คเงื่อนไขฝั่งหลังบ้าน -->
+                    <button type="submit" name="action_fetch_bom" class="btn btn-sm btn-outline-warning text-dark fw-bold rounded-pill px-3 shadow-sm hover-card" onclick="return confirm('ระบบจะดึงสูตรมาตรฐานของแพ็กเกจ [{{ job.package_sold.name|default:"ไม่มีแพ็กเกจ" }}] มาใส่ในตาราง พร้อมกับบันทึกข้อมูลด้านบน\n\nต้องการดำเนินการต่อหรือไม่?');">
                         <i class="fas fa-magic me-1"></i> ดึงรายการวัตถุดิบ (BOM)
-                    </a>
+                    </button>
                     <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3 fw-bold" id="add-material-btn">
                         <i class="fas fa-plus me-1"></i> เพิ่มวัตถุดิบลงสูตร
                     </button>
