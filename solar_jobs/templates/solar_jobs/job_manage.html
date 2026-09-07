@@ -51,7 +51,17 @@
                         </div>
                         <div class="mb-3">
                             <label class="form-label">สถานะงาน (Status)</label>
-                            {{ form.status }}
+                            <div class="mt-1">
+                                {% if job.status == 'DRAFT' %}<span class="badge bg-warning text-dark px-3 py-2 fs-6 shadow-sm"><i class="fas fa-inbox me-1"></i> รอรับงาน</span>
+                                {% elif job.status == 'PREPARING' %}<span class="badge bg-primary px-3 py-2 fs-6 shadow-sm"><i class="fas fa-tools me-1"></i> เตรียมของ/จัดทีม</span>
+                                {% elif job.status == 'WAITING_STORE' %}<span class="badge bg-danger bg-opacity-75 px-3 py-2 fs-6 shadow-sm"><i class="fas fa-box-open me-1"></i> รอสโตร์จ่ายของ</span>
+                                {% elif job.status == 'WAITING_PURCHASE' %}<span class="badge bg-danger px-3 py-2 fs-6 shadow-sm"><i class="fas fa-shopping-cart me-1"></i> รอจัดซื้อสั่งของ</span>
+                                {% elif job.status == 'IN_PROGRESS' %}<span class="badge bg-info px-3 py-2 fs-6 shadow-sm"><i class="fas fa-hard-hat me-1"></i> กำลังติดตั้ง</span>
+                                {% elif job.status == 'COMPLETED' %}<span class="badge bg-success px-3 py-2 fs-6 shadow-sm"><i class="fas fa-check-circle me-1"></i> เสร็จสมบูรณ์</span>
+                                {% else %}<span class="badge bg-secondary px-3 py-2 fs-6">{{ job.get_status_display }}</span>
+                                {% endif %}
+                            </div>
+                            <div class="d-none">{{ form.status }}</div> <!-- ซ่อนฟิลด์ฟอร์มไว้ไม่ให้พัง -->
                         </div>
                     </div>
                 </div>
@@ -150,17 +160,27 @@
             </div>
         </div>
 
-        <!-- 🌟 [FIXED] จัดกลุ่มปุ่มกดด้านล่างให้สวยงามและเพิ่มปุ่มส่งใบเบิก -->
-        <div class="d-flex justify-content-end gap-3 mt-4 pb-5">
-            <!-- ปุ่มบันทึกข้อมูล (ของเดิม) -->
-            <button type="submit" class="btn btn-gold rounded-pill px-5 fw-bold shadow-sm fs-6">
-                <i class="fas fa-save me-2"></i> บันทึกข้อมูลงานและสูตรเบิกของ
+        <!-- 🌟 กลุ่มปุ่มระบบ Automations ตามขั้นตอนการทำงาน 🌟 -->
+        <div class="d-flex justify-content-end gap-3 mt-4 pb-5 flex-wrap">
+            <button type="submit" class="btn btn-gold rounded-pill px-4 fw-bold shadow-sm fs-6">
+                <i class="fas fa-save me-2"></i> บันทึกข้อมูลงาน
             </button>
 
-            <!-- 🌟 [NEW] ปุ่มส่งใบขอเบิกวัสดุ จะแสดงเฉพาะตอนที่สถานะงานยังเป็น DRAFT หรือ PREPARING -->
             {% if job.status == 'DRAFT' or job.status == 'PREPARING' %}
-            <a href="{% url 'center_submit_requisition' job.id %}" class="btn btn-primary rounded-pill px-5 fw-bold shadow-sm fs-6" onclick="return confirm('ยืนยันการส่งใบขอเบิกวัสดุไปให้แผนกสโตร์ตัดสต็อกใช่หรือไม่? \n\n* กรุณากดบันทึกข้อมูลก่อนหากมีการแก้ไขรายการ');">
-                <i class="fas fa-paper-plane me-2"></i> ส่งใบขอเบิกวัสดุ (ให้สโตร์จ่ายของ)
+            <a href="{% url 'center_submit_requisition' job.id %}" class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm fs-6" onclick="return confirm('ยืนยันส่งใบขอเบิกวัสดุไปให้แผนกสโตร์?\n\n(หากมีการแก้ไข BOM กรุณากดปุ่มบันทึกข้อมูลก่อนครับ)');">
+                <i class="fas fa-paper-plane me-2"></i> ส่งให้สโตร์เบิกของ
+            </a>
+            {% endif %}
+
+            {% if job.status == 'WAITING_STORE' %}
+            <a href="{% url 'center_start_job' job.id %}" class="btn btn-info text-white rounded-pill px-4 fw-bold shadow-sm fs-6" onclick="return confirm('สโตร์เบิกของครบแล้ว ยืนยันเริ่มดำเนินการติดตั้งหน้าไซต์งานหรือไม่?');">
+                <i class="fas fa-rocket me-2"></i> เริ่มดำเนินการติดตั้ง
+            </a>
+            {% endif %}
+
+            {% if job.status == 'IN_PROGRESS' %}
+            <a href="{% url 'center_complete_job' job.id %}" class="btn btn-success rounded-pill px-4 fw-bold shadow-sm fs-6" onclick="return confirm('ยืนยันปิดจ๊อบงานนี้?\n\nระบบจะอัปเดตแจ้งเตือนไปที่ฝั่งเซลส์อัตโนมัติครับ');">
+                <i class="fas fa-check-double me-2"></i> ปิดจ๊อบ / ติดตั้งเสร็จสิ้น
             </a>
             {% endif %}
         </div>

@@ -32,7 +32,7 @@
                         {{ product.get_product_type_display }}
                     </span>
                     <h4 class="fw-bold mb-1">{{ product.code|default:"ไม่มีรหัส" }} : {{ product.name }}</h4>
-                    <p class="text-muted mb-0">หมวดหมู่: 
+                    <p class="text-muted mb-0">หมวดหมู่:
                         <!-- 🌟 [FIXED] ดักจับค่าว่างอย่างปลอดภัย -->
                         {% if product.category %}
                             {{ product.category.name }}
@@ -63,6 +63,10 @@
                             <th class="px-4 py-3">วัน/เวลา ที่ทำรายการ</th>
                             <th class="py-3">ประเภท</th>
                             <th class="py-3 text-center">จำนวน</th>
+
+                            <!-- 🌟 [NEW] เพิ่มหัวคอลัมน์ จำนวนคงเหลือ -->
+                            <th class="py-3 text-center">จำนวนคงเหลือ</th>
+
                             <th class="py-3">อ้างอิงเอกสาร</th>
                         </tr>
                     </thead>
@@ -80,13 +84,22 @@
                             <td class="py-3 text-center fw-bold {% if move.movement_type == 'IN' %}text-success{% else %}text-danger{% endif %}">
                                 {% if move.movement_type == 'IN' %}+{% else %}-{% endif %} {{ move.quantity|floatformat:2 }}
                             </td>
+
+                            <!-- 🌟 [NEW] เพิ่มช่องแสดง ยอดคงเหลือสะสม (Running Balance) -->
+                            <td class="py-3 text-center">
+                                <span class="badge bg-light text-dark border fw-bold px-3 py-1 shadow-sm" style="font-size: 0.85rem;">
+                                    {{ move.current_balance|floatformat:2 }}
+                                </span>
+                            </td>
+
                             <td class="py-3">
                                 <span class="text-dark fw-semibold">{{ move.reference_doc|default:"-" }}</span>
                             </td>
                         </tr>
+                        <!-- โค้ดส่วนที่เหลือ (empty และ pagination) คงเดิมครับ -->
                         {% empty %}
                         <tr>
-                            <td colspan="4" class="text-center py-5 text-muted">
+                            <td colspan="5" class="text-center py-5 text-muted">
                                 <i class="fas fa-box-open fs-1 text-light mb-3 d-block"></i>
                                 ยังไม่มีประวัติการเคลื่อนไหวของสินค้านี้
                             </td>
@@ -96,7 +109,7 @@
                 </table>
             </div>
         </div>
-        
+
         <!-- Pagination -->
         {% if page_obj.has_other_pages %}
         <div class="card-footer bg-white border-top py-3">

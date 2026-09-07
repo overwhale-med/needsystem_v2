@@ -180,21 +180,6 @@ def solar_inventory_import(request):
     return redirect('solar_inventory_list')
 
 # ------------------------------------------
-# 📊 ระบบ Stock Card (ประวัติความเคลื่อนไหวสินค้า)
-# ------------------------------------------
-@login_required
-def solar_stock_card(request, pk):
-    product = get_object_or_404(SolarProduct, pk=pk)
-    movements = SolarStockMovement.objects.filter(product=product).order_by('-created_at', '-id')
-    paginator = Paginator(movements, 20)
-    page_obj = paginator.get_page(request.GET.get('page'))
-
-    return render(request, 'solar_inventory/stock_card.html', {
-        'product': product,
-        'page_obj': page_obj
-    })
-
-# ------------------------------------------
 # 📥/📤 ระบบรับเข้า - เบิกออก แมนนวล
 # ------------------------------------------
 @login_required
@@ -216,6 +201,42 @@ def solar_stock_movement_create(request):
         form = SolarStockMovementForm(initial=initial_data)
 
     return render(request, 'solar_inventory/stock_movement_form.html', {'form': form})
+
+# ------------------------------------------
+# 📊 ระบบ Stock Card (ประวัติความเคลื่อนไหวสินค้าพร้อม Running Balance)
+# ------------------------------------------
+@login_required
+def solar_stock_card(request, pk):
+    product = get_object_or_404(SolarProduct, pk=pk)
+
+    # 🌟 [NEW] ดึงประวัติทั้งหมดโดยเรียงจาก 'เก่าสุด' ไป 'ใหม่สุด' เพื่อคำนวณยอดสะสม
+    movements_asc = SolarStockMovement.objects.filter(product=product).order_by('created_at', 'id')
+
+    # 🌟 [NEW] ลอจิกคำนวณยอดคงเหลือสะสม (Running Balance)
+    running_balance = 0
+    calculated_movements = []
+
+    for move in movements_asc:
+        if move.movement_type == 'IN':
+            running_balance += move.quantity
+        elif move.movement_type == 'OUT':
+            running_balance -= move.quantity
+
+        # แปะค่ายอดสะสม (running_balance) ไว้ที่ object แต่ละตัว
+        move.current_balance = running_balance
+        calculated_movements.append(move)
+
+    # 🌟 [NEW] กลับด้านข้อมูล (Reverse) ให้รายการ 'ล่าสุด' ขึ้นมาอยู่บนสุดเหมือนเดิม
+    calculated_movements.reverse()
+
+    # นำรายการที่คำนวณเสร็จแล้วไปแบ่งหน้า (Pagination)
+    paginator = Paginator(calculated_movements, 20)
+    page_obj = paginator.get_page(request.GET.get('page'))
+
+    return render(request, 'solar_inventory/stock_card.html', {
+        'product': product,
+        'page_obj': page_obj
+    })
 
 # ==========================================
 # 📦 หน้าจอสำหรับสโตร์: จัดการใบขอเบิกวัสดุ (Requisitions)
@@ -293,17 +314,20 @@ def store_confirm_deduction(request, job_id):
     if request.method == 'POST':
         job = get_object_or_404(SolarJob, id=job_id, status='WAITING_STORE')
 
-        # 🌟 ลูปดึงรายการวัสดุ (BOM) ของงานนี้มาตัดสต็อก
+        # 🌟 ลูปเช็คก่อนว่ามีของชิ้นไหนที่สต็อกไม่พอหรือจะทำให้ติดลบหรือไม่
         for bom in job.job_boms.all():
-            # ถ้าแผนก Center ระบุยอด "เบิกจริง" มาให้ยึดยอดนั้น แต่ถ้าเป็น 0 ให้ดึงยอด "ตามแผน" มาหักแทน
+            qty_to_deduct = bom.actual_used_quantity if bom.actual_used_quantity > 0 else bom.planned_quantity
+            if bom.product and bom.product.stock_qty < qty_to_deduct:
+                messages.error(request, f"❌ ไม่สามารถจ่ายของได้! วัตถุดิบ '{bom.product.name}' มีจำนวนไม่เพียงพอ (ต้องการ {qty_to_deduct}, มีอยู่ {bom.product.stock_qty})")
+                return redirect('store_requisition_list')
+
+        # 🌟 ถ้ารอดเงื่อนไขด้านบนมาได้ แสดงว่าของครบ ค่อยมาลูปดึงรายการเพื่อตัดสต็อกจริง
+        for bom in job.job_boms.all():
             qty_to_deduct = bom.actual_used_quantity if bom.actual_used_quantity > 0 else bom.planned_quantity
 
             if qty_to_deduct > 0 and bom.product:
-                # 1. หักลบจำนวนคงเหลือในคลัง (Stock Deduction)
-                bom.product.stock_qty -= qty_to_deduct
-                bom.product.save()
-
-                # 2. บันทึกประวัติลง Stock Card อัตโนมัติ (Auto-Movement)
+                # 🌟 [FIXED] ลบโค้ดหักสต็อกบรรทัดเดิมออก ให้เหลือแค่การสร้างประวัติ
+                # เพราะเมื่อสร้างประวัติแล้ว โมเดล SolarStockMovement จะทำการตัดสต็อกให้อัตโนมัติเอง 1 ครั้งถ้วน
                 SolarStockMovement.objects.create(
                     product=bom.product,
                     quantity=qty_to_deduct,
@@ -311,13 +335,13 @@ def store_confirm_deduction(request, job_id):
                     reference_doc=f"จ่ายของสำหรับงาน: {job.code}"
                 )
 
-                # 3. อัปเดตยอดเบิกจริงใน BOM ให้ตรงกัน (กรณีที่ดึงยอดตามแผนมาใช้)
+                # 🌟 อัปเดตยอดเบิกจริงใน BOM ให้ตรงกัน (กรณีที่ดึงยอดตามแผนมาใช้)
                 if bom.actual_used_quantity == 0:
                     bom.actual_used_quantity = qty_to_deduct
                     bom.save()
 
-        # 🌟 คืนสถานะงานกลับไปเป็น "เตรียมของ" เพื่อให้ Center รู้ว่าสโตร์จ่ายของครบแล้ว
-        job.status = 'PREPARING'
+        # 🌟 คืนสถานะงานกลับไปเป็น "กำลังติดตั้ง (IN_PROGRESS)" เพื่อให้ Center รู้ว่าสโตร์จ่ายของครบแล้ว ช่างสามารถเริ่มงานได้เลย
+        job.status = 'IN_PROGRESS'
         job.save()
 
         messages.success(request, f"✅ ตัดสต็อกและจ่ายวัตถุดิบสำหรับงาน {job.code} เรียบร้อยแล้ว!")

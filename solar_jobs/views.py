@@ -54,7 +54,7 @@ def center_dashboard(request):
     draft_jobs = jobs.filter(status='DRAFT').count()
 
     # 🌟 [FIXED] ให้นับรวมงานที่รอสโตร์เบิกของ (WAITING_STORE) เข้าไปในกล่อง 'เตรียมของ' ด้วย
-    preparing_jobs = jobs.filter(status__in=['PREPARING', 'WAITING_STORE']).count()
+    preparing_jobs = jobs.filter(status__in=['PREPARING', 'WAITING_STORE', 'WAITING_PURCHASE']).count()
 
     in_progress_jobs = jobs.filter(status='IN_PROGRESS').count()
 
@@ -122,14 +122,14 @@ def solar_job_overview(request):
         base_jobs = base_jobs.filter(created_at__date__gte=start_date, created_at__date__lte=end_date)
 
     # 4. นับจำนวนสำหรับแสดงบนปุ่มแท็บ
-    active_count = base_jobs.filter(status__in=['DRAFT', 'PREPARING', 'IN_PROGRESS']).count()
+    active_count = base_jobs.filter(status__in=['DRAFT', 'PREPARING', 'WAITING_STORE', 'WAITING_PURCHASE', 'IN_PROGRESS']).count()
     completed_count = base_jobs.filter(status__in=['COMPLETED', 'CANCELLED']).count()
 
     # 5. แยกข้อมูลตามแท็บที่เลือก
     if tab == 'history':
         jobs = base_jobs.filter(status__in=['COMPLETED', 'CANCELLED']).order_by('-created_at')
     else:
-        jobs = base_jobs.filter(status__in=['DRAFT', 'PREPARING', 'IN_PROGRESS']).order_by('created_at')
+        jobs = base_jobs.filter(status__in=['DRAFT', 'PREPARING', 'WAITING_STORE', 'WAITING_PURCHASE', 'IN_PROGRESS']).order_by('created_at')
 
     # 6. ข้อมูลสำหรับ Dropdowns
     teams = SubcontractorTeam.objects.filter(is_active=True)
@@ -191,14 +191,21 @@ def solar_job_manage(request, job_id):
 
     job = get_object_or_404(SolarJob, id=job_id)
 
+    # ใน views.py บรรทัดประมาณ 155
     if request.method == 'POST':
         form = SolarJobForm(request.POST, instance=job)
         formset = SolarBOMFormSet(request.POST, instance=job)
 
         if form.is_valid() and formset.is_valid():
-            form.save()
+            # 🌟 [NEW] Automation 1: DRAFT -> PREPARING (เมื่อบันทึกข้อมูลและมีช่าง)
+            saved_job = form.save(commit=False)
+            if saved_job.status == 'DRAFT' and saved_job.technician_team:
+                saved_job.status = 'PREPARING'
+                messages.success(request, "✨ ระบบปรับสถานะเป็น 'เตรียมของ/จัดทีม' อัตโนมัติ")
+
+            saved_job.save()
             formset.save()
-            messages.success(request, f"✅ บันทึกข้อมูลการจัดทีมและเบิกวัตถุดิบของงาน {job.code} เรียบร้อยแล้ว")
+            messages.success(request, f"✅ บันทึกข้อมูลงาน {job.code} เรียบร้อยแล้ว")
             return redirect('solar_center_dashboard')
         else:
             messages.error(request, "❌ กรุณาตรวจสอบข้อมูลให้ครบถ้วน")
@@ -454,4 +461,37 @@ def center_submit_requisition(request, job_id):
     else:
         messages.warning(request, "⚠️ ไม่สามารถส่งใบเบิกได้ เนื่องจากสถานะงานไม่ถูกต้อง")
 
+    return redirect('solar_job_manage', job_id=job.id)
+
+# 🌟 [NEW] Automation 2: ปุ่มเริ่มดำเนินการติดตั้ง (WAITING_STORE -> IN_PROGRESS)
+@login_required
+def center_start_job(request, job_id):
+    if not is_center_staff(request.user): return redirect('solar_center_dashboard')
+    job = get_object_or_404(SolarJob, id=job_id)
+    if job.status == 'WAITING_STORE':
+        job.status = 'IN_PROGRESS'
+        job.save()
+        messages.success(request, f"🚀 เริ่มดำเนินการติดตั้งงาน {job.code} แล้ว! สถานะอัปเดตเป็นกำลังติดตั้ง")
+    return redirect('solar_job_manage', job_id=job.id)
+
+# 🌟 [NEW] Automation 3: ปุ่มปิดจ๊อบงาน (IN_PROGRESS -> COMPLETED)
+@login_required
+def center_complete_job(request, job_id):
+    if not is_center_staff(request.user): return redirect('solar_center_dashboard')
+    job = get_object_or_404(SolarJob, id=job_id)
+    if job.status == 'IN_PROGRESS':
+        job.status = 'COMPLETED'
+        job.save()
+
+        # 🌟 AUTOMATION วิ่งไปอัปเดตฝั่งเซลส์อัตโนมัติ
+        if job.quotation_ref_id:
+            SolarQuotation.objects.filter(id=job.quotation_ref_id).update(status='READY')
+        elif job.note and "QT-SOL" in str(job.note):
+            for word in str(job.note).split():
+                if "QT-SOL" in word:
+                    qt_code = word.strip().replace(',', '').replace(':', '')
+                    SolarQuotation.objects.filter(code__icontains=qt_code).update(status='READY')
+                    break
+
+        messages.success(request, f"✅ ปิดจ๊อบงาน {job.code} เรียบร้อย! (แจ้งเตือนแผนกเซลส์อัตโนมัติแล้ว)")
     return redirect('solar_job_manage', job_id=job.id)

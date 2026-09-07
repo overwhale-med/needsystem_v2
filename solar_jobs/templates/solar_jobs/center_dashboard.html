@@ -174,13 +174,12 @@
                 <span><i class="fas fa-tools text-primary me-2"></i> เตรียมของ (Preparing)</span>
             </div>
 
-            <!-- 🌟 [FIXED] อนุญาตให้สถานะ WAITING_STORE โผล่ในคอลัมน์นี้ และอัปเดต Drag&Drop -->
+            <!-- 🌟 อนุญาตให้ WAITING_STORE และ WAITING_PURCHASE โผล่ในคอลัมน์นี้ -->
             <div class="kanban-cards" id="col-preparing" data-status="PREPARING">
                 {% for job in jobs %}
-                    {% if job.status == 'PREPARING' or job.status == 'WAITING_STORE' %}
+                    {% if job.status == 'PREPARING' or job.status == 'WAITING_STORE' or job.status == 'WAITING_PURCHASE' %}
 
-                    <!-- เปลี่ยนสีขอบการ์ดถ้าเป็นสถานะรอเบิกของ -->
-                    <div class="kanban-card {% if job.status == 'WAITING_STORE' %}border-warning{% else %}border-preparing{% endif %}" data-id="{{ job.id }}">
+                    <div class="kanban-card {% if job.status == 'WAITING_STORE' %}border-warning{% elif job.status == 'WAITING_PURCHASE' %}border-danger{% else %}border-preparing{% endif %}" data-id="{{ job.id }}">
                         <div class="d-flex justify-content-between align-items-start mb-2">
                             <div>
                                 <div class="fw-bold text-dark fs-6">{{ job.code }}</div>
@@ -189,14 +188,17 @@
                                 {% endif %}
                             </div>
 
-                            <!-- 🌟 [FIXED] เปลี่ยนสี Badge แจ้งเตือนสถานะให้ชัดเจน -->
+                            <!-- 🌟 ป้ายแจ้งเตือนสถานะต่างๆ -->
                             {% if job.status == 'WAITING_STORE' %}
-                                <span class="badge bg-danger bg-opacity-10 text-danger border border-danger small shadow-sm"><i class="fas fa-box-open me-1"></i> รอสโตร์จ่ายของ</span>
+                                <span class="badge bg-danger bg-opacity-10 text-danger border border-danger small shadow-sm"><i class="fas fa-box-open me-1"></i> รอสโตร์เบิก</span>
+                            {% elif job.status == 'WAITING_PURCHASE' %}
+                                <span class="badge bg-danger text-white border border-danger small shadow-sm"><i class="fas fa-shopping-cart me-1"></i> รอจัดซื้อสั่งของ</span>
                             {% else %}
                                 <span class="badge bg-primary small shadow-sm">เตรียมของ</span>
                             {% endif %}
                         </div>
 
+                        <!-- โค้ดกล่อง info-box ของเดิม ไม่ต้องแก้ -->
                         <div class="info-box {% if job.status == 'WAITING_STORE' %}bg-warning bg-opacity-10 border-warning border-opacity-25{% endif %}">
                             <div class="small text-dark mb-1 text-truncate"><i class="fas fa-user-circle text-muted me-2" style="width:14px;"></i><strong>ลค:</strong> {{ job.customer.name|default:"ไม่ระบุ" }}</div>
                             <div class="small text-dark mb-1 text-truncate"><i class="fas fa-users-cog text-primary me-2" style="width:14px;"></i><strong>ช่าง:</strong> {{ job.technician_team.name|default:"ยังไม่จัดทีม"|truncatechars:25 }}</div>
