@@ -260,16 +260,19 @@ def store_requisition_detail(request, job_id):
 
     # 🌟 ลูปเพื่อคำนวณว่ามีวัสดุตัวไหนบ้างที่ "สต็อกไม่พอ"
     for bom in job.job_boms.all():
-        qty_to_deduct = bom.actual_used_quantity if bom.actual_used_quantity > 0 else bom.planned_quantity
+        # 🌟 [แก้ไขใหม่] คำนวณเฉพาะ "ส่วนต่าง" ที่ต้องเบิกเพิ่ม
+        qty_to_deduct = bom.planned_quantity - bom.actual_used_quantity
         missing_qty = 0
 
-        if qty_to_deduct > bom.product.stock_qty:
-            missing_qty = qty_to_deduct - bom.product.stock_qty
-            has_shortage = True # เจอของขาดแล้ว! แจ้งเตือนสโตร์
+        # ถ้าส่วนต่างมากกว่า 0 (แปลว่ามีการขอของเพิ่มจริงๆ) ค่อยเอาไปโชว์สโตร์
+        if qty_to_deduct > 0:
+            if qty_to_deduct > bom.product.stock_qty:
+                missing_qty = qty_to_deduct - bom.product.stock_qty
+                has_shortage = True # เจอของขาดแล้ว! แจ้งเตือนสโตร์
 
-        bom.qty_to_deduct = qty_to_deduct
-        bom.missing_qty = missing_qty
-        bom_list.append(bom)
+            bom.qty_to_deduct = qty_to_deduct
+            bom.missing_qty = missing_qty
+            bom_list.append(bom)
 
     return render(request, 'solar_inventory/store_requisition_detail.html', {
         'job': job,
@@ -293,14 +296,17 @@ def store_trigger_pr(request, job_id):
 
         # 2. คัดเฉพาะของที่ "ขาด" ใส่เข้าไปในเอกสาร PPO
         for bom in job.job_boms.all():
-            qty_to_deduct = bom.actual_used_quantity if bom.actual_used_quantity > 0 else bom.planned_quantity
-            if qty_to_deduct > bom.product.stock_qty:
-                missing_qty = qty_to_deduct - bom.product.stock_qty
-                SolarPurchasePreparationItem.objects.create(
-                    ppo=ppo,
-                    product=bom.product,
-                    quantity_needed=missing_qty
-                )
+            # 🌟 [แก้ไขใหม่] ใช้สูตรหาส่วนต่าง
+            qty_to_deduct = bom.planned_quantity - bom.actual_used_quantity
+
+            if qty_to_deduct > 0: # ดึงเฉพาะรายการที่เบิกเพิ่ม
+                if qty_to_deduct > bom.product.stock_qty:
+                    missing_qty = qty_to_deduct - bom.product.stock_qty
+                    SolarPurchasePreparationItem.objects.create(
+                        ppo=ppo,
+                        product=bom.product,
+                        quantity_needed=missing_qty
+                    )
 
         # 3. เปลี่ยนสถานะงาน เพื่อรอของมาเติม
         job.status = 'WAITING_PURCHASE'
@@ -316,33 +322,33 @@ def store_confirm_deduction(request, job_id):
 
         # 🌟 ลูปเช็คก่อนว่ามีของชิ้นไหนที่สต็อกไม่พอหรือจะทำให้ติดลบหรือไม่
         for bom in job.job_boms.all():
-            qty_to_deduct = bom.actual_used_quantity if bom.actual_used_quantity > 0 else bom.planned_quantity
-            if bom.product and bom.product.stock_qty < qty_to_deduct:
-                messages.error(request, f"❌ ไม่สามารถจ่ายของได้! วัตถุดิบ '{bom.product.name}' มีจำนวนไม่เพียงพอ (ต้องการ {qty_to_deduct}, มีอยู่ {bom.product.stock_qty})")
+            # 🌟 [แก้ไขใหม่] สูตรส่วนต่าง
+            qty_to_deduct = bom.planned_quantity - bom.actual_used_quantity
+
+            if qty_to_deduct > 0 and bom.product and bom.product.stock_qty < qty_to_deduct:
+                messages.error(request, f"❌ ไม่สามารถจ่ายของได้! วัตถุดิบ '{bom.product.name}' มีจำนวนไม่เพียงพอ (ต้องการเบิกเพิ่ม {qty_to_deduct}, มีอยู่ {bom.product.stock_qty})")
                 return redirect('store_requisition_list')
 
         # 🌟 ถ้ารอดเงื่อนไขด้านบนมาได้ แสดงว่าของครบ ค่อยมาลูปดึงรายการเพื่อตัดสต็อกจริง
         for bom in job.job_boms.all():
-            qty_to_deduct = bom.actual_used_quantity if bom.actual_used_quantity > 0 else bom.planned_quantity
+            qty_to_deduct = bom.planned_quantity - bom.actual_used_quantity
 
             if qty_to_deduct > 0 and bom.product:
-                # 🌟 [FIXED] ลบโค้ดหักสต็อกบรรทัดเดิมออก ให้เหลือแค่การสร้างประวัติ
-                # เพราะเมื่อสร้างประวัติแล้ว โมเดล SolarStockMovement จะทำการตัดสต็อกให้อัตโนมัติเอง 1 ครั้งถ้วน
+                # 🌟 สร้างประวัติเพื่อตัดสต็อก (เฉพาะจำนวนที่เบิกเพิ่มรอบนี้)
                 SolarStockMovement.objects.create(
                     product=bom.product,
                     quantity=qty_to_deduct,
                     movement_type='OUT',
-                    reference_doc=f"จ่ายของสำหรับงาน: {job.code}"
+                    reference_doc=f"จ่ายของเพิ่มสำหรับงาน: {job.code}"
                 )
 
-                # 🌟 อัปเดตยอดเบิกจริงใน BOM ให้ตรงกัน (กรณีที่ดึงยอดตามแผนมาใช้)
-                if bom.actual_used_quantity == 0:
-                    bom.actual_used_quantity = qty_to_deduct
-                    bom.save()
+                # 🌟 อัปเดตยอดเบิกจริงใน BOM ให้รวมกับยอดที่เพิ่งเบิกไป
+                bom.actual_used_quantity += qty_to_deduct
+                bom.save()
 
-        # 🌟 คืนสถานะงานกลับไปเป็น "กำลังติดตั้ง (IN_PROGRESS)" เพื่อให้ Center รู้ว่าสโตร์จ่ายของครบแล้ว ช่างสามารถเริ่มงานได้เลย
+        # 🌟 คืนสถานะงานกลับไปเป็น "กำลังติดตั้ง (IN_PROGRESS)"
         job.status = 'IN_PROGRESS'
         job.save()
 
-        messages.success(request, f"✅ ตัดสต็อกและจ่ายวัตถุดิบสำหรับงาน {job.code} เรียบร้อยแล้ว!")
+        messages.success(request, f"✅ ตัดสต็อกและจ่ายวัตถุดิบเพิ่มเติมสำหรับงาน {job.code} เรียบร้อยแล้ว!")
     return redirect('store_requisition_list')

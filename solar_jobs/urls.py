@@ -7,6 +7,9 @@ urlpatterns = [
     path('create-quick-job/', views.solar_job_create, name='solar_job_create'),
     path('manage/<int:job_id>/', views.solar_job_manage, name='solar_job_manage'),
 
+    # 🌟 [NEW] เส้นทางใหม่สำหรับหน้าประวัติการเบิกของ
+    path('manage/<int:job_id>/bom-history/', views.solar_job_bom_history, name='solar_job_bom_history'),
+
     path('manage/<int:job_id>/submit-requisition/', views.center_submit_requisition, name='center_submit_requisition'),
     path('manage/<int:job_id>/start/', views.center_start_job, name='center_start_job'),
     path('manage/<int:job_id>/complete/', views.center_complete_job, name='center_complete_job'),

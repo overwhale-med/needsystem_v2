@@ -27,21 +27,24 @@
                 <table class="table align-middle mb-0">
                     <thead class="bg-light text-secondary small">
                         <tr>
+                            <!-- 🌟 ปรับขนาดความกว้างให้สมดุลเพื่อรองรับคอลัมน์ใหม่ -->
                             <th class="ps-4 py-3 border-0" style="width: 25%;">รหัส / ชื่อวัสดุ (RM)</th>
                             <th class="text-center py-3 border-0" style="width: 10%;">จำนวนที่สั่ง</th>
-                            <th class="py-3 border-0" style="width: 30%;">เลือกร้านค้า (Supplier)</th>
+                            <th class="py-3 border-0" style="width: 25%;">เลือกร้านค้า (Supplier)</th>
                             <th class="text-center py-3 border-0" style="width: 15%;">ราคาต่อหน่วย</th>
+                            <!-- 🌟 [NEW] เพิ่มหัวคอลัมน์ ราคารวมวัตถุดิบ -->
+                            <th class="text-end pe-4 py-3 border-0" style="width: 15%;">ราคารวมวัตถุดิบ</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody id="po-items-body">
                         {% for item in ppo.items.all %}
-                        <tr class="border-bottom bg-danger bg-opacity-10">
+                        <tr class="border-bottom bg-danger bg-opacity-10 po-item-row">
                             <td class="ps-4 py-3 fw-bold text-dark">
                                 <input type="hidden" name="item_id[]" value="{{ item.id }}">
                                 {{ item.product.code }} - {{ item.product.name }}
                             </td>
                             <td class="text-center py-3">
-                                <input type="number" step="0.01" name="quantity[]" value="{{ item.quantity_needed }}" class="form-control form-control-sm text-center fw-bold text-danger bg-white" required>
+                                <input type="number" step="0.01" name="quantity[]" value="{{ item.quantity_needed }}" class="form-control form-control-sm text-center fw-bold text-danger bg-white input-qty" required>
                             </td>
                             <td class="py-3">
                                 <select name="supplier_id[]" class="form-select form-select-sm text-secondary border-danger border-opacity-25 shadow-sm" required>
@@ -51,24 +54,130 @@
                                     {% endfor %}
                                 </select>
                             </td>
-                            <td class="text-center py-3 pe-4">
+                            <td class="text-center py-3">
                                 <div class="input-group input-group-sm shadow-sm">
                                     <span class="input-group-text bg-white border-danger border-opacity-25">฿</span>
-                                    <input type="number" step="0.01" name="unit_cost[]" class="form-control text-end border-danger border-opacity-25" placeholder="0.00" value="{{ item.product.cost_price }}" required>
+                                    <input type="text" inputmode="decimal" name="unit_cost[]" class="form-control text-end border-danger border-opacity-25 input-cost" placeholder="0.00" value="{{ item.product.cost_price }}" required>
                                 </div>
+                            </td>
+                            <!-- 🌟 [NEW] ช่องแสดงผลราคารวมของแต่ละแถว -->
+                            <td class="text-end py-3 pe-4 fw-bold text-danger row-total-price">
+                                0.00
                             </td>
                         </tr>
                         {% endfor %}
                     </tbody>
+                    <!-- 🌟 [NEW] แถวแถมพิเศษ สรุปยอดรวมทั้งบิล -->
+                    <tfoot class="bg-light">
+                        <tr>
+                            <td colspan="4" class="text-end fw-bold py-3 text-dark">รวมเป็นเงินทั้งสิ้น (โดยประมาณ):</td>
+                            <td class="text-end pe-4 fw-bold fs-5 text-danger py-3" id="grand-total-price">0.00</td>
+                        </tr>
+                    </tfoot>
                 </table>
             </div>
         </div>
 
         <div class="text-end">
-            <button type="submit" class="btn btn-primary rounded-pill px-5 py-2 fw-bold shadow-sm fs-5" onclick="return confirm('ระบบจะทำการสร้างใบสั่งซื้อ (PO) ตามร้านค้าที่เลือกไว้ \nยืนยันการทำรายการหรือไม่?');">
+            <button type="submit" class="btn btn-gold rounded-pill px-5 py-2 fw-bold shadow-sm fs-5" onclick="return confirm('ระบบจะทำการสร้างใบสั่งซื้อ (PO) ตามร้านค้าที่เลือกไว้ \nยืนยันการทำรายการหรือไม่?');">
                 <i class="fas fa-magic me-2"></i> สร้างใบสั่งซื้อ (PO) อัตโนมัติ
             </button>
         </div>
     </form>
 </div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const formElement = document.querySelector("form");
+        const rows = document.querySelectorAll(".po-item-row");
+
+        // 🌟 ฟังก์ชันสำหรับเติมลูกน้ำและทศนิยม 2 ตำแหน่ง
+        function formatNumberWithCommas(value) {
+            if (!value) return "0.00";
+            let cleanValue = value.toString().replace(/,/g, '').replace(/[^0-9.]/g, '');
+            if (!cleanValue) return "0.00";
+
+            let floatVal = parseFloat(cleanValue);
+            if (isNaN(floatVal)) return "0.00";
+
+            let parts = floatVal.toFixed(2).split(".");
+            parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+            return parts.join(".");
+        }
+
+        // 🌟 [NEW] ฟังก์ชันคำนวณราคารวม (แถว และ ยอดสุทธิ)
+        function calculateTotals() {
+            let grandTotal = 0;
+
+            rows.forEach(row => {
+                const qtyInput = row.querySelector('.input-qty');
+                const costInput = row.querySelector('.input-cost');
+                const totalCell = row.querySelector('.row-total-price');
+
+                if (qtyInput && costInput && totalCell) {
+                    const qty = parseFloat(qtyInput.value) || 0;
+                    const cost = parseFloat(costInput.value.replace(/,/g, '')) || 0;
+                    
+                    const rowTotal = qty * cost;
+                    grandTotal += rowTotal;
+
+                    totalCell.innerText = formatNumberWithCommas(rowTotal);
+                }
+            });
+
+            // อัปเดตยอดรวมทั้งหมดด้านล่างสุด
+            const grandTotalCell = document.getElementById('grand-total-price');
+            if (grandTotalCell) {
+                grandTotalCell.innerText = "฿ " + formatNumberWithCommas(grandTotal);
+            }
+        }
+
+        // 🌟 วนลูปจับตาดูการพิมพ์ในแต่ละแถว
+        rows.forEach(row => {
+            const qtyInput = row.querySelector('.input-qty');
+            const costInput = row.querySelector('.input-cost');
+
+            // จัดรูปแบบราคาเริ่มต้นตอนเปิดหน้าเว็บ
+            if (costInput && costInput.value) {
+                costInput.value = formatNumberWithCommas(costInput.value);
+            }
+
+            // คำนวณใหม่เมื่อพิมพ์เปลี่ยน "จำนวน"
+            if (qtyInput) {
+                qtyInput.addEventListener('input', calculateTotals);
+            }
+
+            // คำนวณใหม่เมื่อพิมพ์เปลี่ยน "ราคา"
+            if (costInput) {
+                costInput.addEventListener('input', calculateTotals);
+                
+                // คืนฟอร์แมตลูกน้ำเมื่อคลิกออกจากกล่องราคา
+                costInput.addEventListener('blur', function() {
+                    this.value = formatNumberWithCommas(this.value);
+                    calculateTotals();
+                });
+            }
+        });
+
+        // 🌟 คลุมดำอัตโนมัติเมื่อคลิก (เพื่อความรวดเร็วในการพิมพ์ทับ)
+        document.body.addEventListener('focusin', function(e) {
+            if(e.target.tagName === 'INPUT' && (e.target.classList.contains('input-qty') || e.target.classList.contains('input-cost'))) {
+                e.target.select();
+            }
+        });
+
+        // 🌟 ถอดลูกน้ำออกก่อนกด Submit ส่งค่าให้ Django
+        if (formElement) {
+            formElement.addEventListener("submit", function() {
+                const costInputsToSubmit = document.querySelectorAll('.input-cost');
+                costInputsToSubmit.forEach(input => {
+                    input.value = input.value.replace(/,/g, '');
+                });
+            });
+        }
+
+        // 🌟 สั่งรันคำนวณยอดรวม 1 ครั้ง ตอนเปิดหน้าเว็บ
+        calculateTotals();
+    });
+</script>
 {% endblock %}

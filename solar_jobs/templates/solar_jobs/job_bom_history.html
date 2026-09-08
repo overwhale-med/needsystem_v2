@@ -1,0 +1,56 @@
+{% extends 'core/base.html' %}
+{% load humanize %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-end mb-4">
+        <div>
+            <h4 class="fw-bold mb-1 text-dark">
+                <i class="fas fa-history text-info me-2"></i>ประวัติการเบิกจ่ายวัสดุ
+            </h4>
+            <p class="text-muted small mb-0">รหัสงาน: <span class="fw-bold text-primary">{{ job.code }}</span> | ลูกค้า: {{ job.customer.name|default:"-" }}</p>
+        </div>
+        <button type="button" class="btn btn-outline-secondary rounded-pill px-4 fw-bold shadow-sm" onclick="window.close();">
+            <i class="fas fa-times me-2"></i> ปิดหน้าต่าง
+        </button>
+    </div>
+
+    <div class="card border-0 shadow-sm rounded-4 bg-white">
+        <div class="card-header bg-info bg-opacity-10 py-3 border-bottom-0">
+            <h6 class="fw-bold mb-0 text-dark"><i class="fas fa-check-double text-success me-2"></i>รายการวัสดุที่สโตร์จ่ายและตัดสต็อกแล้ว</h6>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="bg-light text-secondary small text-uppercase">
+                        <tr>
+                            <th class="ps-4 py-3 border-0" style="width: 5%;">#</th>
+                            <th class="py-3 border-0" style="width: 45%;">รหัส / ชื่อวัสดุ (RM)</th>
+                            <th class="text-center py-3 border-0" style="width: 15%;">แผนที่วางไว้</th>
+                            <th class="text-center py-3 border-0" style="width: 15%;">เบิกจ่ายจริง</th>
+                            <th class="text-end pe-4 py-3 border-0" style="width: 20%;">ต้นทุน/หน่วย (บาท)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for bom in completed_boms %}
+                        <tr class="border-bottom">
+                            <td class="ps-4 py-3 text-muted">{{ forloop.counter }}</td>
+                            <td class="py-3 fw-bold text-dark">{{ bom.product.code }} - {{ bom.product.name }}</td>
+                            <td class="text-center py-3 text-muted">{{ bom.planned_quantity|floatformat:2 }}</td>
+                            <td class="text-center py-3">
+                                <span class="badge bg-success bg-opacity-10 text-success border border-success fs-6 rounded-pill px-3 shadow-sm">
+                                    {{ bom.actual_used_quantity|floatformat:2 }}
+                                </span>
+                            </td>
+                            <td class="text-end pe-4 py-3 fw-bold text-secondary">{{ bom.unit_cost|floatformat:2|intcomma }} ฿</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="5" class="text-center text-muted py-5">ยังไม่มีประวัติการเบิกจ่ายวัสดุสำหรับงานนี้</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

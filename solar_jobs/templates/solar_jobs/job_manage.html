@@ -9,7 +9,6 @@
     .table-items th { background-color: #f8f9fa; font-weight: 600; color: #495057; border-bottom: 2px solid #dee2e6; }
 </style>
 
-<!-- 🌟 นำเข้า Flatpickr Datepicker สำหรับวันที่ (dd/mm/yyyy) 🌟 -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 
@@ -20,7 +19,6 @@
             <p class="text-muted small mb-0">ปรับปรุงสถานะงานและสูตรผลิต (BOM) (รูปแบบวันที่: dd/mm/yyyy)</p>
         </div>
         <div class="d-flex gap-2">
-            <!-- 🌟 ปุ่มพาไปหน้าจัดการฐานข้อมูลช่าง -->
             <a href="{% url 'subcontractor_list' %}" class="btn btn-outline-primary rounded-pill px-4 fw-bold shadow-sm">
                 <i class="fas fa-users-cog me-2"></i> ฐานข้อมูลทีมช่าง
             </a>
@@ -33,7 +31,7 @@
     <form method="POST" id="jobManageForm">
         {% csrf_token %}
         <div class="row g-4">
-            <!-- 📦 ข้อมูลลูกค้าและสถานะ -->
+            <!-- ข้อมูลลูกค้าและสถานะ (เหมือนเดิม) -->
             <div class="col-lg-4">
                 <div class="card border-0 shadow-sm rounded-4 bg-white h-100">
                     <div class="card-header bg-white py-3 border-bottom-0">
@@ -61,13 +59,13 @@
                                 {% else %}<span class="badge bg-secondary px-3 py-2 fs-6">{{ job.get_status_display }}</span>
                                 {% endif %}
                             </div>
-                            <div class="d-none">{{ form.status }}</div> <!-- ซ่อนฟิลด์ฟอร์มไว้ไม่ให้พัง -->
+                            <div class="d-none">{{ form.status }}</div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- 👷‍♂️ จัดทีมช่าง และ กำหนดเวลา -->
+            <!-- จัดทีมช่าง และ กำหนดเวลา (เหมือนเดิม) -->
             <div class="col-lg-8">
                 <div class="card border-0 shadow-sm rounded-4 bg-white h-100">
                     <div class="card-header bg-white py-3 border-bottom-0">
@@ -77,7 +75,6 @@
                         <div class="row g-3">
                             <div class="col-md-6">
                                 <label class="form-label">ทีมช่างผู้รับผิดชอบ</label>
-                                <!-- 🌟 [FIXED] ดึง Dropdown ทีมช่างจากตาราง SubcontractorTeam -->
                                 <select name="technician_team" class="form-select text-secondary fw-bold">
                                     <option value="">---------</option>
                                     {% for team in teams %}
@@ -86,11 +83,9 @@
                                 </select>
                             </div>
                             <div class="col-md-6">
-                                <label class="form-label">งบประมาณค่าแรงช่าง (บาท)</label>
-                                <!-- 🌟 [FIXED] แสดงช่องกรอกที่พิมพ์จุดทศนิยมได้อิสระ -->
+                                <label class="form-label">งบประมาณค่าดำเนินงาน(15.50%)</label>
                                 {{ form.labor_cost_budget }}
                             </div>
-                            <!-- 🌟 [FIXED] เปลี่ยนเป็น Text เพื่อใช้ Flatpickr -->
                             <div class="col-md-6">
                                 <label class="form-label">กำหนดเริ่มงาน (dd/mm/yyyy)</label>
                                 <input type="text" name="start_date" class="form-control text-secondary fw-bold custom-datepicker" placeholder="dd/mm/yyyy" value="{{ form.start_date.value|date:'Y-m-d'|default_if_none:'' }}">
@@ -112,16 +107,33 @@
         <!-- 📝 รายการเบิกวัตถุดิบ BOM -->
         <div class="card border-0 shadow-sm rounded-4 bg-white mt-4">
             <div class="card-header bg-white py-3 border-bottom-0 d-flex justify-content-between align-items-center">
-                <h6 class="fw-bold mb-0 text-dark">รายการเบิกวัตถุดิบ (Job BOM)</h6>
+                <h6 class="fw-bold mb-0 text-dark">
+                    {% if job.status == 'IN_PROGRESS' %}
+                        <i class="fas fa-plus-circle text-info me-1"></i> รายการขอเบิกวัสดุเพิ่มเติม
+                    {% else %}
+                        <i class="fas fa-list-ol text-warning me-1"></i> รายการรอเบิกวัตถุดิบ (Pending Job BOM)
+                    {% endif %}
+                </h6>
 
-                <!-- 🌟 [NEW] เพิ่มปุ่มใหม่ วางคู่กัน 🌟 -->
                 <div class="d-flex gap-2">
-                    <!-- 🌟 [FIXED] เปลี่ยนเป็นปุ่ม Submit ที่แนบชื่อเพื่อเช็คเงื่อนไขฝั่งหลังบ้าน -->
+                    {% if has_completed_boms %}
+                    <a href="{% url 'solar_job_bom_history' job.id %}" target="_blank" class="btn btn-sm btn-outline-info rounded-pill px-3 fw-bold shadow-sm">
+                        <i class="fas fa-history me-1"></i> ประวัติการเบิกจ่าย
+                    </a>
+                    {% endif %}
+
+                    {% if job.status != 'IN_PROGRESS' %}
                     <button type="submit" name="action_fetch_bom" class="btn btn-sm btn-outline-warning text-dark fw-bold rounded-pill px-3 shadow-sm hover-card" onclick="return confirm('ระบบจะดึงสูตรมาตรฐานของแพ็กเกจ [{{ job.package_sold.name|default:"ไม่มีแพ็กเกจ" }}] มาใส่ในตาราง พร้อมกับบันทึกข้อมูลด้านบน\n\nต้องการดำเนินการต่อหรือไม่?');">
                         <i class="fas fa-magic me-1"></i> ดึงรายการวัตถุดิบ (BOM)
                     </button>
+                    {% endif %}
+
                     <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3 fw-bold" id="add-material-btn">
-                        <i class="fas fa-plus me-1"></i> เพิ่มวัตถุดิบลงสูตร
+                        {% if job.status == 'IN_PROGRESS' %}
+                            <i class="fas fa-plus me-1"></i> ขอเบิกวัสดุเพิ่มเติม
+                        {% else %}
+                            <i class="fas fa-plus me-1"></i> เพิ่มวัตถุดิบลงสูตร
+                        {% endif %}
                     </button>
                 </div>
             </div>
@@ -132,10 +144,18 @@
                     <table class="table table-borderless table-items align-middle mb-0">
                         <thead>
                             <tr>
-                                <th style="width: 35%;">วัตถุดิบ (RM)</th>
-                                <th class="text-center" style="width: 15%;">แผน (BOM)</th>
-                                <th class="text-center text-primary" style="width: 15%;">เบิกจริง</th>
-                                <th class="text-end" style="width: 20%;">ต้นทุน/หน่วย (บาท)</th>
+                                <th style="width: 25%;">วัตถุดิบ (RM)</th>
+                                
+                                {% if job.status == 'IN_PROGRESS' %}
+                                    <th class="text-center text-primary" style="width: 15%;">จำนวนที่ขอเบิกเพิ่ม</th>
+                                    <th class="d-none">เบิกจริง</th>
+                                {% else %}
+                                    <th class="text-center" style="width: 10%;">แผน (BOM)</th>
+                                    <th class="text-center text-primary" style="width: 10%;">เบิกจริง</th>
+                                {% endif %}
+                                
+                                <th class="text-end" style="width: 15%;">ต้นทุน/หน่วย (บาท)</th>
+                                <th class="text-end text-danger" style="width: 15%;">ราคาต้นทุนรวม (บาท)</th>
                                 <th class="text-center" style="width: 10%;">ซ่อน/ลบ</th>
                             </tr>
                         </thead>
@@ -146,9 +166,18 @@
                                     {% for hidden in item_form.hidden_fields %}{{ hidden }}{% endfor %}
                                     {{ item_form.product }}
                                 </td>
-                                <td>{{ item_form.planned_quantity }}</td>
-                                <td>{{ item_form.actual_used_quantity }}</td>
-                                <td>{{ item_form.unit_cost }}</td>
+                                
+                                <td class="text-center">
+                                    {{ item_form.planned_quantity }}
+                                </td>
+                                
+                                <td class="{% if job.status == 'IN_PROGRESS' %}d-none{% endif %} text-center">
+                                    {{ item_form.actual_used_quantity }}
+                                </td>
+
+                                <td class="text-end pe-3">{{ item_form.unit_cost }}</td>
+                                <td class="text-end pe-4 fw-bold text-danger row-total-price">0.00</td>
+                                
                                 <td class="text-center">
                                     <div class="d-none">{{ item_form.DELETE }}</div>
                                     <button type="button" class="btn btn-sm btn-outline-danger border-0 remove-row-btn" title="ลบรายการนี้"><i class="fas fa-trash"></i></button>
@@ -156,6 +185,13 @@
                             </tr>
                             {% endfor %}
                         </tbody>
+                        <tfoot class="bg-light">
+                            <tr>
+                                <td colspan="{% if job.status == 'IN_PROGRESS' %}3{% else %}4{% endif %}" class="text-end fw-bold py-3">รวมต้นทุนวัตถุดิบ (เฉพาะตารางนี้):</td>
+                                <td class="text-end pe-4 fw-bold fs-5 text-danger py-3" id="grand-total-price">0.00</td>
+                                <td></td>
+                            </tr>
+                        </tfoot>
                     </table>
                 </div>
             </div>
@@ -167,10 +203,15 @@
                 <i class="fas fa-save me-2"></i> บันทึกข้อมูลงาน
             </button>
 
+            <!-- 🌟 [NEW] เงื่อนไขซ่อน/โชว์ปุ่มส่งสโตร์แบบรัดกุม 🌟 -->
             {% if job.status == 'DRAFT' or job.status == 'PREPARING' %}
-            <a href="{% url 'center_submit_requisition' job.id %}" class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm fs-6" onclick="return confirm('ยืนยันส่งใบขอเบิกวัสดุไปให้แผนกสโตร์?\n\n(หากมีการแก้ไข BOM กรุณากดปุ่มบันทึกข้อมูลก่อนครับ)');">
-                <i class="fas fa-paper-plane me-2"></i> ส่งให้สโตร์เบิกของ
-            </a>
+                <a href="{% url 'center_submit_requisition' job.id %}" class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm fs-6" onclick="return confirm('ยืนยันส่งใบขอเบิกวัสดุไปให้แผนกสโตร์?\n\n(หากมีการเพิ่มรายการวัตถุดิบ กรุณากดปุ่มบันทึกข้อมูลงานก่อนนะครับ)');">
+                    <i class="fas fa-paper-plane me-2"></i> ส่งให้สโตร์เบิกของ
+                </a>
+            {% elif job.status == 'IN_PROGRESS' and has_pending_requisition %}
+                <a href="{% url 'center_submit_requisition' job.id %}" class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm fs-6" onclick="return confirm('ยืนยันส่งใบขอเบิกวัสดุเพิ่มเติมไปให้แผนกสโตร์?');">
+                    <i class="fas fa-paper-plane me-2"></i> ขอเบิกวัสดุเพิ่ม (ส่งกลับสโตร์)
+                </a>
             {% endif %}
 
             {% if job.status == 'WAITING_STORE' %}
@@ -196,9 +237,14 @@
                 {% for hidden in formset.empty_form.hidden_fields %}{{ hidden }}{% endfor %}
                 {{ formset.empty_form.product }}
             </td>
-            <td>{{ formset.empty_form.planned_quantity }}</td>
-            <td>{{ formset.empty_form.actual_used_quantity }}</td>
-            <td>{{ formset.empty_form.unit_cost }}</td>
+            <td class="text-center">
+                {{ formset.empty_form.planned_quantity }}
+            </td>
+            <td class="{% if job.status == 'IN_PROGRESS' %}d-none{% endif %} text-center">
+                {{ formset.empty_form.actual_used_quantity }}
+            </td>
+            <td class="text-end pe-3">{{ formset.empty_form.unit_cost }}</td>
+            <td class="text-end pe-4 fw-bold text-danger row-total-price">0.00</td>
             <td class="text-center">
                 <div class="d-none">{{ formset.empty_form.DELETE }}</div>
                 <button type="button" class="btn btn-sm btn-outline-danger border-0 remove-row-btn" title="ลบรายการนี้"><i class="fas fa-trash"></i></button>
@@ -208,8 +254,10 @@
 </table>
 
 <script>
+    // รับค่าสมุดราคา (Price Book) จากหลังบ้านมาเก็บเป็น Object ของ JavaScript
+    const rmPrices = JSON.parse('{{ rm_prices_json|escapejs|default:"{}" }}');
+
     document.addEventListener("DOMContentLoaded", function() {
-        // 🌟 1. ตั้งค่า Flatpickr ให้แสดงผลเป็น dd/mm/yyyy
         flatpickr(".custom-datepicker", {
             dateFormat: "Y-m-d",
             altInput: true,
@@ -220,10 +268,70 @@
 
         const formsetBody = document.getElementById("formset-body");
         const addBtn = document.getElementById("add-material-btn");
-        // 🌟 [FIXED] อัปเดตชื่อ Prefix ให้ตรงกับ SolarBOMFormSet (id_job_boms-TOTAL_FORMS)
         const totalFormsInput = document.getElementById("id_job_boms-TOTAL_FORMS");
 
-        // 🌟 2. สคริปต์เพิ่มแถว
+        // กวาดล้างแถวแถมฟรีจาก Django ตอนโหลดหน้าแรก
+        const initialRows = formsetBody.querySelectorAll('.item-row');
+        initialRows.forEach(row => {
+            const productSelect = row.querySelector('select[name$="-product"]');
+            const plannedQtyInput = row.querySelector('input[name$="-planned_quantity"]');
+            if (productSelect && productSelect.value === "" && plannedQtyInput) {
+                plannedQtyInput.value = "0";
+            }
+        });
+
+        // ฟังก์ชันหลักสำหรับคำนวณและแสดงผลราคา
+        function calculateRowAndGrandTotal() {
+            let grandTotal = 0;
+            const rows = formsetBody.querySelectorAll('.item-row');
+            
+            rows.forEach(row => {
+                if (row.style.display === 'none') return;
+
+                const qtyInput = row.querySelector('input[name$="-planned_quantity"]');
+                const costInput = row.querySelector('input[name$="-unit_cost"]');
+                const totalCell = row.querySelector('.row-total-price');
+
+                if (qtyInput && costInput && totalCell) {
+                    const qty = parseFloat(qtyInput.value.replace(/,/g, '')) || 0;
+                    const cost = parseFloat(costInput.value.replace(/,/g, '')) || 0;
+                    
+                    const rowTotal = qty * cost;
+                    grandTotal += rowTotal;
+
+                    totalCell.innerText = formatNumberWithCommas(rowTotal.toFixed(2));
+                }
+            });
+
+            const grandTotalCell = document.getElementById('grand-total-price');
+            if (grandTotalCell) {
+                grandTotalCell.innerText = formatNumberWithCommas(grandTotal.toFixed(2));
+            }
+        }
+
+        // Event Listener จับตาดูการกระทำของผู้ใช้
+        formsetBody.addEventListener('change', function(e) {
+            if (e.target.tagName === 'SELECT' && e.target.name.includes('-product')) {
+                const row = e.target.closest('.item-row');
+                const costInput = row.querySelector('input[name$="-unit_cost"]');
+                const productId = e.target.value;
+
+                if (costInput && productId && rmPrices[productId]) {
+                    costInput.value = formatNumberWithCommas(rmPrices[productId].toFixed(2));
+                } else if (costInput && !productId) {
+                    costInput.value = "0.00";
+                }
+                calculateRowAndGrandTotal();
+            }
+        });
+
+        formsetBody.addEventListener('input', function(e) {
+            if (e.target.tagName === 'INPUT' && (e.target.name.includes('-planned_quantity') || e.target.name.includes('-unit_cost'))) {
+                calculateRowAndGrandTotal();
+            }
+        });
+
+        // สคริปต์เพิ่มแถว
         addBtn.addEventListener("click", function() {
             const currentFormCount = parseInt(totalFormsInput.value);
             const templateHtml = document.getElementById("empty-row-template").innerHTML;
@@ -231,24 +339,90 @@
 
             formsetBody.insertAdjacentHTML('beforeend', newRowHtml);
             totalFormsInput.value = currentFormCount + 1;
+
+            const newRow = formsetBody.lastElementChild;
+            const plannedQtyInput = newRow.querySelector('input[name$="-planned_quantity"]');
+            if (plannedQtyInput) plannedQtyInput.value = "0";
+            
+            calculateRowAndGrandTotal(); 
         });
 
-        // 🌟 3. สคริปต์ลบแถว
+        // สคริปต์ลบแถว
         formsetBody.addEventListener("click", function(e) {
             if (e.target.closest(".remove-row-btn")) {
                 const row = e.target.closest(".item-row");
                 const deleteCheckbox = row.querySelector('input[type="checkbox"][name$="-DELETE"]');
 
                 if (deleteCheckbox) {
-                    // ถ้าเป็นแถวเก่าที่มีใน Database ให้ติ๊กถูก Checkbox แล้วซ่อนแถว (Django จะลบให้ตอน Save)
                     deleteCheckbox.checked = true;
                     row.style.display = 'none';
                 } else {
-                    // ถ้าเป็นแถวใหม่ที่เพิ่งกดเพิ่ม ให้ลบออกไปเลย
                     row.remove();
                 }
+                calculateRowAndGrandTotal(); 
             }
         });
+
+        // คลุมดำอัตโนมัติเมื่อคลิก
+        document.body.addEventListener('focusin', function(e) {
+            if(e.target.tagName === 'INPUT' && (
+                e.target.name.includes('planned_quantity') ||
+                e.target.name.includes('actual_used_quantity') ||
+                e.target.name.includes('unit_cost') ||
+                e.target.name === 'labor_cost_budget'
+            )) {
+                e.target.select();
+            }
+        });
+
+        const formElement = document.getElementById("jobManageForm");
+
+        function formatNumberWithCommas(value) {
+            let parts = value.toString().replace(/[^0-9.]/g, '').split(".");
+            parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+            return parts.join(".");
+        }
+
+        function applyCommaFormatToInput(inputBox) {
+            if(inputBox && inputBox.value) {
+                inputBox.value = formatNumberWithCommas(inputBox.value);
+            }
+        }
+
+        const costInputs = document.querySelectorAll('input[name$="-unit_cost"]');
+        costInputs.forEach(input => {
+            input.type = 'text';
+            applyCommaFormatToInput(input);
+            input.addEventListener('blur', function() {
+                applyCommaFormatToInput(this);
+                calculateRowAndGrandTotal(); 
+            });
+        });
+
+        addBtn.addEventListener("click", function() {
+            setTimeout(() => {
+                const newInputs = document.querySelectorAll('input[name$="-unit_cost"]');
+                const latestInput = newInputs[newInputs.length - 1];
+
+                if (latestInput) {
+                    latestInput.type = 'text';
+                    latestInput.addEventListener('blur', function() {
+                        applyCommaFormatToInput(this);
+                        calculateRowAndGrandTotal();
+                    });
+                }
+            }, 50);
+        });
+
+        formElement.addEventListener("submit", function() {
+            const allCostInputs = document.querySelectorAll('input[name$="-unit_cost"]');
+            allCostInputs.forEach(input => {
+                input.value = input.value.replace(/,/g, '');
+            });
+        });
+
+        // สั่งรันคำนวณผลรวม 1 ครั้งตอนโหลดหน้าจอเสร็จสมบูรณ์
+        setTimeout(calculateRowAndGrandTotal, 100);
     });
 </script>
 {% endblock %}

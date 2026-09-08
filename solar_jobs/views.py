@@ -1,3 +1,4 @@
+from decimal import Decimal # 🌟 [FIXED] เพิ่ม Import Decimal ไว้บนสุด
 from django.db.models import Q
 from hr.models import Employee # ใช้สำหรับดึงรายชื่อเซลส์มาลงในตัวกรอง
 from django.shortcuts import render, redirect, get_object_or_404
@@ -195,11 +196,15 @@ def solar_job_manage(request, job_id):
     job = get_object_or_404(SolarJob, id=job_id)
 
     if request.method == 'POST':
-        form = SolarJobForm(request.POST, instance=job)
+        # ตัดเครื่องหมายคอมม่าออกก่อนส่งให้แบบฟอร์มตรวจสอบ
+        mutable_post = request.POST.copy()
+        if 'labor_cost_budget' in mutable_post:
+            mutable_post['labor_cost_budget'] = mutable_post['labor_cost_budget'].replace(',', '')
+
+        form = SolarJobForm(mutable_post, instance=job)
         formset = SolarBOMFormSet(request.POST, instance=job)
 
         if form.is_valid() and formset.is_valid():
-            # 🌟 [NEW] Automation 1: DRAFT -> PREPARING (เมื่อบันทึกข้อมูลและมีช่าง)
             saved_job = form.save(commit=False)
             if saved_job.status == 'DRAFT' and saved_job.technician_team:
                 saved_job.status = 'PREPARING'
@@ -208,7 +213,6 @@ def solar_job_manage(request, job_id):
             saved_job.save()
             formset.save()
 
-            # 🌟 [FIXED] เช็คว่าพนักงานกดปุ่ม "ดึงรายการวัตถุดิบ (BOM)" หรือไม่ 🌟
             if 'action_fetch_bom' in request.POST:
                 if not saved_job.package_sold:
                     messages.error(request, "❌ ไม่สามารถดึงสูตรได้! งานนี้ยังไม่ได้ผูกกับแพ็กเกจหลัก")
@@ -235,22 +239,26 @@ def solar_job_manage(request, job_id):
                         else:
                             messages.info(request, "✅ บันทึกข้อมูลสำเร็จ! (วัตถุดิบตามสูตรมีอยู่ในตารางครบแล้ว)")
 
-                # รีโหลดกลับหน้าเดิมเพื่อแสดงตาราง BOM ที่อัปเดตใหม่
                 return redirect('solar_job_manage', job_id=saved_job.id)
 
-            # ถ้ากดปุ่ม "บันทึกข้อมูลงาน" ปกติ ให้เด้งกลับหน้า Dashboard
             messages.success(request, f"✅ บันทึกข้อมูลงาน {job.code} เรียบร้อยแล้ว")
-            return redirect('solar_center_dashboard')
+            # 🌟 [FIXED] เปลี่ยนให้โหลดหน้าเดิมกลับขึ้นมา แทนการเด้งไป Dashboard
+            return redirect('solar_job_manage', job_id=job.id)
         else:
             messages.error(request, "❌ กรุณาตรวจสอบข้อมูลให้ครบถ้วน")
     else:
         form = SolarJobForm(instance=job)
 
-        # 🌟 [FIXED] 1. เคลียร์ค่า 0.00 ออกถ้ายังไม่มีการระบุ เพื่อให้ช่องว่างเปล่า พิมพ์ง่าย
-        if job.labor_cost_budget == 0:
-            form.initial['labor_cost_budget'] = None
+        if job.labor_cost_budget == 0 or job.labor_cost_budget is None:
+            if job.quotation_ref and job.quotation_ref.subtotal:
+                calculated_labor = job.quotation_ref.subtotal * Decimal('0.155')
+                formatted_labor = f"{calculated_labor:,.2f}"
+                form.initial['labor_cost_budget'] = formatted_labor
+            else:
+                form.initial['labor_cost_budget'] = None
+        else:
+            form.initial['labor_cost_budget'] = f"{job.labor_cost_budget:,.2f}"
 
-        # 🌟 [FIXED] 2. เปลี่ยนชนิดกล่องเป็น Text เพื่อซ่อนลูกศรขึ้น/ลง และบังคับโหมดคีย์บอร์ดตัวเลข
         form.fields['labor_cost_budget'].widget.input_type = 'text'
         form.fields['labor_cost_budget'].widget.attrs.update({
             'inputmode': 'decimal',
@@ -258,17 +266,55 @@ def solar_job_manage(request, job_id):
             'placeholder': '0.00'
         })
 
-        formset = SolarBOMFormSet(instance=job)
+        # 🌟 [FIXED] กรองการแสดงผลใน FormSet ตามสถานะงาน
+        from django.db.models import F
+
+        if job.status in ['WAITING_STORE', 'WAITING_PURCHASE']:
+            # ถ้าส่งเรื่องให้สโตร์/จัดซื้อแล้ว ให้ซ่อนรายการออกจากหน้า Center ทั้งหมดเพื่อไม่ให้สับสน
+            incomplete_boms = job.job_boms.none()
+        else:
+            # ถ้ากำลังทำงานอยู่ ให้โชว์รายการที่ยังเบิกไม่ครบตามปกติ
+            incomplete_boms = job.job_boms.filter(planned_quantity__gt=F('actual_used_quantity'))
+
+        formset = SolarBOMFormSet(instance=job, queryset=incomplete_boms)
 
     raw_materials = SolarProduct.objects.filter(is_active=True, product_type='RM')
     teams = SubcontractorTeam.objects.filter(is_active=True)
+
+    # 🌟 ส่งค่าเช็คว่า "มีรายการที่เบิกไปแล้วหรือไม่?" ไปให้หน้าเว็บ
+    has_completed_boms = job.job_boms.filter(actual_used_quantity__gt=0).exists()
+
+    # 🌟 [NEW] เช็คว่ามีรายการ "รอเบิก" (แผน > เบิกจริง) อยู่ในระบบหรือไม่?
+    from django.db.models import F
+    has_pending_requisition = job.job_boms.filter(planned_quantity__gt=F('actual_used_quantity')).exists()
+
+    # 🌟 สร้างสมุดราคา (Price Book) แบบ JSON เพื่อส่งให้ JavaScript ใช้ดึงราคาอัตโนมัติ
+    rm_prices = {str(rm.id): float(rm.cost_price) for rm in raw_materials}
+    rm_prices_json = json.dumps(rm_prices)
 
     return render(request, 'solar_jobs/job_manage.html', {
         'job': job,
         'form': form,
         'formset': formset,
         'raw_materials': raw_materials,
-        'teams': teams
+        'teams': teams,
+        'has_completed_boms': has_completed_boms,
+        'has_pending_requisition': has_pending_requisition, # 🌟 ส่งตัวแปรนี้ไปซ่อน/โชว์ปุ่มสโตร์
+        'rm_prices_json': rm_prices_json
+    })
+
+# 🌟 [NEW] ฟังก์ชันใหม่สำหรับเปิดหน้าประวัติการเบิกของ
+@login_required
+def solar_job_bom_history(request, job_id):
+    if not is_center_staff(request.user): return redirect('solar_center_dashboard')
+
+    job = get_object_or_404(SolarJob, id=job_id)
+    # ดึงเฉพาะรายการที่มีการเบิกจริงไปแล้ว (actual_used_quantity > 0)
+    completed_boms = job.job_boms.filter(actual_used_quantity__gt=0).order_by('id')
+
+    return render(request, 'solar_jobs/job_bom_history.html', {
+        'job': job,
+        'completed_boms': completed_boms
     })
 
 # ------------------------------------------
@@ -437,7 +483,8 @@ def center_submit_requisition(request, job_id):
 
     job = get_object_or_404(SolarJob, id=job_id)
 
-    if job.status == 'PREPARING' or job.status == 'DRAFT':
+    # 🌟 [FIXED] เพิ่ม 'IN_PROGRESS' เข้าไป เพื่อให้เบิกของเพิ่มระหว่างทำงานได้
+    if job.status in ['DRAFT', 'PREPARING', 'IN_PROGRESS']:
         job.status = 'WAITING_STORE'
         job.save()
         messages.success(request, f"✅ ส่งใบเบิกวัสดุสำหรับงาน {job.code} ไปยังสโตร์เรียบร้อยแล้ว")
