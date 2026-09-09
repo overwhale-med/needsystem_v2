@@ -2,6 +2,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.http import JsonResponse, HttpResponse
+from django.db.models import F, Q
 import openpyxl
 import json
 
@@ -21,8 +22,11 @@ def solar_inventory_list(request):
     fg_products = SolarProduct.objects.filter(product_type='FG').order_by('-is_active', '-created_at')
     rm_products = SolarProduct.objects.filter(product_type='RM').order_by('-is_active', '-created_at')
 
-    # 🌟 [NEW] นับจำนวนงานที่รอสโตร์จ่ายของ
-    requisition_count = SolarJob.objects.filter(status='WAITING_STORE').count()
+    # 🌟 [FIXED] นับจำนวนงานที่รอสโตร์จ่ายของ (รวมเบิกครั้งแรก และ เบิกเพิ่มหน้างาน)
+    requisition_count = SolarJob.objects.filter(
+        Q(status='WAITING_STORE') |
+        Q(status='IN_PROGRESS', job_boms__planned_quantity__gt=F('job_boms__actual_used_quantity'))
+    ).distinct().count()
 
     return render(request, 'solar_inventory/inventory_list.html', {
         'fg_products': fg_products,
@@ -243,8 +247,11 @@ def solar_stock_card(request, pk):
 # ==========================================
 @login_required
 def store_requisition_list(request):
-    # ดึงเฉพาะงานที่แผนก Center กด "ส่งใบขอเบิก" (WAITING_STORE)
-    jobs_waiting = SolarJob.objects.filter(status='WAITING_STORE').prefetch_related('job_boms__product').order_by('created_at')
+    # 🌟 [FIXED] ดึงงานที่รอสโตร์จ่ายของ หรือ งานที่ขอเบิกเพิ่ม (แต่ต้องยังไม่ถูกส่งไปรอจัดซื้อ)
+    jobs_waiting = SolarJob.objects.filter(
+        Q(status='WAITING_STORE') |
+        Q(status='IN_PROGRESS', job_boms__planned_quantity__gt=F('job_boms__actual_used_quantity'))
+    ).filter(is_waiting_purchase=False).prefetch_related('job_boms__product').distinct().order_by('created_at')
 
     return render(request, 'solar_inventory/store_requisition_list.html', {
         'jobs_waiting': jobs_waiting
@@ -253,7 +260,7 @@ def store_requisition_list(request):
 # 🌟 [FIXED] ฟังก์ชันแสดงหน้า Detail พร้อมระบบคำนวณของขาดอัตโนมัติ
 @login_required
 def store_requisition_detail(request, job_id):
-    job = get_object_or_404(SolarJob, id=job_id, status='WAITING_STORE')
+    job = get_object_or_404(SolarJob, id=job_id)
 
     has_shortage = False
     bom_list = []
@@ -284,7 +291,8 @@ def store_requisition_detail(request, job_id):
 @login_required
 def store_trigger_pr(request, job_id):
     if request.method == 'POST':
-        job = get_object_or_404(SolarJob, id=job_id, status='WAITING_STORE')
+        # 🌟 [FIXED] ปลดล็อคสถานะ เพื่อให้กดส่ง PR สำหรับงานที่กำลัง IN_PROGRESS (เบิกเพิ่ม) ได้ 🌟
+        job = get_object_or_404(SolarJob, id=job_id)
 
         from solar_jobs.models import SolarPurchasePreparation, SolarPurchasePreparationItem
 
@@ -308,8 +316,12 @@ def store_trigger_pr(request, job_id):
                         quantity_needed=missing_qty
                     )
 
-        # 3. เปลี่ยนสถานะงาน เพื่อรอของมาเติม
-        job.status = 'WAITING_PURCHASE'
+        # 🌟 [FIXED] เช็คก่อนว่างานเริ่มติดตั้งไปหรือยัง? ถ้าเริ่มแล้ว ห้ามถอยหลัง! แต่ให้เปิดสวิตช์รอจัดซื้อแทน
+        if job.status != 'IN_PROGRESS':
+            job.status = 'WAITING_PURCHASE'
+
+        # 🌟 เปิดสวิตช์ความจำว่างานนี้กำลังรอจัดซื้อซื้อของมาเติมให้ (การ์ดจะหายไปจากหน้าสโตร์ชั่วคราว)
+        job.is_waiting_purchase = True
         job.save()
 
         messages.success(request, f"✅ ระบบได้สร้างใบขอซื้อ (PPO) รหัส {ppo.code} สำหรับวัสดุที่ขาด และส่งเรื่องให้แผนกจัดซื้อเรียบร้อยแล้ว!")
@@ -318,7 +330,7 @@ def store_trigger_pr(request, job_id):
 @login_required
 def store_confirm_deduction(request, job_id):
     if request.method == 'POST':
-        job = get_object_or_404(SolarJob, id=job_id, status='WAITING_STORE')
+        job = get_object_or_404(SolarJob, id=job_id)
 
         # 🌟 ลูปเช็คก่อนว่ามีของชิ้นไหนที่สต็อกไม่พอหรือจะทำให้ติดลบหรือไม่
         for bom in job.job_boms.all():

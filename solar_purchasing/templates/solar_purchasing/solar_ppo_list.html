@@ -41,15 +41,28 @@
                         <td class="py-3 text-center">
                             {% if ppo.status == 'PENDING' %}
                                 <span class="badge bg-danger rounded-pill px-3 shadow-sm">รอเปิด PO</span>
+                            {% elif ppo.status == 'CANCELLED' %}
+                                <span class="badge bg-secondary rounded-pill px-3 shadow-sm">ยกเลิกแล้ว</span>
                             {% else %}
                                 <span class="badge bg-success rounded-pill px-3 shadow-sm">สั่งซื้อแล้ว</span>
                             {% endif %}
                         </td>
                         <td class="py-3 text-center pe-4">
                             {% if ppo.status == 'PENDING' %}
-                                <a href="{% url 'solar_ppo_detail' ppo.id %}" class="btn btn-sm btn-gold rounded-pill px-4 fw-bold shadow-sm">
-                                    <i class="fas fa-shopping-cart me-1"></i> เปิดบิลสั่งซื้อ (PO)
-                                </a>
+                                <div class="d-flex justify-content-center gap-1">
+                                    <a href="{% url 'solar_ppo_detail' ppo.id %}" class="btn btn-sm btn-gold rounded-pill px-3 fw-bold shadow-sm">
+                                        <i class="fas fa-shopping-cart me-1"></i> เปิดบิลสั่งซื้อ
+                                    </a>
+                                    <!-- 🌟 [NEW] ปุ่มยกเลิก (ส่งเป็น Form POST เพื่อความปลอดภัย) -->
+                                    <form method="POST" action="{% url 'solar_ppo_cancel' ppo.id %}" onsubmit="return confirm('ยืนยันที่จะยกเลิกใบขอซื้อ {{ ppo.code }} ใช่หรือไม่?\n\n(การ์ดงานติดตั้งจะถูกดึงกลับไปให้สโตร์ตรวจสอบใหม่)');">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-sm btn-outline-danger rounded-pill px-3 fw-bold shadow-sm" title="ยกเลิกใบขอซื้อนี้">
+                                            <i class="fas fa-times me-1"></i> ยกเลิก
+                                        </button>
+                                    </form>
+                                </div>
+                            {% elif ppo.status == 'CANCELLED' %}
+                                <button class="btn btn-sm btn-light border rounded-pill px-4 fw-bold text-muted" disabled>ยกเลิกแล้ว</button>
                             {% else %}
                                 <button class="btn btn-sm btn-light border rounded-pill px-4 fw-bold text-muted" disabled>ดำเนินการแล้ว</button>
                             {% endif %}

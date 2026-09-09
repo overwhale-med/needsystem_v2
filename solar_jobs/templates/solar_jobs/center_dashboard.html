@@ -49,6 +49,14 @@
     .kanban-board::-webkit-scrollbar { height: 8px; }
     .kanban-board::-webkit-scrollbar-thumb { background-color: #ccc; border-radius: 4px; }
 
+    /* 🌟 เพิ่มแอนิเมชันให้ป้ายแจ้งเตือนกระพริบได้ 🌟 */
+    .blink_me {
+        animation: blinker 1.5s linear infinite;
+    }
+    @keyframes blinker {
+        50% { opacity: 0.5; }
+    }
+
     .info-box { background-color: #f8f9fa; border: 1px solid #f0f2f5; border-radius: 8px; padding: 10px; margin-bottom: 12px; }
 </style>
 
@@ -158,12 +166,12 @@
             <div class="kanban-header" style="border-top: 4px solid #0d6efd; border-top-left-radius: 12px; border-top-right-radius: 12px;">
                 <span><i class="fas fa-tools text-primary me-2"></i> เตรียมของ (Preparing)</span>
             </div>
-            <!-- 🌟 [FIXED] เอาเงื่อนไข WAITING_STORE และ WAITING_PURCHASE ออกจากคอลัมน์นี้ 🌟 -->
+            <!-- 🌟 [FIXED] เพิ่มเงื่อนไข WAITING_STORE และ WAITING_PURCHASE ให้อยู่ในคอลัมน์นี้แทน 🌟 -->
             <div class="kanban-cards" id="col-preparing" data-status="PREPARING">
                 {% for job in jobs %}
-                    {% if job.status == 'PREPARING' %}
-                    <div class="kanban-card border-preparing" data-id="{{ job.id }}">
-                        
+                    {% if job.status == 'PREPARING' or job.status == 'WAITING_STORE' or job.status == 'WAITING_PURCHASE' %}
+                    <div class="kanban-card {% if job.status == 'WAITING_STORE' %}border-warning{% elif job.status == 'WAITING_PURCHASE' %}border-danger{% else %}border-preparing{% endif %}" data-id="{{ job.id }}">
+
                         <!-- 🌟 หัวการ์ด: มาตรฐานเดียวกัน -->
                         <div class="d-flex justify-content-between align-items-start mb-2">
                             <div>
@@ -177,11 +185,18 @@
                                 {% endif %}
                             </div>
 
-                            <span class="badge bg-primary small shadow-sm">เตรียมของ</span>
+                            <!-- 🌟 [NEW] เพิ่มป้ายแจ้งเตือน ถ้ารอของอยู่ -->
+                            {% if job.status == 'WAITING_STORE' %}
+                                <span class="badge bg-danger bg-opacity-10 text-danger border border-danger small shadow-sm"><i class="fas fa-box-open me-1"></i> รอสโตร์เบิก</span>
+                            {% elif job.status == 'WAITING_PURCHASE' %}
+                                <span class="badge bg-danger text-white border border-danger small shadow-sm"><i class="fas fa-shopping-cart me-1"></i> รอจัดซื้อสั่งของ</span>
+                            {% else %}
+                                <span class="badge bg-primary small shadow-sm">เตรียมของ</span>
+                            {% endif %}
                         </div>
 
                         <!-- 🌟 ข้อมูลในการ์ด: มาตรฐานเดียวกัน -->
-                        <div class="info-box">
+                        <div class="info-box {% if job.status == 'WAITING_STORE' %}bg-warning bg-opacity-10 border-warning border-opacity-25{% endif %}">
                             <div class="small text-dark mb-1 text-truncate"><i class="fas fa-user-circle text-muted me-2" style="width:14px;"></i><strong>ลค:</strong> {{ job.customer.name|default:"ไม่ระบุ" }}</div>
                             <div class="small text-dark mb-1 text-truncate"><i class="fas fa-users-cog text-primary me-2" style="width:14px;"></i><strong>ช่าง:</strong> {{ job.technician_team.name|default:"ยังไม่จัดทีม"|truncatechars:25 }}</div>
                             <div class="small text-dark mb-1 text-truncate"><i class="fas fa-user-tie text-muted me-2" style="width:14px;"></i><strong>เซลส์:</strong> {{ job.salesperson.first_name|default:"ไม่ระบุ" }}</div>
@@ -202,10 +217,10 @@
             </div>
             <div class="kanban-cards" id="col-progress" data-status="IN_PROGRESS">
                 {% for job in jobs %}
-                    <!-- 🌟 [FIXED] เพิ่มเงื่อนไขให้ WAITING_STORE และ WAITING_PURCHASE โชว์ในคอลัมน์นี้แทน 🌟 -->
-                    {% if job.status == 'IN_PROGRESS' or job.status == 'WAITING_STORE' or job.status == 'WAITING_PURCHASE' %}
-                    <div class="kanban-card {% if job.status == 'WAITING_STORE' %}border-warning{% elif job.status == 'WAITING_PURCHASE' %}border-danger{% else %}border-progress{% endif %}" data-id="{{ job.id }}">
-                        
+                    <!-- 🌟 [FIXED] คอลัมน์นี้ให้แสดงเฉพาะการ์ด IN_PROGRESS ล้วนๆ 🌟 -->
+                    {% if job.status == 'IN_PROGRESS' %}
+                    <div class="kanban-card border-progress" data-id="{{ job.id }}">
+
                         <!-- 🌟 หัวการ์ด: มาตรฐานเดียวกัน -->
                         <div class="d-flex justify-content-between align-items-start mb-2">
                             <div>
@@ -218,19 +233,19 @@
                                 <div class="text-muted small" style="font-size: 0.75rem;"><i class="fas fa-bolt me-1"></i>สร้างงานด่วน</div>
                                 {% endif %}
                             </div>
-                            
-                            <!-- 🌟 [NEW] เพิ่มป้ายแจ้งเตือน ถ้ารอของอยู่ -->
-                            {% if job.status == 'WAITING_STORE' %}
-                                <span class="badge bg-danger bg-opacity-10 text-danger border border-danger small shadow-sm"><i class="fas fa-box-open me-1"></i> รอสโตร์เบิก</span>
-                            {% elif job.status == 'WAITING_PURCHASE' %}
-                                <span class="badge bg-danger text-white border border-danger small shadow-sm"><i class="fas fa-shopping-cart me-1"></i> รอจัดซื้อสั่งของ</span>
-                            {% else %}
-                                <span class="badge bg-gold small shadow-sm" style="background-color: #c5a059;">กำลังติดตั้ง</span>
-                            {% endif %}
+
+                                {% if job.pending_ppo_count > 0 %}
+                                    <!-- 🌟 [NEW] สโตร์เช็คแล้วของหมด สั่งไปให้จัดซื้อซื้อด่วน! -->
+                                    <span class="badge bg-danger text-white small shadow-sm blink_me"><i class="fas fa-shopping-cart me-1"></i> รอจัดซื้อ (ของขาดหน้างาน)</span>
+                                {% elif job.pending_req_count > 0 %}
+                                    <span class="badge bg-danger small shadow-sm blink_me"><i class="fas fa-exclamation-triangle me-1"></i> ขอเบิกของเพิ่ม</span>
+                                {% else %}
+                                    <span class="badge bg-gold small shadow-sm" style="background-color: #c5a059;">กำลังติดตั้ง</span>
+                                {% endif %}
                         </div>
 
                         <!-- 🌟 ข้อมูลในการ์ด: มาตรฐานเดียวกัน -->
-                        <div class="info-box {% if job.status == 'WAITING_STORE' %}bg-warning bg-opacity-10 border-warning border-opacity-25{% endif %}">
+                        <div class="info-box">
                             <div class="small text-dark mb-1 text-truncate"><i class="fas fa-user-circle text-muted me-2" style="width:14px;"></i><strong>ลค:</strong> {{ job.customer.name|default:"ไม่ระบุ" }}</div>
                             <div class="small text-dark mb-1 text-truncate"><i class="fas fa-users-cog text-primary me-2" style="width:14px;"></i><strong>ช่าง:</strong> {{ job.technician_team.name|default:"ยังไม่จัดทีม"|truncatechars:25 }}</div>
                             <div class="small text-dark mb-1 text-truncate"><i class="fas fa-user-tie text-muted me-2" style="width:14px;"></i><strong>เซลส์:</strong> {{ job.salesperson.first_name|default:"ไม่ระบุ" }}</div>
@@ -253,7 +268,7 @@
                 {% for job in jobs %}
                     {% if job.status == 'COMPLETED' %}
                     <div class="kanban-card border-completed" data-id="{{ job.id }}">
-                        
+
                         <!-- 🌟 หัวการ์ด: มาตรฐานเดียวกัน -->
                         <div class="d-flex justify-content-between align-items-start mb-2">
                             <div>

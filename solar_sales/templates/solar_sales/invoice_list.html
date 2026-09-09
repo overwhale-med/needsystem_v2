@@ -32,7 +32,7 @@
     }
     .search-pill-btn:hover { background-color: #157347; transform: scale(1.05); }
     .hidden-date { display: none; }
-    
+
     /* 🌟 สไตล์ปุ่มรับชำระ 🌟 */
     .btn-outline-gold {
         color: #c5a059; border-color: #c5a059; transition: all 0.3s ease;
@@ -85,6 +85,8 @@
                         <select name="status" class="form-select border-0 bg-transparent shadow-none" style="cursor: pointer;">
                             <option value="" {% if not status_filter %}selected{% endif %}>สถานะทั้งหมด</option>
                             <option value="UNPAID" {% if status_filter == 'UNPAID' %}selected{% endif %}>ค้างชำระ</option>
+                            <!-- 🌟 [FIXED] เพิ่มตัวเลือกสถานะรอตรวจสอบ 🌟 -->
+                            <option value="PENDING_VERIFY" {% if status_filter == 'PENDING_VERIFY' %}selected{% endif %}>รอบัญชีตรวจสอบ</option>
                             <option value="PAID" {% if status_filter == 'PAID' %}selected{% endif %}>ชำระแล้ว</option>
                         </select>
                     </div>
@@ -137,7 +139,7 @@
                             <div class="fw-bold text-dark" style="font-family: 'Courier New', monospace;">{{ item.code }}</div>
                             <div class="small text-muted mb-1" style="font-size: 0.75rem;"><i class="far fa-clock me-1"></i> {{ item.date|date:"d/m/Y" }}</div>
                             <div class="small lh-sm" style="font-size: 0.7rem;"><span class="text-secondary opacity-75">QT:</span> {{ item.quotation_ref.code }}</div>
-                            
+
                             <!-- 🌟 [NEW] แสดงเลขที่ JOB (ถ้ามี) 🌟 -->
                             {% if item.quotation_ref.center_jobs.first %}
                                 <div class="small fw-bold text-success mt-1" style="font-size: 0.75rem;"><i class="fas fa-hard-hat me-1"></i>{{ item.quotation_ref.center_jobs.first.code }}</div>
@@ -163,7 +165,7 @@
 
                         <td class="text-end">
                             <div class="fw-bold text-dark fs-6">฿{{ item.grand_total|floatformat:2|intcomma }}</div>
-                            
+
                             {% if item.balance_amount > 0 %}
                                 <div class="small fw-bold text-danger mt-1">ค้างชำระ: ฿{{ item.balance_amount|floatformat:2|intcomma }}</div>
                             {% endif %}
@@ -181,8 +183,8 @@
                                     {% elif item.quotation_ref.deposit_method == 'CHECK' %}
                                         <i class="fas fa-money-check text-warning" title="เช็ค"></i>
                                     {% endif %}
-                                    
-                                    <!-- 🌟 [FIXED] กดเพื่อเปิด Modal โชว์รูปสลิปแทนการเปิดแท็บใหม่ 🌟 -->
+
+                                    <!-- 🌟 กดเพื่อเปิด Modal โชว์รูปสลิปแทนการเปิดแท็บใหม่ 🌟 -->
                                     {% if item.quotation_ref.deposit_slip %}
                                         <a href="javascript:void(0);" data-bs-toggle="modal" data-bs-target="#slipModal{{ item.id }}" title="ดูสลิป">
                                             <i class="fas fa-image text-secondary ms-1 fs-6"></i>
@@ -195,8 +197,28 @@
                         </td>
 
                         <td class="text-center">
-                            <!-- 🌟 ปุ่มเพิ่มรับชำระ 🌟 -->
-                            {% if item.balance_amount > 0 %}
+                            {% if item.payment_amount > 0 %}
+                                <!-- 🌟 แสดงยอดรับชำระและหลักฐาน 🌟 -->
+                                <div class="fw-bold text-success" style="font-size: 0.85rem;">฿{{ item.payment_amount|intcomma }}</div>
+                                <div class="d-flex align-items-center justify-content-center gap-1 mt-1">
+                                    {% if item.payment_method == 'TRANSFER' %}
+                                        <i class="fas fa-mobile-alt text-info" title="โอนเงิน"></i>
+                                    {% elif item.payment_method == 'CASH' %}
+                                        <i class="fas fa-money-bill-wave text-success" title="เงินสด"></i>
+                                    {% elif item.payment_method == 'CHECK' %}
+                                        <i class="fas fa-money-check text-warning" title="เช็ค"></i>
+                                    {% endif %}
+
+                                    {% if item.payment_slip %}
+                                        <a href="javascript:void(0);" data-bs-toggle="modal" data-bs-target="#paymentSlipModal{{ item.id }}" title="ดูสลิป">
+                                            <i class="fas fa-image text-secondary ms-1 fs-6"></i>
+                                        </a>
+                                    {% endif %}
+                                </div>
+                            {% elif item.status == 'PENDING_VERIFY' %}
+                                <div class="fw-bold text-warning fs-6"><i class="fas fa-hourglass-half me-1"></i> รอตรวจสลิป</div>
+                            {% elif item.balance_amount > 0 %}
+                                <!-- 🌟 ปุ่มเพิ่มรับชำระ 🌟 -->
                                 <button class="btn btn-sm btn-outline-gold rounded-pill px-3 fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#paymentModal{{ item.id }}">
                                     <i class="fas fa-plus me-1"></i> เพิ่มรับชำระ
                                 </button>
@@ -206,8 +228,11 @@
                         </td>
 
                         <td class="text-center">
+                            <!-- 🌟 [FIXED] เพิ่มป้ายกำกับสถานะ 'รอบัญชีตรวจสอบ' 🌟 -->
                             {% if item.status == 'UNPAID' %}
                                 <span class="badge bg-danger rounded-pill px-3 py-2 shadow-sm border border-danger bg-opacity-10 text-danger"><i class="fas fa-times-circle me-1"></i>ยังไม่ชำระ</span>
+                            {% elif item.status == 'PENDING_VERIFY' %}
+                                <span class="badge bg-warning text-dark rounded-pill px-3 py-2 shadow-sm border border-warning bg-opacity-25"><i class="fas fa-clock me-1"></i>รอบัญชีตรวจสอบ</span>
                             {% elif item.status == 'PAID' %}
                                 <span class="badge bg-success rounded-pill px-3 py-2 shadow-sm border border-success bg-opacity-10 text-success"><i class="fas fa-check-circle me-1"></i>ชำระครบแล้ว</span>
                             {% endif %}
@@ -241,8 +266,24 @@
                     </div>
                     {% endif %}
 
+                    <!-- 🌟 [NEW] Modal โชว์รูปสลิปส่วนที่เหลือ (Popup) 🌟 -->
+                    {% if item.payment_slip %}
+                    <div class="modal fade" id="paymentSlipModal{{ item.id }}" tabindex="-1" aria-hidden="true">
+                        <div class="modal-dialog modal-dialog-centered modal-lg">
+                            <div class="modal-content bg-transparent border-0 shadow-none">
+                                <div class="modal-header border-0 pb-0 justify-content-end">
+                                    <button type="button" class="btn-close fs-5" data-bs-dismiss="modal" aria-label="Close" style="filter: invert(1) grayscale(100%) brightness(200%);"></button>
+                                </div>
+                                <div class="modal-body text-center p-0 mt-2">
+                                    <img src="{{ item.payment_slip.url }}" class="img-fluid rounded-4 shadow-lg" style="max-height: 85vh; object-fit: contain; border: 3px solid rgba(255,255,255,0.2);">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+
                     <!-- 🌟 Modal สำหรับเพิ่มรับชำระเงิน 🌟 -->
-                    {% if item.balance_amount > 0 %}
+                    {% if item.balance_amount > 0 and item.status != 'PENDING_VERIFY' %}
                     <div class="modal fade" id="paymentModal{{ item.id }}" tabindex="-1">
                         <div class="modal-dialog modal-dialog-centered">
                             <div class="modal-content border-0 rounded-4 shadow-lg text-start">
@@ -259,7 +300,8 @@
                                         </div>
                                         <div class="mb-3">
                                             <label class="form-label fw-bold text-dark">จำนวนเงินที่รับชำระ (บาท)</label>
-                                            <input type="number" step="0.01" name="amount" class="form-control form-control-lg text-end fw-bold text-success" value="{{ item.balance_amount }}" max="{{ item.balance_amount }}" required>
+                                            <!-- 🌟 เปลี่ยนเป็น type="text" และเพิ่มคลาส amount-input เพื่อให้สคริปต์รู้จัก -->
+                                            <input type="text" inputmode="decimal" name="amount" class="form-control form-control-lg text-end fw-bold text-success amount-input" value="{{ item.balance_amount }}" data-max="{{ item.balance_amount }}" required>
                                             <div class="small text-muted mt-1"><i class="fas fa-info-circle me-1"></i> ระบบดึงยอดค้างชำระมาให้อัตโนมัติ สามารถพิมพ์แก้ตัวเลขได้หากเป็นการแบ่งจ่าย</div>
                                         </div>
                                         <div class="mb-3">
@@ -276,7 +318,7 @@
                                         </div>
                                         <div class="mb-2">
                                             <label class="form-label fw-bold text-dark">อัปโหลดสลิป</label>
-                                            <input type="file" name="payment_slip" class="form-control" accept="image/*">
+                                            <input type="file" name="payment_slip" class="form-control" accept="image/*" required>
                                         </div>
                                     </div>
                                     <div class="modal-footer bg-light border-0">
@@ -374,6 +416,60 @@ $(function() {
     });
 
     cb(start, end);
+});
+</script>
+
+<!-- 🌟 สคริปต์จัดการลูกน้ำใน Popup รับชำระเงิน 🌟 -->
+<script type="text/javascript">
+document.addEventListener("DOMContentLoaded", function() {
+
+    // ฟังก์ชันช่วยเติมลูกน้ำและบังคับทศนิยม 2 ตำแหน่ง
+    function formatNumberWithCommas(value) {
+        if (!value) return "";
+        let cleanValue = value.toString().replace(/,/g, '').replace(/[^0-9.]/g, '');
+        if (!cleanValue) return "";
+        let floatVal = parseFloat(cleanValue);
+        if (isNaN(floatVal)) return "";
+        let parts = floatVal.toFixed(2).split(".");
+        parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+        return parts.join(".");
+    }
+
+    const amountInputs = document.querySelectorAll('.amount-input');
+
+    amountInputs.forEach(input => {
+        // 1. ใส่ลูกน้ำทันทีเมื่อโหลด Popup ขึ้นมา
+        if (input.value) {
+            input.value = formatNumberWithCommas(input.value);
+        }
+
+        // 2. จัดรูปแบบใหม่ทุกครั้งที่ผู้ใช้พิมพ์แก้ตัวเลขเสร็จ (คลิกออกจากช่อง)
+        input.addEventListener('blur', function() {
+            this.value = formatNumberWithCommas(this.value);
+        });
+
+        // 3. ป้องกันการพิมพ์เกินยอดค้างชำระสูงสุด
+        input.addEventListener('change', function() {
+            let maxVal = parseFloat(this.getAttribute('data-max'));
+            let currentVal = parseFloat(this.value.replace(/,/g, ''));
+            if (currentVal > maxVal) {
+                alert('ไม่สามารถรับชำระเกินยอดค้างได้ครับ (ยอดค้างสูงสุด: ' + formatNumberWithCommas(maxVal) + ' บาท)');
+                this.value = formatNumberWithCommas(maxVal);
+            }
+        });
+    });
+
+    // 4. ถอดลูกน้ำออกก่อนกด Submit ส่งให้ Django
+    const paymentForms = document.querySelectorAll('form[action*="record_payment"]');
+    paymentForms.forEach(form => {
+        form.addEventListener('submit', function() {
+            const amountInput = this.querySelector('.amount-input');
+            if (amountInput) {
+                amountInput.value = amountInput.value.replace(/,/g, '');
+            }
+        });
+    });
+
 });
 </script>
 {% endblock %}

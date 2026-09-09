@@ -622,6 +622,45 @@ def solar_invoice_detail(request, inv_id):
         return redirect('solar_invoice_detail', inv_id=inv.id)
     return render(request, 'solar_sales/invoice_detail.html', {'inv': inv})
 
+# 🌟 [NEW] ฟังก์ชันสำหรับบันทึกรับชำระเงิน (ฝั่งเซลส์/ปฏิบัติการ)
+@login_required
+def solar_invoice_record_payment(request, inv_id):
+    inv = get_object_or_404(SolarInvoice, pk=inv_id)
+
+    if request.method == 'POST':
+        # รับค่าและถอดลูกน้ำออก
+        amount_str = request.POST.get('amount', '0').replace(',', '')
+        try: amount = Decimal(amount_str)
+        except: amount = Decimal('0')
+
+        if amount <= 0:
+            messages.error(request, "❌ ยอดรับชำระต้องมากกว่า 0 บาท")
+            return redirect('solar_invoice_list')
+
+        # บันทึกข้อมูลการชำระเงิน
+        inv.payment_amount = amount
+        inv.payment_method = request.POST.get('payment_method', 'TRANSFER')
+
+        date_str = request.POST.get('payment_date')
+        if date_str:
+            try:
+                inv.payment_date = datetime.datetime.strptime(date_str, '%Y-%m-%d').date()
+            except ValueError:
+                inv.payment_date = timezone.now().date()
+        else:
+            inv.payment_date = timezone.now().date()
+
+        if 'payment_slip' in request.FILES:
+            inv.payment_slip = request.FILES['payment_slip']
+
+        # 🌟 เปลี่ยนสถานะเป็น PENDING_VERIFY
+        inv.status = 'PENDING_VERIFY'
+        inv.save()
+
+        messages.success(request, f"⏳ บันทึกรับชำระยอด {amount:,.2f} บาท ของบิล {inv.code} เรียบร้อยแล้ว (รอแผนกบัญชีตรวจสอบและยืนยัน)")
+
+    return redirect('solar_invoice_list')
+
 # ------------------------------------------
 # 🌟 ฟังก์ชันสำหรับปุ่ม "เปิดบิลขาย" (Invoice Creation & Auto-Archive) 🌟
 # ------------------------------------------

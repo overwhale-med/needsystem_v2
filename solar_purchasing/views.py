@@ -356,11 +356,13 @@ def solar_po_receive(request, po_id):
                 for ppo in ppos:
                     if ppo.code in po.note:
                         job = ppo.job
-                        # ถ้างานต้นทางติดสถานะรอของอยู่ ให้ปลดล็อกทันที!
-                        if job and job.status == 'WAITING_PURCHASE':
-                            job.status = 'WAITING_STORE'
+                        # ถ้างานต้นทางติดสถานะรอของ หรือสวิตช์รอจัดซื้อเปิดอยู่ ให้ปลดล็อก!
+                        if job:
+                            job.is_waiting_purchase = False # ปิดสวิตช์การรอจัดซื้อ!
+                            if job.status == 'WAITING_PURCHASE':
+                                job.status = 'WAITING_STORE'
                             job.save()
-                            messages.success(request, f"🚀 ออโต้เมชั่น: สินค้าครบแล้ว! ระบบได้ปลดล็อกใบสั่งงาน {job.code} กลับไปรอเบิกเรียบร้อย")
+                            messages.success(request, f"🚀 ออโต้เมชั่น: สินค้าครบแล้ว! ระบบได้ปลดล็อกใบสั่งงาน {job.code} กลับไปให้สโตร์เตรียมเบิกเรียบร้อย")
                         break # เจอใบที่ตรงแล้ว หยุดการค้นหาลูปนี้ได้เลย
             # =========================================================
 
@@ -400,3 +402,31 @@ def solar_po_payment(request, po_id):
 
     # ถ้าเปิดมาแบบ GET ให้แสดงหน้าต่าง (เราจะใช้ Modal หน้าเดิม ดังนั้นจุดนี้อาจไม่ได้ใช้ แต่เขียนเผื่อไว้ครับ)
     return redirect('solar_po_list')
+
+# 🌟 [NEW] ฟังก์ชันสำหรับให้จัดซื้อกดยกเลิกใบ PPO ที่สโตร์ส่งมาผิด
+@login_required
+def solar_ppo_cancel(request, pk):
+    if not is_purchasing_staff(request.user):
+        return redirect('dashboard')
+
+    ppo = get_object_or_404(SolarPurchasePreparation, pk=pk)
+
+    if request.method == 'POST':
+        # 1. เปลี่ยนสถานะ PPO เป็นยกเลิก
+        ppo.status = 'CANCELLED'
+        ppo.save()
+
+        # 2. 🌟 AUTOMATION: ดึงการ์ดงานติดตั้งกลับไปที่หน้าสโตร์ 🌟
+        if ppo.job:
+            # ปิดสวิตช์รอจัดซื้อ
+            ppo.job.is_waiting_purchase = False
+
+            # ถ้าการ์ดถูกโยนไปอยู่ช่องรอจัดซื้อ ให้ดึงกลับมารอสโตร์เบิกของเหมือนเดิม
+            if ppo.job.status == 'WAITING_PURCHASE':
+                ppo.job.status = 'WAITING_STORE'
+
+            ppo.job.save()
+
+        messages.success(request, f"✅ ยกเลิกใบขอซื้อ (PPO) รหัส {ppo.code} เรียบร้อยแล้ว (ระบบส่งงานกลับไปให้สโตร์ตรวจสอบใหม่แล้ว)")
+
+    return redirect('solar_ppo_list')

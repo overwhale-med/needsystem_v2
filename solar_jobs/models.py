@@ -49,6 +49,11 @@ class SolarJob(models.Model):
     start_date = models.DateField(null=True, blank=True, verbose_name="วันที่เริ่มงาน (dd/mm/yyyy)")
     expected_finish_date = models.DateField(null=True, blank=True, verbose_name="กำหนดเสร็จ (dd/mm/yyyy)")
 
+    # 🌟 [NEW] เพิ่มสวิตช์ความจำ สำหรับเช็คว่ามีการเบิกของที่ยังไม่ได้กดส่งให้สโตร์หรือไม่
+    has_unsent_requisition = models.BooleanField(default=False, verbose_name="มีใบเบิกที่ยังไม่ได้ส่งสโตร์")
+    # 🌟 [NEW] เพิ่มสวิตช์ความจำ สำหรับเช็คว่าสโตร์กดส่งเรื่องขอซื้อ (PR) ไปให้จัดซื้อแล้วหรือยัง
+    is_waiting_purchase = models.BooleanField(default=False, verbose_name="รอจัดซื้อสั่งของเข้าสโตร์")
+
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='DRAFT', verbose_name="สถานะงาน")
     note = models.TextField(blank=True, verbose_name="รายละเอียด/หมายเหตุ")
     created_at = models.DateTimeField(auto_now_add=True)
@@ -146,7 +151,7 @@ class SolarPurchasePreparation(models.Model):
     job = models.ForeignKey(SolarJob, on_delete=models.CASCADE, related_name='ppos', verbose_name="อ้างอิงใบสั่งงาน (JOB)")
     created_at = models.DateTimeField(auto_now_add=True)
     created_by = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, verbose_name="ผู้จัดทำ (สโตร์)")
-    status = models.CharField(max_length=20, choices=[('PENDING', 'รอจัดซื้อดำเนินการ'), ('ORDERED', 'สั่งซื้อแล้ว')], default='PENDING')
+    status = models.CharField(max_length=20, choices=[('PENDING', 'รอจัดซื้อดำเนินการ'), ('ORDERED', 'สั่งซื้อแล้ว'), ('CANCELLED', 'ยกเลิก')], default='PENDING')
 
     class Meta:
         verbose_name = "ใบเตรียมสั่งซื้อโซล่า (Solar PPO)"

@@ -284,7 +284,8 @@
                                                 </div>
                                                 <div class="mb-3">
                                                     <label class="form-label fw-bold text-muted">ยอดมัดจำที่ได้รับ (บาท)</label>
-                                                    <input type="number" step="0.01" name="deposit_amount" class="form-control form-control-lg text-end fw-bold text-primary" required>
+                                                    <!-- 🌟 [FIXED] เปลี่ยนเป็น type="text" และเพิ่มคลาส deposit-amount-input 🌟 -->
+                                                    <input type="text" inputmode="decimal" name="deposit_amount" class="form-control form-control-lg text-end fw-bold text-primary deposit-amount-input" data-max="{{ qt.grand_total }}" required>
                                                 </div>
                                                 <div class="mb-3">
                                                     <label class="form-label fw-bold text-muted">วันที่รับเงิน</label>
@@ -411,5 +412,56 @@
 
         cb(start, end);
     });
+</script>
+
+<!-- 🌟 สคริปต์จัดการลูกน้ำใน Popup รับเงินมัดจำ 🌟 -->
+<script type="text/javascript">
+document.addEventListener("DOMContentLoaded", function() {
+
+    // ฟังก์ชันช่วยเติมลูกน้ำและบังคับทศนิยม 2 ตำแหน่ง
+    function formatNumberWithCommas(value) {
+        if (!value) return "";
+        let cleanValue = value.toString().replace(/,/g, '').replace(/[^0-9.]/g, '');
+        if (!cleanValue) return "";
+        let floatVal = parseFloat(cleanValue);
+        if (isNaN(floatVal)) return "";
+        let parts = floatVal.toFixed(2).split(".");
+        parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+        return parts.join(".");
+    }
+
+    const depositInputs = document.querySelectorAll('.deposit-amount-input');
+
+    depositInputs.forEach(input => {
+        // 1. จัดรูปแบบใส่ลูกน้ำใหม่ทุกครั้งที่ผู้ใช้พิมพ์แก้ตัวเลขเสร็จ (คลิกออกจากช่อง)
+        input.addEventListener('blur', function() {
+            this.value = formatNumberWithCommas(this.value);
+        });
+
+        // 2. ป้องกันการพิมพ์ยอดมัดจำเกินยอดสุทธิของบิล
+        input.addEventListener('change', function() {
+            let maxValStr = this.getAttribute('data-max').replace(/,/g, '');
+            let maxVal = parseFloat(maxValStr);
+            let currentVal = parseFloat(this.value.replace(/,/g, ''));
+
+            if (currentVal > maxVal) {
+                alert('ไม่สามารถรับเงินมัดจำเกินยอดสุทธิได้ครับ (ยอดสุทธิ: ' + formatNumberWithCommas(maxVal) + ' บาท)');
+                this.value = formatNumberWithCommas(maxVal);
+            }
+        });
+    });
+
+    // 3. ถอดลูกน้ำออกก่อนกด Submit ส่งให้ Django
+    const depositForms = document.querySelectorAll('form[action*="record_deposit"]');
+    depositForms.forEach(form => {
+        form.addEventListener('submit', function() {
+            const amountInput = this.querySelector('.deposit-amount-input');
+            if (amountInput) {
+                amountInput.value = amountInput.value.replace(/,/g, '');
+            }
+        });
+    });
+
+});
 </script>
 {% endblock %}

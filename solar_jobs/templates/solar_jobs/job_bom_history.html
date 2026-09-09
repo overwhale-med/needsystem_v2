@@ -15,20 +15,22 @@
         </button>
     </div>
 
-    <div class="card border-0 shadow-sm rounded-4 bg-white">
+    <div class="card border-0 shadow-sm rounded-4 bg-white overflow-hidden">
         <div class="card-header bg-info bg-opacity-10 py-3 border-bottom-0">
             <h6 class="fw-bold mb-0 text-dark"><i class="fas fa-check-double text-success me-2"></i>รายการวัสดุที่สโตร์จ่ายและตัดสต็อกแล้ว</h6>
         </div>
         <div class="card-body p-0">
             <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0">
+                <table class="table align-middle mb-0">
                     <thead class="bg-light text-secondary small text-uppercase">
                         <tr>
                             <th class="ps-4 py-3 border-0" style="width: 5%;">#</th>
-                            <th class="py-3 border-0" style="width: 45%;">รหัส / ชื่อวัสดุ (RM)</th>
+                            <th class="py-3 border-0" style="width: 35%;">รหัส / ชื่อวัสดุ (RM)</th>
                             <th class="text-center py-3 border-0" style="width: 15%;">แผนที่วางไว้</th>
                             <th class="text-center py-3 border-0" style="width: 15%;">เบิกจ่ายจริง</th>
-                            <th class="text-end pe-4 py-3 border-0" style="width: 20%;">ต้นทุน/หน่วย (บาท)</th>
+                            <th class="text-end py-3 border-0" style="width: 15%;">ต้นทุน/หน่วย</th>
+                            <!-- 🌟 [NEW] เพิ่มหัวคอลัมน์ราคารวม -->
+                            <th class="text-end pe-4 py-3 border-0" style="width: 15%;">ราคารวม (บาท)</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -42,12 +44,23 @@
                                     {{ bom.actual_used_quantity|floatformat:2 }}
                                 </span>
                             </td>
-                            <td class="text-end pe-4 py-3 fw-bold text-secondary">{{ bom.unit_cost|floatformat:2|intcomma }} ฿</td>
+                            <td class="text-end py-3 text-muted">{{ bom.unit_cost|floatformat:2|intcomma }}</td>
+                            <!-- 🌟 [NEW] แสดงราคารวมของแถวนี้ (ที่คำนวณมาจาก views.py) -->
+                            <td class="text-end pe-4 py-3 fw-bold text-secondary">{{ bom.total_cost|floatformat:2|intcomma }} ฿</td>
                         </tr>
                         {% empty %}
-                        <tr><td colspan="5" class="text-center text-muted py-5">ยังไม่มีประวัติการเบิกจ่ายวัสดุสำหรับงานนี้</td></tr>
+                        <tr><td colspan="6" class="text-center text-muted py-5">ยังไม่มีประวัติการเบิกจ่ายวัสดุสำหรับงานนี้</td></tr>
                         {% endfor %}
                     </tbody>
+                    <!-- 🌟 [NEW] แถวสรุปมูลค่าต้นทุนรวม -->
+                    {% if completed_boms %}
+                    <tfoot class="bg-light">
+                        <tr>
+                            <td colspan="5" class="text-end fw-bold py-3 text-dark fs-6">สรุปมูลค่าต้นทุนรวม:</td>
+                            <td class="text-end pe-4 fw-bold fs-5 text-danger py-3">{{ grand_total_cost|floatformat:2|intcomma }} ฿</td>
+                        </tr>
+                    </tfoot>
+                    {% endif %}
                 </table>
             </div>
         </div>

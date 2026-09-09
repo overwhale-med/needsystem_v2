@@ -104,13 +104,27 @@ class SolarQuotationItem(models.Model):
     amount = models.DecimalField(max_digits=10, decimal_places=2)
 
 class SolarInvoice(models.Model):
+    # 🌟 [FIXED] เพิ่มสถานะ 'PENDING_VERIFY' เข้าไปในตัวเลือก
+    STATUS_CHOICES = [
+        ('UNPAID', 'ยังไม่ชำระ'),
+        ('PENDING', 'รอวางบิล'), # เผื่อกรณีสร้างแล้วยังไม่ได้วางบิล
+        ('PENDING_VERIFY', 'รอบัญชีตรวจสอบ'),
+        ('PAID', 'ชำระแล้ว')
+    ]
+
     code = models.CharField(max_length=20, unique=True, verbose_name="เลขที่ใบเสร็จโซล่า")
     quotation_ref = models.OneToOneField(SolarQuotation, on_delete=models.SET_NULL, null=True, blank=True)
     date = models.DateField(default=timezone.now, verbose_name="วันที่เอกสาร (dd/mm/yyyy)")
     customer = models.ForeignKey(Customer, on_delete=models.SET_NULL, null=True)
     grand_total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     balance_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    status = models.CharField(max_length=20, choices=[('UNPAID', 'ยังไม่ชำระ'), ('PAID', 'ชำระแล้ว')], default='UNPAID')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='UNPAID')
+
+    # 🌟 [NEW] เพิ่มช่องเก็บหลักฐานการชำระเงินของบิลขายใบนี้
+    payment_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="ยอดรับชำระล่าสุด")
+    payment_date = models.DateField(null=True, blank=True, verbose_name="วันที่รับชำระล่าสุด")
+    payment_method = models.CharField(max_length=20, blank=True, null=True, verbose_name="ช่องทางชำระล่าสุด")
+    payment_slip = models.ImageField(upload_to='solar_invoice_payments/', null=True, blank=True, verbose_name="สลิปรับชำระเงินล่าสุด")
 
     def save(self, *args, **kwargs):
         if not self.code:

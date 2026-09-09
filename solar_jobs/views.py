@@ -1,5 +1,5 @@
 from decimal import Decimal # 🌟 [FIXED] เพิ่ม Import Decimal ไว้บนสุด
-from django.db.models import Q
+from django.db.models import Q, F, Count
 from hr.models import Employee # ใช้สำหรับดึงรายชื่อเซลส์มาลงในตัวกรอง
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
@@ -37,8 +37,13 @@ def center_dashboard(request):
     start_date = request.GET.get('start_date', '')
     end_date = request.GET.get('end_date', '')
 
-    # 🌟 2. ดึงข้อมูลพื้นฐานทั้งหมด
-    jobs = SolarJob.objects.select_related('customer', 'package_sold', 'salesperson', 'quotation_ref', 'technician_team').all().order_by('-created_at')
+    # 🌟 2. ดึงข้อมูลและฝังสมการเช็คของขาด (ขอเบิกเพิ่ม และ ของที่สโตร์กำลังสั่งซื้อ)
+    jobs = SolarJob.objects.select_related(
+        'customer', 'package_sold', 'salesperson', 'quotation_ref', 'technician_team'
+    ).annotate(
+        pending_req_count=Count('job_boms', filter=Q(job_boms__planned_quantity__gt=F('job_boms__actual_used_quantity')), distinct=True),
+        pending_ppo_count=Count('ppos', filter=Q(ppos__status='PENDING'), distinct=True) # 🌟 [NEW] เช็คว่ามีใบสั่งซื้อค้างอยู่ไหม
+    ).order_by('-created_at')
 
     # 🌟 3. นำข้อมูลมากรองตามเงื่อนไข (Filters)
     if search_q:
@@ -105,10 +110,13 @@ def solar_job_overview(request):
     end_date = request.GET.get('end_date', '')
     tab = request.GET.get('tab', 'active') # active หรือ history
 
-    # 2. Query ข้อมูลพื้นฐาน
+    # 2. Query ข้อมูลพื้นฐาน และฝังสมการเช็คของขาด
     base_jobs = SolarJob.objects.select_related(
         'customer', 'package_sold', 'salesperson', 'quotation_ref', 'technician_team'
-    ).prefetch_related('job_boms').all()
+    ).prefetch_related('job_boms').annotate(
+        pending_req_count=Count('job_boms', filter=Q(job_boms__planned_quantity__gt=F('job_boms__actual_used_quantity')), distinct=True),
+        pending_ppo_count=Count('ppos', filter=Q(ppos__status='PENDING'), distinct=True) # 🌟 [NEW]
+    ).all()
 
     # 3. กรองตามเงื่อนไขการค้นหา
     if search_q:
@@ -241,6 +249,15 @@ def solar_job_manage(request, job_id):
 
                 return redirect('solar_job_manage', job_id=saved_job.id)
 
+            # 🌟 [FIXED] ถ้างานเริ่มติดตั้งไปแล้ว และมีการกดบันทึกข้อมูล ให้เปิดสวิตช์ "มีใบเบิกที่ยังไม่ส่ง" ทันที 🌟
+            if saved_job.status == 'IN_PROGRESS':
+                has_pending = saved_job.job_boms.filter(planned_quantity__gt=F('actual_used_quantity')).exists()
+                if has_pending:
+                    saved_job.has_unsent_requisition = True
+                else:
+                    saved_job.has_unsent_requisition = False
+                saved_job.save()
+
             messages.success(request, f"✅ บันทึกข้อมูลงาน {job.code} เรียบร้อยแล้ว")
             # 🌟 [FIXED] เปลี่ยนให้โหลดหน้าเดิมกลับขึ้นมา แทนการเด้งไป Dashboard
             return redirect('solar_job_manage', job_id=job.id)
@@ -266,9 +283,6 @@ def solar_job_manage(request, job_id):
             'placeholder': '0.00'
         })
 
-        # 🌟 [FIXED] กรองการแสดงผลใน FormSet ตามสถานะงาน
-        from django.db.models import F
-
         if job.status in ['WAITING_STORE', 'WAITING_PURCHASE']:
             # ถ้าส่งเรื่องให้สโตร์/จัดซื้อแล้ว ให้ซ่อนรายการออกจากหน้า Center ทั้งหมดเพื่อไม่ให้สับสน
             incomplete_boms = job.job_boms.none()
@@ -284,10 +298,6 @@ def solar_job_manage(request, job_id):
     # 🌟 ส่งค่าเช็คว่า "มีรายการที่เบิกไปแล้วหรือไม่?" ไปให้หน้าเว็บ
     has_completed_boms = job.job_boms.filter(actual_used_quantity__gt=0).exists()
 
-    # 🌟 [NEW] เช็คว่ามีรายการ "รอเบิก" (แผน > เบิกจริง) อยู่ในระบบหรือไม่?
-    from django.db.models import F
-    has_pending_requisition = job.job_boms.filter(planned_quantity__gt=F('actual_used_quantity')).exists()
-
     # 🌟 สร้างสมุดราคา (Price Book) แบบ JSON เพื่อส่งให้ JavaScript ใช้ดึงราคาอัตโนมัติ
     rm_prices = {str(rm.id): float(rm.cost_price) for rm in raw_materials}
     rm_prices_json = json.dumps(rm_prices)
@@ -299,7 +309,6 @@ def solar_job_manage(request, job_id):
         'raw_materials': raw_materials,
         'teams': teams,
         'has_completed_boms': has_completed_boms,
-        'has_pending_requisition': has_pending_requisition, # 🌟 ส่งตัวแปรนี้ไปซ่อน/โชว์ปุ่มสโตร์
         'rm_prices_json': rm_prices_json
     })
 
@@ -312,9 +321,13 @@ def solar_job_bom_history(request, job_id):
     # ดึงเฉพาะรายการที่มีการเบิกจริงไปแล้ว (actual_used_quantity > 0)
     completed_boms = job.job_boms.filter(actual_used_quantity__gt=0).order_by('id')
 
+    # 🌟 [FIXED] คำนวณยอดสุทธิโดยใช้ property 'total_cost' ที่มีอยู่แล้วในโมเดล
+    grand_total_cost = sum(bom.total_cost for bom in completed_boms)
+
     return render(request, 'solar_jobs/job_bom_history.html', {
         'job': job,
-        'completed_boms': completed_boms
+        'completed_boms': completed_boms,
+        'grand_total_cost': grand_total_cost # 🌟 ส่งยอดรวมทั้งหมดไปที่หน้าเว็บ
     })
 
 # ------------------------------------------
@@ -483,11 +496,17 @@ def center_submit_requisition(request, job_id):
 
     job = get_object_or_404(SolarJob, id=job_id)
 
-    # 🌟 [FIXED] เพิ่ม 'IN_PROGRESS' เข้าไป เพื่อให้เบิกของเพิ่มระหว่างทำงานได้
-    if job.status in ['DRAFT', 'PREPARING', 'IN_PROGRESS']:
+    # 🌟 [FIXED] แยกลอจิกการเบิกครั้งแรก และ เบิกเพิ่มเติม พร้อมปิดสวิตช์ความจำ 🌟
+    if job.status in ['DRAFT', 'PREPARING']:
         job.status = 'WAITING_STORE'
+        job.has_unsent_requisition = False # ปิดสวิตช์
         job.save()
         messages.success(request, f"✅ ส่งใบเบิกวัสดุสำหรับงาน {job.code} ไปยังสโตร์เรียบร้อยแล้ว")
+    elif job.status == 'IN_PROGRESS':
+        # ปิดสวิตช์อย่างเดียว ไม่เปลี่ยนสถานะ
+        job.has_unsent_requisition = False
+        job.save()
+        messages.success(request, f"✅ ส่งใบขอเบิกวัสดุเพิ่มเติมให้สโตร์แล้ว (สถานะงานยังคงเป็นกำลังติดตั้ง)")
     else:
         messages.warning(request, "⚠️ ไม่สามารถส่งใบเบิกได้ เนื่องจากสถานะงานไม่ถูกต้อง")
 

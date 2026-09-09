@@ -7,6 +7,12 @@
     .btn-gold:hover { background: linear-gradient(135deg, #aa8c2c 0%, #8c7324 100%); transform: translateY(-2px); box-shadow: 0 4px 8px rgba(212, 175, 55, 0.3) !important; }
     .form-label { font-size: 0.85rem; font-weight: 700; color: #6c757d; text-transform: uppercase; letter-spacing: 0.5px; }
     .table-items th { background-color: #f8f9fa; font-weight: 600; color: #495057; border-bottom: 2px solid #dee2e6; }
+
+    /* 🌟 สไตล์พิเศษสำหรับช่องวันที่ให้สวยงาม 🌟 */
+    input[name="start_date"], input[name="expected_finish_date"] {
+        color: #6c757d !important;
+        font-weight: 700 !important;
+    }
 </style>
 
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
@@ -30,6 +36,28 @@
 
     <form method="POST" id="jobManageForm">
         {% csrf_token %}
+
+        <!-- 🌟 [NEW] กล่องแสดงข้อผิดพลาด (Validation Errors) 🌟 -->
+        {% if form.errors or formset.errors %}
+        <div class="alert alert-danger border-0 shadow-sm rounded-4 mb-4">
+            <h6 class="fw-bold mb-2"><i class="fas fa-exclamation-triangle me-2"></i>พบข้อมูลไม่สมบูรณ์ (ระบบยกเลิกการบันทึกชั่วคราว):</h6>
+            <ul class="mb-0 small">
+                {% for field in form %}
+                    {% for error in field.errors %}
+                        <li><strong>{{ field.label }}:</strong> {{ error }}</li>
+                    {% endfor %}
+                {% endfor %}
+                {% for form_err in formset.forms %}
+                    {% for field in form_err %}
+                        {% for err in field.errors %}
+                            <li><strong>ตารางวัตถุดิบ (แถวที่ {{ forloop.parentloop.parentloop.counter }}):</strong> {{ field.label }} - {{ err }}</li>
+                        {% endfor %}
+                    {% endfor %}
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
         <div class="row g-4">
             <!-- ข้อมูลลูกค้าและสถานะ (เหมือนเดิม) -->
             <div class="col-lg-4">
@@ -65,7 +93,7 @@
                 </div>
             </div>
 
-            <!-- จัดทีมช่าง และ กำหนดเวลา (เหมือนเดิม) -->
+            <!-- จัดทีมช่าง และ กำหนดเวลา -->
             <div class="col-lg-8">
                 <div class="card border-0 shadow-sm rounded-4 bg-white h-100">
                     <div class="card-header bg-white py-3 border-bottom-0">
@@ -86,14 +114,17 @@
                                 <label class="form-label">งบประมาณค่าดำเนินงาน(15.50%)</label>
                                 {{ form.labor_cost_budget }}
                             </div>
+
+                            <!-- 🌟 [FIXED] ใช้ฟอร์มตั้งต้นของ Django เพื่อแก้ปัญหาวันที่หายเวลาเกิด Error 🌟 -->
                             <div class="col-md-6">
                                 <label class="form-label">กำหนดเริ่มงาน (dd/mm/yyyy)</label>
-                                <input type="text" name="start_date" class="form-control text-secondary fw-bold custom-datepicker" placeholder="dd/mm/yyyy" value="{{ form.start_date.value|date:'Y-m-d'|default_if_none:'' }}">
+                                {{ form.start_date }}
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">กำหนดเสร็จ (dd/mm/yyyy)</label>
-                                <input type="text" name="expected_finish_date" class="form-control text-secondary fw-bold custom-datepicker" placeholder="dd/mm/yyyy" value="{{ form.expected_finish_date.value|date:'Y-m-d'|default_if_none:'' }}">
+                                {{ form.expected_finish_date }}
                             </div>
+
                             <div class="col-12">
                                 <label class="form-label">หมายเหตุ / รายละเอียดเพิ่มเติม</label>
                                 {{ form.note }}
@@ -145,7 +176,7 @@
                         <thead>
                             <tr>
                                 <th style="width: 25%;">วัตถุดิบ (RM)</th>
-                                
+
                                 {% if job.status == 'IN_PROGRESS' %}
                                     <th class="text-center text-primary" style="width: 15%;">จำนวนที่ขอเบิกเพิ่ม</th>
                                     <th class="d-none">เบิกจริง</th>
@@ -153,7 +184,7 @@
                                     <th class="text-center" style="width: 10%;">แผน (BOM)</th>
                                     <th class="text-center text-primary" style="width: 10%;">เบิกจริง</th>
                                 {% endif %}
-                                
+
                                 <th class="text-end" style="width: 15%;">ต้นทุน/หน่วย (บาท)</th>
                                 <th class="text-end text-danger" style="width: 15%;">ราคาต้นทุนรวม (บาท)</th>
                                 <th class="text-center" style="width: 10%;">ซ่อน/ลบ</th>
@@ -166,18 +197,18 @@
                                     {% for hidden in item_form.hidden_fields %}{{ hidden }}{% endfor %}
                                     {{ item_form.product }}
                                 </td>
-                                
+
                                 <td class="text-center">
                                     {{ item_form.planned_quantity }}
                                 </td>
-                                
+
                                 <td class="{% if job.status == 'IN_PROGRESS' %}d-none{% endif %} text-center">
                                     {{ item_form.actual_used_quantity }}
                                 </td>
 
                                 <td class="text-end pe-3">{{ item_form.unit_cost }}</td>
                                 <td class="text-end pe-4 fw-bold text-danger row-total-price">0.00</td>
-                                
+
                                 <td class="text-center">
                                     <div class="d-none">{{ item_form.DELETE }}</div>
                                     <button type="button" class="btn btn-sm btn-outline-danger border-0 remove-row-btn" title="ลบรายการนี้"><i class="fas fa-trash"></i></button>
@@ -203,21 +234,15 @@
                 <i class="fas fa-save me-2"></i> บันทึกข้อมูลงาน
             </button>
 
-            <!-- 🌟 [NEW] เงื่อนไขซ่อน/โชว์ปุ่มส่งสโตร์แบบรัดกุม 🌟 -->
+            <!-- 🌟 [NEW] เงื่อนไขซ่อน/โชว์ปุ่มส่งสโตร์ โดยอ่านจากสวิตช์ความจำ 🌟 -->
             {% if job.status == 'DRAFT' or job.status == 'PREPARING' %}
                 <a href="{% url 'center_submit_requisition' job.id %}" class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm fs-6" onclick="return confirm('ยืนยันส่งใบขอเบิกวัสดุไปให้แผนกสโตร์?\n\n(หากมีการเพิ่มรายการวัตถุดิบ กรุณากดปุ่มบันทึกข้อมูลงานก่อนนะครับ)');">
                     <i class="fas fa-paper-plane me-2"></i> ส่งให้สโตร์เบิกของ
                 </a>
-            {% elif job.status == 'IN_PROGRESS' and has_pending_requisition %}
+            {% elif job.status == 'IN_PROGRESS' and job.has_unsent_requisition %}
                 <a href="{% url 'center_submit_requisition' job.id %}" class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm fs-6" onclick="return confirm('ยืนยันส่งใบขอเบิกวัสดุเพิ่มเติมไปให้แผนกสโตร์?');">
                     <i class="fas fa-paper-plane me-2"></i> ขอเบิกวัสดุเพิ่ม (ส่งกลับสโตร์)
                 </a>
-            {% endif %}
-
-            {% if job.status == 'WAITING_STORE' %}
-            <a href="{% url 'center_start_job' job.id %}" class="btn btn-info text-white rounded-pill px-4 fw-bold shadow-sm fs-6" onclick="return confirm('สโตร์เบิกของครบแล้ว ยืนยันเริ่มดำเนินการติดตั้งหน้าไซต์งานหรือไม่?');">
-                <i class="fas fa-rocket me-2"></i> เริ่มดำเนินการติดตั้ง
-            </a>
             {% endif %}
 
             {% if job.status == 'IN_PROGRESS' %}
@@ -254,37 +279,46 @@
 </table>
 
 <script>
-    // รับค่าสมุดราคา (Price Book) จากหลังบ้านมาเก็บเป็น Object ของ JavaScript
     const rmPrices = JSON.parse('{{ rm_prices_json|escapejs|default:"{}" }}');
 
     document.addEventListener("DOMContentLoaded", function() {
+        // 🌟 [FIXED] บังคับให้ปฏิทินอ่านและส่งค่าเป็นรูปแบบ วัน/เดือน/ปี ให้ตรงกับระบบหลังบ้าน
         flatpickr(".custom-datepicker", {
-            dateFormat: "Y-m-d",
-            altInput: true,
-            altFormat: "d/m/Y",
-            placeholder: "dd/mm/yyyy",
-            allowInput: true
+            dateFormat: "d/m/Y",
+            allowInput: true,
+            placeholder: "dd/mm/yyyy"
         });
 
         const formsetBody = document.getElementById("formset-body");
         const addBtn = document.getElementById("add-material-btn");
         const totalFormsInput = document.getElementById("id_job_boms-TOTAL_FORMS");
 
-        // กวาดล้างแถวแถมฟรีจาก Django ตอนโหลดหน้าแรก
-        const initialRows = formsetBody.querySelectorAll('.item-row');
-        initialRows.forEach(row => {
-            const productSelect = row.querySelector('select[name$="-product"]');
-            const plannedQtyInput = row.querySelector('input[name$="-planned_quantity"]');
-            if (productSelect && productSelect.value === "" && plannedQtyInput) {
-                plannedQtyInput.value = "0";
-            }
-        });
+        function formatNumberWithCommas(value) {
+            let parts = value.toString().replace(/[^0-9.]/g, '').split(".");
+            parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+            return parts.join(".");
+        }
 
-        // ฟังก์ชันหลักสำหรับคำนวณและแสดงผลราคา
+        function applyCommaFormatToInput(inputBox) {
+            if(inputBox && inputBox.value) {
+                inputBox.value = formatNumberWithCommas(inputBox.value);
+            }
+        }
+
+        // 🌟 [FIXED] จัดการลูกน้ำในช่อง 'งบประมาณค่าดำเนินงาน' 🌟
+        const laborInput = document.querySelector('input[name="labor_cost_budget"]');
+        if (laborInput) {
+            laborInput.type = 'text'; // แปลงเป็น text เพื่อให้ใส่ลูกน้ำได้
+            applyCommaFormatToInput(laborInput);
+            laborInput.addEventListener('blur', function() {
+                applyCommaFormatToInput(this);
+            });
+        }
+
         function calculateRowAndGrandTotal() {
             let grandTotal = 0;
             const rows = formsetBody.querySelectorAll('.item-row');
-            
+
             rows.forEach(row => {
                 if (row.style.display === 'none') return;
 
@@ -295,7 +329,7 @@
                 if (qtyInput && costInput && totalCell) {
                     const qty = parseFloat(qtyInput.value.replace(/,/g, '')) || 0;
                     const cost = parseFloat(costInput.value.replace(/,/g, '')) || 0;
-                    
+
                     const rowTotal = qty * cost;
                     grandTotal += rowTotal;
 
@@ -309,7 +343,6 @@
             }
         }
 
-        // Event Listener จับตาดูการกระทำของผู้ใช้
         formsetBody.addEventListener('change', function(e) {
             if (e.target.tagName === 'SELECT' && e.target.name.includes('-product')) {
                 const row = e.target.closest('.item-row');
@@ -331,7 +364,6 @@
             }
         });
 
-        // สคริปต์เพิ่มแถว
         addBtn.addEventListener("click", function() {
             const currentFormCount = parseInt(totalFormsInput.value);
             const templateHtml = document.getElementById("empty-row-template").innerHTML;
@@ -341,13 +373,9 @@
             totalFormsInput.value = currentFormCount + 1;
 
             const newRow = formsetBody.lastElementChild;
-            const plannedQtyInput = newRow.querySelector('input[name$="-planned_quantity"]');
-            if (plannedQtyInput) plannedQtyInput.value = "0";
-            
-            calculateRowAndGrandTotal(); 
+            calculateRowAndGrandTotal();
         });
 
-        // สคริปต์ลบแถว
         formsetBody.addEventListener("click", function(e) {
             if (e.target.closest(".remove-row-btn")) {
                 const row = e.target.closest(".item-row");
@@ -359,11 +387,10 @@
                 } else {
                     row.remove();
                 }
-                calculateRowAndGrandTotal(); 
+                calculateRowAndGrandTotal();
             }
         });
 
-        // คลุมดำอัตโนมัติเมื่อคลิก
         document.body.addEventListener('focusin', function(e) {
             if(e.target.tagName === 'INPUT' && (
                 e.target.name.includes('planned_quantity') ||
@@ -375,27 +402,13 @@
             }
         });
 
-        const formElement = document.getElementById("jobManageForm");
-
-        function formatNumberWithCommas(value) {
-            let parts = value.toString().replace(/[^0-9.]/g, '').split(".");
-            parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-            return parts.join(".");
-        }
-
-        function applyCommaFormatToInput(inputBox) {
-            if(inputBox && inputBox.value) {
-                inputBox.value = formatNumberWithCommas(inputBox.value);
-            }
-        }
-
         const costInputs = document.querySelectorAll('input[name$="-unit_cost"]');
         costInputs.forEach(input => {
             input.type = 'text';
             applyCommaFormatToInput(input);
             input.addEventListener('blur', function() {
                 applyCommaFormatToInput(this);
-                calculateRowAndGrandTotal(); 
+                calculateRowAndGrandTotal();
             });
         });
 
@@ -414,10 +427,34 @@
             }, 50);
         });
 
+        const formElement = document.getElementById("jobManageForm");
+
         formElement.addEventListener("submit", function() {
+            // 1. ถอดลูกน้ำจากช่องราคาวัตถุดิบ
             const allCostInputs = document.querySelectorAll('input[name$="-unit_cost"]');
             allCostInputs.forEach(input => {
                 input.value = input.value.replace(/,/g, '');
+            });
+
+            // 2. ถอดลูกน้ำจากช่องงบประมาณดำเนินงาน
+            if (laborInput) {
+                laborInput.value = laborInput.value.replace(/,/g, '');
+            }
+
+            // 3. 🌟 [FIXED] ขั้นเด็ดขาด: ถ้าเจอแถวที่ไม่ได้เลือกวัตถุดิบ ให้บล็อกไม่ให้เบราว์เซอร์ส่งข้อมูลแถวนี้ไปหลังบ้านเลย 🌟
+            const rows = formsetBody.querySelectorAll('.item-row');
+            rows.forEach(row => {
+                const productSelect = row.querySelector('select[name$="-product"]');
+                if (productSelect && productSelect.value === "") {
+                    const deleteCheck = row.querySelector('input[type="checkbox"][name$="-DELETE"]');
+                    if (deleteCheck) {
+                        deleteCheck.checked = true;
+                    } else {
+                        // สั่ง Disable ช่องกรอกทั้งหมดในแถวนี้! ข้อมูลแถวนี้จะถูกตัดทิ้งก่อนส่งไปถึง Django 100%
+                        const allInputsInRow = row.querySelectorAll('input, select, textarea');
+                        allInputsInRow.forEach(inp => inp.disabled = true);
+                    }
+                }
             });
         });
 

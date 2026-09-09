@@ -28,13 +28,14 @@ urlpatterns = [
     path('invoices/', views.solar_invoice_list, name='solar_invoice_list'),
     path('invoices/<int:inv_id>/', views.solar_invoice_detail, name='solar_invoice_detail'),
     path('invoices/<int:inv_id>/print/', views.solar_invoice_print, name='solar_invoice_print'),
-    path('invoices/<int:inv_id>/record-payment/', views.solar_invoice_detail, name='solar_invoice_record_payment'),
+    # 🌟 [FIXED] เปลี่ยน view ให้ชี้ไปที่ฟังก์ชันรับชำระเงินที่ถูกต้อง 🌟
+    path('invoices/<int:inv_id>/record-payment/', views.solar_invoice_record_payment, name='solar_invoice_record_payment'),
 
     # เพิ่ม URL นี้สำหรับการเซ็นใบเสนอราคาออนไลน์ของฝั่งโซล่าเซลล์
     path('solar-sales/sign-quotation/<str:token>/', views.solar_customer_sign_quotation, name='solar_customer_sign_quotation'),
     # ในไฟล์ urls.py เพิ่มลิงก์นี้
     path('deposits/<int:qt_id>/print/', views.solar_deposit_print, name='solar_deposit_print'),
-    
+
     # ==========================================
     # 🌟 ระบบสำรวจหน้างานและเบิกจ่ายโซล่าเซลล์
     # ==========================================

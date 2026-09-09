@@ -2,16 +2,19 @@ from django import forms
 from django.forms import inlineformset_factory
 from .models import SolarJob, SolarJobBOM, SolarExpense
 # 🌟 ดึงตารางสินค้ามาเพื่อกรองข้อมูล
-from solar_sales.models import SolarProduct 
+from solar_sales.models import SolarProduct
 
 class SolarJobForm(forms.ModelForm):
+    # 🌟 [FIXED] เพิ่มบรรทัดนี้ เพื่อบังคับให้ตัวแปลภาษาของ Django รองรับวันที่แบบไทย 100%
+    start_date = forms.DateField(input_formats=['%d/%m/%Y', '%Y-%m-%d'], required=False, widget=forms.DateInput(format='%d/%m/%Y', attrs={'class': 'form-control custom-datepicker', 'placeholder': 'dd/mm/yyyy'}))
+    expected_finish_date = forms.DateField(input_formats=['%d/%m/%Y', '%Y-%m-%d'], required=False, widget=forms.DateInput(format='%d/%m/%Y', attrs={'class': 'form-control custom-datepicker', 'placeholder': 'dd/mm/yyyy'}))
+
     class Meta:
         model = SolarJob
         fields = ['technician_team', 'start_date', 'expected_finish_date', 'labor_cost_budget', 'status', 'note']
+        # ... (ส่วน widgets ลบ start_date และ expected_finish_date ทิ้งไปเลย เพราะเราประกาศใหม่ด้านบนแล้วครับ)
         widgets = {
             'technician_team': forms.Select(attrs={'class': 'form-select fw-bold'}),
-            'start_date': forms.DateInput(format='%d/%m/%Y', attrs={'class': 'form-control datepicker', 'placeholder': 'dd/mm/yyyy'}),
-            'expected_finish_date': forms.DateInput(format='%d/%m/%Y', attrs={'class': 'form-control datepicker', 'placeholder': 'dd/mm/yyyy'}),
             'labor_cost_budget': forms.NumberInput(attrs={'class': 'form-control text-end fw-bold text-primary', 'step': '0.01'}),
             'status': forms.Select(attrs={'class': 'form-select fw-bold'}),
             'note': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
@@ -50,6 +53,6 @@ class SolarJobBOMForm(forms.ModelForm):
 SolarBOMFormSet = inlineformset_factory(
     SolarJob, SolarJobBOM,
     form=SolarJobBOMForm,
-    extra=1,
+    extra=0, # 🌟 [FIXED] เปลี่ยนจาก 1 เป็น 0 เพื่อไม่ให้ระบบแถมแถวว่างเปล่ามากวนใจ
     can_delete=True
 )

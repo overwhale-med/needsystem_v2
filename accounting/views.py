@@ -6,7 +6,8 @@ from django.utils import timezone
 from .models import Income, Expense
 
 from sales.models import POSOrder, Invoice, Quotation
-from solar_sales.models import SolarQuotation
+# 🌟 [FIXED] เพิ่มการ Import SolarInvoice เข้ามาเพื่อให้ระบบรู้จัก 🌟
+from solar_sales.models import SolarQuotation, SolarInvoice
 from purchasing.models import PurchaseOrder
 from solar_purchasing.models import SolarPurchaseOrder
 from manufacturing.models import LogisticsClaim, BlueprintClaim
@@ -30,13 +31,17 @@ def accounting_dashboard(request):
     pending_deposits_solar = SolarQuotation.objects.filter(is_deposit_paid=True, is_deposit_verified=False).count()
     pending_deposits = pending_deposits_quotation + pending_deposits_solar
 
-    pending_sales = Invoice.objects.filter(status='PENDING').count() + POSOrder.objects.filter(status='PENDING').count()
-    
+    pending_sales = (
+        Invoice.objects.filter(status='PENDING').count() +
+        POSOrder.objects.filter(status='PENDING').count() +
+        SolarInvoice.objects.filter(status='PENDING_VERIFY').count() # 🌟 [NEW] นับบิลโซล่าที่รอบัญชีตรวจ
+    )
+
     # 🌟 [FIXED] แยกนับบิล PO น็อคดาวน์และโซล่าเซลล์ 🌟
     pending_purchases_normal = PurchaseOrder.objects.filter(status='APPROVED', payment_status__in=['PENDING', 'DEPOSIT']).count()
     pending_purchases_solar = SolarPurchaseOrder.objects.filter(status='APPROVED', payment_status__in=['PENDING', 'DEPOSIT']).count()
     pending_purchases = pending_purchases_normal + pending_purchases_solar
-    
+
     pending_logistics = LogisticsClaim.objects.filter(status='PENDING').count()
     pending_blueprints = BlueprintClaim.objects.filter(status='PENDING').count()
 
@@ -54,11 +59,11 @@ def accounting_dashboard(request):
     context = {
         'total_income': total_income, 'total_expense': total_expense, 'net_balance': net_balance,
         'pending_deposits': pending_deposits, 'pending_sales': pending_sales,
-        
+
         # 🌟 [FIXED] ส่งตัวแปรแยกกันไปแสดงผลที่หน้าเว็บ 🌟
         'pending_purchases_normal': pending_purchases_normal,
         'pending_purchases_solar': pending_purchases_solar,
-        
+
         'pending_logistics': pending_logistics,
         'pending_blueprints': pending_blueprints, 'total_pending_payments': total_pending_payments,
         'recent_transactions': recent_transactions,
@@ -98,10 +103,18 @@ def verification_hub(request, task_type):
     elif task_type == 'invoices':
         inv_list = list(Invoice.objects.filter(status='PENDING'))
         pos_list = list(POSOrder.objects.filter(status='PENDING'))
-        context['items'] = sorted(inv_list + pos_list, key=lambda x: x.created_at, reverse=True)
-        context['title'] = 'ตรวจสอบรับชำระบิลขาย (Invoices & POS)'
+        solar_inv_list = list(SolarInvoice.objects.filter(status='PENDING_VERIFY')) # 🌟 [NEW] โหลดบิลโซล่า
+
+        # แยกประเภทระบบให้บัญชีดูง่าย
+        for item in inv_list: item.system_type = 'invoice'
+        for item in pos_list: item.system_type = 'pos'
+        for item in solar_inv_list: item.system_type = 'solar_invoice'
+
+        # รวมลิสต์และเรียงวันที่
+        context['items'] = sorted(inv_list + pos_list + solar_inv_list, key=lambda x: getattr(x, 'created_at', getattr(x, 'date', timezone.now())), reverse=True)
+        context['title'] = 'ตรวจสอบรับชำระบิลขาย (Invoices, POS & Solar)'
         context['icon'] = 'fa-file-invoice-dollar text-primary'
-        
+
     elif task_type == 'po_payments':
         # 🌟 ดึงแค่บิลระบบปกติ (บ้านน็อคดาวน์)
         context['items'] = PurchaseOrder.objects.filter(status='APPROVED', payment_status__in=['PENDING', 'DEPOSIT']).order_by('-created_at')
@@ -139,31 +152,34 @@ def approve_transaction(request, task_type, item_id):
 
         elif task_type == 'invoices':
             doc_type = request.POST.get('doc_type', '').strip().lower()
+            doc_system = request.POST.get('doc_system', '').strip().lower() # 🌟 [NEW] รับค่าว่าระบบไหน
             inv = None
             amount = 0
 
-            if doc_type == 'pos':
-                inv = get_object_or_404(POSOrder, id=item_id)
-                amount = inv.total_amount
-            elif doc_type == 'invoice':
-                inv = get_object_or_404(Invoice, id=item_id)
-                amount = inv.grand_total
-            else:
-                pos_obj = POSOrder.objects.filter(id=item_id, status='PENDING').first()
-                inv_obj = Invoice.objects.filter(id=item_id, status='PENDING').first()
+            # 🌟 [NEW] จัดการอนุมัติรับเงินของบิล Solar
+            if doc_system == 'solar_invoice':
+                inv = get_object_or_404(SolarInvoice, id=item_id)
+                amount = inv.payment_amount
 
-                if pos_obj and not inv_obj:
-                    inv = pos_obj
-                    amount = inv.total_amount
-                elif inv_obj and not pos_obj:
-                    inv = inv_obj
-                    amount = inv.grand_total
-                elif pos_obj and inv_obj:
-                    messages.error(request, "❌ ตรวจพบ ID ซ้ำกัน กรุณากด (Ctrl+F5) เพื่อเคลียร์แคชหน้าเว็บก่อนทำรายการ")
-                    return redirect('accounting_verification_hub', task_type=task_type)
+                # ตัดยอดค้างชำระ
+                inv.balance_amount -= amount
+                if inv.balance_amount <= 0:
+                    inv.balance_amount = 0
+                    inv.status = 'PAID'
                 else:
-                    messages.error(request, "❌ ไม่พบเอกสารนี้ หรือเอกสารอาจถูกอนุมัติรับเงินไปแล้ว")
-                    return redirect('accounting_verification_hub', task_type=task_type)
+                    inv.status = 'UNPAID' # ถ้าจ่ายไม่ครบ ให้กลับไปเป็น UNPAID ทวงต่อ
+
+                inv.save()
+
+                # ลงบัญชีรายรับอัตโนมัติ
+                Income.objects.create(
+                    title=f"รับชำระบิลโซล่าเซลล์ #{inv.code}",
+                    amount=amount,
+                    date=timezone.now().date(),
+                    note=f"ยืนยันรับชำระโดยบัญชี (ช่องทาง: {inv.payment_method})"
+                )
+                messages.success(request, f"✅ ยืนยันรับชำระเงินบิลโซล่า {inv.code} และลงบันทึกรายรับเรียบร้อย")
+                return redirect('accounting_verification_hub', task_type=task_type)
 
             inv.status = 'PAID'
             inv.save()
