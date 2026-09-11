@@ -530,6 +530,11 @@ def center_complete_job(request, job_id):
     job = get_object_or_404(SolarJob, id=job_id)
     if job.status == 'IN_PROGRESS':
         job.status = 'COMPLETED'
+
+        # 🌟 [NEW] ประทับตรา "วันที่ติดตั้งเสร็จจริง" เป็นวันที่ปัจจุบัน (วันนี้)
+        from django.utils import timezone
+        job.actual_finish_date = timezone.now().date()
+
         job.save()
 
         # 🌟 AUTOMATION วิ่งไปอัปเดตฝั่งเซลส์อัตโนมัติ

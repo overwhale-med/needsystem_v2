@@ -365,7 +365,14 @@
 <!-- 🌟 สคริปต์ Date Range Picker 🌟 -->
 <script type="text/javascript">
 document.addEventListener("DOMContentLoaded", function() {
-    flatpickr(".datepicker", { dateFormat: "Y-m-d", altInput: true, altFormat: "d/m/Y", allowInput: true });
+    // 🌟 [FIXED] สั่งให้ Flatpickr แสดง "วันที่ปัจจุบัน" (today) เป็นค่าเริ่มต้นเมื่อเปิดหน้าต่างขึ้นมา
+    flatpickr(".datepicker", {
+        dateFormat: "Y-m-d",
+        altInput: true,
+        altFormat: "d/m/Y",
+        allowInput: true,
+        defaultDate: "today" // 🌟 เพิ่มคำสั่งนี้เข้าไป!
+    });
 });
 
 $(function() {

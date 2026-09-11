@@ -148,7 +148,32 @@
                             </td>
 
                             <td class="text-center">
-                                {% if item.total_amount %}
+                                <!-- 🌟 [NEW] เพิ่มเงื่อนไขเช็คว่าเป็นบิลจากระบบโซล่าเซลล์ 🌟 -->
+                                {% if item.system_type == 'solar_invoice' %}
+                                    {% if item.payment_amount > 0 %}
+                                        <div class="d-flex align-items-center justify-content-center gap-2 bg-light border border-warning rounded px-2 py-1 d-inline-flex">
+                                            <span class="fw-bold text-dark" style="font-size: 0.75rem;">฿{{ item.payment_amount|floatformat:2|intcomma }}</span>
+
+                                            {% if item.payment_method == 'TRANSFER' %}
+                                                <i class="fas fa-mobile-alt text-info"></i>
+                                            {% elif item.payment_method == 'CASH' %}
+                                                <i class="fas fa-money-bill-wave text-success"></i>
+                                            {% elif item.payment_method == 'CHECK' %}
+                                                <i class="fas fa-money-check text-warning"></i>
+                                            {% endif %}
+
+                                            <!-- โชว์รูปสลิปของระบบโซล่าเซลล์ -->
+                                            {% if item.payment_slip %}
+                                                <img src="{{ item.payment_slip.url }}" class="slip-thumbnail" loading="lazy" style="width: 25px; height: 25px;" data-bs-toggle="modal" data-bs-target="#slipModal" onclick="document.getElementById('slipImageFull').src='{{ item.payment_slip.url }}'">
+                                            {% endif %}
+                                            <i class="fas fa-circle text-warning" style="font-size: 8px;" title="รอตรวจ"></i>
+                                        </div>
+                                    {% else %}
+                                        <span class="text-muted small">-</span>
+                                    {% endif %}
+                                
+                                <!-- 🌟 โค้ดส่วนนี้คือของระบบน็อคดาวน์ (POSOrder) 🌟 -->
+                                {% elif item.total_amount %}
                                     <div class="d-flex align-items-center justify-content-center gap-2 bg-light border rounded px-2 py-1 d-inline-flex">
                                         <span class="fw-bold text-dark" style="font-size: 0.75rem;">฿{{ item.total_amount|floatformat:2|intcomma }}</span>
 
@@ -168,6 +193,7 @@
                                         <i class="fas fa-circle text-warning" style="font-size: 8px;" title="รอตรวจ"></i>
                                     </div>
 
+                                <!-- 🌟 โค้ดส่วนนี้คือของระบบน็อคดาวน์ (Invoice ปกติที่มีการผ่อนชำระ) 🌟 -->
                                 {% else %}
                                     {% if item.payment_history.all %}
                                         <div class="d-flex flex-column gap-1 align-items-center">
@@ -279,9 +305,8 @@
                                     {% csrf_token %}
                                     <input type="hidden" name="doc_type" value="{% if item.total_amount %}pos{% else %}invoice{% endif %}">
 
-                                    {% if task_type == 'deposits' %}
-                                        <input type="hidden" name="doc_system" value="{{ item.system_type }}">
-                                    {% endif %}
+                                    <!-- 🌟 [FIXED] ส่งค่า system_type ไปเสมอทั้งตอนรับมัดจำและรับชำระบิล เพื่อให้บัญชีแยกระบบโซล่าเซลล์ได้ -->
+                                    <input type="hidden" name="doc_system" value="{{ item.system_type|default:'' }}">
 
                                     <button type="submit" class="btn btn-sm btn-success rounded-pill px-3 shadow-sm fw-bold w-100" onclick="return confirm('ยืนยันความถูกต้อง และสร้างบันทึกรายรับในระบบบัญชีใช่หรือไม่?');">
                                         <i class="fas fa-check-circle me-1"></i> อนุมัติรับเงิน

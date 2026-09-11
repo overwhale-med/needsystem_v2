@@ -181,10 +181,24 @@ def approve_transaction(request, task_type, item_id):
                 messages.success(request, f"✅ ยืนยันรับชำระเงินบิลโซล่า {inv.code} และลงบันทึกรายรับเรียบร้อย")
                 return redirect('accounting_verification_hub', task_type=task_type)
 
-            inv.status = 'PAID'
-            inv.save()
-            Income.objects.create(title=f"รับชำระบิลขาย #{inv.code}", amount=amount, date=timezone.now().date(), note="ชำระเต็มจำนวน")
-            messages.success(request, f"✅ ยืนยันรับชำระ {inv.code} เข้าสู่ระบบบัญชีเรียบร้อย")
+            # 🌟 [FIXED] จัดการเงื่อนไขสำหรับระบบน็อคดาวน์ปกติ (Invoice และ POS)
+            else:
+                if doc_type == 'pos':
+                    inv = get_object_or_404(POSOrder, id=item_id)
+                else:
+                    inv = get_object_or_404(Invoice, id=item_id)
+
+                amount = inv.grand_total # ยอดชำระเต็มจำนวนของระบบเก่า
+                inv.status = 'PAID'
+                inv.save()
+
+                Income.objects.create(
+                    title=f"รับชำระบิลขาย #{inv.code}",
+                    amount=amount,
+                    date=timezone.now().date(),
+                    note="ชำระเต็มจำนวน"
+                )
+                messages.success(request, f"✅ ยืนยันรับชำระ {inv.code} เข้าสู่ระบบบัญชีเรียบร้อย")
 
         elif task_type == 'po_payments':
             po = get_object_or_404(PurchaseOrder, id=item_id)

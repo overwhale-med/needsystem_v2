@@ -54,6 +54,7 @@
         color: #ffffff;
         box-shadow: 0 4px 8px rgba(13, 110, 253, 0.25);
     }
+    /* 🌟 [FIXED] ปรับสีปุ่มประวัติให้เป็นสีเทากลางๆ ดูสบายตาและอ่านง่ายขึ้น 🌟 */
     .nav-pills-custom .nav-link.active-history {
         background-color: #6c757d;
         color: #ffffff;
@@ -214,20 +215,24 @@
                                     {% if job.technician_team %}{{ job.technician_team.name }}{% else %}<span class="text-muted">ยังไม่จัดทีม</span>{% endif %}
                                 </span>
                             </div>
-                            <div class="small text-muted mb-2">
-                                <i class="far fa-clock text-secondary me-1"></i>เริ่มติดตั้ง: {{ job.start_date|date:"d/m/Y"|default:"ยังไม่ระบุ" }}
-                            </div>
-                            <!-- Progress Bar จำลองตามสถานะ -->
-                            <div class="progress" style="height: 6px;">
-                                {% if job.status == 'DRAFT' %}
-                                    <div class="progress-bar bg-warning" style="width: 25%"></div>
-                                {% elif job.status == 'PREPARING' or job.status == 'WAITING_STORE' or job.status == 'WAITING_PURCHASE' %}
-                                    <div class="progress-bar bg-primary" style="width: 50%"></div>
-                                {% elif job.status == 'IN_PROGRESS' %}
-                                    <div class="progress-bar bg-info progress-bar-striped progress-bar-animated" style="width: 75%"></div>
-                                {% elif job.status == 'COMPLETED' %}
-                                    <div class="progress-bar bg-success" style="width: 100%"></div>
-                                {% endif %}
+                            <!-- 🌟 [FIXED] เพิ่มเงื่อนไขเปลี่ยนข้อความเมื่อติดตั้งเสร็จ 🌟 -->
+                            {% if job.status == 'COMPLETED' or job.status == 'CLOSED' %}
+                                <div class="small text-success fw-bold mb-2">
+                                    <i class="fas fa-calendar-check me-1"></i>ติดตั้งเสร็จ: {{ job.actual_finish_date|date:"d/m/Y"|default:"-" }}
+                                </div>
+                            {% else %}
+                                <div class="small text-muted mb-2">
+                                    <i class="far fa-clock text-secondary me-1"></i>เริ่มติดตั้ง: {{ job.start_date|date:"d/m/Y"|default:"ยังไม่ระบุ" }}
+                                </div>
+                            {% endif %}
+                            <!-- Progress Bar ดึงค่า Dynamic จาก Backend -->
+                            <div class="progress mt-2" style="height: 6px; background-color: #e9ecef;">
+                                <div class="progress-bar {{ job.progress_color }}"
+                                     role="progressbar"
+                                     style="width: {{ job.progress_percentage }}%;"
+                                     aria-valuenow="{{ job.progress_percentage }}"
+                                     aria-valuemin="0" aria-valuemax="100">
+                                </div>
                             </div>
                         </td>
 
@@ -237,13 +242,14 @@
                                 <div class="step-item {% if job.status != 'CANCELLED' %}active{% endif %}">
                                     <div class="step-dot"></div> 1. รอรับงาน
                                 </div>
-                                <div class="step-item {% if job.status == 'PREPARING' or job.status == 'WAITING_STORE' or job.status == 'WAITING_PURCHASE' or job.status == 'IN_PROGRESS' or job.status == 'COMPLETED' %}active{% endif %}">
+                                <!-- 🌟 [FIXED] เพิ่มเงื่อนไข CLOSED เข้าไปให้ไฟเขียวติดครบทุกดวงเมื่อปิดจ๊อบ 🌟 -->
+                                <div class="step-item {% if job.status == 'PREPARING' or job.status == 'WAITING_STORE' or job.status == 'WAITING_PURCHASE' or job.status == 'IN_PROGRESS' or job.status == 'COMPLETED' or job.status == 'CLOSED' %}active{% endif %}">
                                     <div class="step-dot"></div> 2. เตรียมของ/รอสโตร์
                                 </div>
-                                <div class="step-item {% if job.status == 'IN_PROGRESS' or job.status == 'COMPLETED' %}active{% endif %}">
+                                <div class="step-item {% if job.status == 'IN_PROGRESS' or job.status == 'COMPLETED' or job.status == 'CLOSED' %}active{% endif %}">
                                     <div class="step-dot"></div> 3. กำลังติดตั้ง
                                 </div>
-                                <div class="step-item {% if job.status == 'COMPLETED' %}active{% endif %}">
+                                <div class="step-item {% if job.status == 'COMPLETED' or job.status == 'CLOSED' %}active{% endif %}">
                                     <div class="step-dot"></div> 4. เสร็จสมบูรณ์
                                 </div>
                             </div>

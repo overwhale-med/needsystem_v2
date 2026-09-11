@@ -49,6 +49,9 @@ class SolarJob(models.Model):
     start_date = models.DateField(null=True, blank=True, verbose_name="วันที่เริ่มงาน (dd/mm/yyyy)")
     expected_finish_date = models.DateField(null=True, blank=True, verbose_name="กำหนดเสร็จ (dd/mm/yyyy)")
 
+    # 🌟 [NEW] เพิ่มช่องเก็บ "วันที่ติดตั้งเสร็จจริง" (บันทึกอัตโนมัติเมื่อกดปุ่มปิดจ๊อบ)
+    actual_finish_date = models.DateField(null=True, blank=True, verbose_name="วันที่ติดตั้งเสร็จจริง")
+
     # 🌟 [NEW] เพิ่มสวิตช์ความจำ สำหรับเช็คว่ามีการเบิกของที่ยังไม่ได้กดส่งให้สโตร์หรือไม่
     has_unsent_requisition = models.BooleanField(default=False, verbose_name="มีใบเบิกที่ยังไม่ได้ส่งสโตร์")
     # 🌟 [NEW] เพิ่มสวิตช์ความจำ สำหรับเช็คว่าสโตร์กดส่งเรื่องขอซื้อ (PR) ไปให้จัดซื้อแล้วหรือยัง
@@ -88,6 +91,24 @@ class SolarJob(models.Model):
     @property
     def total_job_cost(self):
         return self.total_material_cost + self.labor_cost_budget
+
+    @property
+    def progress_percentage(self):
+        """คำนวณความคืบหน้าของงานเพื่อนำไปแสดงผลหลอด Progress Bar"""
+        if self.status == 'DRAFT': return 25
+        if self.status in ['PREPARING', 'WAITING_STORE', 'WAITING_PURCHASE']: return 50
+        if self.status == 'IN_PROGRESS': return 75
+        if self.status in ['COMPLETED', 'CLOSED']: return 100
+        return 0 # ถ้าถูกยกเลิกให้เหลือ 0%
+
+    @property
+    def progress_color(self):
+        """ส่งคืนคลาสสีของ Bootstrap ตามสถานะของงาน"""
+        if self.status == 'DRAFT': return 'bg-warning'
+        if self.status in ['PREPARING', 'WAITING_STORE', 'WAITING_PURCHASE']: return 'bg-primary'
+        if self.status == 'IN_PROGRESS': return 'bg-info progress-bar-striped progress-bar-animated'
+        if self.status in ['COMPLETED', 'CLOSED']: return 'bg-success'
+        return 'bg-danger'
 
 class SolarJobBOM(models.Model):
     job = models.ForeignKey(SolarJob, related_name='job_boms', on_delete=models.CASCADE, verbose_name="อ้างอิงใบสั่งงาน")
