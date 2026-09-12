@@ -692,14 +692,37 @@ def solar_quotation_create_invoice(request, qt_id):
     qt.status = 'CONVERTED'
     qt.save()
 
-    # 🌟 [NEW] AUTOMATION 4: เปลี่ยนสถานะ Job ฝั่ง Center เป็น CLOSED เพื่อซ่อนการ์ด 🌟
-    # ค้นหาใบสั่งงานของ Center ที่อ้างอิงถึง Quotation นี้ และมีสถานะ COMPLETED
+    # ดึงเลข Invoice ที่เพิ่งสร้างมาใช้งาน
+    new_inv = SolarInvoice.objects.get(quotation_ref=qt)
+
+    # 🌟 [FIXED] AUTOMATION 4: ตัดสต๊อกขาย (Stock-OUT) ด้วยโมเดล SolarStockMovement 🌟
+    from solar_inventory.models import SolarStockMovement
+    from decimal import Decimal
+
+    # ค้นหาใบสั่งงานของ Center ที่อ้างอิงถึง Quotation นี้
     related_jobs = SolarJob.objects.filter(quotation_ref=qt, status='COMPLETED')
     for job in related_jobs:
+
+        # 🌟 4.1 ตรวจสอบว่างานนี้มีแพ็กเกจหลักให้ตัดสต๊อกหรือไม่
+        if job.package_sold:
+            # เช็คจากตัวแปร stock_qty
+            if job.package_sold.stock_qty >= Decimal('1'):
+                # บันทึกประวัติเบิกออก (ขาย) 1 ชุด (ระบบจะนำไปหักสต๊อกให้อัตโนมัติ)
+                SolarStockMovement.objects.create(
+                    product=job.package_sold,
+                    movement_type='OUT',
+                    quantity=Decimal('1'),
+                    reference_doc=new_inv.code
+                )
+            else:
+                # แจ้งเตือนแอดมินเบาๆ หากไม่มีของให้ตัด
+                messages.warning(request, f"⚠️ ระบบไม่สามารถตัดสต๊อก {job.package_sold.code} ได้ เนื่องจากไม่มียอดรับเข้าก่อนหน้านี้")
+
+        # 4.2 เปลี่ยนสถานะเป็น CLOSED เพื่อซ่อนการ์ดจากหน้ากระดาน
         job.status = 'CLOSED'
         job.save()
 
-    messages.success(request, f"🎉 สร้างใบแจ้งหนี้สำหรับ {qt.code} สำเร็จ! และระบบได้ซ่อนการ์ดติดตั้งในหน้ากระดาน Center เรียบร้อยแล้ว (บิลถูกส่งให้บัญชีตรวจสอบ)")
+    messages.success(request, f"🎉 สร้างใบแจ้งหนี้สำหรับ {qt.code} และตัดสต๊อกแพ็กเกจสำเร็จ! (บิลถูกส่งให้บัญชีตรวจสอบ)")
 
     # 🌟 เปลี่ยนให้เด้งไปหน้า "รายการใบแจ้งหนี้" ทันที 🌟
     return redirect('solar_invoice_list')

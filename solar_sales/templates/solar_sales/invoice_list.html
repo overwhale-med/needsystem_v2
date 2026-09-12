@@ -184,11 +184,9 @@
                                         <i class="fas fa-money-check text-warning" title="เช็ค"></i>
                                     {% endif %}
 
-                                    <!-- 🌟 กดเพื่อเปิด Modal โชว์รูปสลิปแทนการเปิดแท็บใหม่ 🌟 -->
+                                    <!-- 🌟 [FIXED] โชว์รูปสลิปจำลองแบบ Thumbnail 🌟 -->
                                     {% if item.quotation_ref.deposit_slip %}
-                                        <a href="javascript:void(0);" data-bs-toggle="modal" data-bs-target="#slipModal{{ item.id }}" title="ดูสลิป">
-                                            <i class="fas fa-image text-secondary ms-1 fs-6"></i>
-                                        </a>
+                                        <img src="{{ item.quotation_ref.deposit_slip.url }}" class="ms-2 border shadow-sm" style="width: 25px; height: 25px; object-fit: cover; border-radius: 4px; cursor: pointer; transition: transform 0.2s;" data-bs-toggle="modal" data-bs-target="#slipModal{{ item.id }}" title="คลิกเพื่อดูสลิปมัดจำ" onmouseover="this.style.transform='scale(1.2)'" onmouseout="this.style.transform='scale(1)'">
                                     {% endif %}
                                 </div>
                             {% else %}
@@ -209,10 +207,9 @@
                                         <i class="fas fa-money-check text-warning" title="เช็ค"></i>
                                     {% endif %}
 
+                                    <!-- 🌟 [FIXED] โชว์รูปสลิปจำลองแบบ Thumbnail 🌟 -->
                                     {% if item.payment_slip %}
-                                        <a href="javascript:void(0);" data-bs-toggle="modal" data-bs-target="#paymentSlipModal{{ item.id }}" title="ดูสลิป">
-                                            <i class="fas fa-image text-secondary ms-1 fs-6"></i>
-                                        </a>
+                                        <img src="{{ item.payment_slip.url }}" class="ms-2 border shadow-sm" style="width: 25px; height: 25px; object-fit: cover; border-radius: 4px; cursor: pointer; transition: transform 0.2s;" data-bs-toggle="modal" data-bs-target="#paymentSlipModal{{ item.id }}" title="คลิกเพื่อดูสลิปชำระเงิน" onmouseover="this.style.transform='scale(1.2)'" onmouseout="this.style.transform='scale(1)'">
                                     {% endif %}
                                 </div>
                             {% elif item.status == 'PENDING_VERIFY' %}

@@ -101,15 +101,30 @@
                         {% if task_type == 'invoices' %}
                             <td>
                                 <div class="d-flex flex-column align-items-center justify-content-center">
-                                    {% if item.employee.photo %}
-                                     <img src="{{ item.employee.photo.url }}" class="rounded-circle border mb-1" style="width: 30px; height: 30px; object-fit: cover;">
+                                    <!-- 🌟 [FIXED] เช็คว่าเป็นระบบ Solar หรือไม่ เพื่อดึงข้อมูลพนักงานจาก Quotation 🌟 -->
+                                    {% if item.system_type == 'solar_invoice' %}
+                                        {% if item.quotation_ref.employee.photo %}
+                                         <img src="{{ item.quotation_ref.employee.photo.url }}" class="rounded-circle border mb-1" style="width: 30px; height: 30px; object-fit: cover;">
+                                        {% else %}
+                                            <div class="bg-light text-secondary rounded-circle d-inline-flex align-items-center justify-content-center border mb-1" style="width: 30px; height: 30px; font-size: 10px;">
+                                                {{ item.quotation_ref.employee.first_name|slice:":2"|default:"-" }}
+                                            </div>
+                                        {% endif %}
+                                        <div class="small fw-bold text-dark lh-sm">{{ item.quotation_ref.employee.first_name|default:"-" }}</div>
+                                        <div class="text-muted lh-sm" style="font-size: 0.65rem;">{{ item.quotation_ref.employee.department.name|default:"ไม่มีสาขา"|truncatechars:15 }}</div>
+
+                                    <!-- 🌟 ถ้าเป็นระบบบ้านน็อคดาวน์ปกติ 🌟 -->
                                     {% else %}
-                                        <div class="bg-light text-secondary rounded-circle d-inline-flex align-items-center justify-content-center border mb-1" style="width: 30px; height: 30px; font-size: 10px;">
-                                            {{ item.employee.first_name|slice:":2"|default:"-" }}
-                                        </div>
+                                        {% if item.employee.photo %}
+                                         <img src="{{ item.employee.photo.url }}" class="rounded-circle border mb-1" style="width: 30px; height: 30px; object-fit: cover;">
+                                        {% else %}
+                                            <div class="bg-light text-secondary rounded-circle d-inline-flex align-items-center justify-content-center border mb-1" style="width: 30px; height: 30px; font-size: 10px;">
+                                                {{ item.employee.first_name|slice:":2"|default:"-" }}
+                                            </div>
+                                        {% endif %}
+                                        <div class="small fw-bold text-dark lh-sm">{{ item.employee.first_name|default:"-" }}</div>
+                                        <div class="text-muted lh-sm" style="font-size: 0.65rem;">{{ item.employee.department.name|default:"ไม่มีสาขา"|truncatechars:15 }}</div>
                                     {% endif %}
-                                    <div class="small fw-bold text-dark lh-sm">{{ item.employee.first_name|default:"-" }}</div>
-                                    <div class="text-muted lh-sm" style="font-size: 0.65rem;">{{ item.employee.department.name|default:"ไม่มีสาขา"|truncatechars:15 }}</div>
                                 </div>
                             </td>
 
@@ -171,7 +186,7 @@
                                     {% else %}
                                         <span class="text-muted small">-</span>
                                     {% endif %}
-                                
+
                                 <!-- 🌟 โค้ดส่วนนี้คือของระบบน็อคดาวน์ (POSOrder) 🌟 -->
                                 {% elif item.total_amount %}
                                     <div class="d-flex align-items-center justify-content-center gap-2 bg-light border rounded px-2 py-1 d-inline-flex">
@@ -272,7 +287,7 @@
                                 <button type="button" class="btn btn-sm btn-warning rounded-pill px-3 shadow-sm fw-bold w-100 text-dark" data-bs-toggle="modal" data-bs-target="#paymentModal{{ item.id }}">
                                     <i class="fas fa-hand-holding-usd me-1"></i> ทำจ่าย Solar PO
                                 </button>
-                                
+
                                 <!-- Modal ป๊อปอัปสำหรับอัปเดตสถานะชำระเงิน Solar PO -->
                                 <div class="modal fade" id="paymentModal{{ item.id }}" tabindex="-1" aria-hidden="true">
                                     <div class="modal-dialog modal-dialog-centered modal-sm">

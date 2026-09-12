@@ -34,4 +34,46 @@
         </div>
     </div>
 </div>
+
+<!-- 🌟 สคริปต์จัดการลูกน้ำและทศนิยม 🌟 -->
+<script type="text/javascript">
+document.addEventListener("DOMContentLoaded", function() {
+
+    // ฟังก์ชันช่วยเติมลูกน้ำและบังคับทศนิยม 2 ตำแหน่ง
+    function formatNumberWithCommas(value) {
+        if (!value) return "";
+        // ลบตัวอักษรที่ไม่ใช่ตัวเลขหรือจุดทศนิยมออกก่อน
+        let cleanValue = value.toString().replace(/,/g, '').replace(/[^0-9.]/g, '');
+        if (!cleanValue) return "";
+
+        let floatVal = parseFloat(cleanValue);
+        if (isNaN(floatVal)) return "";
+
+        // แบ่งทศนิยมและใส่ลูกน้ำ
+        let parts = floatVal.toFixed(2).split(".");
+        parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+        return parts.join(".");
+    }
+
+    const amountInput = document.querySelector('.amount-input');
+    const form = amountInput.closest('form');
+
+    if (amountInput) {
+        // 1. ใส่ลูกน้ำทันทีเมื่อมีค่าเดิม (เช่น กรณีแก้ไขบิลเก่า)
+        if (amountInput.value) {
+            amountInput.value = formatNumberWithCommas(amountInput.value);
+        }
+
+        // 2. จัดรูปแบบใหม่ทุกครั้งที่ผู้ใช้พิมพ์แก้ตัวเลขเสร็จ (คลิกออกจากช่อง)
+        amountInput.addEventListener('blur', function() {
+            this.value = formatNumberWithCommas(this.value);
+        });
+
+        // 3. 🌟 สำคัญมาก: ถอดลูกน้ำออกก่อนกด Submit ส่งให้ Django ไม่ให้อ่านค่า Error
+        form.addEventListener('submit', function() {
+            amountInput.value = amountInput.value.replace(/,/g, '');
+        });
+    }
+});
+</script>
 {% endblock %}

@@ -535,6 +535,19 @@ def center_complete_job(request, job_id):
         from django.utils import timezone
         job.actual_finish_date = timezone.now().date()
 
+        # 🌟 [FIXED] สร้างประวัติจำลอง "รับเข้า" (Stock-IN) ด้วยโมเดล SolarStockMovement 🌟
+        if job.package_sold:
+            from solar_inventory.models import SolarStockMovement
+            from decimal import Decimal
+
+            # บันทึกประวัติรับเข้า 1 ชุด (ระบบจะนำไปบวกสต๊อกให้อัตโนมัติ)
+            SolarStockMovement.objects.create(
+                product=job.package_sold,
+                movement_type='IN',
+                quantity=Decimal('1'),
+                reference_doc=job.code
+            )
+
         job.save()
 
         # 🌟 AUTOMATION วิ่งไปอัปเดตฝั่งเซลส์อัตโนมัติ

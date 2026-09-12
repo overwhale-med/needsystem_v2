@@ -6,8 +6,9 @@ from solar_sales.models import SolarProduct
 
 class SolarJobForm(forms.ModelForm):
     # 🌟 [FIXED] เพิ่มบรรทัดนี้ เพื่อบังคับให้ตัวแปลภาษาของ Django รองรับวันที่แบบไทย 100%
-    start_date = forms.DateField(input_formats=['%d/%m/%Y', '%Y-%m-%d'], required=False, widget=forms.DateInput(format='%d/%m/%Y', attrs={'class': 'form-control custom-datepicker', 'placeholder': 'dd/mm/yyyy'}))
-    expected_finish_date = forms.DateField(input_formats=['%d/%m/%Y', '%Y-%m-%d'], required=False, widget=forms.DateInput(format='%d/%m/%Y', attrs={'class': 'form-control custom-datepicker', 'placeholder': 'dd/mm/yyyy'}))
+    # 🌟 [FIXED] เพิ่ม 'autocomplete': 'off' เพื่อป้องกันประวัติเก่าเด้งบังปฏิทิน 🌟
+    start_date = forms.DateField(input_formats=['%d/%m/%Y', '%Y-%m-%d'], required=False, widget=forms.DateInput(format='%d/%m/%Y', attrs={'class': 'form-control custom-datepicker', 'placeholder': 'dd/mm/yyyy', 'autocomplete': 'off'}))
+    expected_finish_date = forms.DateField(input_formats=['%d/%m/%Y', '%Y-%m-%d'], required=False, widget=forms.DateInput(format='%d/%m/%Y', attrs={'class': 'form-control custom-datepicker', 'placeholder': 'dd/mm/yyyy', 'autocomplete': 'off'}))
 
     class Meta:
         model = SolarJob

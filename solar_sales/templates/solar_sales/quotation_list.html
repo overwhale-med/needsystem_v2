@@ -147,9 +147,11 @@
                     <table class="table table-hover align-middle mb-0 border-0">
                         <thead class="text-secondary small text-uppercase" style="background-color: #f8f9fc; border-bottom: 2px solid #eef2f7;">
                             <tr>
-                                <th class="ps-4 py-3 border-0" style="width: 25%;">เลขที่เอกสาร / วันที่</th>
-                                <th class="py-3 border-0" style="width: 25%;">ลูกค้า / สาขาพนักงาน</th>
-                                <th class="py-3 border-0 text-end" style="width: 20%;">ยอดสุทธิ (บาท)</th>
+                                <th class="ps-4 py-3 border-0" style="width: 20%;">เลขที่เอกสาร / วันที่</th>
+                                <th class="py-3 border-0" style="width: 20%;">ลูกค้า / สาขาพนักงาน</th>
+                                <!-- 🌟 [NEW] เพิ่มหัวข้อคอลัมน์ยอดมัดจำ 🌟 -->
+                                <th class="py-3 border-0 text-center" style="width: 15%;">ยอดมัดจำ / หลักฐาน</th>
+                                <th class="py-3 border-0 text-end" style="width: 15%;">ยอดสุทธิ (บาท)</th>
                                 <th class="py-3 border-0 text-center" style="width: 15%;">สถานะ</th>
                                 <th class="pe-4 py-3 border-0 text-center" style="width: 15%;">จัดการ</th>
                             </tr>
@@ -172,6 +174,29 @@
                                         <i class="fas fa-user-tie me-1 opacity-50"></i>{{ qt.employee.first_name|default:"-" }}
                                         {% if qt.employee.department %}({{ qt.employee.department.name|default:"สำนักงานใหญ่" }}){% endif %}
                                     </div>
+                                </td>
+
+                                <!-- 🌟 [NEW] ช่องแสดงข้อมูลยอดมัดจำและปุ่มคลิกดูสลิป 🌟 -->
+                                <td class="text-center">
+                                    {% if qt.is_deposit_paid and qt.deposit_amount > 0 %}
+                                        <div class="fw-bold text-success" style="font-size: 0.85rem;">฿{{ qt.deposit_amount|floatformat:2|intcomma }}</div>
+                                        <div class="d-flex align-items-center justify-content-center gap-1 mt-1">
+                                            {% if qt.deposit_method == 'TRANSFER' %}
+                                                <i class="fas fa-mobile-alt text-info" title="โอนเงิน"></i>
+                                            {% elif qt.deposit_method == 'CASH' %}
+                                                <i class="fas fa-money-bill-wave text-success" title="เงินสด"></i>
+                                            {% elif qt.deposit_method == 'CHECK' %}
+                                                <i class="fas fa-money-check text-warning" title="เช็ค"></i>
+                                            {% endif %}
+
+                                            <!-- 🌟 [FIXED] โชว์รูปสลิปจำลองแบบ Thumbnail 🌟 -->
+                                            {% if qt.deposit_slip %}
+                                                <img src="{{ qt.deposit_slip.url }}" class="ms-2 border shadow-sm" style="width: 25px; height: 25px; object-fit: cover; border-radius: 4px; cursor: pointer; transition: transform 0.2s;" data-bs-toggle="modal" data-bs-target="#depositSlipModal{{ qt.id }}" title="คลิกเพื่อดูสลิปมัดจำ" onmouseover="this.style.transform='scale(1.2)'" onmouseout="this.style.transform='scale(1)'">
+                                            {% endif %}
+                                        </div>
+                                    {% else %}
+                                        <span class="text-muted small">-</span>
+                                    {% endif %}
                                 </td>
                                 <td class="text-end">
                                     <div class="fw-bold fs-6 text-dark">฿{{ qt.grand_total|floatformat:2|intcomma }}</div>
@@ -309,6 +334,21 @@
                                                 <button type="submit" class="btn btn-warning rounded-pill px-4 fw-bold shadow-sm text-dark" onclick="return confirm('ยืนยันบันทึกยอดมัดจำ?');">บันทึกยอดมัดจำ</button>
                                             </div>
                                         </form>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endif %}
+                            <!-- 🌟 Modal สำหรับกดดูรูปสลิปมัดจำขยายใหญ่ 🌟 -->
+                            {% if qt.deposit_slip %}
+                            <div class="modal fade" id="depositSlipModal{{ qt.id }}" tabindex="-1" aria-hidden="true">
+                                <div class="modal-dialog modal-dialog-centered modal-lg">
+                                    <div class="modal-content bg-transparent border-0 shadow-none">
+                                        <div class="modal-header border-0 pb-0 justify-content-end">
+                                            <button type="button" class="btn-close fs-5" data-bs-dismiss="modal" aria-label="Close" style="filter: invert(1) grayscale(100%) brightness(200%);"></button>
+                                        </div>
+                                        <div class="modal-body text-center p-0 mt-2">
+                                            <img src="{{ qt.deposit_slip.url }}" class="img-fluid rounded-4 shadow-lg" style="max-height: 85vh; object-fit: contain; border: 3px solid rgba(255,255,255,0.2);">
+                                        </div>
                                     </div>
                                 </div>
                             </div>

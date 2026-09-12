@@ -87,6 +87,10 @@ class SolarExpenseClaimForm(forms.ModelForm):
         model = SolarExpenseClaim
         fields = ['amount', 'description']
         widgets = {
-            'amount': forms.NumberInput(attrs={'class': 'form-control text-end fs-5 fw-bold text-danger', 'step': '0.01'}),
+            # 🌟 [FIXED] เปลี่ยนจาก NumberInput เป็น TextInput และเพิ่มคลาส 'amount-input' เพื่อให้ JS รู้จัก
+            'amount': forms.TextInput(attrs={
+                'class': 'form-control text-end fs-5 fw-bold text-danger amount-input',
+                'inputmode': 'decimal' # เด้งคีย์บอร์ดตัวเลขในมือถือ
+            }),
             'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 4, 'placeholder': 'เช่น \n- ค่าน้ำมันรถ 500 บาท\n- ค่าทางด่วน 150 บาท...'}),
         }
