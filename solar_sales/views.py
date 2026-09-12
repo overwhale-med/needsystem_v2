@@ -36,17 +36,48 @@ from django.utils import timezone
 # ==========================================
 @login_required
 def solar_sales_dashboard(request):
-    total_sales = SolarInvoice.objects.filter(status='PAID').aggregate(Sum('grand_total'))['grand_total__sum'] or 0
-    pending_balance = SolarInvoice.objects.filter(status='UNPAID').aggregate(Sum('balance_amount'))['balance_amount__sum'] or 0
+    # 🌟 [FIXED] คำนวณยอดขายจาก "ใบเสนอราคา" ในเดือนนี้ ที่รับมัดจำแล้ว 🌟
+    tz_bkk = pytz.timezone('Asia/Bangkok')
+    today_bkk = timezone.now().astimezone(tz_bkk)
+
+    total_sales = SolarQuotation.objects.filter(
+        date__year=today_bkk.year,
+        date__month=today_bkk.month,
+        is_deposit_paid=True
+    ).aggregate(Sum('grand_total'))['grand_total__sum'] or 0
+
+    # 🌟 [FIXED] คำนวณการ์ดที่ 2: "งานติดตั้งเสร็จยังไม่ได้เปิดบิล" (READY) 🌟
+    ready_quotations = SolarQuotation.objects.filter(status='READY')
+    pending_invoice_count = ready_quotations.count() # นับจำนวนรายการ
+
+    # รวมยอด Grand Total และยอดมัดจำที่รับมาแล้ว
+    ready_totals = ready_quotations.aggregate(
+        total_grand=Sum('grand_total'),
+        total_deposit=Sum('deposit_amount')
+    )
+    t_grand = ready_totals['total_grand'] or Decimal('0')
+    t_dep = ready_totals['total_deposit'] or Decimal('0')
+
+    # ยอดคงเหลือที่ต้องไปตามเก็บ = ยอดเต็ม - มัดจำ
+    pending_invoice_balance = t_grand - t_dep
+
     draft_qt_count = SolarQuotation.objects.filter(status='DRAFT').count()
-    unpaid_inv_count = SolarInvoice.objects.filter(status='UNPAID').count()
+
+    # 🌟 [FIXED] ลอจิกการ์ดที่ 4: ใบแจ้งหนี้ที่ยังไม่รับเงิน (UNPAID) 🌟
+    unpaid_invoices = SolarInvoice.objects.filter(status='UNPAID')
+    unpaid_inv_count = unpaid_invoices.count() # จำนวนรายการ
+    # รวมยอดเงินค้างชำระ
+    unpaid_inv_balance = unpaid_invoices.aggregate(Sum('balance_amount'))['balance_amount__sum'] or Decimal('0')
+
     recent_invoices = SolarInvoice.objects.all().order_by('-date', '-id')[:5]
 
     context = {
         'total_sales': total_sales,
-        'pending_balance': pending_balance,
+        'pending_invoice_balance': pending_invoice_balance,
+        'pending_invoice_count': pending_invoice_count,
         'draft_qt_count': draft_qt_count,
         'unpaid_inv_count': unpaid_inv_count,
+        'unpaid_inv_balance': unpaid_inv_balance, # 🌟 ส่งค่ายอดเงินที่ยังไม่ได้รับชำระ
         'recent_invoices': recent_invoices,
     }
     return render(request, 'solar_sales/dashboard.html', context)
@@ -111,7 +142,16 @@ def solar_quotation_list(request):
         elif status_filter == 'PENDING_VERIFY':
             quotations = quotations.filter(status='APPROVED', is_deposit_paid=True, is_deposit_verified=False)
         elif status_filter == 'READY':
-            quotations = quotations.filter(status='APPROVED', is_deposit_paid=True, is_deposit_verified=True)
+            quotations = quotations.filter(status='READY')
+        # 🌟 [NEW] เพิ่มตัวกรองพิเศษสำหรับกดดูจากหน้าแดชบอร์ด 🌟
+        elif status_filter == 'MONTHLY_SALES':
+            tz_bkk = pytz.timezone('Asia/Bangkok')
+            today_bkk = timezone.now().astimezone(tz_bkk)
+            quotations = quotations.filter(
+                date__year=today_bkk.year,
+                date__month=today_bkk.month,
+                is_deposit_paid=True
+            )
         else:
             quotations = quotations.filter(status=status_filter)
 
@@ -120,13 +160,27 @@ def solar_quotation_list(request):
         quotations = quotations.filter(Q(code__icontains=search_query) | Q(customer__name__icontains=search_query))
 
     # 4. กรองวันที่
+    import calendar # 🌟 นำเข้าฟังก์ชันปฏิทินเพื่อหาวันสิ้นเดือน
     date_start = request.GET.get('start_date')
     date_end = request.GET.get('end_date')
 
-    if not date_start or date_start == 'None':
-        date_start = (timezone.now().date() - datetime.timedelta(days=29)).strftime('%Y-%m-%d')
-    if not date_end or date_end == 'None':
-        date_end = timezone.now().date().strftime('%Y-%m-%d')
+    # 🌟 [FIXED] ถ้ากดมาจากปุ่มยอดขายเดือนนี้ ให้บังคับวันที่เป็น 1 ถึง สิ้นเดือน 🌟
+    if status_filter == 'MONTHLY_SALES':
+        tz_bkk = pytz.timezone('Asia/Bangkok')
+        today_bkk = timezone.now().astimezone(tz_bkk)
+
+        # หาวันที่ 1 และวันสุดท้ายของเดือน
+        first_day = today_bkk.replace(day=1)
+        last_day = today_bkk.replace(day=calendar.monthrange(today_bkk.year, today_bkk.month)[1])
+
+        date_start = first_day.strftime('%Y-%m-%d')
+        date_end = last_day.strftime('%Y-%m-%d')
+    else:
+        # ถ้าเป็นกรณีปกติที่ไม่ได้ระบุวันที่ ให้ย้อนหลัง 30 วันเหมือนเดิม
+        if not date_start or date_start == 'None':
+            date_start = (timezone.now().date() - datetime.timedelta(days=29)).strftime('%Y-%m-%d')
+        if not date_end or date_end == 'None':
+            date_end = timezone.now().date().strftime('%Y-%m-%d')
 
     if not status_filter:
         quotations = quotations.filter(date__gte=date_start, date__lte=date_end)
@@ -366,19 +420,25 @@ def solar_invoice_list(request):
             Q(quotation_ref__code__icontains=search_query)
         )
 
-    # 4. กรองวันที่ (ค่าเริ่มต้นคือวันที่ปัจจุบันของไทย)
+    # 4. กรองวันที่
     tz_bkk = pytz.timezone('Asia/Bangkok')
     today_bkk = timezone.now().astimezone(tz_bkk).date()
 
     date_start = request.GET.get('start_date')
     date_end = request.GET.get('end_date')
 
-    if not date_start or date_start == 'None':
-        date_start = today_bkk.strftime('%Y-%m-%d')
-    if not date_end or date_end == 'None':
-        date_end = today_bkk.strftime('%Y-%m-%d')
+    # 🌟 [FIXED] ถ้ามีการค้นหาจาก Dashboard (มี status_filter ส่งมา) และไม่ได้เลือกวันที่
+    # ให้ข้ามการกรองวันที่ไปเลย เพื่อโชว์บิลเก่าๆ ที่ค้างอยู่ทั้งหมด
+    if status_filter and (not date_start or date_start == 'None'):
+        pass # ไม่ต้องกรองวันที่ ปล่อยให้แสดงทั้งหมดตามสถานะ
+    else:
+        # แต่ถ้าเข้ามาหน้าแรกปกติ หรือ มีการกดเลือกวันที่เอง ให้กรองตามนั้น
+        if not date_start or date_start == 'None':
+            date_start = today_bkk.strftime('%Y-%m-%d')
+        if not date_end or date_end == 'None':
+            date_end = today_bkk.strftime('%Y-%m-%d')
 
-    invoices = invoices.filter(date__gte=date_start, date__lte=date_end)
+        invoices = invoices.filter(date__gte=date_start, date__lte=date_end)
 
     # ระบบแบ่งหน้า (Pagination)
     paginator = Paginator(invoices, 15)
@@ -684,8 +744,8 @@ def solar_quotation_create_invoice(request, qt_id):
         grand_total=qt.grand_total,
         balance_amount=qt.grand_total - qt.deposit_amount,
 
-        # 🌟 [FIXED] บังคับให้เป็น 'PENDING' เสมอ เพื่อให้บัญชีต้องตรวจรับทราบก่อนทุกบิล
-        status='PENDING'
+        # 🌟 [FIXED] ตั้งค่าเริ่มต้นเป็น 'UNPAID' (ค้างชำระ) เพื่อให้วิ่งเข้าการ์ดติดตามหนี้ทันที
+        status='UNPAID'
     )
 
     # 2. อัปเดตสถานะใบเสนอราคาเป็น เปิดบิลแล้ว (CONVERTED)
