@@ -8,13 +8,13 @@ from django.db.models import Q
 class SolarQuotationStep1Form(forms.ModelForm):
     class Meta:
         model = SolarQuotation
-        # 🌟 [FIXED] เพิ่ม 'vat_type' เข้าไปใน fields เพื่อให้บิลใหม่บันทึกประเภทภาษีตั้งแต่ตอนสร้าง 🌟
         fields = ['customer', 'date', 'valid_until', 'vat_type']
         widgets = {
             'customer': forms.Select(attrs={'class': 'form-select fw-bold text-dark'}),
-            'date': forms.DateInput(format='%d/%m/%Y', attrs={'class': 'form-control datepicker', 'placeholder': 'dd/mm/yyyy'}),
-            'valid_until': forms.DateInput(format='%d/%m/%Y', attrs={'class': 'form-control datepicker', 'placeholder': 'dd/mm/yyyy'}),
-            'vat_type': forms.Select(attrs={'class': 'form-select fw-bold'}),
+            'date': forms.DateInput(format='%d/%m/%Y', attrs={'class': 'form-control datepicker', 'placeholder': 'dd/mm/yyyy', 'autocomplete': 'off'}),
+            'valid_until': forms.DateInput(format='%d/%m/%Y', attrs={'class': 'form-control datepicker', 'placeholder': 'dd/mm/yyyy', 'autocomplete': 'off'}),
+            # 🌟 [FIXED] ล็อคปุ่มให้กดเปลี่ยนไม่ได้ (Readonly) 🌟
+            'vat_type': forms.Select(attrs={'class': 'form-select fw-bold', 'style': 'pointer-events: none; background-color: #e9ecef;'}),
         }
 
 # 🌟 สเต็ป 2: ฟอร์มจัดการเงื่อนไขและสรุปยอดเงิน
@@ -25,7 +25,8 @@ class SolarQuotationStep2Form(forms.ModelForm):
         widgets = {
             'discount': forms.NumberInput(attrs={'class': 'form-control text-end text-danger', 'step': '0.01'}),
             'survey_fee': forms.NumberInput(attrs={'class': 'form-control text-end', 'step': '0.01'}),
-            'vat_type': forms.Select(attrs={'class': 'form-select fw-bold'}),
+            # 🌟 [FIXED] ล็อคปุ่มไม่ให้เปลี่ยน VAT ตอนแก้ไขบิลด้วย 🌟
+            'vat_type': forms.Select(attrs={'class': 'form-select fw-bold', 'style': 'pointer-events: none; background-color: #e9ecef;'}),
             'payment_terms': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
             'note': forms.Textarea(attrs={'class': 'form-control', 'rows': 2, 'placeholder': '-ไม่มี-'}),
         }

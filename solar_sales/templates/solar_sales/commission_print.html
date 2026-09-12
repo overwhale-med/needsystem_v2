@@ -1,0 +1,262 @@
+{% load humanize %}
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ใบสำคัญขอเบิกเงิน_Incentive_{{ claim.code }}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+
+    <style>
+        /* ตั้งค่ากระดาษและฟอนต์พื้นฐาน */
+        body { font-family: 'Sarabun', sans-serif; font-size: 15px; line-height: 1.6; color: #1a1a1a; background-color: #525659; margin: 0; padding: 20px 0; }
+        .page { background-color: white; width: 210mm; min-height: 297mm; margin: 0 auto; padding: 20mm 20mm; box-sizing: border-box; box-shadow: 0 5px 15px rgba(0,0,0,0.3); position: relative; }
+
+        /* Typography */
+        h1, h2, h3, p { margin: 0; }
+        .text-center { text-align: center; }
+        .text-end { text-align: right; }
+        .fw-bold { font-weight: 700; }
+        .fw-medium { font-weight: 500; }
+        .text-muted { color: #666; }
+
+        /* Header Section */
+        .header-section { display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: 25px; }
+        .company-name { font-size: 24px; font-weight: 700; letter-spacing: 0.5px; margin-bottom: 5px; color: #000; }
+        .doc-title { font-size: 28px; font-weight: 700; letter-spacing: 1px; color: #000; text-transform: uppercase; text-align: right; }
+        .doc-subtitle { font-size: 13px; color: #888; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 15px; }
+
+        /* Meta Information (Clean Borderless Layout) */
+        /* 🌟 เอา border-bottom ออก และปรับ margin ให้พอดีกับตารางด้านล่าง 🌟 */
+        .meta-section { margin-top: 15px; margin-bottom: 20px; display: flex; justify-content: space-between; border: none; padding-bottom: 0; }
+        .meta-col { width: 48%; }
+        .meta-row { display: flex; margin-bottom: 8px; }
+        .meta-label { width: 140px; color: #555; font-size: 14px; }
+        .meta-val { flex: 1; font-weight: 600; color: #000; font-size: 15px; }
+
+        /* Luxury Table Style */
+        .lux-table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
+        .lux-table th { border-top: 1px solid #000; border-bottom: 1px solid #000; padding: 12px 5px; font-size: 14px; font-weight: 600; color: #222; }
+        .lux-table td { padding: 12px 5px; border-bottom: 1px dashed #e0e0e0; vertical-align: top; }
+        .lux-table tr:last-child td { border-bottom: 1px solid #000; }
+
+        /* Totals Row */
+        .total-row td { border-top: 1px solid #000; border-bottom: 3px double #000 !important; padding: 15px 5px; font-weight: 700; }
+        .grand-total { font-size: 22px; color: #000; }
+        .baht-text { font-size: 14px; font-style: italic; color: #555; padding-top: 10px; text-align: right; }
+
+        /* Remarks */
+        .remarks-box { font-size: 13px; color: #555; margin-top: 30px; padding: 15px 20px; background-color: #fcfcfc; border-left: 3px solid #d4af37; }
+
+        /* Signatures */
+        .signatures { display: flex; justify-content: space-between; margin-top: 70px; text-align: center; }
+        .sig-box { width: 30%; }
+        .sig-line { border-bottom: 1px solid #000; width: 80%; margin: 0 auto 10px auto; height: 30px; }
+        .sig-name { font-size: 14px; margin-bottom: 3px; }
+        .sig-title { font-size: 14px; font-weight: 600; color: #000; }
+        .sig-subtitle { font-size: 12px; color: #888; margin-bottom: 10px; }
+        .sig-date { font-size: 13px; color: #333; }
+
+        /* Print Button */
+        .print-btn { position: fixed; top: 20px; right: 30px; background: #c5a059; color: white; border: none; padding: 12px 25px; border-radius: 50px; cursor: pointer; font-size: 16px; font-family: 'Sarabun'; box-shadow: 0 4px 10px rgba(0,0,0,0.2); transition: 0.2s; z-index: 1000; }
+        .print-btn:hover { background: #b38f4f; transform: translateY(-2px); }
+
+        /* Print Settings */
+        @media print {
+            @page { size: A4; margin: 10mm; }
+            body { background-color: white; padding: 0; }
+            .page { margin: 0; padding: 10mm; box-shadow: none; width: 100%; min-height: auto; }
+            .no-print { display: none !important; }
+        }
+    </style>
+</head>
+<body>
+
+    <button onclick="window.print()" class="print-btn no-print fw-bold"><i class="fas fa-print me-2"></i> สั่งพิมพ์เอกสาร</button>
+
+    <div class="page">
+
+        <!-- Header -->
+        <div class="header-section">
+            <div style="width: 60%;">
+                <div class="company-name">{{ company.name_th|default:"บริษัท นีด ช้อปปิ้ง จำกัด" }}</div>
+                <div style="font-size: 13px; color: #333; margin-bottom: 2px; white-space: nowrap;">{{ company.address|default:"10/10 หมู่ 10 ตำบลบางพระ อำเภอศรีราชา จังหวัดชลบุรี 20110" }}</div>
+                <div style="font-size: 13px; color: #333;">โทร: {{ company.phone|default:"033 640 447" }} | เลขประจำตัวผู้เสียภาษี: {{ company.tax_id|default:"0205563029342" }}</div>
+            </div>
+            <div style="width: 40%; text-align: right;">
+                <div class="doc-title">ใบสำคัญขอเบิกเงิน</div>
+                <div class="doc-subtitle">Payment Requisition Form</div>
+                <div style="margin-top: 5px;">
+                    <div style="color: #666; font-size: 13px; margin-bottom: 2px;">เลขที่เอกสาร:</div>
+                    <div style="font-family: 'Courier New', monospace; font-size: 20px; font-weight: bold; color: #000; letter-spacing: 0.5px;">{{ claim.code }}</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="text-center" style="margin-bottom: 5px;">
+            <h3 style="font-size: 18px; font-weight: 700;">เรื่อง: ขออนุมัติเบิกจ่ายค่าบริหารงานแผนกโซล่าเซลล์</h3>
+        </div>
+
+        <!-- Meta Information (Clean Layout) -->
+        <div class="meta-section">
+            <div class="meta-col">
+                <div class="meta-row">
+                    <div class="meta-label">ผู้ขอเบิก / จ่ายให้:</div>
+                    <div class="meta-val">{{ claim.requester.first_name|default:"-" }} {{ claim.requester.last_name|default:"" }}</div>
+                </div>
+                <div class="meta-row">
+                    <div class="meta-label">แผนก (Dept):</div>
+                    <div class="meta-val">{{ claim.requester.department.name|default:"ทีมช่างโซล่าเซลล์" }}</div>
+                </div>
+                <div class="meta-row">
+                    <div class="meta-label">วันที่ขอเบิก (Date):</div>
+                    <div class="meta-val">{{ claim.created_at|date:"d/m/Y" }}</div>
+                </div>
+            </div>
+
+            <div class="meta-col">
+                <div class="meta-row">
+                    <div class="meta-label">ประเภทผลตอบแทน:</div>
+                    <div class="meta-val" style="font-size: 18px; color: #c5a059;">{{ claim.claim_type }}</div>
+                </div>
+                <div class="meta-row">
+                    <div class="meta-label">ธนาคาร (Bank):</div>
+                    <div class="meta-val">{{ claim.requester.bank_name|default:"ยังไม่ระบุธนาคาร" }}</div>
+                </div>
+                <div class="meta-row">
+                    <div class="meta-label">เลขบัญชี (A/C No.):</div>
+                    <div class="meta-val" style="letter-spacing: 1px;">{{ claim.requester.bank_account|default:"-" }}</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Items Table (Minimalist Standard) -->
+        <table class="lux-table">
+            <thead>
+                <tr>
+                    <th class="text-center" style="width: 8%;">ลำดับ</th>
+                    <th style="width: 30%; text-align: left;">เลขที่ใบคุมสิทธิ์</th>
+                    <th style="width: 26%; text-align: left;">อ้างอิงเอกสารขาย</th>
+                    <th class="text-end" style="width: 18%;">ฐานคำนวน</th>
+                    <th class="text-end" style="width: 18%;">ยอดเบิกสุทธิ (฿)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for ticket in claim.tickets.all %}
+                <tr>
+                    <td class="text-center text-muted">{{ forloop.counter }}</td>
+                    <td style="font-family: 'Courier New', monospace; font-weight: 600;">{{ ticket.code }}</td>
+                    <td>
+                        {% if claim.claim_type == '2%' %}
+                            {{ ticket.quotation_ref.code|default:"-" }}
+                        {% else %}
+                            {{ ticket.invoice_ref.code|default:"-" }}
+                        {% endif %}
+                    </td>
+                    <td class="text-end text-muted">{{ ticket.base_amount|floatformat:2|intcomma }}</td>
+                    <td class="text-end fw-bold">{{ ticket.commission_amount|floatformat:2|intcomma }}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="5" class="text-center py-5 text-muted">-- ไม่พบรายละเอียดสิทธิ์การเบิก --</td></tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr class="total-row">
+                    <td colspan="4" class="text-end" style="font-size: 15px;">
+                        รวมเป็นเงินทั้งสิ้น (Grand Total)
+                    </td>
+                    <td class="text-end grand-total">
+                        {{ claim.total_amount|floatformat:2|intcomma }}
+                    </td>
+                </tr>
+                <tr>
+                    <td colspan="5" style="border: none; padding: 0;">
+                        <div class="baht-text">
+                            จำนวนเงินตัวอักษร: <span id="thaiBahtText" style="font-weight: 600; color: #000; margin-left: 5px;">(กำลังประมวลผล...)</span>
+                        </div>
+                    </td>
+                </tr>
+            </tfoot>
+        </table>
+
+        <!-- Remarks -->
+        <div class="remarks-box">
+            <span class="fw-bold" style="color: #000;">หมายเหตุ (Remarks):</span>
+            <div style="margin-top: 5px;">
+                - เอกสารฉบับนี้ใช้สำหรับเป็นหลักฐานแนบประกอบการทำจ่ายของแผนกบัญชีเท่านั้น<br>
+                - โปรดตรวจสอบความถูกต้องของข้อมูล ธนาคาร และเลขบัญชี ก่อนเซ็นชื่อรับรองนำส่งบัญชี
+            </div>
+        </div>
+
+        <!-- Signatures -->
+        <div class="signatures">
+            <div class="sig-box">
+                <div class="sig-line"></div>
+                <div class="sig-name">( {{ claim.requester.first_name|default:"..................................................." }} {{ claim.requester.last_name|default:"" }} )</div>
+                <div class="sig-title">ผู้จัดทำ / ผู้ขอเบิก</div>
+                <div class="sig-subtitle">Prepared / Requested By</div>
+                <div class="sig-date">วันที่: ........ / ........ / ............</div>
+            </div>
+            <div class="sig-box">
+                <div class="sig-line"></div>
+                <div class="sig-name">( ................................................... )</div>
+                <div class="sig-title">หัวหน้าแผนก / ผู้จัดการ</div>
+                <div class="sig-subtitle">Checked / Approved By</div>
+                <div class="sig-date">วันที่: ........ / ........ / ............</div>
+            </div>
+            <div class="sig-box">
+                <div class="sig-line"></div>
+                <div class="sig-name">( ................................................... )</div>
+                <div class="sig-title">ผู้อนุมัติทำจ่าย (ฝ่ายการเงิน)</div>
+                <div class="sig-subtitle">Authorized By</div>
+                <div class="sig-date">วันที่: ........ / ........ / ............</div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Script Thai Baht -->
+    <script>
+        function ArabicNumberToText(Number) {
+            var Number = Number.toString().replace(/,/g, '');
+            Number = parseFloat(Number).toFixed(2);
+            var splitNumber = Number.split('.');
+            var baht = splitNumber[0];
+            var satang = splitNumber[1];
+
+            var text = '';
+            var numberArray = ["ศูนย์", "หนึ่ง", "สอง", "สาม", "สี่", "ห้า", "หก", "เจ็ด", "แปด", "เก้า"];
+            var digitArray = ["", "สิบ", "ร้อย", "พัน", "หมื่น", "แสน", "ล้าน"];
+
+            function convert(numStr) {
+                var res = '';
+                var length = numStr.length;
+                for (var i = 0; i < length; i++) {
+                    var digit = parseInt(numStr.charAt(i));
+                    var position = length - i - 1;
+                    if (digit !== 0) {
+                        if (position === 0 && digit === 1 && length > 1) {
+                            res += "เอ็ด";
+                        } else if (position === 1 && digit === 1) {
+                            res += "สิบ";
+                        } else if (position === 1 && digit === 2) {
+                            res += "ยี่สิบ";
+                        } else {
+                            res += numberArray[digit] + digitArray[position];
+                        }
+                    }
+                }
+                return res;
+            }
+
+            if (baht > 0) { text += convert(baht) + "บาท"; }
+            if (satang > 0) { text += convert(satang) + "สตางค์"; } else { text += "ถ้วน"; }
+            return text || "ศูนย์บาทถ้วน";
+        }
+
+        var totalAmountStr = "{{ claim.total_amount }}";
+        document.getElementById('thaiBahtText').innerText = "= " + ArabicNumberToText(totalAmountStr) + " =";
+    </script>
+</body>
+</html>

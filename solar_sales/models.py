@@ -21,8 +21,6 @@ class SolarQuotation(models.Model):
         ('CANCELLED', 'ยกเลิกแล้ว')
     ]
     VAT_CHOICES = [
-        ('NONE', 'ไม่มี VAT'),
-        ('EXCLUDE', 'แยก VAT 7%'),
         ('INCLUDE', 'รวม VAT 7%')
     ]
 
@@ -222,3 +220,66 @@ class SolarExpenseSlip(models.Model):
 
     def __str__(self):
         return f"Slip for {self.expense.code}"
+
+# ==========================================
+# 💸 4. ระบบเบิกผลตอบแทนโซล่าเซลล์ (Incentive & Commission)
+# ==========================================
+class SolarCommissionClaim(models.Model):
+    CLAIM_TYPES = [('2%', '2% (จากมัดจำ)'), ('13.5%', '13.5% (จากปิดบิล)')]
+    STATUS_CHOICES = [('PENDING', 'รอโอนเงิน'), ('PAID', 'โอนเงินแล้ว')]
+
+    code = models.CharField(max_length=20, unique=True, verbose_name="เลขที่ใบเบิกผลตอบแทน")
+    claim_type = models.CharField(max_length=10, choices=CLAIM_TYPES, verbose_name="ประเภทการเบิก")
+    requester = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, verbose_name="ผู้ทำรายการเบิก")
+    total_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name="ยอดเงินรวม")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING', verbose_name="สถานะ")
+
+    transfer_slip = models.ImageField(upload_to='solar_commissions/', null=True, blank=True, verbose_name="สลิปโอนเงิน")
+    paid_at = models.DateTimeField(null=True, blank=True, verbose_name="วันที่โอนเงิน")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def save(self, *args, **kwargs):
+        if not self.code:
+            now = timezone.now()
+            thai_year = (now.year + 543) % 100
+            # แยกรหัส REQ2 และ REQ13
+            prefix = f"REQ2-SOL-{thai_year:02d}{now.strftime('%m')}" if self.claim_type == '2%' else f"REQ13-SOL-{thai_year:02d}{now.strftime('%m')}"
+            last = SolarCommissionClaim.objects.filter(code__startswith=prefix).order_by('code').last()
+            seq = int(last.code.split('-')[-1]) + 1 if last else 1
+            self.code = f"{prefix}-{seq:03d}"
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.code
+
+class SolarCommissionTicket(models.Model):
+    TICKET_TYPES = [('2%', '2% (จากมัดจำ)'), ('13.5%', '13.5% (จากปิดบิล)')]
+    STATUS_CHOICES = [('AVAILABLE', 'พร้อมเบิก'), ('CLAIMING', 'กำลังตั้งเบิก'), ('PAID', 'จ่ายแล้ว')]
+
+    code = models.CharField(max_length=20, unique=True, verbose_name="เลขที่ใบคุมสิทธิ์")
+    ticket_type = models.CharField(max_length=10, choices=TICKET_TYPES, verbose_name="ประเภทสิทธิ์")
+
+    quotation_ref = models.ForeignKey('SolarQuotation', on_delete=models.CASCADE, null=True, blank=True, verbose_name="อ้างอิงใบเสนอราคา")
+    invoice_ref = models.ForeignKey('SolarInvoice', on_delete=models.CASCADE, null=True, blank=True, verbose_name="อ้างอิงใบแจ้งหนี้")
+
+    base_amount = models.DecimalField(max_digits=12, decimal_places=2, verbose_name="ยอดฐานคำนวณ (ก่อน VAT)")
+    commission_amount = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="ยอดผลตอบแทน")
+
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='AVAILABLE', verbose_name="สถานะสิทธิ์")
+    claim_ref = models.ForeignKey(SolarCommissionClaim, on_delete=models.SET_NULL, null=True, blank=True, related_name='tickets', verbose_name="รวมอยู่ในใบเบิกเลขที่")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def save(self, *args, **kwargs):
+        if not self.code:
+            now = timezone.now()
+            thai_year = (now.year + 543) % 100
+            # แยกรหัส C2 และ C13
+            prefix = f"C2-SOL-{thai_year:02d}{now.strftime('%m')}" if self.ticket_type == '2%' else f"C13-SOL-{thai_year:02d}{now.strftime('%m')}"
+            last = SolarCommissionTicket.objects.filter(code__startswith=prefix).order_by('code').last()
+            seq = int(last.code.split('-')[-1]) + 1 if last else 1
+            self.code = f"{prefix}-{seq:03d}"
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.code

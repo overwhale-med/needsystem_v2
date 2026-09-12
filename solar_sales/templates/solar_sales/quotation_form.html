@@ -60,7 +60,7 @@
 
                 <div class="d-flex justify-content-between mt-4">
                     <a href="{% url 'solar_quotation_list' %}" class="btn btn-light border rounded-pill px-4 fw-bold">ยกเลิก</a>
-                    <button type="submit" class="btn btn-success rounded-pill px-5 fw-bold shadow-sm fs-6">
+                    <button type="submit" id="submitBtn" class="btn btn-success rounded-pill px-5 fw-bold shadow-sm fs-6">
                         บันทึกและไปต่อ <i class="fas fa-arrow-right ms-2"></i>
                     </button>
                 </div>
@@ -80,6 +80,32 @@
                 noResults: function() {
                     return "ไม่พบข้อมูลลูกค้าในระบบ";
                 }
+            }
+        });
+    });
+</script>
+
+<script>
+    $(document).ready(function() {
+        // เปลี่ยน Dropdown ธรรมดา ให้กลายเป็นช่องค้นหาอัจฉริยะด้วย Select2
+        $('select[name="customer"]').select2({
+            placeholder: "-- พิมพ์ค้นหาชื่อลูกค้า... --",
+            allowClear: true,
+            width: '100%',
+            language: {
+                noResults: function() {
+                    return "ไม่พบข้อมูลลูกค้าในระบบ";
+                }
+            }
+        });
+
+        // 🌟 [NEW] ป้องกันการกดปุ่มบันทึกซ้ำ (Double Submit Prevention) 🌟
+        $('form').on('submit', function() {
+            var btn = $('#submitBtn');
+            // ตรวจสอบว่าฟอร์มผ่านการตรวจสอบความถูกต้องแล้ว (ถ้ามี validation)
+            if (this.checkValidity()) {
+                btn.prop('disabled', true); // ล็อคปุ่มทันที
+                btn.html('<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>กำลังบันทึก...'); // เปลี่ยนข้อความและใส่ไอคอนหมุนๆ
             }
         });
     });

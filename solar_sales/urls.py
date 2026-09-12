@@ -49,4 +49,11 @@ urlpatterns = [
     # หัวหน้า/แอดมิน กดอนุมัติ
     path('expenses/<int:exp_id>/approve/', views.solar_expense_approve, name='solar_expense_approve'),
     path('expenses/<int:exp_id>/print/', views.solar_expense_print, name='solar_expense_print'),
+    # ==========================================
+    # 🌟 ระบบเบิกผลตอบแทนโซล่าเซลล์ (Incentive)
+    # ==========================================
+    path('commissions/', views.solar_commission_board, name='solar_commission_board'),
+    path('commissions/claim/create/<str:claim_type>/', views.solar_commission_create_claim, name='solar_commission_create_claim'),
+    path('commissions/claim/<int:claim_id>/pay/', views.solar_commission_pay, name='solar_commission_pay'),
+    path('commissions/claim/<int:claim_id>/print/', views.solar_commission_print, name='solar_commission_print'),
 ]

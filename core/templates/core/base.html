@@ -15,6 +15,7 @@
         .navbar-custom {
             background-color: #ffffff; box-shadow: 0 4px 12px rgba(0,0,0,0.05);
             padding-top: 15px; padding-bottom: 15px;
+            z-index: 1050; /* 🌟 [NEW] เพิ่มบรรทัดนี้เพื่อให้เมนูลอยอยู่บนสุดเสมอ */
         }
         .navbar-brand {
             font-weight: 800; font-size: 1.5rem;
@@ -210,6 +211,13 @@
                             <li>
                                 <a class="dropdown-item py-2 fw-bold text-secondary" href="{% url 'solar_expense_list' %}">
                                     <i class="fas fa-file-invoice-dollar text-danger me-2" style="width: 20px; text-align: center;"></i> ตั้งเบิกค่าใช้จ่าย (Expenses)
+                                </a>
+                            </li>
+                            <!-- 🌟 [NEW] เมนูเบิกผลตอบแทน Incentive 🌟 -->
+                            <li><hr class="dropdown-divider opacity-25"></li>
+                            <li>
+                                <a class="dropdown-item py-2 fw-bold text-secondary" href="{% url 'solar_commission_board' %}">
+                                    <i class="fas fa-hand-holding-usd text-success me-2" style="width: 20px; text-align: center;"></i> ศูนย์เบิกผลตอบแทน (Incentive)
                                 </a>
                             </li>
                         </ul>

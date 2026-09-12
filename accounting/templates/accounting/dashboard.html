@@ -150,7 +150,7 @@
                         <span class="badge bg-danger rounded-pill px-3 shadow-sm">{{ pending_purchases_normal }} รายการ</span>
                     </div>
                 </a>
-                
+
                 <a href="{% url 'accounting_verification_hub' 'solar_po_payments' %}" class="text-decoration-none">
                     <div class="d-flex justify-content-between align-items-center p-3 mb-3 bg-white rounded-3 border modal-task-btn border-warning">
                         <div class="d-flex align-items-center">
@@ -194,6 +194,21 @@
                             </div>
                         </div>
                         <span class="badge bg-danger rounded-pill px-3 shadow-sm">{{ pending_blueprints }} รายการ</span>
+                    </div>
+                </a>
+
+                <a href="{% url 'accounting_verification_hub' 'solar_commissions' %}" class="text-decoration-none">
+                    <div class="d-flex justify-content-between align-items-center p-3 mt-3 bg-white rounded-3 border modal-task-btn border-success">
+                        <div class="d-flex align-items-center">
+                            <div class="bg-success bg-opacity-10 text-success rounded-circle d-flex justify-content-center align-items-center me-3" style="width: 45px; height: 45px; font-size: 1.2rem;">
+                                <i class="fas fa-hand-holding-usd"></i>
+                            </div>
+                            <div>
+                                <h6 class="fw-bold text-dark mb-0">ทำจ่ายคอมมิชชันโซล่า (Incentive)</h6>
+                                <small class="text-muted">จ่ายค่าผลตอบแทนทีมงานโซล่าเซลล์</small>
+                            </div>
+                        </div>
+                        <span class="badge bg-danger rounded-pill px-3 shadow-sm">รอโอนเงิน</span>
                     </div>
                 </a>
 

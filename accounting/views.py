@@ -127,6 +127,13 @@ def verification_hub(request, task_type):
         context['title'] = 'ทำจ่ายเงินร้านค้า (Solar PO) - ระบบโซล่าเซลล์'
         context['icon'] = 'fa-solar-panel text-warning'
 
+    # 🌟 [NEW] เพิ่มคิวงานสำหรับตรวจสอบและจ่ายเงินค่าคอมมิชชันโซล่าเซลล์ 🌟
+    elif task_type == 'solar_commissions':
+        from solar_sales.models import SolarCommissionClaim
+        context['items'] = SolarCommissionClaim.objects.filter(status='PENDING').order_by('created_at')
+        context['title'] = 'ทำจ่ายค่าคอมมิชชัน (Incentive) - ระบบโซล่าเซลล์'
+        context['icon'] = 'fa-hand-holding-usd text-success'
+
     return render(request, 'accounting/verification_hub.html', context)
 
 
@@ -141,8 +148,21 @@ def approve_transaction(request, task_type, item_id):
                 qt = get_object_or_404(SolarQuotation, id=item_id)
                 qt.is_deposit_verified = True
                 qt.save()
+
+                # 🌟 [NEW] ระบบอัตโนมัติ: สร้างใบคุมสิทธิ์ 2% ส่งไปที่ศูนย์ตั้งเบิกโซล่าเซลล์
+                from solar_sales.models import SolarCommissionTicket
+                from decimal import Decimal
+                base_amount = qt.subtotal - qt.discount + qt.survey_fee
+                comm_amount = base_amount * Decimal('0.02')
+
+                SolarCommissionTicket.objects.get_or_create(
+                    ticket_type='2%',
+                    quotation_ref=qt,
+                    defaults={'base_amount': base_amount, 'commission_amount': comm_amount}
+                )
+
                 Income.objects.create(title=f"รับมัดจำใบเสนอราคาโซล่า #{qt.code}", amount=qt.deposit_amount, date=timezone.now().date(), note="อนุมัติโดยฝ่ายบัญชี")
-                messages.success(request, f"✅ ยืนยันรับมัดจำโซล่า {qt.code} เข้าสู่ระบบบัญชีเรียบร้อย")
+                messages.success(request, f"✅ ยืนยันรับมัดจำโซล่า {qt.code} พร้อมสร้างโควตาเบิก 2% สำเร็จ!")
             else:
                 qt = get_object_or_404(Quotation, id=item_id)
                 qt.is_deposit_verified = True
@@ -166,6 +186,19 @@ def approve_transaction(request, task_type, item_id):
                 if inv.balance_amount <= 0:
                     inv.balance_amount = 0
                     inv.status = 'PAID'
+
+                    # 🌟 [NEW] ระบบอัตโนมัติ: ถ้าจ่ายครบ 100% ให้สร้างคูปอง 13.5% ทันที
+                    if inv.quotation_ref:
+                        from solar_sales.models import SolarCommissionTicket
+                        from decimal import Decimal
+                        base_amount = inv.quotation_ref.subtotal - inv.quotation_ref.discount + inv.quotation_ref.survey_fee
+                        comm_amount = base_amount * Decimal('0.135')
+
+                        SolarCommissionTicket.objects.get_or_create(
+                            ticket_type='13.5%',
+                            invoice_ref=inv,
+                            defaults={'base_amount': base_amount, 'commission_amount': comm_amount}
+                        )
                 else:
                     inv.status = 'UNPAID' # ถ้าจ่ายไม่ครบ ให้กลับไปเป็น UNPAID ทวงต่อ
 
@@ -178,7 +211,7 @@ def approve_transaction(request, task_type, item_id):
                     date=timezone.now().date(),
                     note=f"ยืนยันรับชำระโดยบัญชี (ช่องทาง: {inv.payment_method})"
                 )
-                messages.success(request, f"✅ ยืนยันรับชำระเงินบิลโซล่า {inv.code} และลงบันทึกรายรับเรียบร้อย")
+                messages.success(request, f"✅ ยืนยันรับชำระเงินบิลโซล่า {inv.code} และอัปเดตสิทธิ์ค่าคอมมิชชันเรียบร้อย")
                 return redirect('accounting_verification_hub', task_type=task_type)
 
             # 🌟 [FIXED] จัดการเงื่อนไขสำหรับระบบน็อคดาวน์ปกติ (Invoice และ POS)

@@ -539,7 +539,19 @@ def solar_verify_deposit(request, qt_id):
     qt = get_object_or_404(SolarQuotation, pk=qt_id)
     qt.is_deposit_verified = True
     qt.save()
-    messages.success(request, f"✅ ยืนยันตรวจสอบยอดมัดจำของ {qt.code} เรียบร้อยแล้ว! งานพร้อมส่งเข้า Center")
+
+    # 🌟 [NEW] ระบบอัตโนมัติ: สร้างใบคุมสิทธิ์ 2% ทันทีที่บัญชียืนยันมัดจำ
+    from .models import SolarCommissionTicket
+    base_amount = qt.subtotal - qt.discount + qt.survey_fee # หายอดก่อน VAT
+    comm_amount = base_amount * Decimal('0.02')
+
+    SolarCommissionTicket.objects.get_or_create(
+        ticket_type='2%',
+        quotation_ref=qt,
+        defaults={'base_amount': base_amount, 'commission_amount': comm_amount}
+    )
+
+    messages.success(request, f"✅ ยืนยันตรวจสอบยอดมัดจำของ {qt.code} เรียบร้อยแล้ว! (สร้างใบคุมสิทธิ์ 2% สำเร็จ)")
     return redirect('solar_quotation_list')
 
 # ==========================================
@@ -678,7 +690,20 @@ def solar_invoice_detail(request, inv_id):
         inv.balance_amount = 0
         inv.status = 'PAID'
         inv.save()
-        messages.success(request, f"✅ ยืนยันการรับชำระเงินบิล {inv.code} ปิดยอดเรียบร้อยแล้ว!")
+
+        # 🌟 [NEW] ระบบอัตโนมัติ: สร้างใบคุมสิทธิ์ 13.5% ทันทีที่รับชำระบิลเต็มจำนวน
+        if inv.quotation_ref:
+            from .models import SolarCommissionTicket
+            base_amount = inv.quotation_ref.subtotal - inv.quotation_ref.discount + inv.quotation_ref.survey_fee
+            comm_amount = base_amount * Decimal('0.135')
+
+            SolarCommissionTicket.objects.get_or_create(
+                ticket_type='13.5%',
+                invoice_ref=inv,
+                defaults={'base_amount': base_amount, 'commission_amount': comm_amount}
+            )
+
+        messages.success(request, f"✅ ยืนยันการรับชำระเงินบิล {inv.code} ปิดยอดเรียบร้อยแล้ว! (สร้างใบคุมสิทธิ์ 13.5% สำเร็จ)")
         return redirect('solar_invoice_detail', inv_id=inv.id)
     return render(request, 'solar_sales/invoice_detail.html', {'inv': inv})
 
@@ -1078,4 +1103,80 @@ def solar_expense_print(request, exp_id):
         'expense': expense,
         'company': company,
         'amount_text': amount_text
+    })
+
+# ==========================================
+# 💸 5. ระบบกระดานตั้งเบิกผลตอบแทน (Incentive Board)
+# ==========================================
+from .models import SolarCommissionTicket, SolarCommissionClaim
+
+@login_required
+def solar_commission_board(request):
+    # ดึงสิทธิ์ที่ยังไม่ได้เบิกมาโชว์ให้เซลส์เลือก
+    tickets_2 = SolarCommissionTicket.objects.filter(ticket_type='2%', status='AVAILABLE').order_by('created_at')
+    tickets_13 = SolarCommissionTicket.objects.filter(ticket_type='13.5%', status='AVAILABLE').order_by('created_at')
+
+    # ดึงประวัติใบเบิกที่ถูกสร้างแล้วมาแสดง
+    claims = SolarCommissionClaim.objects.all().order_by('-created_at')
+
+    return render(request, 'solar_sales/commission_board.html', {
+        'tickets_2': tickets_2,
+        'tickets_13': tickets_13,
+        'claims': claims
+    })
+
+@login_required
+def solar_commission_create_claim(request, claim_type):
+    if request.method == 'POST':
+        ticket_ids = request.POST.getlist('ticket_ids')
+        if not ticket_ids:
+            messages.error(request, "❌ กรุณาเลือกใบคุมสิทธิ์อย่างน้อย 1 ใบก่อนกดตั้งเบิกครับ")
+            return redirect('solar_commission_board')
+
+        # ค้นหาใบคุมสิทธิ์ที่ถูกเลือกและตรวจสอบว่าว่างอยู่จริง
+        tickets = SolarCommissionTicket.objects.filter(id__in=ticket_ids, status='AVAILABLE', ticket_type=claim_type)
+        if tickets.exists():
+            total_amt = sum(t.commission_amount for t in tickets)
+
+            # 1. สร้างใบสรุปขอเบิก
+            claim = SolarCommissionClaim.objects.create(
+                claim_type=claim_type,
+                requester=getattr(request.user, 'employee', None),
+                total_amount=total_amt
+            )
+            # 2. ปิดตายใบคุมสิทธิ์ว่า "ถูกนำไปตั้งเบิกแล้ว" จะได้ไม่โดนกดซ้ำ
+            tickets.update(status='CLAIMING', claim_ref=claim)
+
+            messages.success(request, f"✅ สร้างใบตั้งเบิก {claim.code} (ประเภท {claim_type}) ยอด {total_amt:,.2f} บาท สำเร็จ! ส่งให้บัญชีแล้ว")
+
+    return redirect('solar_commission_board')
+
+@login_required
+def solar_commission_pay(request, claim_id):
+    claim = get_object_or_404(SolarCommissionClaim, id=claim_id)
+    if request.method == 'POST':
+        if 'transfer_slip' in request.FILES:
+            claim.transfer_slip = request.FILES['transfer_slip']
+            claim.status = 'PAID'
+            claim.paid_at = timezone.now()
+            claim.save()
+
+            # อัปเดตสถานะใบคุมสิทธิ์ย่อยๆ ให้เป็น "จ่ายแล้ว" ถาวร
+            claim.tickets.update(status='PAID')
+
+            messages.success(request, f"💰 บันทึกการโอนเงินและแนบสลิปสำหรับ {claim.code} เสร็จสมบูรณ์แล้ว!")
+        else:
+            messages.error(request, "❌ กรุณาแนบรูปสลิปโอนเงินด้วยครับ")
+
+    return redirect('solar_commission_board')
+
+@login_required
+def solar_commission_print(request, claim_id):
+    claim = get_object_or_404(SolarCommissionClaim, id=claim_id)
+    from master_data.models import CompanyInfo
+    company = CompanyInfo.objects.first()
+
+    return render(request, 'solar_sales/commission_print.html', {
+        'claim': claim,
+        'company': company
     })

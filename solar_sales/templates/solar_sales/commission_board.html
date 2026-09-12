@@ -1,0 +1,176 @@
+{% extends 'core/base.html' %}
+{% load humanize %}
+
+{% block content %}
+<div class="container-fluid py-4 px-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-end mb-4">
+        <div>
+            <h4 class="fw-bold mb-1 text-dark"><i class="fas fa-hand-holding-usd text-success me-2"></i>ศูนย์ตั้งเบิกผลตอบแทน (Incentive)</h4>
+            <p class="text-muted small mb-0">ระบบจัดการสิทธิ์และรวบรวมยอดขอเบิกค่าคอมมิชชัน แผนกโซล่าเซลล์</p>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <!-- 🌟 ฝั่งซ้าย: ตารางคูปองที่รอเบิก (2% และ 13.5%) -->
+        <div class="col-lg-7">
+            <div class="card border-0 shadow-sm rounded-4 mb-4">
+                <div class="card-header bg-white py-3 border-bottom d-flex align-items-center">
+                    <h6 class="fw-bold mb-0 text-dark"><i class="fas fa-ticket-alt text-warning me-2"></i>ใบคุมสิทธิ์ที่พร้อมเบิก (Available Tickets)</h6>
+                </div>
+                <div class="card-body p-0">
+                    <!-- แท็บเลือกประเภท 2% หรือ 13.5% -->
+                    <ul class="nav nav-tabs nav-fill bg-light m-0 border-0" id="commissionTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active fw-bold text-dark rounded-0 border-0 py-3" id="tab-2percent" data-bs-toggle="tab" data-bs-target="#content-2percent" type="button" role="tab">
+                                <i class="fas fa-bolt text-warning me-1"></i> โควตา 2% (จากมัดจำ) <span class="badge bg-danger ms-2">{{ tickets_2|length }}</span>
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link fw-bold text-dark rounded-0 border-0 py-3" id="tab-13percent" data-bs-toggle="tab" data-bs-target="#content-13percent" type="button" role="tab">
+                                <i class="fas fa-check-double text-success me-1"></i> โควตา 13.5% (จากปิดบิล) <span class="badge bg-danger ms-2">{{ tickets_13|length }}</span>
+                            </button>
+                        </li>
+                    </ul>
+
+                    <div class="tab-content" id="commissionTabsContent">
+                        <!-- 🎟️ ตาราง 2% -->
+                        <div class="tab-pane fade show active" id="content-2percent" role="tabpanel">
+                            <form action="{% url 'solar_commission_create_claim' '2%' %}" method="post">
+                                {% csrf_token %}
+                                <div class="table-responsive" style="max-height: 400px;">
+                                    <table class="table table-hover align-middle mb-0">
+                                        <thead class="bg-white sticky-top shadow-sm small text-secondary">
+                                            <tr>
+                                                <th class="text-center" width="50"><input type="checkbox" id="checkAll2" class="form-check-input shadow-sm"></th>
+                                                <th>เลขที่สิทธิ์</th>
+                                                <th>อ้างอิงเอกสาร</th>
+                                                <th class="text-end">ยอดเบิกได้ (บาท)</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for t in tickets_2 %}
+                                            <tr>
+                                                <td class="text-center"><input type="checkbox" name="ticket_ids" value="{{ t.id }}" class="form-check-input chk-2"></td>
+                                                <td><span class="badge bg-light text-dark border"><i class="fas fa-ticket-alt text-warning me-1"></i>{{ t.code }}</span></td>
+                                                <td class="small fw-bold text-secondary">{{ t.quotation_ref.code|default:"-" }}</td>
+                                                <td class="text-end fw-bold text-success">฿{{ t.commission_amount|floatformat:2|intcomma }}</td>
+                                            </tr>
+                                            {% empty %}
+                                            <tr><td colspan="4" class="text-center py-4 text-muted">ไม่มีสิทธิ์คงค้าง</td></tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div class="card-footer bg-white text-end py-3">
+                                    <button type="submit" class="btn btn-warning fw-bold px-4 rounded-pill shadow-sm" {% if not tickets_2 %}disabled{% endif %}>
+                                        <i class="fas fa-file-invoice-dollar me-1"></i> สร้างใบขอเบิก 2%
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+
+                        <!-- 🎟️ ตาราง 13.5% -->
+                        <div class="tab-pane fade" id="content-13percent" role="tabpanel">
+                            <form action="{% url 'solar_commission_create_claim' '13.5%' %}" method="post">
+                                {% csrf_token %}
+                                <div class="table-responsive" style="max-height: 400px;">
+                                    <table class="table table-hover align-middle mb-0">
+                                        <thead class="bg-white sticky-top shadow-sm small text-secondary">
+                                            <tr>
+                                                <th class="text-center" width="50"><input type="checkbox" id="checkAll13" class="form-check-input shadow-sm"></th>
+                                                <th>เลขที่สิทธิ์</th>
+                                                <th>อ้างอิงเอกสาร</th>
+                                                <th class="text-end">ยอดเบิกได้ (บาท)</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for t in tickets_13 %}
+                                            <tr>
+                                                <td class="text-center"><input type="checkbox" name="ticket_ids" value="{{ t.id }}" class="form-check-input chk-13"></td>
+                                                <td><span class="badge bg-light text-dark border"><i class="fas fa-ticket-alt text-success me-1"></i>{{ t.code }}</span></td>
+                                                <td class="small fw-bold text-secondary">{{ t.invoice_ref.code|default:"-" }}</td>
+                                                <td class="text-end fw-bold text-success">฿{{ t.commission_amount|floatformat:2|intcomma }}</td>
+                                            </tr>
+                                            {% empty %}
+                                            <tr><td colspan="4" class="text-center py-4 text-muted">ไม่มีสิทธิ์คงค้าง</td></tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div class="card-footer bg-white text-end py-3">
+                                    <button type="submit" class="btn btn-success fw-bold px-4 rounded-pill shadow-sm" {% if not tickets_13 %}disabled{% endif %}>
+                                        <i class="fas fa-file-invoice-dollar me-1"></i> สร้างใบขอเบิก 13.5%
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 🌟 ฝั่งขวา: ประวัติใบตั้งเบิกที่รอโอน/โอนแล้ว -->
+        <div class="col-lg-5">
+            <div class="card border-0 shadow-sm rounded-4">
+                <div class="card-header bg-white py-3 border-bottom d-flex align-items-center">
+                    <h6 class="fw-bold mb-0 text-dark"><i class="fas fa-history text-muted me-2"></i>ประวัติใบตั้งเบิก (Claim Requests)</h6>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive" style="max-height: 500px;">
+                        <table class="table table-hover align-middle mb-0">
+                            <tbody>
+                                {% for c in claims %}
+                                <tr>
+                                    <td class="ps-4">
+                                        <div class="fw-bold text-dark mb-1">{{ c.code }} <span class="badge bg-light text-dark border ms-1">{{ c.claim_type }}</span></div>
+                                        <div class="small text-muted"><i class="far fa-clock me-1"></i> {{ c.created_at|date:"d/m/Y H:i" }}</div>
+                                        <div class="small text-muted mt-1"><i class="far fa-user me-1"></i> เบิกโดย: {{ c.requester.first_name|default:"-" }}</div>
+                                    </td>
+                                    <td class="text-end pe-4">
+                                        <h5 class="fw-bold text-primary mb-1">฿{{ c.total_amount|floatformat:2|intcomma }}</h5>
+                                        
+                                        {% if c.status == 'PENDING' %}
+                                            <span class="badge bg-warning text-dark rounded-pill px-3 shadow-sm mb-2"><i class="fas fa-hourglass-half me-1"></i> รอโอนเงิน</span>
+                                            
+                                            <!-- 🌟 [NEW] ปุ่มพิมพ์ใบขอเบิกแทนการอัปโหลดสลิปตรงๆ 🌟 -->
+                                            <div class="mt-2">
+                                                <a href="{% url 'solar_commission_print' c.id %}" target="_blank" class="btn btn-sm btn-outline-primary rounded-pill px-3 py-1 fw-bold shadow-sm" style="font-size: 0.8rem;">
+                                                    <i class="fas fa-print me-1"></i> พิมพ์ใบเบิก (A4)
+                                                </a>
+                                            </div>
+                                            
+                                        {% else %}
+                                            <span class="badge bg-success rounded-pill px-3 shadow-sm"><i class="fas fa-check-circle me-1"></i> โอนแล้ว</span>
+                                            {% if c.transfer_slip %}
+                                            <div class="mt-2">
+                                                <a href="{{ c.transfer_slip.url }}" target="_blank" class="btn btn-sm btn-outline-secondary rounded-pill px-3 py-1" style="font-size: 0.75rem;">
+                                                    <i class="fas fa-image me-1"></i> ดูสลิป
+                                                </a>
+                                            </div>
+                                            {% endif %}
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr><td colspan="2" class="text-center py-5 text-muted">ยังไม่มีประวัติการเบิก</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // สคริปต์ทำปุ่ม "เลือกทั้งหมด (Check All)"
+    document.getElementById('checkAll2').addEventListener('change', function() {
+        document.querySelectorAll('.chk-2').forEach(chk => chk.checked = this.checked);
+    });
+    document.getElementById('checkAll13').addEventListener('change', function() {
+        document.querySelectorAll('.chk-13').forEach(chk => chk.checked = this.checked);
+    });
+</script>
+{% endblock %}
