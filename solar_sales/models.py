@@ -232,6 +232,9 @@ class SolarCommissionClaim(models.Model):
     claim_type = models.CharField(max_length=10, choices=CLAIM_TYPES, verbose_name="ประเภทการเบิก")
     requester = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, verbose_name="ผู้ทำรายการเบิก")
     total_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name="ยอดเงินรวม")
+    # 🌟 [NEW] เพิ่ม 2 บรรทัดนี้ เพื่อเก็บข้อมูลธนาคารของใบเบิกแต่ละใบ 🌟
+    bank_name = models.CharField(max_length=100, blank=True, null=True, verbose_name="ธนาคารที่รับเงิน")
+    bank_account = models.CharField(max_length=50, blank=True, null=True, verbose_name="เลขที่บัญชี")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING', verbose_name="สถานะ")
 
     transfer_slip = models.ImageField(upload_to='solar_commissions/', null=True, blank=True, verbose_name="สลิปโอนเงิน")

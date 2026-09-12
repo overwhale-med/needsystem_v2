@@ -66,8 +66,9 @@
                             </td>
                             <td class="text-center">
                                 <div class="text-muted small" style="font-size: 0.75rem;">บัญชีธนาคาร:</div>
-                                <div class="fw-bold text-dark" style="font-size: 0.85rem;">{{ item.requester.bank_name|default:"ไม่ระบุ" }}</div>
-                                <div class="text-secondary small">{{ item.requester.bank_account|default:"ไม่ระบุ" }}</div>
+                                <!-- 🌟 แก้ไขตรงนี้ 🌟 -->
+                                <div class="fw-bold text-dark" style="font-size: 0.85rem;">{{ item.bank_name|default:"ไม่ระบุ" }}</div>
+                                <div class="text-secondary small">{{ item.bank_account|default:"-" }}</div>
                             </td>
                             <td class="text-center">
                                 <span class="status-badge"><i class="fas fa-hourglass-half"></i> รอตรวจสอบ/ทำจ่าย</span>

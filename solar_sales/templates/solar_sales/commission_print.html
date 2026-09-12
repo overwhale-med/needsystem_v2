@@ -122,11 +122,13 @@
                 </div>
                 <div class="meta-row">
                     <div class="meta-label">ธนาคาร (Bank):</div>
-                    <div class="meta-val">{{ claim.requester.bank_name|default:"ยังไม่ระบุธนาคาร" }}</div>
+                    <!-- 🌟 แก้ไขตรงนี้ 🌟 -->
+                    <div class="meta-val">{{ claim.bank_name|default:"-" }}</div>
                 </div>
                 <div class="meta-row">
                     <div class="meta-label">เลขบัญชี (A/C No.):</div>
-                    <div class="meta-val" style="letter-spacing: 1px;">{{ claim.requester.bank_account|default:"-" }}</div>
+                    <!-- 🌟 แก้ไขตรงนี้ 🌟 -->
+                    <div class="meta-val" style="letter-spacing: 1px;">{{ claim.bank_account|default:"-" }}</div>
                 </div>
             </div>
         </div>

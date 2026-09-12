@@ -1129,24 +1129,29 @@ def solar_commission_board(request):
 def solar_commission_create_claim(request, claim_type):
     if request.method == 'POST':
         ticket_ids = request.POST.getlist('ticket_ids')
+
+        # 🌟 [NEW] รับค่าธนาคารและเลขบัญชีจากหน้าเว็บ
+        bank_name = request.POST.get('bank_name', '')
+        bank_account = request.POST.get('bank_account', '')
+
         if not ticket_ids:
             messages.error(request, "❌ กรุณาเลือกใบคุมสิทธิ์อย่างน้อย 1 ใบก่อนกดตั้งเบิกครับ")
             return redirect('solar_commission_board')
 
-        # ค้นหาใบคุมสิทธิ์ที่ถูกเลือกและตรวจสอบว่าว่างอยู่จริง
         tickets = SolarCommissionTicket.objects.filter(id__in=ticket_ids, status='AVAILABLE', ticket_type=claim_type)
         if tickets.exists():
             total_amt = sum(t.commission_amount for t in tickets)
 
-            # 1. สร้างใบสรุปขอเบิก
+            # 🌟 [FIXED] เพิ่ม bank_name และ bank_account เข้าไปตอนสร้างใบเบิก
             claim = SolarCommissionClaim.objects.create(
                 claim_type=claim_type,
                 requester=getattr(request.user, 'employee', None),
-                total_amount=total_amt
+                total_amount=total_amt,
+                bank_name=bank_name,
+                bank_account=bank_account
             )
-            # 2. ปิดตายใบคุมสิทธิ์ว่า "ถูกนำไปตั้งเบิกแล้ว" จะได้ไม่โดนกดซ้ำ
-            tickets.update(status='CLAIMING', claim_ref=claim)
 
+            tickets.update(status='CLAIMING', claim_ref=claim)
             messages.success(request, f"✅ สร้างใบตั้งเบิก {claim.code} (ประเภท {claim_type}) ยอด {total_amt:,.2f} บาท สำเร็จ! ส่งให้บัญชีแล้ว")
 
     return redirect('solar_commission_board')

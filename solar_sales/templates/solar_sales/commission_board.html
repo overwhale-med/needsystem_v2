@@ -62,10 +62,36 @@
                                         </tbody>
                                     </table>
                                 </div>
-                                <div class="card-footer bg-white text-end py-3">
-                                    <button type="submit" class="btn btn-warning fw-bold px-4 rounded-pill shadow-sm" {% if not tickets_2 %}disabled{% endif %}>
-                                        <i class="fas fa-file-invoice-dollar me-1"></i> สร้างใบขอเบิก 2%
-                                    </button>
+                                
+                                <!-- 🌟 [NEW] โซนระบุบัญชีรับเงินและปุ่มกดเบิก 2% 🌟 -->
+                                <div class="card-footer bg-white p-3">
+                                    <div class="bg-light p-3 rounded-3 border mb-3 text-start">
+                                        <h6 class="fw-bold text-dark mb-3" style="font-size: 14px;"><i class="fas fa-university text-primary me-2"></i>ระบุบัญชีรับเงิน (Payment Details)</h6>
+                                        <div class="row g-2">
+                                            <div class="col-md-6">
+                                                <select name="bank_name" class="form-select form-select-sm shadow-sm" required>
+                                                    <option value="">-- เลือกระบุธนาคาร / ช่องทาง --</option>
+                                                    <option value="กสิกรไทย (KBANK)">กสิกรไทย (KBANK)</option>
+                                                    <option value="ไทยพาณิชย์ (SCB)">ไทยพาณิชย์ (SCB)</option>
+                                                    <option value="กรุงเทพ (BBL)">กรุงเทพ (BBL)</option>
+                                                    <option value="กรุงไทย (KTB)">กรุงไทย (KTB)</option>
+                                                    <option value="กรุงศรีอยุธยา (BAY)">กรุงศรีอยุธยา (BAY)</option>
+                                                    <option value="ทหารไทยธนชาต (TTB)">ทหารไทยธนชาต (TTB)</option>
+                                                    <option value="ออมสิน (GSB)">ออมสิน (GSB)</option>
+                                                    <option value="พร้อมเพย์ (PromptPay)">พร้อมเพย์ (PromptPay)</option>
+                                                </select>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <input type="text" name="bank_account" class="form-control form-control-sm shadow-sm" placeholder="ระบุเลขที่บัญชี / เบอร์พร้อมเพย์" required>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="text-end">
+                                        <button type="submit" class="btn btn-warning fw-bold px-4 rounded-pill shadow-sm" {% if not tickets_2 %}disabled{% endif %}>
+                                            <i class="fas fa-file-invoice-dollar me-1"></i> สร้างใบขอเบิก 2%
+                                        </button>
+                                    </div>
                                 </div>
                             </form>
                         </div>
@@ -98,10 +124,36 @@
                                         </tbody>
                                     </table>
                                 </div>
-                                <div class="card-footer bg-white text-end py-3">
-                                    <button type="submit" class="btn btn-success fw-bold px-4 rounded-pill shadow-sm" {% if not tickets_13 %}disabled{% endif %}>
-                                        <i class="fas fa-file-invoice-dollar me-1"></i> สร้างใบขอเบิก 13.5%
-                                    </button>
+                                
+                                <!-- 🌟 [NEW] โซนระบุบัญชีรับเงินและปุ่มกดเบิก 13.5% 🌟 -->
+                                <div class="card-footer bg-white p-3">
+                                    <div class="bg-light p-3 rounded-3 border mb-3 text-start">
+                                        <h6 class="fw-bold text-dark mb-3" style="font-size: 14px;"><i class="fas fa-university text-primary me-2"></i>ระบุบัญชีรับเงิน (Payment Details)</h6>
+                                        <div class="row g-2">
+                                            <div class="col-md-6">
+                                                <select name="bank_name" class="form-select form-select-sm shadow-sm" required>
+                                                    <option value="">-- เลือกระบุธนาคาร / ช่องทาง --</option>
+                                                    <option value="กสิกรไทย (KBANK)">กสิกรไทย (KBANK)</option>
+                                                    <option value="ไทยพาณิชย์ (SCB)">ไทยพาณิชย์ (SCB)</option>
+                                                    <option value="กรุงเทพ (BBL)">กรุงเทพ (BBL)</option>
+                                                    <option value="กรุงไทย (KTB)">กรุงไทย (KTB)</option>
+                                                    <option value="กรุงศรีอยุธยา (BAY)">กรุงศรีอยุธยา (BAY)</option>
+                                                    <option value="ทหารไทยธนชาต (TTB)">ทหารไทยธนชาต (TTB)</option>
+                                                    <option value="ออมสิน (GSB)">ออมสิน (GSB)</option>
+                                                    <option value="พร้อมเพย์ (PromptPay)">พร้อมเพย์ (PromptPay)</option>
+                                                </select>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <input type="text" name="bank_account" class="form-control form-control-sm shadow-sm" placeholder="ระบุเลขที่บัญชี / เบอร์พร้อมเพย์" required>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="text-end">
+                                        <button type="submit" class="btn btn-success fw-bold px-4 rounded-pill shadow-sm" {% if not tickets_13 %}disabled{% endif %}>
+                                            <i class="fas fa-file-invoice-dollar me-1"></i> สร้างใบขอเบิก 13.5%
+                                        </button>
+                                    </div>
                                 </div>
                             </form>
                         </div>
@@ -133,7 +185,7 @@
                                         {% if c.status == 'PENDING' %}
                                             <span class="badge bg-warning text-dark rounded-pill px-3 shadow-sm mb-2"><i class="fas fa-hourglass-half me-1"></i> รอโอนเงิน</span>
                                             
-                                            <!-- 🌟 [NEW] ปุ่มพิมพ์ใบขอเบิกแทนการอัปโหลดสลิปตรงๆ 🌟 -->
+                                            <!-- 🌟 ปุ่มพิมพ์ใบขอเบิก 🌟 -->
                                             <div class="mt-2">
                                                 <a href="{% url 'solar_commission_print' c.id %}" target="_blank" class="btn btn-sm btn-outline-primary rounded-pill px-3 py-1 fw-bold shadow-sm" style="font-size: 0.8rem;">
                                                     <i class="fas fa-print me-1"></i> พิมพ์ใบเบิก (A4)
