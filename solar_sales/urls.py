@@ -56,4 +56,6 @@ urlpatterns = [
     path('commissions/claim/create/<str:claim_type>/', views.solar_commission_create_claim, name='solar_commission_create_claim'),
     path('commissions/claim/<int:claim_id>/pay/', views.solar_commission_pay, name='solar_commission_pay'),
     path('commissions/claim/<int:claim_id>/print/', views.solar_commission_print, name='solar_commission_print'),
+    # 🌟 [NEW] เส้นทางสำหรับบันทึกการแก้ไขข้อมูลบัญชี
+    path('commissions/claim/<int:claim_id>/edit-bank/', views.solar_commission_edit_bank, name='solar_commission_edit_bank'),
 ]

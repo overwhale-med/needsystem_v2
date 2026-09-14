@@ -62,15 +62,15 @@
                                         </tbody>
                                     </table>
                                 </div>
-                                
-                                <!-- 🌟 [NEW] โซนระบุบัญชีรับเงินและปุ่มกดเบิก 2% 🌟 -->
+
+                                <!-- โซนระบุบัญชีรับเงิน 2% -->
                                 <div class="card-footer bg-white p-3">
                                     <div class="bg-light p-3 rounded-3 border mb-3 text-start">
                                         <h6 class="fw-bold text-dark mb-3" style="font-size: 14px;"><i class="fas fa-university text-primary me-2"></i>ระบุบัญชีรับเงิน (Payment Details)</h6>
                                         <div class="row g-2">
-                                            <div class="col-md-6">
+                                            <div class="col-md-4">
                                                 <select name="bank_name" class="form-select form-select-sm shadow-sm" required>
-                                                    <option value="">-- เลือกระบุธนาคาร / ช่องทาง --</option>
+                                                    <option value="">-- เลือกธนาคาร --</option>
                                                     <option value="กสิกรไทย (KBANK)">กสิกรไทย (KBANK)</option>
                                                     <option value="ไทยพาณิชย์ (SCB)">ไทยพาณิชย์ (SCB)</option>
                                                     <option value="กรุงเทพ (BBL)">กรุงเทพ (BBL)</option>
@@ -81,12 +81,15 @@
                                                     <option value="พร้อมเพย์ (PromptPay)">พร้อมเพย์ (PromptPay)</option>
                                                 </select>
                                             </div>
-                                            <div class="col-md-6">
-                                                <input type="text" name="bank_account" class="form-control form-control-sm shadow-sm" placeholder="ระบุเลขที่บัญชี / เบอร์พร้อมเพย์" required>
+                                            <div class="col-md-4">
+                                                <input type="text" name="bank_account" class="form-control form-control-sm shadow-sm" placeholder="เลขที่บัญชี / เบอร์พร้อมเพย์" required>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <input type="text" name="account_name" class="form-control form-control-sm shadow-sm" placeholder="ชื่อบัญชี (นาย/นาง/นางสาว...)" required>
                                             </div>
                                         </div>
                                     </div>
-                                    
+
                                     <div class="text-end">
                                         <button type="submit" class="btn btn-warning fw-bold px-4 rounded-pill shadow-sm" {% if not tickets_2 %}disabled{% endif %}>
                                             <i class="fas fa-file-invoice-dollar me-1"></i> สร้างใบขอเบิก 2%
@@ -124,15 +127,15 @@
                                         </tbody>
                                     </table>
                                 </div>
-                                
-                                <!-- 🌟 [NEW] โซนระบุบัญชีรับเงินและปุ่มกดเบิก 13.5% 🌟 -->
+
+                                <!-- โซนระบุบัญชีรับเงิน 13.5% -->
                                 <div class="card-footer bg-white p-3">
                                     <div class="bg-light p-3 rounded-3 border mb-3 text-start">
                                         <h6 class="fw-bold text-dark mb-3" style="font-size: 14px;"><i class="fas fa-university text-primary me-2"></i>ระบุบัญชีรับเงิน (Payment Details)</h6>
                                         <div class="row g-2">
-                                            <div class="col-md-6">
+                                            <div class="col-md-4">
                                                 <select name="bank_name" class="form-select form-select-sm shadow-sm" required>
-                                                    <option value="">-- เลือกระบุธนาคาร / ช่องทาง --</option>
+                                                    <option value="">-- เลือกธนาคาร --</option>
                                                     <option value="กสิกรไทย (KBANK)">กสิกรไทย (KBANK)</option>
                                                     <option value="ไทยพาณิชย์ (SCB)">ไทยพาณิชย์ (SCB)</option>
                                                     <option value="กรุงเทพ (BBL)">กรุงเทพ (BBL)</option>
@@ -143,12 +146,15 @@
                                                     <option value="พร้อมเพย์ (PromptPay)">พร้อมเพย์ (PromptPay)</option>
                                                 </select>
                                             </div>
-                                            <div class="col-md-6">
-                                                <input type="text" name="bank_account" class="form-control form-control-sm shadow-sm" placeholder="ระบุเลขที่บัญชี / เบอร์พร้อมเพย์" required>
+                                            <div class="col-md-4">
+                                                <input type="text" name="bank_account" class="form-control form-control-sm shadow-sm" placeholder="เลขที่บัญชี / เบอร์พร้อมเพย์" required>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <input type="text" name="account_name" class="form-control form-control-sm shadow-sm" placeholder="ชื่อบัญชี (นาย/นาง/นางสาว...)" required>
                                             </div>
                                         </div>
                                     </div>
-                                    
+
                                     <div class="text-end">
                                         <button type="submit" class="btn btn-success fw-bold px-4 rounded-pill shadow-sm" {% if not tickets_13 %}disabled{% endif %}>
                                             <i class="fas fa-file-invoice-dollar me-1"></i> สร้างใบขอเบิก 13.5%
@@ -178,20 +184,81 @@
                                         <div class="fw-bold text-dark mb-1">{{ c.code }} <span class="badge bg-light text-dark border ms-1">{{ c.claim_type }}</span></div>
                                         <div class="small text-muted"><i class="far fa-clock me-1"></i> {{ c.created_at|date:"d/m/Y H:i" }}</div>
                                         <div class="small text-muted mt-1"><i class="far fa-user me-1"></i> เบิกโดย: {{ c.requester.first_name|default:"-" }}</div>
+                                        
+                                        <!-- ข้อมูลบัญชีธนาคาร -->
+                                        <div class="small mt-1 text-primary d-flex align-items-start position-relative">
+                                            <div>
+                                                <i class="fas fa-university me-1"></i> {{ c.bank_name|default:"ไม่ระบุธนาคาร" }} <br>
+                                                <span class="text-muted ms-3">เลขที่: {{ c.bank_account|default:"-" }}</span><br>
+                                                <span class="text-dark fw-bold ms-3">ชื่อบัญชี: {{ c.account_name|default:"-" }}</span>
+                                            </div>
+                                            
+                                            <!-- 🌟 [NEW] ปุ่มแก้ไข (โชว์เฉพาะตอน PENDING) 🌟 -->
+                                            {% if c.status == 'PENDING' %}
+                                            <button type="button" class="btn btn-sm btn-link text-warning p-0 ms-2" data-bs-toggle="modal" data-bs-target="#editBankModal{{ c.id }}" title="แก้ไขข้อมูลบัญชี">
+                                                <i class="fas fa-edit"></i>
+                                            </button>
+                                            
+                                            <!-- 🌟 Modal สำหรับแก้ไขข้อมูลบัญชี 🌟 -->
+                                            <div class="modal fade" id="editBankModal{{ c.id }}" tabindex="-1" aria-hidden="true">
+                                                <div class="modal-dialog modal-dialog-centered">
+                                                    <div class="modal-content border-0 shadow rounded-4">
+                                                        <div class="modal-header bg-warning text-dark border-0 rounded-top-4">
+                                                            <h5 class="modal-title fw-bold"><i class="fas fa-edit me-2"></i>แก้ไขบัญชีรับเงิน</h5>
+                                                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                        </div>
+                                                        <form method="post" action="{% url 'solar_commission_edit_bank' c.id %}">
+                                                            {% csrf_token %}
+                                                            <div class="modal-body p-4 text-start">
+                                                                <p class="text-muted small mb-3">ใบเบิกเลขที่: <strong>{{ c.code }}</strong></p>
+                                                                
+                                                                <div class="mb-3">
+                                                                    <label class="form-label small fw-bold">ธนาคาร</label>
+                                                                    <select name="bank_name" class="form-select shadow-sm" required>
+                                                                        <option value="{{ c.bank_name }}" selected>{{ c.bank_name }}</option>
+                                                                        <option value="กสิกรไทย (KBANK)">กสิกรไทย (KBANK)</option>
+                                                                        <option value="ไทยพาณิชย์ (SCB)">ไทยพาณิชย์ (SCB)</option>
+                                                                        <option value="กรุงเทพ (BBL)">กรุงเทพ (BBL)</option>
+                                                                        <option value="กรุงไทย (KTB)">กรุงไทย (KTB)</option>
+                                                                        <option value="กรุงศรีอยุธยา (BAY)">กรุงศรีอยุธยา (BAY)</option>
+                                                                        <option value="ทหารไทยธนชาต (TTB)">ทหารไทยธนชาต (TTB)</option>
+                                                                        <option value="ออมสิน (GSB)">ออมสิน (GSB)</option>
+                                                                        <option value="พร้อมเพย์ (PromptPay)">พร้อมเพย์ (PromptPay)</option>
+                                                                    </select>
+                                                                </div>
+                                                                <div class="mb-3">
+                                                                    <label class="form-label small fw-bold">เลขที่บัญชี</label>
+                                                                    <input type="text" name="bank_account" class="form-control shadow-sm" value="{{ c.bank_account|default:'' }}" required>
+                                                                </div>
+                                                                <div class="mb-3">
+                                                                    <label class="form-label small fw-bold">ชื่อบัญชี (นาย/นาง/นางสาว...)</label>
+                                                                    <input type="text" name="account_name" class="form-control shadow-sm" value="{{ c.account_name|default:'' }}" required>
+                                                                </div>
+                                                            </div>
+                                                            <div class="modal-footer border-0 pb-4 pe-4 bg-light rounded-bottom-4">
+                                                                <button type="button" class="btn btn-outline-secondary rounded-pill px-4 fw-bold" data-bs-dismiss="modal">ยกเลิก</button>
+                                                                <button type="submit" class="btn btn-warning text-dark rounded-pill px-4 fw-bold shadow-sm">บันทึกการแก้ไข</button>
+                                                            </div>
+                                                        </form>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            {% endif %}
+                                        </div>
                                     </td>
                                     <td class="text-end pe-4">
                                         <h5 class="fw-bold text-primary mb-1">฿{{ c.total_amount|floatformat:2|intcomma }}</h5>
-                                        
+
                                         {% if c.status == 'PENDING' %}
                                             <span class="badge bg-warning text-dark rounded-pill px-3 shadow-sm mb-2"><i class="fas fa-hourglass-half me-1"></i> รอโอนเงิน</span>
-                                            
+
                                             <!-- 🌟 ปุ่มพิมพ์ใบขอเบิก 🌟 -->
                                             <div class="mt-2">
                                                 <a href="{% url 'solar_commission_print' c.id %}" target="_blank" class="btn btn-sm btn-outline-primary rounded-pill px-3 py-1 fw-bold shadow-sm" style="font-size: 0.8rem;">
                                                     <i class="fas fa-print me-1"></i> พิมพ์ใบเบิก (A4)
                                                 </a>
                                             </div>
-                                            
+
                                         {% else %}
                                             <span class="badge bg-success rounded-pill px-3 shadow-sm"><i class="fas fa-check-circle me-1"></i> โอนแล้ว</span>
                                             {% if c.transfer_slip %}

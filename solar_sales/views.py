@@ -1130,9 +1130,10 @@ def solar_commission_create_claim(request, claim_type):
     if request.method == 'POST':
         ticket_ids = request.POST.getlist('ticket_ids')
 
-        # 🌟 [NEW] รับค่าธนาคารและเลขบัญชีจากหน้าเว็บ
+        # 🌟 รับค่า 3 อย่างจากหน้าเว็บ
         bank_name = request.POST.get('bank_name', '')
         bank_account = request.POST.get('bank_account', '')
+        account_name = request.POST.get('account_name', '') # 🌟 [NEW] รับค่าชื่อบัญชี
 
         if not ticket_ids:
             messages.error(request, "❌ กรุณาเลือกใบคุมสิทธิ์อย่างน้อย 1 ใบก่อนกดตั้งเบิกครับ")
@@ -1142,13 +1143,14 @@ def solar_commission_create_claim(request, claim_type):
         if tickets.exists():
             total_amt = sum(t.commission_amount for t in tickets)
 
-            # 🌟 [FIXED] เพิ่ม bank_name และ bank_account เข้าไปตอนสร้างใบเบิก
+            # 🌟 บันทึกข้อมูลลง Database
             claim = SolarCommissionClaim.objects.create(
                 claim_type=claim_type,
                 requester=getattr(request.user, 'employee', None),
                 total_amount=total_amt,
                 bank_name=bank_name,
-                bank_account=bank_account
+                bank_account=bank_account,
+                account_name=account_name # 🌟 [NEW] บันทึกชื่อบัญชี
             )
 
             tickets.update(status='CLAIMING', claim_ref=claim)
@@ -1185,3 +1187,22 @@ def solar_commission_print(request, claim_id):
         'claim': claim,
         'company': company
     })
+
+# 🌟 [NEW] ฟังก์ชันสำหรับให้เซลส์แก้ไขข้อมูลบัญชีธนาคาร 🌟
+@login_required
+def solar_commission_edit_bank(request, claim_id):
+    claim = get_object_or_404(SolarCommissionClaim, id=claim_id)
+
+    # ⚠️ ป้องกันความปลอดภัย: ถ้าบัญชีโอนเงินแล้ว ห้ามแก้ไขเด็ดขาด!
+    if claim.status == 'PAID':
+        messages.error(request, "❌ ไม่สามารถแก้ไขได้ เนื่องจากแผนกบัญชีดำเนินการโอนเงินไปแล้ว")
+        return redirect('solar_commission_board')
+
+    if request.method == 'POST':
+        claim.bank_name = request.POST.get('bank_name', '')
+        claim.bank_account = request.POST.get('bank_account', '')
+        claim.account_name = request.POST.get('account_name', '')
+        claim.save()
+        messages.success(request, f"✅ อัปเดตข้อมูลบัญชีรับเงินของใบเบิก {claim.code} เรียบร้อยแล้ว")
+
+    return redirect('solar_commission_board')

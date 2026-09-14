@@ -60,6 +60,13 @@
     }
     .search-pill-btn:hover { background-color: #000; transform: scale(1.05); }
     .hidden-date { display: none; }
+
+    /* 🌟 [NEW] สไตล์ Thumbnail สลิปมัดจำ 🌟 */
+    .slip-thumbnail {
+        width: 35px; height: 35px; object-fit: cover; border-radius: 6px; cursor: pointer;
+        transition: transform 0.2s ease, box-shadow 0.2s ease; border: 1px solid #dee2e6;
+    }
+    .slip-thumbnail:hover { transform: scale(1.2); box-shadow: 0 5px 15px rgba(0,0,0,0.2); z-index: 10; position: relative; }
 </style>
 
 <div class="container-fluid py-4 px-4">
@@ -68,8 +75,8 @@
 
             <div class="d-flex justify-content-between align-items-end mb-4">
                 <div>
-                    <h3 class="fw-bold mb-1 text-dark"><i class="fas fa-file-invoice text-primary me-2"></i>รายการใบเสนอราคา</h3>
-                    <p class="text-muted small mb-0">จัดการเอกสารเสนอราคาและการติดตามงานผลิตอย่างเป็นระบบ</p>
+                    <h4 class="fw-bold mb-1 text-dark"><i class="fas fa-file-invoice text-warning me-2"></i>รายการใบเสนอราคา (น็อคดาวน์)</h4>
+                    <p class="text-muted small mb-0">ระบบจัดการงานขายแผนกบ้านน็อคดาวน์</p>
                 </div>
                 <div class="d-flex gap-2">
                     <a href="{% url 'sales_dashboard' %}" class="btn btn-light border shadow-sm rounded-pill px-4 fw-bold text-muted d-flex align-items-center">
@@ -184,10 +191,14 @@
                         <thead class="text-secondary small text-uppercase" style="background-color: #f8f9fc; border-bottom: 2px solid #eef2f7;">
                             <tr>
                                 <th class="ps-4 py-3 fw-bold" style="width: 18%;">ข้อมูลเอกสาร / ลูกค้า</th>
-                                <th class="py-3 fw-bold" style="width: 20%;">พนักงานขาย / สาขา</th>
-                                <th class="py-3 fw-bold" style="width: 32%;">สถานะดำเนินการ / ฝ่ายผลิต</th>
-                                <th class="text-end py-3 fw-bold" style="width: 15%;">ยอดสุทธิ (บาท)</th>
-                                <th class="text-end pe-4 py-3 fw-bold" style="width: 15%;">จัดการ</th>
+                                <th class="py-3 fw-bold" style="width: 18%;">พนักงานขาย / สาขา</th>
+                                <th class="py-3 fw-bold" style="width: 20%;">สถานะดำเนินการ / ฝ่ายผลิต</th>
+                                
+                                <!-- 🌟 [NEW] เพิ่มหัวตาราง "ยอดมัดจำ / หลักฐาน" 🌟 -->
+                                <th class="text-center py-3 fw-bold" style="width: 14%;">ยอดมัดจำ / หลักฐาน</th>
+                                
+                                <th class="text-end py-3 fw-bold" style="width: 14%;">ยอดสุทธิ (บาท)</th>
+                                <th class="text-end pe-4 py-3 fw-bold" style="width: 16%;">จัดการ</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -287,6 +298,33 @@
                                         {% endwith %}
                                     </div>
                                 </td>
+                                
+                                <!-- 🌟 [NEW] แสดงยอดมัดจำ / รูปสลิป / ไอคอนการจ่าย 🌟 -->
+                                <td class="text-center py-3">
+                                    {% if qt.is_deposit_paid %}
+                                        <div class="fw-bold text-success" style="font-size: 0.85rem;">฿{{ qt.deposit_amount|floatformat:2|intcomma }}</div>
+                                        <div class="d-flex align-items-center justify-content-center gap-1 mt-1">
+                                            {% if qt.deposit_method == 'TRANSFER' %}
+                                                <i class="fas fa-mobile-alt text-info" title="โอนเงิน"></i>
+                                            {% elif qt.deposit_method == 'CASH' %}
+                                                <i class="fas fa-money-bill-wave text-success" title="เงินสด"></i>
+                                            {% elif qt.deposit_method == 'CHECK' %}
+                                                <i class="fas fa-money-check text-warning" title="เช็ค"></i>
+                                            {% endif %}
+
+                                            {% if qt.deposit_slip %}
+                                                <img src="{{ qt.deposit_slip.url }}" class="slip-thumbnail mx-1" data-bs-toggle="modal" data-bs-target="#slipModal" onclick="document.getElementById('slipImageFull').src='{{ qt.deposit_slip.url }}'">
+                                            {% endif %}
+                                        </div>
+                                        
+                                        <!-- โชว์ Badge ถ้าบัญชียังไม่ได้ตรวจ -->
+                                        {% if not qt.is_deposit_verified %}
+                                            <div class="mt-1"><span class="badge bg-warning text-dark border" style="font-size: 0.6rem;"><i class="fas fa-hourglass-half me-1"></i>รอตรวจ</span></div>
+                                        {% endif %}
+                                    {% else %}
+                                        <span class="text-muted small">-</span>
+                                    {% endif %}
+                                </td>
 
                                 <td class="text-end py-3">
                                     <h6 class="fw-bold mb-1 {% if qt.status == 'CANCELLED' %}text-decoration-line-through text-muted{% else %}text-dark{% endif %}" style="letter-spacing: 0.5px;">
@@ -297,8 +335,6 @@
                                         <div class="text-success fw-bold" style="font-size: 0.75rem;"><i class="fas fa-check-circle me-1"></i>ชำระครบแล้ว</div>
                                     {% elif qt.balance_due > 0 and qt.status != 'CANCELLED' and qt.status != 'DRAFT' %}
                                         <div class="text-danger fw-bold" style="font-size: 0.75rem;">ค้างชำระ: ฿{{ qt.balance_due|floatformat:2|intcomma }}</div>
-                                    {% elif qt.deposit_amount > 0 and qt.status != 'CANCELLED' %}
-                                        <div class="text-success fw-bold" style="font-size: 0.75rem;">มัดจำแล้ว: ฿{{ qt.deposit_amount|floatformat:2|intcomma }}</div>
                                     {% endif %}
                                 </td>
 
@@ -314,7 +350,7 @@
                                                 <button class="btn btn-warning btn-primary-action rounded-pill text-dark" data-bs-toggle="modal" data-bs-target="#depositModal{{ qt.id }}"><i class="fas fa-hand-holding-usd me-1"></i> รับมัดจำ</button>
 
                                             {% elif qt.status == 'APPROVED' and qt.is_deposit_paid and not qt.is_deposit_verified %}
-                                                <span class="btn btn-secondary btn-primary-action rounded-pill text-white" style="cursor: not-allowed; opacity: 0.8;"><i class="fas fa-user-clock me-1"></i> รอตรวจสอบรับเงินมัดจำ</span>
+                                                <span class="btn btn-secondary btn-primary-action rounded-pill text-white" style="cursor: not-allowed; opacity: 0.8;"><i class="fas fa-user-clock me-1"></i> รอตรวจรับเงิน</span>
 
                                             {% elif qt.status == 'APPROVED' and qt.is_deposit_paid and qt.is_deposit_verified and not qt.production_orders.all %}
                                                 <button class="btn btn-info btn-primary-action rounded-pill text-dark" data-bs-toggle="modal" data-bs-target="#produceModal{{ qt.id }}"><i class="fas fa-industry me-1"></i> สั่งผลิต</button>
@@ -324,14 +360,14 @@
                                                     {% if job and job.status == 'COMPLETED' %}
                                                         <a href="{% url 'convert_quote_to_invoice' qt.id %}" class="btn btn-primary-action rounded-pill text-white" style="background-color: #6f42c1; border-color: #6f42c1;" onclick="return confirm('เปิดบิลขายจากใบเสนอราคานี้ใช่หรือไม่?');"><i class="fas fa-file-invoice-dollar me-1"></i> เปิดบิลขาย</a>
                                                     {% else %}
-                                                        <span class="btn btn-secondary btn-primary-action rounded-pill text-white" style="cursor: not-allowed; opacity: 0.7;"><i class="fas fa-cogs me-1"></i> กำลังดำเนินการผลิต</span>
+                                                        <span class="btn btn-secondary btn-primary-action rounded-pill text-white" style="cursor: not-allowed; opacity: 0.7;"><i class="fas fa-cogs me-1"></i> กำลังผลิต</span>
                                                     {% endif %}
                                                 {% endwith %}
 
                                             {% elif qt.status == 'CONVERTED' %}
                                                 {% with job=qt.production_orders.first %}
                                                     {% if job and job.delivery_status and job.delivery_status.name == 'จัดส่งเรียบร้อย' %}
-                                                        <span class="btn btn-success btn-primary-action rounded-pill text-white" style="cursor: not-allowed; opacity: 0.9;"><i class="fas fa-check-circle me-1"></i> จัดส่งสินค้าเรียบร้อย</span>
+                                                        <span class="btn btn-success btn-primary-action rounded-pill text-white" style="cursor: not-allowed; opacity: 0.9;"><i class="fas fa-check-circle me-1"></i> จัดส่งเรียบร้อย</span>
                                                     {% elif job %}
                                                         <span class="btn btn-warning btn-primary-action rounded-pill text-dark" style="cursor: not-allowed; opacity: 0.9;"><i class="fas fa-truck-loading me-1"></i> รอจัดส่งสินค้า</span>
                                                     {% endif %}
@@ -461,7 +497,7 @@
                             {% endif %}
 
                             {% empty %}
-                            <tr><td colspan="5" class="text-center py-5"><div class="text-muted"><i class="fas fa-folder-open fa-3x mb-3 opacity-25"></i><br>ยังไม่มีเอกสารใบเสนอราคาในระบบ</div></td></tr>
+                            <tr><td colspan="6" class="text-center py-5"><div class="text-muted"><i class="fas fa-folder-open fa-3x mb-3 opacity-25"></i><br>ยังไม่มีเอกสารใบเสนอราคาในระบบ</div></td></tr>
                             {% endfor %}
                         </tbody>
                     </table>
@@ -482,6 +518,20 @@
                     </nav>
                 </div>
                 {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 🌟 [NEW] Modal สำหรับดูรูปสลิปขยายใหญ่ 🌟 -->
+<div class="modal fade" id="slipModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content bg-transparent border-0">
+            <div class="modal-header border-0 pb-0 justify-content-end">
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close" style="filter: invert(1);"></button>
+            </div>
+            <div class="modal-body text-center pt-0">
+                <img id="slipImageFull" src="" class="img-fluid rounded-3 shadow-lg" style="max-height: 80vh; object-fit: contain;">
             </div>
         </div>
     </div>

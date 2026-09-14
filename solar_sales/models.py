@@ -235,6 +235,7 @@ class SolarCommissionClaim(models.Model):
     # 🌟 [NEW] เพิ่ม 2 บรรทัดนี้ เพื่อเก็บข้อมูลธนาคารของใบเบิกแต่ละใบ 🌟
     bank_name = models.CharField(max_length=100, blank=True, null=True, verbose_name="ธนาคารที่รับเงิน")
     bank_account = models.CharField(max_length=50, blank=True, null=True, verbose_name="เลขที่บัญชี")
+    account_name = models.CharField(max_length=150, blank=True, null=True, verbose_name="ชื่อบัญชีธนาคาร")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING', verbose_name="สถานะ")
 
     transfer_slip = models.ImageField(upload_to='solar_commissions/', null=True, blank=True, verbose_name="สลิปโอนเงิน")
