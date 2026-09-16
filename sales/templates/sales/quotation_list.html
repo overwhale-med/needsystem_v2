@@ -33,6 +33,10 @@
     .badge-soft-info { background-color: rgba(13, 202, 240, 0.1); color: #087990; border: 1px solid rgba(13, 202, 240, 0.2); }
     .badge-soft-secondary { background-color: rgba(108, 117, 125, 0.1); color: #495057; border: 1px solid rgba(108, 117, 125, 0.2); }
     .badge-soft-danger { background-color: rgba(220, 53, 69, 0.1); color: #c82333; border: 1px solid rgba(220, 53, 69, 0.2); }
+    
+    /* 🌟 สไตล์สถานะการผลิตใหม่ (ตาม Kanban) 🌟 */
+    .badge-soft-production { background-color: rgba(13, 110, 253, 0.1); color: #0d6efd; border: 1px solid rgba(13, 110, 253, 0.2); }
+    .badge-soft-qc { background-color: rgba(111, 66, 193, 0.1); color: #6f42c1; border: 1px solid rgba(111, 66, 193, 0.2); }
 
     /* 🌟 Dropdown Menu 🌟 */
     .dropdown-menu { border-radius: 10px; border: 1px solid rgba(0,0,0,0.05); padding: 8px 0; }
@@ -61,7 +65,7 @@
     .search-pill-btn:hover { background-color: #000; transform: scale(1.05); }
     .hidden-date { display: none; }
 
-    /* 🌟 [NEW] สไตล์ Thumbnail สลิปมัดจำ 🌟 */
+    /* 🌟 สไตล์ Thumbnail สลิปมัดจำ 🌟 */
     .slip-thumbnail {
         width: 35px; height: 35px; object-fit: cover; border-radius: 6px; cursor: pointer;
         transition: transform 0.2s ease, box-shadow 0.2s ease; border: 1px solid #dee2e6;
@@ -163,7 +167,7 @@
                             </div>
                         </div>
 
-                        <!-- 6. ช่วงวันที่ + ปุ่มล้างค่า (มัดรวมกันไว้ในคอลัมน์เดียวเพื่อแก้ปัญหาตกบรรทัด) -->
+                        <!-- 6. ช่วงวันที่ + ปุ่มล้างค่า -->
                         <div class="col-12 col-xl-3 d-flex align-items-center justify-content-between gap-2">
                             <div class="search-pill-container flex-grow-1" style="background-color: #f8f9fa; border: 1px solid #ced4da; min-width: 250px;">
                                 <i class="far fa-calendar-alt search-pill-icon"></i>
@@ -193,12 +197,9 @@
                                 <th class="ps-4 py-3 fw-bold" style="width: 18%;">ข้อมูลเอกสาร / ลูกค้า</th>
                                 <th class="py-3 fw-bold" style="width: 18%;">พนักงานขาย / สาขา</th>
                                 <th class="py-3 fw-bold" style="width: 20%;">สถานะดำเนินการ / ฝ่ายผลิต</th>
-                                
-                                <!-- 🌟 [NEW] เพิ่มหัวตาราง "ยอดมัดจำ / หลักฐาน" 🌟 -->
                                 <th class="text-center py-3 fw-bold" style="width: 14%;">ยอดมัดจำ / หลักฐาน</th>
-                                
                                 <th class="text-end py-3 fw-bold" style="width: 14%;">ยอดสุทธิ (บาท)</th>
-                                <th class="text-end pe-4 py-3 fw-bold" style="width: 16%;">จัดการ</th>
+                                <th class="text-center py-3 fw-bold" style="width: 16%;">จัดการ</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -210,15 +211,22 @@
                                         <span class="text-muted" style="font-size: 0.75rem;"><i class="far fa-clock me-1"></i>{{ qt.date|date:"d/m/Y" }}</span>
                                     </div>
 
-                                    {% with job=qt.production_orders.first %}
-                                        {% if job %}
-                                            <div class="mb-2">
+                                    <div class="d-flex flex-wrap gap-1 mb-2">
+                                        {% with job=qt.production_orders.first %}
+                                            {% if job %}
                                                 <span class="badge bg-light text-dark border border-secondary border-opacity-25 shadow-sm" style="font-size: 0.7rem; letter-spacing: 0.5px;">
                                                     <i class="fas fa-clipboard-list text-secondary me-1"></i>{{ job.code }}
                                                 </span>
-                                            </div>
+                                            {% endif %}
+                                        {% endwith %}
+
+                                        <!-- 🌟 แสดงรหัส Invoice (DLN) 🌟 -->
+                                        {% if qt.invoice %}
+                                            <span class="badge bg-info bg-opacity-10 text-info border border-info shadow-sm" style="font-size: 0.7rem; letter-spacing: 0.5px;" title="เปิดบิลแล้ว">
+                                                <i class="fas fa-file-invoice-dollar me-1"></i>{{ qt.invoice.code }}
+                                            </span>
                                         {% endif %}
-                                    {% endwith %}
+                                    </div>
 
                                     <div class="text-primary fw-bold mt-2" style="font-size: 0.9rem;">
                                         <i class="fas fa-user-circle me-1 opacity-75"></i> {{ qt.customer_name }}
@@ -230,13 +238,33 @@
 
                                 <td class="py-3">
                                     <div class="d-flex align-items-center mb-1">
-                                        <div class="rounded-circle d-flex align-items-center justify-content-center me-2 text-white fw-bold shadow-sm" style="width: 35px; height: 35px; font-size: 14px; background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);">
-                                            {{ qt.employee.first_name|slice:":1" }}
-                                        </div>
-                                        <div>
-                                            <div class="text-dark fw-bold" style="font-size: 0.9rem;">{{ qt.employee.first_name|default:"ไม่ระบุ" }}</div>
-                                            <div class="text-muted" style="font-size: 0.75rem;"><i class="fas fa-map-marker-alt opacity-50 me-1"></i>{{ qt.employee.department.name|default:"สำนักงานใหญ่" }}</div>
-                                        </div>
+                                        {% if qt.employee %}
+                                            {% if qt.employee.profile_picture %}
+                                                <img src="{{ qt.employee.profile_picture.url }}" class="rounded-circle me-2 shadow-sm border" style="width: 35px; height: 35px; object-fit: cover;">
+                                            {% elif qt.employee.image %}
+                                                <img src="{{ qt.employee.image.url }}" class="rounded-circle me-2 shadow-sm border" style="width: 35px; height: 35px; object-fit: cover;">
+                                            {% else %}
+                                                <div class="rounded-circle d-flex align-items-center justify-content-center me-2 text-white fw-bold shadow-sm" style="width: 35px; height: 35px; font-size: 14px; background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);">
+                                                    {{ qt.employee.first_name|default:qt.employee.user.first_name|default:"?"|slice:":1" }}
+                                                </div>
+                                            {% endif %}
+
+                                            <div>
+                                                <div class="text-dark fw-bold" style="font-size: 0.9rem;">
+                                                    {{ qt.employee.first_name|default:qt.employee.user.first_name|default:"ไม่ระบุชื่อ" }}
+                                                    {{ qt.employee.last_name|default:qt.employee.user.last_name|default:"" }}
+                                                </div>
+                                                <div class="text-muted" style="font-size: 0.75rem;"><i class="fas fa-map-marker-alt opacity-50 me-1"></i>{{ qt.employee.department.name|default:"สำนักงานใหญ่" }}</div>
+                                            </div>
+                                        {% else %}
+                                            <div class="rounded-circle d-flex align-items-center justify-content-center me-2 text-white fw-bold shadow-sm" style="width: 35px; height: 35px; font-size: 14px; background: #adb5bd;">
+                                                <i class="fas fa-user"></i>
+                                            </div>
+                                            <div>
+                                                <div class="text-dark fw-bold" style="font-size: 0.9rem;">ไม่ระบุพนักงาน</div>
+                                                <div class="text-muted" style="font-size: 0.75rem;"><i class="fas fa-map-marker-alt opacity-50 me-1"></i>-</div>
+                                            </div>
+                                        {% endif %}
                                     </div>
 
                                     {% with job=qt.production_orders.first %}
@@ -251,6 +279,8 @@
                                 <td class="py-3">
                                     <div class="d-flex flex-column align-items-start gap-1">
                                         <div class="d-flex align-items-center gap-2 mb-1">
+                                            
+                                            <!-- 🌟 แสดงสถานะของเอกสารฝั่ง Sales 🌟 -->
                                             {% if qt.status == 'APPROVED' %}
                                                 {% if not qt.is_deposit_paid %}
                                                     <span class="badge-soft badge-soft-warning"><i class="fas fa-hourglass-half me-1"></i>รอรับมัดจำ</span>
@@ -266,16 +296,32 @@
                                             {% elif qt.status == 'DRAFT' %}
                                                 <span class="badge-soft badge-soft-secondary"><i class="fas fa-file-alt me-1"></i>รออนุมัติ</span>
                                             {% endif %}
-
+                                            
+                                            <!-- 🌟 [NEW] แสดงสถานะจากกระดาน Kanban ของฝ่ายผลิต 🌟 -->
                                             {% with job=qt.production_orders.first %}
-                                                {% if job and job.is_onsite %}
-                                                    <span class="badge bg-danger text-white rounded-pill px-2 py-1 shadow-sm" style="font-size: 0.7rem;" title="ช่างประกอบที่หน้างาน"><i class="fas fa-hard-hat me-1"></i>ประกอบหน้างาน</span>
+                                                {% if job %}
+                                                    {% if job.status == 'NEW_JOB' or job.status == 'WAITING_BLUEPRINT' or job.status == 'PLANNED' %}
+                                                        <span class="badge-soft badge-soft-secondary"><i class="fas fa-clipboard-list me-1"></i>เตรียมการผลิต</span>
+                                                    {% elif job.status == 'WAITING_MATERIALS' or job.status == 'WAITING_INVENTORY' %}
+                                                        <span class="badge-soft badge-soft-warning"><i class="fas fa-boxes me-1"></i>เตรียมวัตถุดิบ</span>
+                                                    {% elif job.status == 'IN_PROGRESS' %}
+                                                        <span class="badge-soft badge-soft-production"><i class="fas fa-tools me-1"></i>กำลังผลิต</span>
+                                                    {% elif job.status == 'WAITING_QC' or job.status == 'REWORK' %}
+                                                        <span class="badge-soft badge-soft-qc"><i class="fas fa-search me-1"></i>เก็บงานทำความสะอาด (QC)</span>
+                                                    {% elif job.status == 'COMPLETED' %}
+                                                        <span class="badge-soft badge-soft-success"><i class="fas fa-check-double me-1"></i>ผลิตเสร็จ</span>
+                                                    {% endif %}
+
+                                                    {% if job.is_onsite %}
+                                                        <span class="badge bg-danger text-white rounded-pill px-2 py-1 shadow-sm" style="font-size: 0.7rem;" title="ช่างประกอบที่หน้างาน"><i class="fas fa-hard-hat me-1"></i>ประกอบหน้างาน</span>
+                                                    {% endif %}
                                                 {% endif %}
                                             {% endwith %}
                                         </div>
 
                                         {% with job=qt.production_orders.first %}
                                             {% if job %}
+                                                <!-- ข้อมูลสถานที่ผลิต และ ทีมช่าง -->
                                                 <div class="bg-light rounded p-2 border border-secondary border-opacity-10 w-100 mt-1">
                                                     <div class="d-flex flex-wrap align-items-center gap-3" style="font-size: 0.7rem;">
                                                         <div><i class="fas fa-industry text-primary opacity-75 me-1"></i><span class="fw-bold text-dark">{{ job.branch.name|default:"กองกลาง" }}</span></div>
@@ -283,23 +329,57 @@
                                                     </div>
                                                 </div>
 
+                                                <!-- 🌟 [NEW] สมองกลแสดง Progress Bar อัจฉริยะ (แบ่งสีตามสถานะ) 🌟 -->
                                                 {% if job.status in 'IN_PROGRESS,COMPLETED,WAITING_QC,REWORK' and not job.is_closed %}
-                                                    <div class="w-100 mt-2 pe-3" tabindex="0" data-bs-toggle="popover" title="ความคืบหน้าการผลิต" data-bs-content="{% for d in job.completed_departments.all %}<i class='fas fa-check-circle text-success me-1'></i> {{ d.name }}<br>{% empty %}<span class='text-muted'>ยังไม่เริ่มดำเนินการ</span>{% endfor %}" data-bs-html="true">
-                                                        <div class="d-flex justify-content-between text-muted" style="font-size: 0.65rem;">
-                                                            <span>ความคืบหน้าผลิต</span>
-                                                            <span class="fw-bold">{{ job.progress_percentage }}%</span>
+                                                    
+                                                    <!-- กรณี 1: กำลังประกอบ (สีเขียว/น้ำเงิน) -->
+                                                    {% if job.status == 'IN_PROGRESS' %}
+                                                        <div class="w-100 mt-2 pe-3" tabindex="0" data-bs-toggle="popover" title="ความคืบหน้าการผลิต" data-bs-content="{% for d in job.completed_departments.all %}<i class='fas fa-check-circle text-success me-1'></i> {{ d.name }}<br>{% empty %}<span class='text-muted'>ยังไม่เริ่มดำเนินการ</span>{% endfor %}" data-bs-html="true">
+                                                            <div class="d-flex justify-content-between text-muted" style="font-size: 0.65rem;">
+                                                                <span>ความคืบหน้าผลิต</span>
+                                                                <span class="fw-bold">{{ job.progress_percentage }}%</span>
+                                                            </div>
+                                                            <div class="progress progress-rounded mt-1 shadow-sm" style="height: 6px;">
+                                                                <div class="progress-bar {% if job.progress_percentage == 100 %}bg-success{% else %}bg-primary{% endif %}" role="progressbar" style="width: {{ job.progress_percentage }}%;"></div>
+                                                            </div>
                                                         </div>
-                                                        <div class="progress progress-rounded mt-1 shadow-sm" style="height: 6px;">
-                                                            <div class="progress-bar {% if job.progress_percentage == 100 %}bg-success{% else %}bg-primary{% endif %}" role="progressbar" style="width: {{ job.progress_percentage }}%;"></div>
-                                                        </div>
-                                                    </div>
+                                                    
+                                                    <!-- กรณี 2: เข้าสู่โหมด QC (สีม่วง) -->
+                                                    {% elif job.status == 'WAITING_QC' or job.status == 'REWORK' %}
+                                                        
+                                                        <!-- คำนวณเปอร์เซ็นต์ QC อัตโนมัติใน Template -->
+                                                        {% with total_qc=6 %}
+                                                        {% with passed_qc=0 %}
+                                                            <!-- จำลองการบวกเลขแบบบ้านๆ ใน Template -->
+                                                            {% if job.qc_paint %}{% widthratio passed_qc|add:1 1 1 as passed_qc %}{% endif %}
+                                                            {% if job.qc_internal %}{% widthratio passed_qc|add:1 1 1 as passed_qc %}{% endif %}
+                                                            {% if job.qc_external %}{% widthratio passed_qc|add:1 1 1 as passed_qc %}{% endif %}
+                                                            {% if job.qc_electrical %}{% widthratio passed_qc|add:1 1 1 as passed_qc %}{% endif %}
+                                                            {% if job.qc_plumbing %}{% widthratio passed_qc|add:1 1 1 as passed_qc %}{% endif %}
+                                                            {% if job.qc_aircon %}{% widthratio passed_qc|add:1 1 1 as passed_qc %}{% endif %}
+                                                            
+                                                            <!-- คำนวณเป็นร้อยละ -->
+                                                            {% widthratio passed_qc total_qc 100 as qc_percent %}
+                                                            
+                                                            <div class="w-100 mt-2 pe-3" tabindex="0" data-bs-toggle="popover" title="ความคืบหน้าการตรวจ QC" data-bs-content="<div class='small'>{% if job.qc_paint %}<i class='fas fa-check-circle text-success me-1'></i> 1. งานสี<br>{% endif %}{% if job.qc_internal %}<i class='fas fa-check-circle text-success me-1'></i> 2. ภายใน<br>{% endif %}{% if job.qc_external %}<i class='fas fa-check-circle text-success me-1'></i> 3. ภายนอก<br>{% endif %}{% if job.qc_electrical %}<i class='fas fa-check-circle text-success me-1'></i> 4. ไฟฟ้า<br>{% endif %}{% if job.qc_plumbing %}<i class='fas fa-check-circle text-success me-1'></i> 5. ประปา<br>{% endif %}{% if job.qc_aircon %}<i class='fas fa-check-circle text-success me-1'></i> 6. แอร์<br>{% endif %}</div>" data-bs-html="true">
+                                                                <div class="d-flex justify-content-between text-muted" style="font-size: 0.65rem;">
+                                                                    <span>ความคืบหน้า (QC)</span>
+                                                                    <span class="fw-bold" style="color: #6f42c1;">{{ qc_percent|default:"0" }}%</span>
+                                                                </div>
+                                                                <div class="progress progress-rounded mt-1 shadow-sm" style="height: 6px;">
+                                                                    <div class="progress-bar" role="progressbar" style="width: {{ qc_percent|default:'0' }}%; background-color: #6f42c1;"></div>
+                                                                </div>
+                                                            </div>
+                                                        {% endwith %}
+                                                        {% endwith %}
+                                                    {% endif %}
+
                                                 {% endif %}
                                             {% endif %}
                                         {% endwith %}
                                     </div>
                                 </td>
                                 
-                                <!-- 🌟 [NEW] แสดงยอดมัดจำ / รูปสลิป / ไอคอนการจ่าย 🌟 -->
                                 <td class="text-center py-3">
                                     {% if qt.is_deposit_paid %}
                                         <div class="fw-bold text-success" style="font-size: 0.85rem;">฿{{ qt.deposit_amount|floatformat:2|intcomma }}</div>
@@ -316,8 +396,7 @@
                                                 <img src="{{ qt.deposit_slip.url }}" class="slip-thumbnail mx-1" data-bs-toggle="modal" data-bs-target="#slipModal" onclick="document.getElementById('slipImageFull').src='{{ qt.deposit_slip.url }}'">
                                             {% endif %}
                                         </div>
-                                        
-                                        <!-- โชว์ Badge ถ้าบัญชียังไม่ได้ตรวจ -->
+
                                         {% if not qt.is_deposit_verified %}
                                             <div class="mt-1"><span class="badge bg-warning text-dark border" style="font-size: 0.6rem;"><i class="fas fa-hourglass-half me-1"></i>รอตรวจ</span></div>
                                         {% endif %}
@@ -338,38 +417,38 @@
                                     {% endif %}
                                 </td>
 
-                                <td class="text-end pe-4 py-3">
-                                    <div class="d-flex justify-content-end align-items-center gap-2">
+                                <td class="text-center py-3" style="width: 16%;">
+                                    <div class="d-flex justify-content-center align-items-center gap-2 mb-1">
 
                                         {% if qt.status != 'CANCELLED' %}
 
                                             {% if is_manager and qt.status == 'DRAFT' %}
-                                                <a href="{% url 'quotation_approve' qt.id %}" class="btn btn-success btn-primary-action rounded-pill text-white" onclick="return confirm('ยืนยันการอนุมัติเอกสารนี้?');"><i class="fas fa-check-circle me-1"></i> อนุมัติ</a>
+                                                <a href="{% url 'quotation_approve' qt.id %}" class="btn btn-success btn-primary-action rounded-pill text-white shadow-sm" onclick="return confirm('ยืนยันการอนุมัติเอกสารนี้?');"><i class="fas fa-check-circle me-1"></i> อนุมัติ</a>
 
                                             {% elif qt.status == 'APPROVED' and not qt.is_deposit_paid %}
-                                                <button class="btn btn-warning btn-primary-action rounded-pill text-dark" data-bs-toggle="modal" data-bs-target="#depositModal{{ qt.id }}"><i class="fas fa-hand-holding-usd me-1"></i> รับมัดจำ</button>
+                                                <button class="btn btn-warning btn-primary-action rounded-pill text-dark shadow-sm" data-bs-toggle="modal" data-bs-target="#depositModal{{ qt.id }}"><i class="fas fa-hand-holding-usd me-1"></i> รับมัดจำ</button>
 
                                             {% elif qt.status == 'APPROVED' and qt.is_deposit_paid and not qt.is_deposit_verified %}
-                                                <span class="btn btn-secondary btn-primary-action rounded-pill text-white" style="cursor: not-allowed; opacity: 0.8;"><i class="fas fa-user-clock me-1"></i> รอตรวจรับเงิน</span>
+                                                <span class="btn btn-secondary btn-primary-action rounded-pill text-white shadow-sm" style="cursor: not-allowed; opacity: 0.8;"><i class="fas fa-user-clock me-1"></i> รอตรวจรับเงิน</span>
 
                                             {% elif qt.status == 'APPROVED' and qt.is_deposit_paid and qt.is_deposit_verified and not qt.production_orders.all %}
-                                                <button class="btn btn-info btn-primary-action rounded-pill text-dark" data-bs-toggle="modal" data-bs-target="#produceModal{{ qt.id }}"><i class="fas fa-industry me-1"></i> สั่งผลิต</button>
+                                                <button class="btn btn-info btn-primary-action rounded-pill text-dark shadow-sm" data-bs-toggle="modal" data-bs-target="#produceModal{{ qt.id }}"><i class="fas fa-industry me-1"></i> สั่งผลิต</button>
 
                                             {% elif qt.status == 'APPROVED' and qt.production_orders.all %}
                                                 {% with job=qt.production_orders.first %}
                                                     {% if job and job.status == 'COMPLETED' %}
-                                                        <a href="{% url 'convert_quote_to_invoice' qt.id %}" class="btn btn-primary-action rounded-pill text-white" style="background-color: #6f42c1; border-color: #6f42c1;" onclick="return confirm('เปิดบิลขายจากใบเสนอราคานี้ใช่หรือไม่?');"><i class="fas fa-file-invoice-dollar me-1"></i> เปิดบิลขาย</a>
+                                                        <a href="{% url 'convert_quote_to_invoice' qt.id %}" class="btn btn-primary-action rounded-pill text-white shadow-sm" style="background-color: #6f42c1; border-color: #6f42c1;" onclick="return confirm('เปิดบิลขายจากใบเสนอราคานี้ใช่หรือไม่?');"><i class="fas fa-file-invoice-dollar me-1"></i> เปิดบิลขาย</a>
                                                     {% else %}
-                                                        <span class="btn btn-secondary btn-primary-action rounded-pill text-white" style="cursor: not-allowed; opacity: 0.7;"><i class="fas fa-cogs me-1"></i> กำลังผลิต</span>
+                                                        <span class="btn btn-secondary btn-primary-action rounded-pill text-white shadow-sm" style="cursor: not-allowed; opacity: 0.7;"><i class="fas fa-cogs me-1"></i> กำลังผลิต</span>
                                                     {% endif %}
                                                 {% endwith %}
 
                                             {% elif qt.status == 'CONVERTED' %}
                                                 {% with job=qt.production_orders.first %}
                                                     {% if job and job.delivery_status and job.delivery_status.name == 'จัดส่งเรียบร้อย' %}
-                                                        <span class="btn btn-success btn-primary-action rounded-pill text-white" style="cursor: not-allowed; opacity: 0.9;"><i class="fas fa-check-circle me-1"></i> จัดส่งเรียบร้อย</span>
+                                                        <span class="btn btn-success btn-primary-action rounded-pill text-white shadow-sm" style="cursor: not-allowed; opacity: 0.9;"><i class="fas fa-check-circle me-1"></i> จัดส่งเรียบร้อย</span>
                                                     {% elif job %}
-                                                        <span class="btn btn-warning btn-primary-action rounded-pill text-dark" style="cursor: not-allowed; opacity: 0.9;"><i class="fas fa-truck-loading me-1"></i> รอจัดส่งสินค้า</span>
+                                                        <span class="btn btn-warning btn-primary-action rounded-pill text-dark shadow-sm" style="cursor: not-allowed; opacity: 0.9;"><i class="fas fa-truck-loading me-1"></i> รอจัดส่งสินค้า</span>
                                                     {% endif %}
                                                 {% endwith %}
                                             {% endif %}
@@ -379,7 +458,7 @@
                                         {% endif %}
 
                                         <div class="dropdown">
-                                            <button class="btn btn-light rounded-circle shadow-sm border d-flex align-items-center justify-content-center" type="button" data-bs-toggle="dropdown" data-bs-boundary="window" style="width: 35px; height: 35px;">
+                                            <button class="btn btn-light rounded-circle shadow-sm border d-flex align-items-center justify-content-center p-0" type="button" data-bs-toggle="dropdown" data-bs-boundary="window" style="width: 33px; height: 33px;">
                                                 <i class="fas fa-ellipsis-v text-secondary"></i>
                                             </button>
                                             <ul class="dropdown-menu dropdown-menu-end shadow border-0 mt-2">
@@ -402,8 +481,16 @@
                                                 {% endif %}
                                             </ul>
                                         </div>
-
                                     </div>
+
+                                    {% if qt.status != 'CANCELLED' and is_manager and qt.status == 'DRAFT' %}
+                                        <div class="d-flex justify-content-center mt-2">
+                                            <a href="{% url 'quotation_print' qt.id %}" target="_blank" class="btn btn-outline-info btn-sm rounded-pill w-100" style="font-size: 0.75rem; border-color: #0dcaf0; color: #0dcaf0; font-weight: 600; max-width: 150px;">
+                                                <i class="fas fa-search me-1"></i> แสดงตัวอย่าง
+                                            </a>
+                                        </div>
+                                    {% endif %}
+
                                 </td>
                             </tr>
 
@@ -523,7 +610,7 @@
     </div>
 </div>
 
-<!-- 🌟 [NEW] Modal สำหรับดูรูปสลิปขยายใหญ่ 🌟 -->
+<!-- 🌟 Modal สำหรับดูรูปสลิปขยายใหญ่ 🌟 -->
 <div class="modal fade" id="slipModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content bg-transparent border-0">
@@ -573,8 +660,7 @@
             });
             input.addEventListener('focus', function() {
                 let val = this.value.replace(/,/g, '');
-                if (val === '0.00' || val === '0') this.value = '';
-                else this.value = val;
+                if (val === '0.00' || val === '0') this.value = val;
             });
         });
 
@@ -611,13 +697,13 @@
         $('#reportrange').daterangepicker({
             startDate: start,
             endDate: end,
-            linkedCalendars: false, // 🌟 [NEW] เพิ่มบรรทัดนี้เพื่อแยกปฏิทินซ้าย-ขวาให้เป็นอิสระต่อกัน
+            linkedCalendars: false, 
             ranges: {
                'วันนี้': [moment(), moment()],
                'เมื่อวาน': [moment().subtract(1, 'days'), moment().subtract(1, 'days')],
                'ช่วง 7 วันก่อนหน้า': [moment().subtract(6, 'days'), moment()],
                'ช่วง 30 วันก่อนหน้า': [moment().subtract(29, 'days'), moment()],
-               'ช่วง 3 เดือนก่อนหน้า': [moment().subtract(3, 'months'), moment()], // 🌟 [NEW] เพิ่มตัวเลือก 3 เดือนก่อนหน้า 🌟
+               'ช่วง 3 เดือนก่อนหน้า': [moment().subtract(3, 'months'), moment()], 
                'เดือนนี้': [moment().startOf('month'), moment().endOf('month')],
                '1 เดือนก่อนหน้า': [moment().subtract(1, 'month').startOf('month'), moment().subtract(1, 'month').endOf('month')]
             },

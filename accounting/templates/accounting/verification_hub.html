@@ -112,7 +112,7 @@
                                     {% endif %}
                                 </div>
                                 <div class="text-muted small mb-1" style="font-size: 0.75rem;"><i class="far fa-clock me-1"></i>{% if item.total_amount %}{{ item.created_at|date:"d/m/Y H:i" }}{% else %}{{ item.date|date:"d/m/Y" }}{% endif %}</div>
-                                
+
                                 <!-- ข้อมูล QT และ Job สำหรับระบบน็อคดาวน์ -->
                                 {% if task_type == 'invoices' and item.system_type != 'solar_invoice' %}
                                     <div class="mt-1">
@@ -148,7 +148,7 @@
 
                                 <td class="text-end">
                                     <div class="fw-bold text-dark fs-6">฿{{ item.grand_total|floatformat:2|intcomma }}</div>
-                                    
+
                                     <!-- 🌟 [FIXED] โชว์ยอดค้างชำระเสมอ แม้จะเป็น 0.00 🌟 -->
                                     <div class="text-danger small fw-bold mt-1">ค้างชำระ: ฿{{ item.balance_amount|default:"0"|floatformat:2|intcomma }}</div>
                                 </td>
@@ -223,7 +223,7 @@
                                         {% with last_payment=item.payment_history.last %}
                                             {% if last_payment or item.transfer_slip or item.check_slip or item.received_amount %}
                                                 <div class="d-flex align-items-center justify-content-center gap-2 bg-light border border-warning rounded px-2 py-1 d-inline-flex">
-                                                    
+
                                                     <!-- ดึงยอดเงิน -->
                                                     {% if last_payment %}
                                                         <span class="fw-bold text-dark" style="font-size: 0.75rem;">฿{{ last_payment.amount|floatformat:2|intcomma }}</span>
@@ -254,7 +254,7 @@
                                                     {% elif item.check_slip %}
                                                         <img src="{{ item.check_slip.url }}" class="slip-thumbnail" loading="lazy" data-bs-toggle="modal" data-bs-target="#slipModal" onclick="document.getElementById('slipImageFull').src='{{ item.check_slip.url }}'">
                                                     {% endif %}
-                                                    
+
                                                     <i class="fas fa-circle text-warning" style="font-size: 8px;" title="รอตรวจ"></i>
                                                 </div>
                                             {% else %}
@@ -300,9 +300,17 @@
                                     <input type="hidden" name="doc_type" value="{% if item.total_amount %}pos{% else %}invoice{% endif %}">
                                     <input type="hidden" name="doc_system" value="{{ item.system_type|default:'' }}">
 
-                                    <button type="submit" class="btn btn-sm btn-success rounded-pill px-3 shadow-sm fw-bold w-100" onclick="return confirm('ยืนยันรับรายการนี้เข้าสู่ระบบบัญชีใช่หรือไม่?');">
-                                        <i class="fas fa-check-circle me-1"></i> อนุมัติรับเงิน
-                                    </button>
+                                    <!-- 🌟 [NEW] ระบบแยกปุ่ม รับเงิน (สีเขียว) / จ่ายเงิน (สีแดง) 🌟 -->
+                                    {% if task_type == 'po_payments' or task_type == 'solar_po_payments' %}
+                                        <button type="submit" class="btn btn-sm btn-danger rounded-pill px-3 shadow-sm fw-bold w-100" onclick="return confirm('ยืนยันยอดเงินถูกต้อง และอนุมัติทำจ่ายเงินใช่หรือไม่?');">
+                                            <i class="fas fa-file-invoice-dollar me-1"></i> อนุมัติจ่ายเงิน
+                                        </button>
+                                    {% else %}
+                                        <button type="submit" class="btn btn-sm btn-success rounded-pill px-3 shadow-sm fw-bold w-100" onclick="return confirm('ยืนยันตรวจสอบหลักฐาน และรับเงินเข้าระบบใช่หรือไม่?');">
+                                            <i class="fas fa-check-circle me-1"></i> อนุมัติรับเงิน
+                                        </button>
+                                    {% endif %}
+
                                 </form>
                             </td>
                         </tr>

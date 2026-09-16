@@ -13,7 +13,7 @@
 
     <form method="POST">
         {% csrf_token %}
-        
+
         <div class="card shadow-sm border-0 rounded-4 mb-4 bg-light">
             <div class="card-body p-4 row g-3">
                 <div class="col-md-6">
@@ -22,7 +22,7 @@
                 </div>
                 <div class="col-md-3">
                     <label class="form-label text-muted small fw-bold">เลขที่ใบส่งของ / อ้างอิง <span class="text-danger">*</span></label>
-                    <input type="text" name="doc_reference" class="form-control" placeholder="เช่น ทะเบียนรถ, DO-1234" required>
+                    <input type="text" name="doc_reference" class="form-control" placeholder="ระบุใบสั่งซื้อ หรือใบส่่งของ" required>
                 </div>
                 <div class="col-md-3">
                     <label class="form-label text-muted small fw-bold">หมายเหตุ (ถ้ามี)</label>
@@ -61,14 +61,14 @@
                                     <span class="text-muted">-</span>
                                 {% endif %}
                             </td>
-                            
+
                             <td class="text-center fw-bold text-danger">
                                 <script>
                                     // 🌟 ใช้ parseFloat เพื่อให้รองรับทศนิยม 🌟
                                     var qty_{{ item.id }} = parseFloat("{{ item.quantity|stringformat:'f' }}") || 0;
                                     var rec_{{ item.id }} = parseFloat("{{ item.received_qty|stringformat:'f' }}") || 0;
                                     var remain_{{ item.id }} = qty_{{ item.id }} - rec_{{ item.id }};
-                                    
+
                                     // ตัดศูนย์ต่อท้ายให้ดูสวยงาม (เช่น 0.50 -> 0.5)
                                     var display_remain_{{ item.id }} = remain_{{ item.id }} % 1 === 0 ? remain_{{ item.id }} : remain_{{ item.id }}.toFixed(2);
                                     document.write(display_remain_{{ item.id }});

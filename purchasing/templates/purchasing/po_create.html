@@ -6,11 +6,11 @@
 <style>
     .flatpickr-calendar { font-family: 'Sarabun', sans-serif; }
     .row-total { font-weight: bold; color: #0d6efd; }
-    .btn-delete-row { 
-        color: #dc3545; background: #fff; border: 1px solid #dc3545; 
-        border-radius: 50%; width: 32px; height: 32px; 
-        display: inline-flex; align-items: center; justify-content: center; 
-        padding: 0; transition: 0.2s; 
+    .btn-delete-row {
+        color: #dc3545; background: #fff; border: 1px solid #dc3545;
+        border-radius: 50%; width: 32px; height: 32px;
+        display: inline-flex; align-items: center; justify-content: center;
+        padding: 0; transition: 0.2s;
     }
     .btn-delete-row:hover { background: #dc3545; color: #fff; }
 </style>
@@ -59,10 +59,10 @@
                         <label class="form-label small fw-bold text-muted">สถานะเอกสาร</label>
                         <div>
                             <div class="d-none">{{ form.status }}</div>
-                            
+
                             {% if po %}
                                 {% if po.status == 'DRAFT' %}
-                                    <span class="badge bg-warning text-dark border w-100 py-2 fs-6 rounded-2"><i class="fas fa-hourglass-half me-1"></i> ร่าง (รออนุมัติ)</span>
+                                    <span class="badge bg-warning text-dark border w-100 py-2 fs-6 rounded-2"><i class="fas fa-hourglass-half me-1"></i> รออนุมัติ</span>
                                 {% elif po.status == 'APPROVED' %}
                                     <span class="badge bg-success border w-100 py-2 fs-6 rounded-2"><i class="fas fa-check-circle me-1"></i> อนุมัติแล้ว</span>
                                 {% else %}
@@ -86,7 +86,7 @@
                 <h6 class="fw-bold mb-0 text-dark"><i class="fas fa-box-open me-2"></i>รายการวัตถุดิบ / สินค้า</h6>
                 <div class="bg-light border rounded-pill px-3 py-1">
                     <span class="text-muted small fw-bold me-2">ยอดรวมสุทธิ:</span>
-                    <span class="text-danger fw-bold fs-5" id="grand-total">0.00</span> 
+                    <span class="text-danger fw-bold fs-5" id="grand-total">0.00</span>
                     <span class="text-muted small">บาท</span>
                 </div>
             </div>
@@ -125,7 +125,7 @@
                         </tbody>
                     </table>
                 </div>
-                
+
                 <div class="d-flex justify-content-between align-items-center mt-3">
                     <button type="button" id="add-item-btn" class="btn btn-outline-primary rounded-pill btn-sm px-3 shadow-sm">
                         <i class="fas fa-plus me-1"></i> เพิ่มรายการสินค้าเอง
@@ -135,24 +135,43 @@
             </div>
         </div>
 
+        <!-- 🌟 [FIXED] สลับตำแหน่งปุ่ม ซ้าย-ขวา 🌟 -->
         <div class="d-flex justify-content-between align-items-center bg-white p-4 rounded-4 shadow-sm border mb-5">
+
+            <!-- ⬅️ ฝั่งซ้าย: สำหรับบันทึกงาน -->
+            <div>
+                {% if po.status != 'APPROVED' and po.status != 'CANCELLED' %}
+                    <button type="submit" class="btn btn-primary rounded-pill px-5 shadow-sm fw-bold fs-5">
+                        <i class="fas fa-save me-2"></i>
+                        {% if po %}บันทึกการแก้ไข{% else %}บันทึกเป็น "ฉบับร่าง"{% endif %}
+                    </button>
+                {% endif %}
+            </div>
+
+            <!-- ➡️ ฝั่งขวา: สำหรับการอนุมัติ / ยกเลิก / หรือพิมพ์เอกสารเมื่ออนุมัติแล้ว -->
             <div>
                 {% if po %}
                     {% if po.status == 'APPROVED' %}
-                        <span class="badge bg-success bg-opacity-10 text-success border border-success px-4 py-2 fs-6 rounded-pill shadow-sm">
+                        <span class="badge bg-success bg-opacity-10 text-success border border-success px-4 py-2 fs-6 rounded-pill shadow-sm me-3">
                             <i class="fas fa-lock me-1"></i> เอกสารนี้ได้รับการอนุมัติแล้ว
                         </span>
+                        <a href="{% url 'po_print' po.id %}" target="_blank" class="btn btn-primary rounded-pill px-5 shadow-sm fw-bold fs-5">
+                            <i class="fas fa-print me-2"></i> พิมพ์ใบสั่งซื้อ (Print PO)
+                        </a>
+
                     {% elif po.status == 'CANCELLED' %}
                         <span class="badge bg-danger bg-opacity-10 text-danger border border-danger px-4 py-2 fs-6 rounded-pill shadow-sm">
                             <i class="fas fa-ban me-1"></i> เอกสารนี้ถูกยกเลิกแล้ว
                         </span>
+
                     {% elif is_approver and po.status == 'DRAFT' %}
                         <a href="{% url 'po_approve' po.id %}" class="btn btn-success rounded-pill px-4 shadow-sm fw-bold me-2" onclick="return confirm('ยืนยันการอนุมัติใบสั่งซื้อนี้?')">
-                            <i class="fas fa-check-circle me-1"></i> อนุมัติ (Approve)
+                            <i class="fas fa-check-circle me-1"></i> อนุมัติ
                         </a>
                         <a href="{% url 'po_cancel' po.id %}" class="btn btn-outline-danger rounded-pill px-4 shadow-sm fw-bold bg-white" onclick="return confirm('ยืนยันการยกเลิกใบสั่งซื้อนี้?')">
-                            <i class="fas fa-times-circle me-1"></i> ยกเลิก (Cancel)
+                            <i class="fas fa-times-circle me-1"></i> ยกเลิก
                         </a>
+
                     {% elif not is_approver and po.status == 'DRAFT' %}
                         <span class="badge bg-warning text-dark border px-4 py-2 fs-6 rounded-pill shadow-sm">
                             <i class="fas fa-user-shield me-1"></i> รอผู้จัดการตรวจสอบและอนุมัติ
@@ -161,18 +180,6 @@
                 {% endif %}
             </div>
 
-            <div>
-                {% if po.status == 'APPROVED' %}
-                    <a href="{% url 'po_print' po.id %}" target="_blank" class="btn btn-primary rounded-pill px-5 shadow-sm fw-bold fs-5">
-                        <i class="fas fa-print me-2"></i> พิมพ์ใบสั่งซื้อ (Print PO)
-                    </a>
-                {% elif po.status != 'CANCELLED' %}
-                    <button type="submit" class="btn btn-primary rounded-pill px-5 shadow-sm fw-bold fs-5">
-                        <i class="fas fa-save me-2"></i> 
-                        {% if po %}บันทึกการแก้ไข (ฉบับร่าง){% else %}บันทึกเป็น "ฉบับร่าง"{% endif %}
-                    </button>
-                {% endif %}
-            </div>
         </div>
     </form>
 </div>
@@ -205,18 +212,16 @@
             const qtyInput = row.querySelector('[id$="-quantity"]');
             const costInput = row.querySelector('[id$="-unit_cost"]');
             const totalEl = row.querySelector('.row-total');
-            // 🌟 ชี้เป้าไปที่ช่อง total_cost ที่เราเพิ่งซ่อนไว้ 🌟
-            const totalHiddenInput = row.querySelector('[id$="-total_cost"]'); 
+            const totalHiddenInput = row.querySelector('[id$="-total_cost"]');
 
             if (qtyInput && costInput && totalEl) {
                 const qty = parseFloat(qtyInput.value) || 0;
                 const cost = parseFloat(costInput.value.replace(/,/g, '')) || 0;
                 const total = qty * cost;
                 totalEl.textContent = total.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-                
-                // 🌟 อัปเดตค่าใส่ตัวแปรที่ซ่อนอยู่ เพื่อให้ระบบพร้อมส่ง 🌟
+
                 if (totalHiddenInput) {
-                    totalHiddenInput.value = total; 
+                    totalHiddenInput.value = total;
                 }
                 return total;
             }
@@ -250,13 +255,13 @@
             const deleteInput = row.querySelector('[id$="-DELETE"]');
             if (deleteInput) {
                 deleteInput.checked = true; // ซ่อนเพื่อรอลบในฐานข้อมูล
-                row.style.display = 'none'; 
+                row.style.display = 'none';
                 calculateGrandTotal();
             } else {
                 row.remove(); // ลบแถวที่เพิ่งเพิ่มสดๆ ออกไปเลย
                 let formCount = parseInt(totalFormsInput.value);
                 totalFormsInput.value = formCount - 1;
-                
+
                 // จัดเรียง Index ใหม่
                 const rows = formsetContainer.querySelectorAll('.formset-row');
                 rows.forEach((r, index) => {
@@ -280,11 +285,11 @@
                 if(!firstRow) return;
 
                 const rowTemplate = firstRow.cloneNode(true);
-                
+
                 // เปลี่ยน ID ให้เป็นแถวใหม่
                 const regex = new RegExp(`items-(\\d+)-`, 'g');
                 rowTemplate.innerHTML = rowTemplate.innerHTML.replace(regex, `items-${formCount}-`);
-                
+
                 // เคลียร์ค่าที่ก๊อปปี้มาทิ้ง
                 const inputs = rowTemplate.querySelectorAll('input, select');
                 inputs.forEach(input => {
@@ -298,11 +303,11 @@
                         input.value = '';
                     }
                 });
-                
+
                 const totalEl = rowTemplate.querySelector('.row-total');
                 if (totalEl) totalEl.textContent = '0.00';
 
-                rowTemplate.style.display = ''; 
+                rowTemplate.style.display = '';
                 formsetContainer.appendChild(rowTemplate);
                 totalFormsInput.value = formCount + 1;
             });
