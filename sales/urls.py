@@ -25,7 +25,7 @@ urlpatterns = [
     path('deposit/record/<int:qt_id>/', views.record_deposit, name='record_deposit'),
     path('deposit/verify/<int:qt_id>/', views.verify_deposit, name='verify_deposit'),
     path('deposit/print/<int:qt_id>/', views.deposit_print, name='deposit_print'),
-    
+
     # 🌟 [NEW] URL สำหรับหน้าเซ็นสัญญามัดจำ 🌟
     path('deposit/sign/<str:token>/', views.customer_sign_deposit, name='customer_sign_deposit'),
 
@@ -49,4 +49,7 @@ urlpatterns = [
     path('crm/appointments/create-modal/', views.appointment_create_modal, name='appointment_create_modal'),
     path('crm/appointments/update/<int:apt_id>/', views.appointment_update, name='appointment_update'),
     path('quotation/<int:qt_id>/print-deposit/', views.print_deposit_contract, name='print_deposit_contract'),
+    path('commissions/', views.commission_board, name='commission_board'),
+    path('commissions/claim/<str:claim_type>/', views.commission_create_claim, name='commission_create_claim'),
+    path('commissions/pay/<int:claim_id>/', views.knockdown_commission_pay, name='knockdown_commission_pay'),
 ]

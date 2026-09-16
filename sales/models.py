@@ -317,3 +317,69 @@ class Appointment(models.Model):
     def __str__(self):
         lead_name = self.lead.customer_name if self.lead else "ไม่ระบุลูกค้า"
         return f"นัดหมาย {lead_name} ({self.appointment_date.strftime('%d/%m/%Y %H:%M')})"
+
+# ==========================================
+# 💸 ระบบเบิกผลตอบแทนบ้านน็อคดาวน์ (Incentive & Commission)
+# ==========================================
+class CommissionClaim(models.Model):
+    CLAIM_TYPES = [('2%', '2% (จากมัดจำ)'), ('3%', '3% (จากปิดบิล)')]
+    STATUS_CHOICES = [('PENDING', 'รอโอนเงิน'), ('PAID', 'โอนเงินแล้ว')]
+
+    code = models.CharField(max_length=20, unique=True, verbose_name="เลขที่ใบเบิกผลตอบแทน")
+    claim_type = models.CharField(max_length=10, choices=CLAIM_TYPES, verbose_name="ประเภทการเบิก")
+    requester = models.ForeignKey('hr.Employee', on_delete=models.SET_NULL, null=True, verbose_name="ผู้ทำรายการเบิก")
+    total_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name="ยอดเงินรวม")
+
+    bank_name = models.CharField(max_length=100, blank=True, null=True, verbose_name="ธนาคารที่รับเงิน")
+    bank_account = models.CharField(max_length=50, blank=True, null=True, verbose_name="เลขที่บัญชี")
+    account_name = models.CharField(max_length=150, blank=True, null=True, verbose_name="ชื่อบัญชีธนาคาร")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING', verbose_name="สถานะ")
+
+    transfer_slip = models.ImageField(upload_to='commissions_knockdown/', null=True, blank=True, verbose_name="สลิปโอนเงิน")
+    paid_at = models.DateTimeField(null=True, blank=True, verbose_name="วันที่โอนเงิน")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def save(self, *args, **kwargs):
+        if not self.code:
+            now = timezone.now()
+            thai_year = (now.year + 543) % 100
+            # ใช้รหัส KD ย่อมาจาก Knockdown เพื่อแยกกับ SOL
+            prefix = f"REQ2-KD-{thai_year:02d}{now.strftime('%m')}" if self.claim_type == '2%' else f"REQ3-KD-{thai_year:02d}{now.strftime('%m')}"
+            last = CommissionClaim.objects.filter(code__startswith=prefix).order_by('code').last()
+            seq = int(last.code.split('-')[-1]) + 1 if last else 1
+            self.code = f"{prefix}-{seq:03d}"
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.code
+
+class CommissionTicket(models.Model):
+    TICKET_TYPES = [('2%', '2% (จากมัดจำ)'), ('3%', '3% (จากปิดบิล)')]
+    STATUS_CHOICES = [('AVAILABLE', 'พร้อมเบิก'), ('CLAIMING', 'กำลังตั้งเบิก'), ('PAID', 'จ่ายแล้ว')]
+
+    code = models.CharField(max_length=20, unique=True, verbose_name="เลขที่ใบคุมสิทธิ์")
+    ticket_type = models.CharField(max_length=10, choices=TICKET_TYPES, verbose_name="ประเภทสิทธิ์")
+
+    quotation_ref = models.ForeignKey('Quotation', on_delete=models.CASCADE, null=True, blank=True, verbose_name="อ้างอิงใบเสนอราคา")
+    invoice_ref = models.ForeignKey('Invoice', on_delete=models.CASCADE, null=True, blank=True, verbose_name="อ้างอิงใบแจ้งหนี้")
+
+    base_amount = models.DecimalField(max_digits=12, decimal_places=2, verbose_name="ยอดฐานคำนวณ (หัก 10%)")
+    commission_amount = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="ยอดผลตอบแทน")
+
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='AVAILABLE', verbose_name="สถานะสิทธิ์")
+    claim_ref = models.ForeignKey(CommissionClaim, on_delete=models.SET_NULL, null=True, blank=True, related_name='tickets', verbose_name="รวมอยู่ในใบเบิกเลขที่")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def save(self, *args, **kwargs):
+        if not self.code:
+            now = timezone.now()
+            thai_year = (now.year + 543) % 100
+            prefix = f"C2-KD-{thai_year:02d}{now.strftime('%m')}" if self.ticket_type == '2%' else f"C3-KD-{thai_year:02d}{now.strftime('%m')}"
+            last = CommissionTicket.objects.filter(code__startswith=prefix).order_by('code').last()
+            seq = int(last.code.split('-')[-1]) + 1 if last else 1
+            self.code = f"{prefix}-{seq:03d}"
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.code

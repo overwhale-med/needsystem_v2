@@ -142,8 +142,8 @@
                                 <i class="fas fa-shopping-cart"></i>
                             </div>
                             <div>
-                                <h6 class="fw-bold text-dark mb-0">จ่ายเงินร้านค้า (Supplier)</h6>
-                                <small class="text-muted">บิลสั่งซื้อวัตถุดิบ (PO)</small>
+                                <h6 class="fw-bold text-dark mb-0">จ่ายเงินร้านค้าแผนกน็อคดาวน์</h6>
+                                <small class="text-muted">บิลสั่งซื้อวัตถุดิบบ้านน็อคดาวน์</small>
                             </div>
                         </div>
                         <!-- 🌟 [FIXED] ใช้ตัวแปร pending_purchases_normal 🌟 -->
@@ -158,7 +158,7 @@
                                 <i class="fas fa-solar-panel"></i>
                             </div>
                             <div>
-                                <h6 class="fw-bold text-dark mb-0">จ่ายเงินร้านค้าโซล่า (Solar PO)</h6>
+                                <h6 class="fw-bold text-dark mb-0">จ่ายเงินร้านค้าแผนกโซล่าเซลล์</h6>
                                 <small class="text-muted">บิลสั่งซื้ออุปกรณ์โซล่าเซลล์</small>
                             </div>
                         </div>
@@ -197,6 +197,21 @@
                     </div>
                 </a>
 
+                <a href="{% url 'accounting_verification_hub' 'knockdown_commissions' %}" class="text-decoration-none">
+                    <div class="d-flex justify-content-between align-items-center p-3 mt-3 bg-white rounded-3 border modal-task-btn border-primary">
+                        <div class="d-flex align-items-center">
+                            <div class="bg-primary bg-opacity-10 text-primary rounded-circle d-flex justify-content-center align-items-center me-3" style="width: 45px; height: 45px; font-size: 1.2rem;">
+                                <i class="fas fa-hand-holding-usd"></i>
+                            </div>
+                            <div>
+                                <h6 class="fw-bold text-dark mb-0">ทำจ่ายคอมมิชชันแผนกน็อคดาวน์</h6>
+                                <small class="text-muted">จ่ายค่าผลตอบแทนทีมงานน็อคดาวน์</small>
+                            </div>
+                        </div>
+                        <span class="badge bg-danger rounded-pill px-3 shadow-sm">รอโอนเงิน</span>
+                    </div>
+                </a>
+
                 <a href="{% url 'accounting_verification_hub' 'solar_commissions' %}" class="text-decoration-none">
                     <div class="d-flex justify-content-between align-items-center p-3 mt-3 bg-white rounded-3 border modal-task-btn border-success">
                         <div class="d-flex align-items-center">
@@ -204,7 +219,7 @@
                                 <i class="fas fa-hand-holding-usd"></i>
                             </div>
                             <div>
-                                <h6 class="fw-bold text-dark mb-0">ทำจ่ายคอมมิชชันโซล่า (Incentive)</h6>
+                                <h6 class="fw-bold text-dark mb-0">ทำจ่ายคอมมิชชันแผนกโซล่าเซลล์</h6>
                                 <small class="text-muted">จ่ายค่าผลตอบแทนทีมงานโซล่าเซลล์</small>
                             </div>
                         </div>

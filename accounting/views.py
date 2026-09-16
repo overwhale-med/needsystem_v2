@@ -131,11 +131,19 @@ def verification_hub(request, task_type):
     elif task_type == 'solar_commissions':
         from solar_sales.models import SolarCommissionClaim
         context['items'] = SolarCommissionClaim.objects.filter(status='PENDING').order_by('created_at')
-        context['title'] = 'ทำจ่ายค่าคอมมิชชัน (Incentive) - ระบบโซล่าเซลล์'
+        context['title'] = 'ทำจ่ายค่าคอมมิชชัน - ระบบโซล่าเซลล์'
         context['icon'] = 'fa-hand-holding-usd text-success'
 
-    return render(request, 'accounting/verification_hub.html', context)
+    elif task_type == 'knockdown_commissions':
+        from sales.models import CommissionClaim
+        items = CommissionClaim.objects.filter(status='PENDING').order_by('created_at')
+        title = "ทำจ่ายคอมมิชชัน - ระบบบ้านน็อคดาวน์"
+        icon = "fa-hand-holding-usd text-primary"
+        context['items'] = items
+        context['title'] = title
+        context['icon'] = icon
 
+    return render(request, 'accounting/verification_hub.html', context)
 
 # 🌟 ฟังก์ชันกดยืนยันอนุมัติและลงบันทึกบัญชีอัตโนมัติ (รองรับทั้งน็อคดาวน์และโซล่าเซลล์) 🌟
 @login_required

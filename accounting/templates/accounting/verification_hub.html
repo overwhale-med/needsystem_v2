@@ -39,7 +39,7 @@
                         {% else %}
                             <th class="py-3 fw-bold text-center">ยอดเงินรอตรวจสอบ</th>
                             <!-- 🌟 เปลี่ยนหัวตารางให้สอดคล้องกับแต่ละหน้า 🌟 -->
-                            {% if task_type == 'solar_commissions' %}
+                            {% if task_type == 'solar_commissions' or task_type == 'knockdown_commissions' %}
                                 <th class="py-3 fw-bold text-center">ช่องทางจ่ายเงิน</th>
                             {% else %}
                                 <th class="py-3 fw-bold text-center">ช่องทาง / หลักฐาน</th>
@@ -52,7 +52,7 @@
                 </thead>
                 <tbody>
                     <!-- 🌟 1. กรณีเป็นงานทำจ่ายค่าคอมมิชชันโซล่าเซลล์ 🌟 -->
-                    {% if task_type == 'solar_commissions' %}
+                    {% if task_type == 'solar_commissions' or task_type == 'knockdown_commissions' %}
                         {% for item in items %}
                         <tr>
                             <td class="ps-4">
@@ -79,7 +79,7 @@
                                 <span class="status-badge"><i class="fas fa-hourglass-half"></i> รอตรวจสอบ/ทำจ่าย</span>
                             </td>
                             <td class="text-center pe-4" style="width: 250px;">
-                                <form action="{% url 'solar_commission_pay' item.id %}" method="post" enctype="multipart/form-data" class="d-flex flex-column align-items-center bg-light p-2 rounded-3 border">
+                                <form action="{% if task_type == 'solar_commissions' %}{% url 'solar_commission_pay' item.id %}{% else %}{% url 'knockdown_commission_pay' item.id %}{% endif %}" method="post" enctype="multipart/form-data" class="d-flex flex-column align-items-center bg-light p-2 rounded-3 border">
                                     {% csrf_token %}
                                     <input type="file" name="transfer_slip" class="form-control form-control-sm mb-2" accept="image/*" required style="font-size: 0.75rem;">
                                     <button type="submit" class="btn btn-sm btn-success fw-bold w-100 shadow-sm" onclick="return confirm('ยืนยันยอดเงินถูกต้อง และทำจ่ายเรียบร้อยแล้วใช่หรือไม่?');">

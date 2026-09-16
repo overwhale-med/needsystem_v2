@@ -21,7 +21,7 @@ from datetime import timedelta
 from django.db import transaction
 
 # Models
-from .models import Quotation, QuotationItem, POSOrder, POSOrderItem, Invoice, UpsaleCategory, UpsaleCatalog, QuotationUpsale, InvoicePayment, CustomerLead, Appointment
+from .models import Quotation, QuotationItem, POSOrder, POSOrderItem, Invoice, UpsaleCategory, UpsaleCatalog, QuotationUpsale, InvoicePayment, CustomerLead, Appointment, CommissionClaim, CommissionTicket
 from master_data.models import Customer, CompanyInfo, ShippingRate
 from hr.models import Employee, SalesGroup, CompanySalesTarget, CommissionLog, FundTransaction
 from .forms import QuotationForm
@@ -1486,7 +1486,7 @@ def invoice_list(request):
 
 @login_required
 def confirm_payment(request, doc_type, doc_id):
-    current_emp = getattr(request.user, 'employee', None) # 🌟 ดึงข้อมูลผู้ใช้งานที่กำลังกดปุ่ม
+    current_emp = getattr(request.user, 'employee', None)
 
     if doc_type == 'pos':
         obj = get_object_or_404(POSOrder, id=doc_id)
@@ -1506,12 +1506,27 @@ def confirm_payment(request, doc_type, doc_id):
 
             if obj.balance_amount <= 0:
                 obj.status = 'PAID'
-                obj.verified_by = current_emp # 🌟 บันทึกพนักงานบัญชีที่กดยืนยัน 🌟
+                obj.verified_by = current_emp
                 obj.save()
                 sale_amt = getattr(obj, 'total_amount', getattr(obj, 'grand_total', 0))
+
                 if obj.employee:
                     process_commission_logic(sale_amt, obj.employee, obj.code)
-                messages.success(request, f"✅ ยืนยันรับชำระเงินครบ 100% เอกสาร {obj.code} ปิดการขายเรียบร้อยแล้ว!")
+
+                    # 🌟 AUTOMATION: สร้างตั๋วคอมมิชชัน 3% (บ้านน็อคดาวน์) 🌟
+                    if obj.quotation_ref and obj.grand_total > 0:
+                        if not CommissionTicket.objects.filter(invoice_ref=obj, ticket_type='3%').exists():
+                            base_amount = obj.grand_total - (obj.grand_total * Decimal('0.10'))
+                            comm_amount = base_amount * Decimal('0.03') # คูณ 3%
+
+                            CommissionTicket.objects.create(
+                                ticket_type='3%',
+                                invoice_ref=obj,
+                                base_amount=base_amount,
+                                commission_amount=comm_amount
+                            )
+
+                messages.success(request, f"✅ ยืนยันรับชำระเงินครบ 100% เอกสาร {obj.code} ปิดการขายเรียบร้อยแล้ว! (ระบบสร้างตั๋วคอมมิชชัน 3% ให้พนักงานขายแล้ว)")
             else:
                 obj.status = 'UNPAID'
                 obj.save()
@@ -1713,22 +1728,24 @@ def verify_deposit(request, qt_id):
     qt = get_object_or_404(Quotation, pk=qt_id)
     qt.is_deposit_verified = True
     qt.save()
-    messages.success(request, f"✅ บัญชียืนยันตรวจสอบยอดมัดจำของ {qt.code} เรียบร้อยแล้ว!")
+
+    # 🌟 AUTOMATION: สร้างตั๋วคอมมิชชัน 2% (บ้านน็อคดาวน์) 🌟
+    if qt.employee and qt.grand_total > 0:
+        # เช็คป้องกันการสร้างตั๋วซ้ำ
+        if not CommissionTicket.objects.filter(quotation_ref=qt, ticket_type='2%').exists():
+            # สูตร: หักออก 10% จาก Grand Total
+            base_amount = qt.grand_total - (qt.grand_total * Decimal('0.10'))
+            comm_amount = base_amount * Decimal('0.02') # คูณ 2%
+
+            CommissionTicket.objects.create(
+                ticket_type='2%',
+                quotation_ref=qt,
+                base_amount=base_amount,
+                commission_amount=comm_amount
+            )
+
+    messages.success(request, f"✅ บัญชียืนยันตรวจสอบยอดมัดจำของ {qt.code} เรียบร้อยแล้ว! (ระบบสร้างตั๋วคอมมิชชัน 2% ให้พนักงานขายแล้ว)")
     return redirect('deposit_list')
-
-@login_required
-def deposit_print(request, qt_id):
-    qt = get_object_or_404(Quotation, pk=qt_id)
-    company = CompanyInfo.objects.first()
-
-    main_total = sum(item.quantity * item.unit_price for item in qt.items.all())
-    upsale_total = sum(u.quantity * u.unit_price for u in qt.upsales.all())
-    item_total = main_total + upsale_total
-
-    balance_due = qt.grand_total - qt.deposit_amount
-    return render(request, 'sales/deposit_print.html', {
-        'qt': qt, 'company': company, 'item_total': item_total, 'balance_due': balance_due
-    })
 
 # ==========================================
 # 🌟 [NEW] ระบบ CRM ติดตามลูกค้ามุ่งหวัง (Leads) 🌟
@@ -2004,3 +2021,110 @@ def customer_sign_deposit(request, token):
         'balance_due_text': balance_due_text,
         'delivery_date': delivery_date,
     })
+
+# ==========================================
+# 🖨️ ฟังก์ชันพิมพ์ใบเสร็จรับเงินมัดจำ (ที่หายไป)
+# ==========================================
+@login_required
+def deposit_print(request, qt_id):
+    qt = get_object_or_404(Quotation, pk=qt_id)
+    from master_data.models import CompanyInfo
+    company = CompanyInfo.objects.first()
+
+    main_total = sum(item.quantity * item.unit_price for item in qt.items.all())
+    upsale_total = sum(u.quantity * u.unit_price for u in qt.upsales.all())
+    item_total = main_total + upsale_total
+
+    balance_due = qt.grand_total - qt.deposit_amount
+    return render(request, 'sales/deposit_print.html', {
+        'qt': qt, 'company': company, 'item_total': item_total, 'balance_due': balance_due
+    })
+
+# ==========================================
+# 💸 ศูนย์ตั้งเบิกผลตอบแทน บ้านน็อคดาวน์ (Commission Board)
+# ==========================================
+@login_required
+def commission_board(request):
+    if not is_sales_authorized(request.user):
+        messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์เข้าถึงหน้านี้")
+        return redirect('dashboard')
+
+    current_emp = getattr(request.user, 'employee', None)
+
+    # 1. ดึงตั๋ว 2% (เบิกจากมัดจำ) ที่เป็นของพนักงานคนนี้
+    tickets_2 = CommissionTicket.objects.filter(
+        ticket_type='2%',
+        status='AVAILABLE',
+        quotation_ref__employee=current_emp
+    ).order_by('-created_at')
+
+    # 2. ดึงตั๋ว 3% (เบิกจากปิดบิล) ที่เป็นของพนักงานคนนี้
+    # เช็คจากพนักงานที่เป็นเจ้าของใบเสนอราคาต้นทาง เพื่อป้องกันกรณีแอดมินเป็นคนกดเปิดบิลให้
+    tickets_3 = CommissionTicket.objects.filter(
+        ticket_type='3%',
+        status='AVAILABLE',
+        invoice_ref__quotation_ref__employee=current_emp
+    ).order_by('-created_at')
+
+    # 3. ดึงประวัติการขอเบิก
+    claims = CommissionClaim.objects.filter(requester=current_emp).order_by('-created_at')
+
+    return render(request, 'sales/commission_board.html', {
+        'tickets_2': tickets_2,
+        'tickets_3': tickets_3,
+        'claims': claims
+    })
+
+@login_required
+def commission_create_claim(request, claim_type):
+    if request.method == 'POST':
+        ticket_ids = request.POST.getlist('ticket_ids')
+        bank_name = request.POST.get('bank_name')
+        bank_account = request.POST.get('bank_account')
+        account_name = request.POST.get('account_name')
+
+        if not ticket_ids:
+            messages.error(request, "❌ กรุณาเลือกใบคุมสิทธิ์ที่ต้องการเบิกอย่างน้อย 1 รายการ")
+            return redirect('commission_board')
+
+        # ค้นหาตั๋วที่ถูกเลือกและยังว่างอยู่
+        tickets = CommissionTicket.objects.filter(id__in=ticket_ids, status='AVAILABLE')
+        total_amount = sum(t.commission_amount for t in tickets)
+
+        if total_amount > 0:
+            # สร้างใบขอเบิก
+            claim = CommissionClaim.objects.create(
+                claim_type=claim_type,
+                requester=getattr(request.user, 'employee', None),
+                total_amount=total_amount,
+                bank_name=bank_name,
+                bank_account=bank_account,
+                account_name=account_name
+            )
+
+            # อัปเดตตั๋วให้ผูกกับใบขอเบิกนี้ และเปลี่ยนสถานะ
+            tickets.update(status='CLAIMING', claim_ref=claim)
+            messages.success(request, f"✅ สร้างใบขอเบิก {claim.code} ยอด {total_amount:,.2f} บาท สำเร็จ! (รอโอนเงินจากฝ่ายบัญชี)")
+        else:
+            messages.error(request, "❌ ไม่พบยอดเงินที่สามารถเบิกได้ หรือสิทธิ์ถูกเบิกไปแล้ว")
+
+    return redirect('commission_board')
+
+# ==========================================
+# 💸 ฟังก์ชันบัญชีกดทำจ่ายคอมมิชชัน น็อคดาวน์
+# ==========================================
+@login_required
+def knockdown_commission_pay(request, claim_id):
+    claim = get_object_or_404(CommissionClaim, id=claim_id)
+    if request.method == 'POST' and 'transfer_slip' in request.FILES:
+        from django.utils import timezone
+        claim.transfer_slip = request.FILES['transfer_slip']
+        claim.status = 'PAID'
+        claim.paid_at = timezone.now()
+        claim.save()
+
+        # อัปเดตตั๋วสิทธิ์ข้างในให้กลายเป็น โอนแล้ว (PAID) อัตโนมัติ
+        claim.tickets.update(status='PAID')
+        messages.success(request, f"✅ บัญชีทำรายการโอนเงินค่าคอมมิชชันน็อคดาวน์ {claim.code} สำเร็จ!")
+
+    return redirect('accounting_verification_hub', task_type='knockdown_commissions')
