@@ -21,7 +21,7 @@ from datetime import timedelta
 from django.db import transaction
 
 # Models
-from .models import Quotation, QuotationItem, POSOrder, POSOrderItem, Invoice, UpsaleCategory, UpsaleCatalog, QuotationUpsale, InvoicePayment, CustomerLead, Appointment, CommissionClaim, CommissionTicket
+from .models import Quotation, QuotationItem, QuotationDeposit, POSOrder, POSOrderItem, Invoice, UpsaleCategory, UpsaleCatalog, QuotationUpsale, InvoicePayment, CustomerLead, Appointment, CommissionClaim, CommissionTicket
 from master_data.models import Customer, CompanyInfo, ShippingRate
 from hr.models import Employee, SalesGroup, CompanySalesTarget, CommissionLog, FundTransaction
 from .forms import QuotationForm
@@ -402,28 +402,39 @@ def record_deposit(request, qt_id):
         next_url = request.POST.get('next')
 
         if amount > 0:
-            qt.deposit_amount = amount
-            qt.deposit_method = method
-            if date_str: qt.deposit_date = parse_thai_date(date_str)
-            else: qt.deposit_date = timezone.now().date()
-            qt.is_deposit_paid = True
+            # 🌟 [NEW] สร้างรหัส RVD ใหม่ 🌟
+            tz_bkk = pytz.timezone('Asia/Bangkok')
+            now_bkk = timezone.now().astimezone(tz_bkk)
+            thai_year = (now_bkk.year + 543) % 100
+            prefix = f"RVD-{thai_year:02d}{now_bkk.strftime('%m')}"
 
-            # 🌟 [NEW] สร้างรหัส RVD สำหรับใบรับเงินมัดจำ (ถ้ายังไม่มี) 🌟
-            if not getattr(qt, 'deposit_code', None):
-                tz_bkk = pytz.timezone('Asia/Bangkok')
-                now_bkk = timezone.now().astimezone(tz_bkk)
-                thai_year = (now_bkk.year + 543) % 100
-                prefix = f"RVD-{thai_year:02d}{now_bkk.strftime('%m')}"
+            last_deposit = QuotationDeposit.objects.filter(code__startswith=prefix).order_by('code').last()
+            seq = int(last_deposit.code.split('-')[-1]) + 1 if last_deposit else 1
+            new_rvd_code = f"{prefix}-{seq:03d}"
 
-                # หาเลขรันล่าสุดของเดือนนี้
-                last_deposit = Quotation.objects.filter(deposit_code__startswith=prefix).order_by('deposit_code').last()
-                seq = int(last_deposit.deposit_code.split('-')[-1]) + 1 if last_deposit else 1
-                qt.deposit_code = f"{prefix}-{seq:03d}"
+            # 🌟 [NEW] สร้างเรคคอร์ดมัดจำในตาราง QuotationDeposit ใหม่ 🌟
+            new_deposit = QuotationDeposit.objects.create(
+                code=new_rvd_code,
+                quotation=qt,
+                amount=amount,
+                payment_method=method,
+                deposit_date=parse_thai_date(date_str) if date_str else now_bkk.date()
+            )
 
             if 'deposit_slip' in request.FILES:
-                qt.deposit_slip = request.FILES['deposit_slip']
+                new_deposit.deposit_slip = request.FILES['deposit_slip']
+                new_deposit.save()
+
+            # 🌟 [UPDATE] อัปเดตสถานะให้ Quotation แม่ ว่ามีการจ่ายมัดจำแล้ว (แต่ยังไม่ยืนยัน) 🌟
+            qt.is_deposit_paid = True
+            qt.is_deposit_verified = False # ต้องให้บัญชีมาตรวจใหม่ทุกครั้งที่มีการจ่ายมัดจำเพิ่ม
+
+            # ลบฟิลด์มัดจำเก่าทิ้ง เพื่อบังคับให้ระบบใหม่ดึงจากตารางใหม่ 100%
+            qt.deposit_code = None
+            qt.deposit_amount = Decimal('0.00')
             qt.save()
-            messages.success(request, f"💰 บันทึกรับมัดจำ {amount:,.2f} บาท และสร้างใบเสร็จ {qt.deposit_code} เรียบร้อยแล้ว")
+
+            messages.success(request, f"💰 บันทึกรับมัดจำ {amount:,.2f} บาท และสร้างใบเสร็จ {new_deposit.code} เรียบร้อยแล้ว")
         else:
             messages.error(request, "❌ จำนวนเงินมัดจำต้องมากกว่า 0")
 
@@ -1677,38 +1688,41 @@ def invoice_print(request, inv_id):
 @login_required
 def deposit_list(request):
     target_employees, _ = get_target_employees(request.user)
-    qs = get_sales_queryset(Quotation, request.user, target_employees).filter(is_deposit_paid=True)
+
+    # 🌟 [UPDATED] ดึงข้อมูลจากตาราง QuotationDeposit โดยตรง 🌟
+    qs = QuotationDeposit.objects.filter(
+        quotation__employee_id__in=target_employees.values_list('id', flat=True)
+    ).select_related('quotation', 'quotation__customer', 'quotation__employee', 'quotation__employee__department')
 
     # รับค่าต่างๆ จาก URL
     search_query = request.GET.get('q', '')
     status_filter = request.GET.get('status')
-
-    # 🌟 [NEW] รับค่า วันที่เริ่มต้น - วันที่สิ้นสุด 🌟
     start_date_str = request.GET.get('start_date')
     end_date_str = request.GET.get('end_date')
 
     # กรองข้อความ
     if search_query:
-        qs = qs.filter(Q(code__icontains=search_query) | Q(customer_name__icontains=search_query))
+        qs = qs.filter(
+            Q(code__icontains=search_query) |
+            Q(quotation__code__icontains=search_query) |
+            Q(quotation__customer_name__icontains=search_query)
+        )
 
     # กรองสถานะ
     if status_filter == 'VERIFIED':
-        qs = qs.filter(is_deposit_verified=True)
+        qs = qs.filter(is_verified=True)
     elif status_filter == 'PENDING':
-        qs = qs.filter(is_deposit_verified=False)
+        qs = qs.filter(is_verified=False)
 
-    # 🌟 [NEW] ประมวลผลและกรองวันที่มัดจำ 🌟
+    # กรองวันที่มัดจำ
     if start_date_str and end_date_str:
         try:
-            # ใช้ parse_date เพื่อแปลง String ให้เป็น Date Object
             start_date = parse_date(start_date_str)
             end_date = parse_date(end_date_str)
-
             if start_date and end_date:
-                 # ดึงเฉพาะรายการที่มัดจำในช่วงเวลานี้
                  qs = qs.filter(deposit_date__range=[start_date, end_date])
-        except Exception as e:
-            pass # ปล่อยผ่านไปหากมีใครซนแอบพิมพ์วันที่ผิดรูปแบบมาใน URL
+        except Exception:
+            pass
 
     qs = qs.order_by('-deposit_date', '-created_at')
     paginator = Paginator(qs, 15)
@@ -1718,22 +1732,26 @@ def deposit_list(request):
         'page_obj': page_obj,
         'search_query': search_query,
         'status_filter': status_filter,
-        # 🌟 [NEW] ส่งค่ากลับไปหา Template เพื่อให้ช่อง Input ยังคงแสดงวันที่ที่เลือกไว้ 🌟
         'start_date': start_date_str,
         'end_date': end_date_str
     })
 
 @login_required
-def verify_deposit(request, qt_id):
-    qt = get_object_or_404(Quotation, pk=qt_id)
+def verify_deposit(request, deposit_id): # 🌟 รับ id ของตารางมัดจำมาแทน
+    deposit = get_object_or_404(QuotationDeposit, pk=deposit_id)
+    deposit.is_verified = True
+    deposit.save()
+
+    # ไปอัปเดตแม่ (Quotation) ว่าตรวจมัดจำเรียบร้อยแล้ว
+    qt = deposit.quotation
     qt.is_deposit_verified = True
     qt.save()
 
-    # 🌟 AUTOMATION: สร้างตั๋วคอมมิชชัน 2% (บ้านน็อคดาวน์) 🌟
-    if qt.employee and qt.grand_total > 0:
-        # เช็คป้องกันการสร้างตั๋วซ้ำ
+    # 🌟 AUTOMATION: สร้างตั๋วคอมมิชชัน 2% (บ้านน็อคดาวน์) จากยอดมัดจำใบนี้ 🌟
+    if qt.employee and deposit.amount > 0:
+        # เช็คป้องกันการสร้างตั๋วซ้ำจากใบมัดจำนี้
         if not CommissionTicket.objects.filter(quotation_ref=qt, ticket_type='2%').exists():
-            # สูตร: หักออก 10% จาก Grand Total
+            # สูตร: หักออก 10% จาก Grand Total (คำนวณจากยอดรวมใบเสนอราคาตามเดิม)
             base_amount = qt.grand_total - (qt.grand_total * Decimal('0.10'))
             comm_amount = base_amount * Decimal('0.02') # คูณ 2%
 
@@ -1744,7 +1762,7 @@ def verify_deposit(request, qt_id):
                 commission_amount=comm_amount
             )
 
-    messages.success(request, f"✅ บัญชียืนยันตรวจสอบยอดมัดจำของ {qt.code} เรียบร้อยแล้ว! (ระบบสร้างตั๋วคอมมิชชัน 2% ให้พนักงานขายแล้ว)")
+    messages.success(request, f"✅ บัญชียืนยันตรวจสอบยอดมัดจำใบเสร็จ {deposit.code} เรียบร้อยแล้ว! (ระบบสร้างตั๋วคอมมิชชัน 2% ให้พนักงานขายแล้ว)")
     return redirect('deposit_list')
 
 # ==========================================

@@ -383,3 +383,36 @@ class CommissionTicket(models.Model):
 
     def __str__(self):
         return self.code
+
+# ==========================================
+# 💰 ระบบจัดการใบรับเงินมัดจำ (Separated Deposit Model)
+# ==========================================
+class QuotationDeposit(models.Model):
+    code = models.CharField(max_length=20, unique=True, verbose_name="เลขที่ใบรับมัดจำ (RVD)")
+
+    # 🌟 เชื่อมโยงกลับไปที่ Quotation แบบ 1-to-Many (1 ใบเสนอราคา มีสลิปมัดจำได้หลายใบ)
+    quotation = models.ForeignKey('Quotation', on_delete=models.CASCADE, related_name='deposits', verbose_name="อ้างอิงใบเสนอราคา")
+
+    amount = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="ยอดมัดจำที่รับ")
+    deposit_date = models.DateField(default=timezone.now, verbose_name="วันที่รับมัดจำ")
+    payment_method = models.CharField(max_length=50, blank=True, null=True, verbose_name="ช่องทางรับมัดจำ")
+    deposit_slip = models.ImageField(upload_to='deposit_slips_v2/%Y/%m/', null=True, blank=True, verbose_name="สลิปมัดจำ")
+
+    is_verified = models.BooleanField(default=False, verbose_name="บัญชีตรวจสอบมัดจำแล้ว")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        # ฟังก์ชันย่อขนาดรูปสลิปอัตโนมัติ (เหมือนของเดิม)
+        if self.deposit_slip:
+            try:
+                img = Image.open(self.deposit_slip.path)
+                if img.height > 800 or img.width > 800:
+                    output_size = (800, 800)
+                    img.thumbnail(output_size)
+                    img.save(self.deposit_slip.path, quality=85, optimize=True)
+            except Exception:
+                pass
+
+    def __str__(self):
+        return str(self.code)

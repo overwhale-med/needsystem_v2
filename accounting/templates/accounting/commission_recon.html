@@ -1,0 +1,320 @@
+{% extends 'core/base.html' %}
+{% load humanize %}
+
+{% block content %}
+<style>
+    /* 🌟 สไตล์เฉพาะตอนกดพิมพ์ (Print Report) 🌟 */
+    @media print {
+        /* 1. ซ่อนส่วนที่ไม่จำเป็นบนกระดาษ */
+        .navbar, .sidebar, form, .d-flex.mb-3.gap-2,
+        .card.shadow-sm.border-0.rounded-4.mb-4.bg-white, /* ซ่อนกล่องค้นหา */
+        .btn, .input-group, a[href^="?tab="], .d-print-none {
+            display: none !important;
+        }
+
+        /* 2. ตั้งค่ากระดาษ A4 แนวตั้ง (Portrait) */
+        @page { size: A4 portrait; margin: 10mm; }
+        body { background-color: #fff !important; font-size: 9pt; color: #000; }
+        .container-fluid { padding: 0 !important; width: 100% !important; max-width: 100% !important; }
+        .main-content { margin-left: 0 !important; padding: 0 !important; }
+
+        /* 3. ปรับแต่งตารางให้พิมพ์ชัดเจนแบบมืออาชีพ (ลดขนาดฟอนต์ให้พอดีหน้าตั้ง) */
+        .card { border: none !important; box-shadow: none !important; }
+        table { border-collapse: collapse !important; width: 100% !important; }
+        th, td { border: 1px solid #000 !important; padding: 4px 6px !important; color: #000 !important; font-size: 8pt !important; }
+        th { background-color: #f1f1f1 !important; -webkit-print-color-adjust: exact; color-adjust: exact; font-size: 8.5pt !important; }
+
+        /* ล้างสีพื้นหลังคอลัมน์เพื่อความสะอาดและเป็นทางการ */
+        .bg-success.bg-opacity-10, .bg-danger.bg-opacity-10, .bg-light { background-color: transparent !important; }
+
+        /* 4. ปรับป้ายสถานะให้เป็นข้อความธรรมดาสีดำ (ลบพื้นหลัง) */
+        .badge {
+            border: 1px solid #000 !important;
+            color: #000 !important;
+            background: transparent !important;
+            font-weight: bold;
+            padding: 3px 5px !important;
+        }
+        /* บังคับสีฟอนต์ทุกอย่างให้เป็นสีดำตอนพิมพ์ */
+        .text-white, .text-success, .text-danger, .text-info, .text-warning, .text-muted, .text-secondary { color: #000 !important; }
+        a { text-decoration: none !important; color: #000 !important; }
+    }
+</style>
+<div class="container-fluid py-4 px-4">
+    <!-- 🌟 หัวกระดาษสำหรับตอนสั่งพิมพ์ (ซ่อนไว้เมื่อดูบนจอปกติ) 🌟 -->
+    <div class="d-none d-print-block text-center mb-3 pb-2 border-bottom border-2 border-dark">
+        <h4 class="fw-bold mb-1 text-dark" style="font-size: 14pt;">
+            รายการตั้งเบิกผลตอบแทนค่าบริหารการขาย
+            {% if request.GET.status_inv == 'HIDDEN' %}
+                <br><span style="font-size: 12pt; font-weight: normal;">ตามใบเสนอราคา (2%)</span>
+            {% elif request.GET.status_dep == 'HIDDEN' %}
+                <br><span style="font-size: 12pt; font-weight: normal;">ตามใบเสร็จรับเงิน ({% if tab == 'knockdown' %}3%{% else %}13.5%{% endif %})</span>
+            {% endif %}
+        </h4>
+        <div class="d-flex justify-content-between align-items-end mt-3">
+            <div class="text-start">
+                <p class="mb-0 fw-bold" style="font-size: 10pt;">ระบบ: {% if tab == 'solar' %}โซล่าเซลล์ (Solar){% else %}บ้านน็อคดาวน์ (Knockdown){% endif %}</p>
+                <p class="mb-0 fw-bold" style="font-size: 10pt;">
+                    {% if request.GET.date_range %}
+                        ระหว่างวันที่: {{ request.GET.date_range }}
+                    {% else %}
+                        รอบข้อมูล: ทั้งหมด (100 รายการล่าสุด)
+                    {% endif %}
+                </p>
+            </div>
+            <div class="text-end">
+                <p class="mb-0" style="font-size: 9pt;">พิมพ์เมื่อ: {% now "d/m/Y H:i" %}</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 🌟 Header ใหม่ของหน้าเว็บ (มีคลาส d-print-none เพื่อซ่อนตอนพิมพ์) 🌟 -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3 d-print-none">
+        <div>
+            <h3 class="fw-bold mb-1 text-dark"><i class="fas fa-search-dollar text-info me-2"></i>รายการตั้งเบิกผลตอบแทนค่าบริหารการขาย</h3>
+            <p class="text-muted small mb-0">ตารางตรวจสอบและแสดงสถานะ การตั้งเบิกค่าคอมมิชชั่นการขาย</p>
+        </div>
+
+        <div class="d-flex flex-wrap align-items-center gap-3">
+            <!-- แท็บเลือกดูระบบ -->
+            <div class="d-flex gap-2">
+                <a href="?tab=knockdown" class="btn rounded-pill px-4 fw-bold shadow-sm {% if tab == 'knockdown' %}btn-primary{% else %}btn-outline-secondary bg-white{% endif %}">
+                    <i class="fas fa-home me-1"></i> ระบบบ้านน็อคดาวน์
+                </a>
+                <a href="?tab=solar" class="btn rounded-pill px-4 fw-bold shadow-sm {% if tab == 'solar' %}btn-warning text-dark{% else %}btn-outline-secondary bg-white{% endif %}">
+                    <i class="fas fa-solar-panel me-1"></i> ระบบโซล่าเซลล์
+                </a>
+            </div>
+
+            <!-- ปุ่มกลับ -->
+            <div>
+                <a href="{% url 'accounting_dashboard' %}" class="btn btn-outline-secondary rounded-pill px-4 shadow-sm fw-bold"><i class="fas fa-arrow-left me-2"></i> กลับศูนย์บัญชาการ</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- 🌟 โซนค้นหาและตัวกรองอัจฉริยะ (เพิ่มช่วงเวลา) 🌟 -->
+    <div class="card shadow-sm border-0 rounded-4 mb-4 bg-white d-print-none">
+        <div class="card-body p-3">
+            <form method="GET" action="" class="row g-2 align-items-end">
+                <input type="hidden" name="tab" value="{{ tab }}">
+
+                <!-- ช่องค้นหา -->
+                <div class="col-md-3">
+                    <label class="form-label small fw-bold text-muted mb-1"><i class="fas fa-search me-1"></i>ค้นหาเลขเอกสาร</label>
+                    <input type="text" name="search_q" class="form-control form-control-sm rounded-pill shadow-sm px-3" placeholder="Job / QT / INV..." value="{{ request.GET.search_q }}">
+                </div>
+
+                <!-- กล่องเลือกสถานะ คอมฯ มัดจำ -->
+                <div class="col-md-2">
+                    <label class="form-label small fw-bold text-muted mb-1"><i class="fas fa-percent me-1"></i>ค้นหาตามใบเสนอราคา</label>
+                    <select name="status_dep" class="form-select form-select-sm rounded-pill shadow-sm">
+                        <option value="">-- ทั้งหมด --</option>
+                        <option value="AVAILABLE" {% if request.GET.status_dep == 'AVAILABLE' %}selected{% endif %}>รอตั้งเบิก (เซลส์ยังไม่เบิก)</option>
+                        <option value="CLAIMING" {% if request.GET.status_dep == 'CLAIMING' %}selected{% endif %}>รอโอน (บัญชีรอจ่าย)</option>
+                        <option value="PAID" {% if request.GET.status_dep == 'PAID' %}selected{% endif %}>โอนแล้ว</option>
+                        <option value="HIDDEN" {% if request.GET.status_dep == 'HIDDEN' %}selected{% endif %} class="text-danger fw-bold">ไม่แสดงรายการ</option>
+                    </select>
+                </div>
+
+                <!-- กล่องเลือกสถานะ คอมฯ ปิดบิล -->
+                <div class="col-md-2">
+                    <label class="form-label small fw-bold text-muted mb-1"><i class="fas fa-check-double me-1"></i>ค้นหาตามใบเสร็จรับเงิน</label>
+                    <select name="status_inv" class="form-select form-select-sm rounded-pill shadow-sm">
+                        <option value="">-- ทั้งหมด --</option>
+                        <option value="AVAILABLE" {% if request.GET.status_inv == 'AVAILABLE' %}selected{% endif %}>รอตั้งเบิก (เซลส์ยังไม่เบิก)</option>
+                        <option value="CLAIMING" {% if request.GET.status_inv == 'CLAIMING' %}selected{% endif %}>รอโอน (บัญชีรอจ่าย)</option>
+                        <option value="PAID" {% if request.GET.status_inv == 'PAID' %}selected{% endif %}>โอนแล้ว</option>
+                        <option value="HIDDEN" {% if request.GET.status_inv == 'HIDDEN' %}selected{% endif %} class="text-danger fw-bold">ไม่แสดงรายการ</option>
+                    </select>
+                </div>
+
+                <!-- 🌟 ช่วงเวลา (Date Range) 🌟 -->
+                <div class="col-md-5">
+                    <label class="form-label small fw-bold text-muted mb-1"><i class="far fa-calendar-alt me-1"></i>ช่วงเวลา (วันที่เริ่มงาน) และจัดการ</label>
+                    <div class="input-group input-group-sm shadow-sm rounded-pill overflow-hidden">
+                        <!-- กล่องเลือกวันที่ -->
+                        <input type="text" id="reportrange" name="date_range" class="form-control border-0 text-center fw-bold text-dark px-2" value="{{ request.GET.date_range }}" placeholder="เลือกช่วงวันที่..." readonly style="cursor: pointer; background-color: #fff; min-width: 170px;">
+
+                        <!-- ปุ่มกรอง -->
+                        <button type="submit" class="btn btn-success fw-bold px-3 border-start"><i class="fas fa-filter me-1"></i> กรอง</button>
+
+                        <!-- ปุ่มรีเฟรช -->
+                        <a href="?tab={{ tab }}" class="btn btn-light px-3 border-start text-secondary" title="ล้างค่าทั้งหมด"><i class="fas fa-sync-alt"></i></a>
+
+                        <!-- 🌟 ปุ่มพิมพ์รายงาน (A4) 🌟 -->
+                        <button type="button" class="btn btn-primary fw-bold px-3 border-start" onclick="window.print()">
+                            <i class="fas fa-print me-1"></i> พิมพ์รายงาน
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0 rounded-4 overflow-hidden">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="bg-light text-secondary small text-uppercase" style="letter-spacing: 0.5px;">
+                    <tr>
+                        <th class="ps-4 py-3 fw-bold">ลำดับงาน (Job No.)</th>
+
+                        <!-- 🌟 ซ่อนคอลัมน์ 2% ถ้าเลือกไม่แสดง 🌟 -->
+                        {% if request.GET.status_dep != 'HIDDEN' %}
+                        <th class="py-3 fw-bold text-center bg-success bg-opacity-10">ขั้นที่ 1: ใบเสนอราคา</th>
+                        <th class="py-3 fw-bold text-center bg-danger bg-opacity-10 border-end">จ่ายคอมฯ (2%)</th>
+                        {% endif %}
+
+                        <!-- 🌟 ซ่อนคอลัมน์ปิดบิล ถ้าเลือกไม่แสดง 🌟 -->
+                        {% if request.GET.status_inv != 'HIDDEN' %}
+                        <th class="py-3 fw-bold text-center bg-success bg-opacity-10">ขั้นที่ 2: ใบเสร็จรับเงิน</th>
+                        <th class="py-3 fw-bold text-center bg-danger bg-opacity-10 border-end">จ่ายคอมฯ ({% if tab == 'knockdown' %}3%{% else %}13.5%{% endif %})</th>
+                        {% endif %}
+
+                        <th class="py-3 fw-bold text-center pe-4">สถานะบัญชีรวม</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in data_list %}
+                    <tr>
+                        <!-- คอลัมน์ 1: ข้อมูล Job -->
+                        <td class="ps-4">
+                            <div class="fw-bold text-dark fs-6" style="font-family: 'Courier New', monospace;">{{ item.job_code }}</div>
+                            <div class="small text-muted"><i class="fas fa-user me-1"></i> {{ item.customer_name }}</div>
+                        </td>
+
+                        <!-- โซน 2% -->
+                        {% if request.GET.status_dep != 'HIDDEN' %}
+                        <td class="text-center bg-success bg-opacity-10">
+                            {% if item.qt %}
+                                <a href="{% if tab == 'knockdown' %}{% url 'deposit_list' %}{% else %}{% url 'solar_deposit_list' %}{% endif %}" class="fw-bold text-decoration-none text-success" title="คลิกเพื่อไปหน้าใบรับเงินมัดจำ" target="_blank">{{ item.qt.code }}</a><br>
+                                <span class="small fw-bold text-dark">฿{{ item.qt.grand_total|floatformat:2|intcomma }}</span><br>
+                                {% if item.qt.is_deposit_paid %}
+                                    <span class="badge bg-success rounded-pill mt-1" style="font-size: 0.65rem;">รับมัดจำแล้ว</span>
+                                {% else %}
+                                    <span class="badge bg-secondary rounded-pill mt-1" style="font-size: 0.65rem;">ยังไม่รับมัดจำ</span>
+                                {% endif %}
+                            {% else %}
+                                <span class="text-muted small">-</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center bg-danger bg-opacity-10 border-end">
+                            {% if item.t2 %}
+                                <div class="small fw-bold text-dark">{{ item.t2.code }}</div>
+                                <div class="text-danger small fw-bold">฿{{ item.t2.commission_amount|floatformat:2|intcomma }}</div>
+                                {% if item.t2.status == 'PAID' %}
+                                    <span class="badge bg-success rounded-pill mt-1" style="font-size: 0.65rem;"><i class="fas fa-check"></i> โอนแล้ว</span>
+                                {% elif item.t2.status == 'CLAIMING' %}
+                                    <span class="badge bg-warning text-dark rounded-pill mt-1" style="font-size: 0.65rem;">รอโอน</span>
+                                {% else %}
+                                    <span class="badge bg-secondary rounded-pill mt-1" style="font-size: 0.65rem;">รอตั้งเบิก</span>
+                                {% endif %}
+                            {% else %}
+                                {% if item.qt and item.qt.is_deposit_paid %}
+                                    <div class="small fw-bold text-muted">-</div>
+                                    <span class="badge bg-secondary rounded-pill mt-1" style="font-size: 0.65rem;">รอตั้งเบิก</span>
+                                {% else %}
+                                    <span class="text-muted small">-</span>
+                                {% endif %}
+                            {% endif %}
+                        </td>
+                        {% endif %}
+
+                        <!-- โซนปิดบิล -->
+                        {% if request.GET.status_inv != 'HIDDEN' %}
+                        <td class="text-center bg-success bg-opacity-10">
+                            {% if item.inv %}
+                                <a href="{% if tab == 'knockdown' %}{% url 'invoice_list' %}{% else %}{% url 'solar_invoice_list' %}{% endif %}" class="fw-bold text-decoration-none text-success" title="คลิกเพื่อไปหน้าใบรับชำระเงิน" target="_blank">{{ item.inv.code }}</a><br>
+                                <span class="small fw-bold text-dark">฿{{ item.inv.grand_total|floatformat:2|intcomma }}</span><br>
+                                {% if item.inv.status == 'PAID' %}
+                                    <span class="badge bg-success rounded-pill mt-1" style="font-size: 0.65rem;">รับเงินครบ</span>
+                                {% else %}
+                                    <span class="badge bg-warning text-dark rounded-pill mt-1" style="font-size: 0.65rem;">รอชำระ</span>
+                                {% endif %}
+                            {% else %}
+                                <span class="text-muted small">-</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center bg-danger bg-opacity-10 border-end">
+                            {% if item.t3 %}
+                                <div class="small fw-bold text-dark">{{ item.t3.code }}</div>
+                                <div class="text-danger small fw-bold">฿{{ item.t3.commission_amount|floatformat:2|intcomma }}</div>
+                                {% if item.t3.status == 'PAID' %}
+                                    <span class="badge bg-success rounded-pill mt-1" style="font-size: 0.65rem;"><i class="fas fa-check"></i> โอนแล้ว</span>
+                                {% elif item.t3.status == 'CLAIMING' %}
+                                    <span class="badge bg-warning text-dark rounded-pill mt-1" style="font-size: 0.65rem;">รอโอน</span>
+                                {% else %}
+                                    <span class="badge bg-secondary rounded-pill mt-1" style="font-size: 0.65rem;">รอตั้งเบิก</span>
+                                {% endif %}
+                            {% else %}
+                                {% if item.inv and item.inv.status == 'PAID' %}
+                                    <div class="small fw-bold text-muted">-</div>
+                                    <span class="badge bg-secondary rounded-pill mt-1" style="font-size: 0.65rem;">รอตั้งเบิก</span>
+                                {% else %}
+                                    <span class="text-muted small">-</span>
+                                {% endif %}
+                            {% endif %}
+                        </td>
+                        {% endif %}
+
+                        <!-- คอลัมน์ 6: สถานะรวม -->
+                        <td class="text-center pe-4">
+                            {% if item.fin_status == 'WAITING_DEPOSIT' %}
+                                <span class="badge bg-secondary px-3 py-2 rounded-pill w-100 shadow-sm"><i class="fas fa-hourglass-start me-1"></i> รอรับมัดจำ</span>
+                            {% elif item.fin_status == 'DEPOSIT_PAID' %}
+                                <span class="badge bg-info text-dark px-3 py-2 rounded-pill w-100 shadow-sm"><i class="fas fa-file-invoice-dollar me-1"></i> รอจ่ายคอมฯ 2%</span>
+                            {% elif item.fin_status == 'WAITING_INV' %}
+                                <span class="badge bg-warning text-dark px-3 py-2 rounded-pill w-100 shadow-sm"><i class="fas fa-clock me-1"></i> รอรับเงินปิดบิล</span>
+                            {% elif item.fin_status == 'INV_PAID' %}
+                                <span class="badge bg-danger px-3 py-2 rounded-pill w-100 shadow-sm"><i class="fas fa-hand-holding-usd me-1"></i> รอจ่ายคอมฯ ตามใบขาย</span>
+                            {% elif item.fin_status == 'CLEARED' %}
+                                <span class="badge bg-success px-3 py-2 rounded-pill w-100 shadow-sm"><i class="fas fa-check-double me-1"></i> เคลียร์บัญชี 100%</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="6" class="text-center py-5 text-muted"><i class="fas fa-folder-open fa-3x mb-3 opacity-25"></i><br>ยังไม่มีรายการโปรเจกต์ให้ตรวจสอบ</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- 🌟 Script สำหรับ Date Range Picker (อัปเกรดเพิ่มเมนูลัดช่วงเวลา) 🌟 -->
+<script type="text/javascript" src="https://cdn.jsdelivr.net/jquery/latest/jquery.min.js"></script>
+<script type="text/javascript" src="https://cdn.jsdelivr.net/momentjs/latest/moment.min.js"></script>
+<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.min.js"></script>
+<link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css" />
+<script>
+    $(function() {
+        $('#reportrange').daterangepicker({
+            autoUpdateInput: false,
+            linkedCalendars: false, // ปลดล็อกปฏิทินซ้าย-ขวาให้เลือกอิสระ
+            ranges: {
+               'วันนี้': [moment(), moment()],
+               'เมื่อวาน': [moment().subtract(1, 'days'), moment().subtract(1, 'days')],
+               'ช่วง 7 วันก่อนหน้า': [moment().subtract(6, 'days'), moment()],
+               'ช่วง 30 วันก่อนหน้า': [moment().subtract(29, 'days'), moment()],
+               'ช่วง 3 เดือนก่อนหน้า': [moment().subtract(3, 'months'), moment()],
+               'เดือนนี้': [moment().startOf('month'), moment().endOf('month')],
+               '1 เดือนก่อนหน้า': [moment().subtract(1, 'month').startOf('month'), moment().subtract(1, 'month').endOf('month')]
+            },
+            locale: {
+                format: 'DD/MM/YYYY',
+                cancelLabel: 'ล้างค่า',
+                applyLabel: 'ตกลง',
+                customRangeLabel: 'กำหนดเอง',
+                daysOfWeek: ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'],
+                monthNames: ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'],
+            }
+        });
+        $('#reportrange').on('apply.daterangepicker', function(ev, picker) {
+            $(this).val(picker.startDate.format('DD/MM/YYYY') + ' - ' + picker.endDate.format('DD/MM/YYYY'));
+        });
+        $('#reportrange').on('cancel.daterangepicker', function(ev, picker) {
+            $(this).val('');
+        });
+    });
+</script>
+{% endblock %}

@@ -9,7 +9,7 @@
 <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css" />
 
 <style>
-    /* สไตล์สีปุ่มและป้ายสถานะ */
+    /* สไตล์สีปุ่มและป้ายสถานะ (จอปกติ) */
     .btn-light-hover:hover { background-color: #e9ecef; }
     .status-badge {
         font-size: 0.75rem; padding: 6px 12px; border-radius: 20px; font-weight: 600; letter-spacing: 0.3px;
@@ -19,70 +19,61 @@
     .status-paid { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
     .status-unpaid { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
 
-    .doc-type-icon {
-        width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
-        border-radius: 8px; font-size: 14px;
-    }
+    .doc-type-icon { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 8px; font-size: 14px; }
     .type-pos { background-color: #e2e6ea; color: #495057; }
     .type-inv { background-color: #cce5ff; color: #004085; }
     .table-hover tbody tr:hover { background-color: #f8f9fa; }
     .fw-medium { font-weight: 500; }
 
     /* สไตล์รูปสลิป */
-    .slip-thumbnail {
-        width: 35px; height: 35px; object-fit: cover; border-radius: 6px; cursor: pointer;
-        transition: transform 0.2s ease, box-shadow 0.2s ease; border: 1px solid #dee2e6;
-    }
+    .slip-thumbnail { width: 35px; height: 35px; object-fit: cover; border-radius: 6px; cursor: pointer; transition: transform 0.2s ease, box-shadow 0.2s ease; border: 1px solid #dee2e6; }
     .slip-thumbnail:hover { transform: scale(1.2); box-shadow: 0 5px 15px rgba(0,0,0,0.2); z-index: 10; position: relative; }
     #slipModal .modal-backdrop { background-color: rgba(0,0,0,0.8); }
 
-    /* 🌟 สไตล์แถบค้นหาแบบแคปซูล (Pill-shaped Search Bar) 🌟 */
-    .search-pill-container {
-        display: flex;
-        align-items: center;
-        background-color: #f8f9fa; /* สีพื้นหลังกล่อง */
-        border: 1px solid #ced4da; /* สีเส้นขอบ */
-        border-radius: 50px; /* ทำให้โค้งเป็นแคปซูล */
-        padding: 5px 10px;
-        box-shadow: inset 0 1px 2px rgba(0,0,0,0.05);
-    }
-    .search-pill-input {
-        border: none;
-        background: transparent;
-        box-shadow: none;
-        outline: none;
-        width: 100%;
-        padding: 8px 15px;
-        font-size: 0.9rem;
-        cursor: pointer;
-    }
-    .search-pill-input:focus {
-        outline: none;
-        box-shadow: none;
-    }
-    .search-pill-icon {
-        color: #6c757d;
-        padding-left: 10px;
-    }
-    .search-pill-btn {
-        background-color: #198754; /* สีเขียว */
-        color: white;
-        border: none;
-        border-radius: 50px;
-        width: 40px;
-        height: 40px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        transition: all 0.2s ease;
-    }
-    .search-pill-btn:hover {
-        background-color: #157347; /* สีเขียวเข้มตอนชี้เมาส์ */
-        transform: scale(1.05);
-    }
-
     /* ซ่อน input แบบเดิมเพื่อส่งค่า */
     .hidden-date { display: none; }
+
+    /* 🌟 สไตล์เฉพาะตอนสั่งพิมพ์ (Audit-Ready Print Report) 🌟 */
+    @media print {
+        /* ซ่อนเมนู, แถบค้นหา, และปุ่มต่างๆ */
+        .navbar, .sidebar, form, .d-print-none, .btn, .search-pill-container, .modal { display: none !important; }
+
+        /* จัดหน้ากระดาษ A4 แนวนอน (Landscape) เพื่อให้ข้อมูลไม่เบียด */
+        @page { size: A4 landscape; margin: 10mm; }
+        body { background-color: #fff !important; font-size: 9pt; color: #000; }
+        .container-fluid { padding: 0 !important; width: 100% !important; max-width: 100% !important; }
+        .main-content { margin-left: 0 !important; padding: 0 !important; }
+
+        /* 🌟 [NEW] จัดตารางแบบ Ledger (ไม่มีเส้นแนวตั้ง) 🌟 */
+        .card { border: none !important; box-shadow: none !important; }
+        table { border-collapse: collapse !important; width: 100% !important; border: none !important; }
+
+        th, td {
+            border-top: 1px solid #ddd !important;     /* เส้นแนวนอนอ่อนๆ */
+            border-bottom: 1px solid #ddd !important;  /* เส้นแนวนอนอ่อนๆ */
+            border-left: none !important;              /* เอาเส้นแนวตั้งซ้ายออก */
+            border-right: none !important;             /* เอาเส้นแนวตั้งขวาออก */
+            padding: 6px 4px !important;
+            color: #000 !important;
+            font-size: 8.5pt !important;
+        }
+
+        th {
+            background-color: transparent !important; /* เอาสีเทาพื้นหลังออกเพื่อความสะอาด */
+            -webkit-print-color-adjust: exact; color-adjust: exact;
+            font-size: 9pt !important;
+            font-weight: bold;
+            border-top: 2px solid #000 !important;    /* เส้นหนาเปิดหัวตาราง */
+            border-bottom: 2px solid #000 !important; /* เส้นหนาปิดหัวตาราง */
+        }
+
+        /* ล้างป้ายสถานะและไอคอนให้เป็นข้อความธรรมดา */
+        .status-badge, .badge, .doc-type-icon {
+            background: transparent !important; color: #000 !important; border: none !important; font-weight: bold; padding: 0 !important;
+        }
+        .slip-thumbnail, i { display: none !important; }
+        .text-muted, .text-secondary, .text-danger, .text-success, .text-warning, .text-info { color: #000 !important; }
+    }
 </style>
 
 <div class="container-fluid py-4 px-4">
@@ -91,7 +82,7 @@
 
             <div class="d-flex justify-content-between align-items-end mb-4">
                 <div>
-                    <h4 class="fw-bold mb-1 text-dark"><i class="fas fa-receipt text-success me-2"></i>รายการใบรับชำระเงิน</h4>
+                    <h4 class="fw-bold mb-1 text-dark"><i class="fas fa-receipt text-success me-2"></i>รายการใบเสร็จรับเงิน - บ้านน็อคดาวน์</h4>
                     <p class="text-muted small mb-0">ตรวจสอบยอดเงินเข้าและจัดการสถานะเอกสาร</p>
                 </div>
                 <a href="{% url 'sales_dashboard' %}" class="btn btn-outline-secondary rounded-pill px-4 text-uppercase" style="font-size: 0.85rem; letter-spacing: 0.5px;">
@@ -99,8 +90,8 @@
                 </a>
             </div>
 
-            <!-- 🌟 แถบค้นหาดีไซน์ใหม่ 🌟 -->
-            <div class="card shadow-sm border-0 rounded-4 mb-4">
+            <!-- 🌟 แถบค้นหาดีไซน์ใหม่ (เพิ่มปุ่ม Print) 🌟 -->
+            <div class="card shadow-sm border-0 rounded-4 mb-4 d-print-none">
                 <div class="card-body p-3">
                     <form method="GET" class="row g-2 align-items-center">
 
@@ -112,7 +103,6 @@
                             </div>
                         </div>
 
-                        <!-- 🌟 [NEW] 2. คัดกรองสาขา (โชว์เฉพาะ Manager หรือ Supervisor) 🌟 -->
                         {% if is_manager or is_supervisor %}
                         <div class="col-md-2">
                             <div class="input-group border-0 bg-light rounded-pill px-2">
@@ -140,31 +130,48 @@
                             </div>
                         </div>
 
-                        <!-- 🌟 4. กล่องค้นหาวันที่แบบแคปซูล 🌟 -->
-                        <div class="col-md-4">
-                            <div class="search-pill-container">
-                                <i class="far fa-calendar-alt search-pill-icon"></i>
-                                <input type="text" id="reportrange" class="search-pill-input" placeholder="เลือกช่วงวันที่..." readonly>
-                                <button type="submit" class="search-pill-btn" title="ค้นหา">
-                                    <i class="fas fa-search"></i>
+                        <!-- 🌟 4. กลุ่มปุ่ม วันที่ + ค้นหา + รีเซ็ต + พิมพ์ (รวมบล็อกเดียวกัน) 🌟 -->
+                        <div class="col-md-5">
+                            <div class="input-group input-group-sm shadow-sm rounded-pill overflow-hidden bg-light" style="border: 1px solid #ced4da;">
+                                <!-- กล่องเลือกวันที่ -->
+                                <span class="input-group-text bg-transparent border-0 text-muted ps-3"><i class="far fa-calendar-alt"></i></span>
+                                <input type="text" id="reportrange" class="form-control border-0 bg-transparent text-center fw-bold text-dark px-2 shadow-none" value="{{ start_date|default:'' }}" placeholder="เลือกช่วงวันที่..." readonly style="cursor: pointer; min-width: 170px;">
+
+                                <!-- ปุ่มค้นหา -->
+                                <button type="submit" class="btn btn-success fw-bold px-3 border-start"><i class="fas fa-search me-1"></i> ค้นหา</button>
+
+                                <!-- ปุ่มล้างค่า (ถ้ามีการค้นหา) -->
+                                {% if search_query or start_date or status_filter or branch_filter %}
+                                    <a href="{% url 'invoice_list' %}" class="btn btn-danger px-3 border-start text-white" title="ล้างค่าทั้งหมด"><i class="fas fa-undo-alt"></i></a>
+                                {% endif %}
+
+                                <!-- ปุ่มพิมพ์รายงาน -->
+                                <button type="button" class="btn btn-primary fw-bold px-3 border-start" onclick="window.print()" title="พิมพ์กระดาษ A4 (Landscape)">
+                                    <i class="fas fa-print me-1"></i> พิมพ์
                                 </button>
                             </div>
 
-                            <!-- Input ล่องหนสำหรับส่งค่าไปยัง Backend -->
                             <input type="text" name="start_date" id="start_date" class="hidden-date" value="{{ start_date|default:'' }}">
                             <input type="text" name="end_date" id="end_date" class="hidden-date" value="{{ end_date|default:'' }}">
                         </div>
 
-                        <!-- ปุ่มล้างค่า -->
-                        <div class="col-md-1 text-end">
-                            {% if search_query or start_date or status_filter or branch_filter %}
-                                <a href="{% url 'invoice_list' %}" class="btn btn-outline-danger rounded-circle d-inline-flex align-items-center justify-content-center" style="width: 40px; height: 40px;" title="ล้างค่าทั้งหมด">
-                                    <i class="fas fa-undo-alt"></i>
-                                </a>
-                            {% endif %}
-                        </div>
-
                     </form>
+                </div>
+            </div>
+
+            <!-- 🌟 หัวกระดาษพิมพ์ (ซ่อนไว้โชว์ตอนสั่งพิมพ์เท่านั้น) 🌟 -->
+            <div class="d-none d-print-block mb-3 border-bottom border-2 border-dark pb-1">
+                <div class="d-flex justify-content-between align-items-end">
+                    <div>
+                        <span class="fw-bold fs-5 me-3">รายงานทะเบียนคุมลูกหนี้</span>
+                        <span class="text-dark" style="font-size: 9pt;">
+                            <span class="fw-bold">ช่วงเวลา:</span> {% if start_date %}{{ start_date|date:"d/m/Y" }} - {{ end_date|date:"d/m/Y" }}{% else %}ทั้งหมด{% endif %}
+                            | <span class="fw-bold">สถานะ:</span> {% if status_filter == 'PAID' %}ชำระครบแล้ว{% elif status_filter == 'UNPAID' %}ค้างชำระ{% elif status_filter == 'PENDING' %}รอตรวจสอบ{% else %}ทั้งหมด{% endif %}
+                        </span>
+                    </div>
+                    <div class="text-end">
+                        <span class="text-dark" style="font-size: 9pt;">พิมพ์เมื่อ: {% now "d/m/Y H:i" %}</span>
+                    </div>
                 </div>
             </div>
 
@@ -174,39 +181,87 @@
                     <table class="table table-hover align-middle mb-0">
                         <thead class="bg-light text-secondary" style="font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.5px;">
                             <tr>
-                                <th class="ps-4 py-3 fw-bold">ประเภท</th>
-                                <th class="py-3 fw-bold">เอกสาร / วันที่</th>
+                                <th class="py-3 fw-bold text-center" style="width: 5%;">ลำดับ</th>
+                                <th class="py-3 fw-bold">เลขที่ใบเสร็จรับเงิน</th>
+                                <th class="py-3 fw-bold">เลขที่ใบรับเงินมัดจำ</th>
+                                <th class="py-3 fw-bold">เลขที่ใบเสนอราคา</th>
+                                <th class="py-3 fw-bold">เลขที่ JOB</th>
                                 <th class="py-3 fw-bold">ลูกค้า</th>
                                 <th class="py-3 fw-bold text-center">พนักงาน</th>
                                 <th class="py-3 fw-bold text-end">ยอดสุทธิ (บาท)</th>
                                 <th class="py-3 fw-bold text-center">เงินมัดจำ</th>
                                 <th class="py-3 fw-bold text-center">ยอดรับชำระ / หลักฐาน</th>
                                 <th class="py-3 fw-bold text-center">สถานะ</th>
-                                <th class="py-3 fw-bold text-center" style="width: 10%;">ตรวจสอบ</th>
-                                <th class="pe-4 py-3 fw-bold text-center" style="width: 8%;">พิมพ์</th>
+                                <th class="py-3 fw-bold text-center d-print-none" style="width: 8%;">ตรวจสอบ</th>
+                                <th class="pe-4 py-3 fw-bold text-center d-print-none" style="width: 5%;">พิมพ์</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for item in page_obj %}
                             <tr>
-                                <td class="ps-4" style="width: 60px;">
-                                    {% if item.total_amount %}
-                                        <div class="doc-type-icon type-pos" title="ขายหน้าร้าน (POS)"><i class="fas fa-store"></i></div>
+                                <td class="text-center fw-bold text-secondary" style="width: 5%;">
+                                    {{ forloop.counter }}
+                                </td>
+
+                                <!-- คอลัมน์เอกสาร / วันที่ อัปเกรดใหม่ (Audit Trail) -->
+                                <!-- 1. เลขที่ใบเสร็จรับเงิน (DLN) -->
+                                <td>
+                                    <div class="fw-bold text-dark fs-6" style="font-family: 'Courier New', monospace;">{{ item.code }}</div>
+                                    <div class="text-muted small mb-0" style="font-size: 0.75rem;">
+                                        <i class="far fa-calendar-check me-1"></i> {{ item.created_at|date:"d/m/Y" }}
+                                    </div>
+                                </td>
+
+                                <!-- 2. เลขที่ใบรับเงินมัดจำ (RVD) -->
+                                <td>
+                                    {% if not item.total_amount and item.quotation_ref %}
+                                        {% for deposit in item.quotation_ref.deposits.all %}
+                                            <div class="small fw-bold text-dark lh-sm" style="font-size: 0.75rem; font-family: 'Courier New', monospace;">
+                                                <span class="text-success opacity-75 me-1"><i class="fas fa-file-invoice-dollar"></i></span>
+                                                {{ deposit.code }}
+                                            </div>
+                                            <div class="text-muted lh-sm mb-1" style="font-size: 0.7rem;">
+                                                มัดจำ: {{ deposit.deposit_date|date:"d/m/Y"|default:"-" }}
+                                            </div>
+                                        {% empty %}
+                                            <span class="text-muted small">-</span>
+                                        {% endfor %}
                                     {% else %}
-                                        <div class="doc-type-icon type-inv" title="ใบวางบิล (Invoice)"><i class="fas fa-file-invoice"></i></div>
+                                        <span class="text-muted small">-</span>
                                     {% endif %}
                                 </td>
 
+                                <!-- 3. เลขที่ใบเสนอราคา (QT) -->
                                 <td>
-                                    <div class="fw-bold text-dark" style="font-family: 'Courier New', monospace;">{{ item.code }}</div>
-                                    <div class="text-muted small mb-1" style="font-size: 0.75rem;"><i class="far fa-clock me-1"></i> {{ item.created_at|date:"d/m/Y H:i" }}</div>
-                                    {% if not item.total_amount %}
-                                        {% if item.quotation_ref %}
-                                            <div class="small lh-sm" style="font-size: 0.7rem;"><span class="text-secondary opacity-75">QT:</span> {{ item.quotation_ref.code }}</div>
-                                            {% for job in item.quotation_ref.production_orders.all %}
-                                                <div class="small lh-sm" style="font-size: 0.7rem;"><span class="text-secondary opacity-75">JOB:</span> {{ job.code }}</div>
-                                            {% endfor %}
-                                        {% endif %}
+                                    {% if not item.total_amount and item.quotation_ref %}
+                                        <div class="small fw-bold text-dark lh-sm" style="font-size: 0.75rem; font-family: 'Courier New', monospace;">
+                                            <span class="text-primary opacity-75 me-1"><i class="fas fa-file-alt"></i></span>
+                                            {{ item.quotation_ref.code }}
+                                        </div>
+                                        <div class="text-muted lh-sm" style="font-size: 0.7rem;">
+                                            เสนอราคา: {{ item.quotation_ref.date|date:"d/m/Y"|default:"-" }}
+                                        </div>
+                                    {% else %}
+                                        <span class="text-muted small">-</span>
+                                    {% endif %}
+                                </td>
+
+                                <!-- 4. เลขที่ JOB -->
+                                <td>
+                                    {% if not item.total_amount and item.quotation_ref %}
+                                        {% for job in item.quotation_ref.production_orders.all %}
+                                            <div class="small fw-bold text-dark lh-sm" style="font-size: 0.75rem; font-family: 'Courier New', monospace;">
+                                                <span class="text-warning opacity-75 me-1"><i class="fas fa-tools"></i></span>
+                                                {{ job.code }}
+                                            </div>
+                                            <div class="text-muted lh-sm mb-1" style="font-size: 0.7rem;">
+                                                เริ่มผลิต: {{ job.start_date|date:"d/m/Y"|default:"-" }}
+                                            </div>
+                                        {% empty %}
+                                            <span class="text-muted small">-</span>
+                                        {% endfor %}
+                                    {% else %}
+                                        <span class="text-muted small">-</span>
                                     {% endif %}
                                 </td>
 
@@ -344,7 +399,8 @@
                                     {% endif %}
                                 </td>
 
-                                <td class="text-center">
+                                <!-- 🌟 คอลัมน์ที่ 1: ตรวจสอบ (เพิ่มคลาส d-print-none เพื่อซ่อนตอนพิมพ์) 🌟 -->
+                                <td class="text-center d-print-none">
                                     {% if item.status == 'PENDING' %}
                                         {% if user.is_superuser or 'บัญชี' in user.employee.department.name|default:'' or 'Accounting' in user.employee.department.name|default:'' %}
                                             {% if item.total_amount %}
@@ -364,7 +420,8 @@
                                     {% endif %}
                                 </td>
 
-                                <td class="text-center pe-4">
+                                <!-- 🌟 คอลัมน์ที่ 2: พิมพ์ (เพิ่มคลาส d-print-none เพื่อซ่อนตอนพิมพ์) 🌟 -->
+                                <td class="text-center pe-4 d-print-none">
                                     {% if item.total_amount %}
                                         <a href="{% url 'pos_print_slip' item.code %}" target="_blank" class="btn btn-sm btn-white border text-secondary btn-light-hover shadow-sm" title="พิมพ์สลิป">
                                             <i class="fas fa-print"></i>

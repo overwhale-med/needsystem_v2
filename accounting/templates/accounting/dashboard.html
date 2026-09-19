@@ -16,6 +16,9 @@
             <p class="text-muted mb-0">ข้อมูลสรุปกระแสเงินสดประจำเดือน {% now "F Y" %}</p>
         </div>
         <div>
+            <a href="{% url 'accounting_commission_recon' %}" class="btn btn-info text-white shadow-sm rounded-pill px-4 me-2 fw-bold">
+                <i class="fas fa-search-dollar me-1"></i> กระดานกระทบยอดบัญชี (Recon)
+            </a>
             <button class="btn btn-success shadow-sm rounded-pill px-3 me-2 fw-bold"><i class="fas fa-plus-circle me-1"></i> รับรายได้</button>
             <button class="btn btn-danger shadow-sm rounded-pill px-3 fw-bold"><i class="fas fa-minus-circle me-1"></i> บันทึกรายจ่าย</button>
         </div>

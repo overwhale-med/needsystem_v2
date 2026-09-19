@@ -270,3 +270,163 @@ def approve_transaction(request, task_type, item_id):
             messages.success(request, f"✅ ทำจ่ายบิล {po.code} และลงบันทึกรายจ่ายเข้าระบบเรียบร้อย")
 
     return redirect('accounting_verification_hub', task_type=task_type)
+
+# ==========================================
+# 📊 กระดานกระทบยอดบัญชีราย Job (Commission Reconciliation Board)
+# ==========================================
+@login_required
+def commission_recon_board(request):
+    # เช็คสิทธิ์เฉพาะฝ่ายบัญชีหรือผู้บริหาร
+    is_accounting = False
+    if request.user.is_superuser:
+        is_accounting = True
+    elif hasattr(request.user, 'employee') and request.user.employee:
+        dept = getattr(request.user.employee.department, 'name', '')
+        if 'บัญชี' in dept or 'Account' in dept or 'บริหาร' in dept: is_accounting = True
+
+    if not is_accounting:
+        messages.error(request, "❌ หน้าต่างนี้สงวนสิทธิ์เฉพาะระดับบริหารและฝ่ายบัญชีเท่านั้น")
+        return redirect('dashboard')
+
+    tab = request.GET.get('tab', 'knockdown')
+    search_q = request.GET.get('search_q', '').strip()
+    status_dep = request.GET.get('status_dep', '')
+    status_inv = request.GET.get('status_inv', '')
+
+    # 🌟 [NEW] ดักจับค่าวันที่ 🌟
+    date_range = request.GET.get('date_range', '').strip()
+    start_date = None
+    end_date = None
+    if date_range:
+        try:
+            from datetime import datetime
+            d_parts = date_range.split(' - ')
+            start_date = datetime.strptime(d_parts[0].strip(), "%d/%m/%Y").date()
+            end_date = datetime.strptime(d_parts[1].strip(), "%d/%m/%Y").date()
+        except:
+            pass
+
+    data_list = []
+
+    if tab == 'knockdown':
+        from manufacturing.models import ProductionOrder
+        from sales.models import Invoice, CommissionTicket
+        from django.db.models import Q
+
+        jobs_query = ProductionOrder.objects.select_related('quotation_ref').order_by('-id')
+        if search_q:
+            jobs_query = jobs_query.filter(
+                Q(code__icontains=search_q) |
+                Q(quotation_ref__code__icontains=search_q) |
+                Q(quotation_ref__invoice__code__icontains=search_q)
+            )
+
+        # 🌟 [NEW] กรองข้อมูลช่วงเวลา (ใช้ start_date ของใบสั่งผลิต) 🌟
+        if start_date and end_date:
+            jobs_query = jobs_query.filter(start_date__gte=start_date, start_date__lte=end_date)
+
+        jobs = jobs_query[:100]
+
+        for job in jobs:
+            # (โค้ดเดิมด้านล่างปล่อยไว้เหมือนเดิมครับ...)
+            qt = job.quotation_ref
+            inv = Invoice.objects.filter(quotation_ref=qt).first() if qt else None
+            t2 = CommissionTicket.objects.filter(quotation_ref=qt, ticket_type='2%').first() if qt else None
+            t3 = CommissionTicket.objects.filter(invoice_ref=inv, ticket_type='3%').first() if inv else None
+
+            # 🌟 [FIXED] ลอจิกการกรองสถานะที่แม่นยำขึ้น 🌟
+            if status_dep == 'AVAILABLE':
+                if not ((t2 and t2.status == 'AVAILABLE') or (not t2 and qt and qt.is_deposit_paid)): continue
+            elif status_dep == 'CLAIMING':
+                if not (t2 and t2.status == 'CLAIMING'): continue
+            elif status_dep == 'PAID':
+                if not (t2 and t2.status == 'PAID'): continue
+            # หากเลือก HIDDEN ให้ข้ามการกรอง t2 ไปเลย
+
+            if status_inv == 'AVAILABLE':
+                if not ((t3 and t3.status == 'AVAILABLE') or (not t3 and inv and inv.status == 'PAID')): continue
+            elif status_inv == 'CLAIMING':
+                if not (t3 and t3.status == 'CLAIMING'): continue
+            elif status_inv == 'PAID':
+                if not (t3 and t3.status == 'PAID'): continue
+            # หากเลือก HIDDEN ให้ข้ามการกรอง t3 ไปเลย
+
+
+            # 🌟 [FIXED] ลอจิกสถานะบัญชีรวมแบบ Linear (เช็คจากซ้ายไปขวา) 🌟
+            fin_status = 'WAITING_DEPOSIT'
+            if qt and qt.is_deposit_paid:
+                if not t2 or t2.status != 'PAID':
+                    fin_status = 'DEPOSIT_PAID' # ติดล็อกที่ 1: รอจ่ายคอมฯ 2%
+                elif not inv or inv.status != 'PAID':
+                    fin_status = 'WAITING_INV'  # ผ่าน 2% มาแล้ว -> รอเงินปิดบิล
+                elif not t3 or t3.status != 'PAID':
+                    fin_status = 'INV_PAID'     # ได้เงินปิดบิลแล้ว -> รอจ่ายคอมฯ ตามใบขาย
+                else:
+                    fin_status = 'CLEARED'      # จบกระบวนการ 100%
+
+            data_list.append({
+                'job_code': job.code,
+                'customer_name': job.customer_name or (qt.customer.name if qt and qt.customer else '-'),
+                'qt': qt, 'inv': inv, 't2': t2, 't3': t3, 'fin_status': fin_status
+            })
+
+    elif tab == 'solar':
+        from solar_jobs.models import SolarJob
+        from solar_sales.models import SolarInvoice, SolarCommissionTicket
+        from django.db.models import Q
+
+        jobs_query = SolarJob.objects.select_related('quotation_ref', 'customer').order_by('-id')
+        if search_q:
+            jobs_query = jobs_query.filter(
+                Q(code__icontains=search_q) |
+                Q(quotation_ref__code__icontains=search_q) |
+                Q(quotation_ref__solarinvoice__code__icontains=search_q)
+            )
+
+        # 🌟 [NEW] กรองข้อมูลช่วงเวลา (ใช้ created_at ของใบงานโซล่า) 🌟
+        if start_date and end_date:
+            jobs_query = jobs_query.filter(created_at__date__gte=start_date, created_at__date__lte=end_date)
+
+        jobs = jobs_query[:100]
+
+        for job in jobs:
+            qt = job.quotation_ref
+            inv = SolarInvoice.objects.filter(quotation_ref=qt).first() if qt else None
+            t2 = SolarCommissionTicket.objects.filter(quotation_ref=qt, ticket_type='2%').first() if qt else None
+            t13 = SolarCommissionTicket.objects.filter(invoice_ref=inv, ticket_type='13.5%').first() if inv else None
+
+            # 🌟 [FIXED] ลอจิกการกรองสถานะที่แม่นยำขึ้น 🌟
+            if status_dep == 'AVAILABLE':
+                if not ((t2 and t2.status == 'AVAILABLE') or (not t2 and qt and qt.is_deposit_paid)): continue
+            elif status_dep == 'CLAIMING':
+                if not (t2 and t2.status == 'CLAIMING'): continue
+            elif status_dep == 'PAID':
+                if not (t2 and t2.status == 'PAID'): continue
+
+            if status_inv == 'AVAILABLE':
+                if not ((t13 and t13.status == 'AVAILABLE') or (not t13 and inv and inv.status == 'PAID')): continue
+            elif status_inv == 'CLAIMING':
+                if not (t13 and t13.status == 'CLAIMING'): continue
+            elif status_inv == 'PAID':
+                if not (t13 and t13.status == 'PAID'): continue
+
+            # 🌟 [FIXED] ลอจิกสถานะบัญชีรวมแบบ Linear (เช็คจากซ้ายไปขวา) 🌟
+            fin_status = 'WAITING_DEPOSIT'
+            if qt and qt.is_deposit_paid:
+                if not t2 or t2.status != 'PAID':
+                    fin_status = 'DEPOSIT_PAID' # ติดล็อกที่ 1: รอจ่ายคอมฯ 2%
+                elif not inv or inv.status != 'PAID':
+                    fin_status = 'WAITING_INV'  # ผ่าน 2% มาแล้ว -> รอเงินปิดบิล
+                elif not t13 or t13.status != 'PAID':
+                    fin_status = 'INV_PAID'     # ได้เงินปิดบิลแล้ว -> รอจ่ายคอมฯ ตามใบขาย
+                else:
+                    fin_status = 'CLEARED'      # จบกระบวนการ 100%
+
+            data_list.append({
+                'job_code': job.code,
+                'customer_name': job.customer.name if job.customer else '-',
+                'qt': qt, 'inv': inv, 't2': t2, 't3': t13, 'fin_status': fin_status
+            })
+
+    context = {'tab': tab, 'data_list': data_list}
+    return render(request, 'accounting/commission_recon.html', context)
