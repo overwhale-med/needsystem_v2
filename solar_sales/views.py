@@ -626,10 +626,11 @@ def solar_quotation_cancel(request, qt_id):
 @login_required
 def solar_deposit_list(request):
     # ดึงใบเสนอราคา Solar ที่มีการจ่ายมัดจำแล้ว
-    quotations = SolarQuotation.objects.filter(is_deposit_paid=True)
+    quotations = SolarQuotation.objects.filter(is_deposit_paid=True).select_related('customer', 'employee', 'employee__department')
 
-    # 🌟 ระบบจำกัดสิทธิ์ (ผู้จัดการ/บัญชี เห็นทั้งหมด, เซลส์เห็นเฉพาะของตัวเอง)
+    # 🌟 ระบบจำกัดสิทธิ์และโหลดข้อมูลสาขา 🌟
     is_manager = False
+    is_supervisor = False
     current_emp = getattr(request.user, 'employee', None)
 
     if request.user.is_superuser:
@@ -638,27 +639,44 @@ def solar_deposit_list(request):
         rank = current_emp.business_rank.lower() if current_emp.business_rank else ""
         if rank in ['manager', 'director'] or 'manager' in getattr(current_emp.position, 'title', '').lower() or 'บัญชี' in getattr(current_emp.department, 'name', ''):
             is_manager = True
+        elif rank == 'supervisor':
+            is_supervisor = True
 
-    if not is_manager and current_emp:
-        quotations = quotations.filter(employee=current_emp)
+    # โหลดรายชื่อสาขา
+    if is_manager:
+        departments = list(Department.objects.filter(Q(name__icontains='ทีม') | Q(name__icontains='สาขา')).order_by('name'))
+    elif is_supervisor and current_emp.department:
+        departments = list(Department.objects.filter(id=current_emp.department.id))
+    else:
+        departments = []
+
+    for d in departments:
+        d.name = d.name.replace('แผนก', '').strip()
 
     # รับค่าการค้นหาจาก URL
     search_query = request.GET.get('q', '')
     status_filter = request.GET.get('status', '')
+    branch_filter = request.GET.get('branch', '')
     start_date_str = request.GET.get('start_date')
     end_date_str = request.GET.get('end_date')
 
-    # กรองคำค้นหา (เลขที่เอกสาร หรือ ชื่อลูกค้า)
+    # 1. กรองสาขา
+    if branch_filter and (is_manager or is_supervisor):
+        quotations = quotations.filter(employee__department_id=branch_filter)
+    elif not is_manager and not is_supervisor and current_emp:
+        quotations = quotations.filter(employee=current_emp)
+
+    # 2. กรองคำค้นหา (เลขที่เอกสาร หรือ ชื่อลูกค้า)
     if search_query:
         quotations = quotations.filter(Q(code__icontains=search_query) | Q(customer__name__icontains=search_query))
 
-    # กรองสถานะ
+    # 3. กรองสถานะ
     if status_filter == 'VERIFIED':
         quotations = quotations.filter(is_deposit_verified=True)
     elif status_filter == 'PENDING':
         quotations = quotations.filter(is_deposit_verified=False)
 
-    # 🌟 กรองวันที่มัดจำ 🌟
+    # 4. กรองวันที่มัดจำ
     if start_date_str and end_date_str:
         try:
             start_date = parse_date(start_date_str)
@@ -666,11 +684,9 @@ def solar_deposit_list(request):
             if start_date and end_date:
                 quotations = quotations.filter(deposit_date__range=[start_date, end_date])
         except Exception:
-            pass # หากวันที่ผิดรูปแบบให้ปล่อยผ่าน
+            pass
 
     # เรียงลำดับและแบ่งหน้า
-    # 🌟 [FIXED] เปลี่ยนให้เรียงลำดับตาม 'เลขใบรับเงินมัดจำ' (deposit_code) เป็นหลัก 🌟
-    # เครื่องหมายลบ (-) ด้านหน้าหมายถึงให้เรียงจากมากไปน้อย (ใบใหม่สุดอยู่บนสุด)
     quotations = quotations.order_by('-deposit_code', '-deposit_date')
     paginator = Paginator(quotations, 15)
     page_obj = paginator.get_page(request.GET.get('page'))
@@ -679,6 +695,10 @@ def solar_deposit_list(request):
         'page_obj': page_obj,
         'search_query': search_query,
         'status_filter': status_filter,
+        'branch_filter': branch_filter,
+        'departments': departments,
+        'is_manager': is_manager,
+        'is_supervisor': is_supervisor,
         'start_date': start_date_str,
         'end_date': end_date_str,
     })
