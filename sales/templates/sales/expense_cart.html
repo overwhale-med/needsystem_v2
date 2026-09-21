@@ -1,0 +1,195 @@
+{% extends 'core/base.html' %}
+{% load humanize %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h3 class="fw-bold mb-1 text-dark"><i class="fas fa-shopping-cart text-success me-2"></i>ตะกร้าตั้งเบิกค่าใช้จ่าย (ของฉัน)</h3>
+            <p class="text-muted mb-0">เลือกบิลจากตะกร้า แล้วกรอกเลขบัญชีเพื่อสร้าง "ใบคุมการเบิกรวม (MEC)" ส่งให้ฝ่ายบัญชี</p>
+        </div>
+        <a href="{% url 'master_job_report' %}" class="btn btn-outline-secondary rounded-pill px-4 fw-bold shadow-sm">
+            <i class="fas fa-arrow-left me-2"></i> กลับหน้ารายงาน
+        </a>
+    </div>
+
+    <form method="POST" action="{% url 'submit_expense_cart' %}" id="cartForm">
+        {% csrf_token %}
+        <div class="row g-4">
+            
+            <!-- ซ้าย: รายการบิลในตะกร้า -->
+            <div class="col-lg-8">
+                <div class="card shadow-sm border-0 rounded-4 mb-4">
+                    <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+                        <h6 class="m-0 fw-bold text-dark"><i class="fas fa-list-check text-primary me-2"></i>บิลที่รอตั้งเบิก (ติ๊กเลือกเพื่อเบิกเงิน)</h6>
+                    </div>
+                    <div class="card-body p-0">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="bg-light">
+                                <tr>
+                                    <th class="ps-4" width="5%"><input type="checkbox" id="selectAll" class="form-check-input shadow-sm border-secondary" onchange="toggleAllCheckboxes(this)"></th>
+                                    <th>หมวดหมู่ / รายละเอียด</th>
+                                    <th>อ้างอิง JOB</th>
+                                    <th class="text-end pe-4">ยอดเงิน (บาท)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- หมวด 1: ค่าแรง -->
+                                {% for item in labor_items %}
+                                <tr>
+                                    <td class="ps-4"><input type="checkbox" name="labor_ids" value="{{ item.id }}" class="form-check-input cart-checkbox shadow-sm border-secondary" data-amount="{{ item.amount }}" onchange="calculateTotal()"></td>
+                                    <td>
+                                        <span class="badge bg-warning text-dark me-2">ค่าแรง</span>
+                                        <span class="fw-bold text-dark">{{ item.contractor_name }}</span>
+                                    </td>
+                                    <td><span class="font-monospace text-muted">{{ item.production_order.code }}</span></td>
+                                    <td class="text-end pe-4 fw-bold text-danger">{{ item.amount|intcomma }}</td>
+                                </tr>
+                                {% endfor %}
+
+                                <!-- หมวด 2: ค่าแอร์ -->
+                                {% for item in aircon_items %}
+                                <tr>
+                                    <td class="ps-4"><input type="checkbox" name="aircon_ids" value="{{ item.id }}" class="form-check-input cart-checkbox shadow-sm border-secondary" data-amount="{{ item.amount }}" onchange="calculateTotal()"></td>
+                                    <td>
+                                        <span class="badge bg-info text-dark me-2">ค่าแอร์</span>
+                                        <span class="fw-bold text-dark">{{ item.technician_name }}</span>
+                                        <div class="small text-muted">{{ item.description }}</div>
+                                    </td>
+                                    <td><span class="font-monospace text-muted">{{ item.production_order.code }}</span></td>
+                                    <td class="text-end pe-4 fw-bold text-danger">{{ item.amount|intcomma }}</td>
+                                </tr>
+                                {% endfor %}
+
+                                <!-- หมวด 3: ค่าอื่นๆ -->
+                                {% for item in other_items %}
+                                <tr>
+                                    <td class="ps-4"><input type="checkbox" name="other_ids" value="{{ item.id }}" class="form-check-input cart-checkbox shadow-sm border-secondary" data-amount="{{ item.amount }}" onchange="calculateTotal()"></td>
+                                    <td>
+                                        <span class="badge bg-secondary me-2">ค่าอื่นๆ</span>
+                                        <span class="fw-bold text-dark">{{ item.description }}</span>
+                                    </td>
+                                    <td><span class="font-monospace text-muted">{{ item.production_order.code }}</span></td>
+                                    <td class="text-end pe-4 fw-bold text-danger">{{ item.amount|intcomma }}</td>
+                                </tr>
+                                {% endfor %}
+
+                                {% if not labor_items and not aircon_items and not other_items %}
+                                <tr>
+                                    <td colspan="4" class="text-center py-5 text-muted">
+                                        <i class="fas fa-box-open fa-3x mb-3 opacity-25"></i>
+                                        <h6>ตะกร้าว่างเปล่า</h6>
+                                        <p class="small">ยังไม่มีรายการหยอดกระปุกเข้ามาเบิก</p>
+                                    </td>
+                                </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- ประวัติใบคุมรวมที่ผ่านมา -->
+                <h6 class="fw-bold text-muted mb-3 mt-5"><i class="fas fa-history me-2"></i>ประวัติใบคุมรวม (MEC) ของคุณ</h6>
+                <div class="card shadow-sm border-0 rounded-4 overflow-hidden mb-4">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead class="bg-light text-muted small">
+                            <tr>
+                                <th class="ps-3 py-2">เลขที่ใบคุม</th>
+                                <th class="py-2">วันที่สร้าง</th>
+                                <th class="text-end py-2">ยอดสุทธิ (บาท)</th>
+                                <th class="text-center pe-3 py-2">สถานะ</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for claim in master_claims %}
+                            <tr>
+                                <td class="ps-3 fw-bold">{{ claim.code }}</td>
+                                <td class="small text-muted">{{ claim.created_at|date:"d/m/Y H:i" }}</td>
+                                <td class="text-end fw-bold text-dark">{{ claim.total_amount|intcomma }}</td>
+                                <td class="text-center pe-3">
+                                    {% if claim.status == 'PAID' %}
+                                        <span class="badge bg-success bg-opacity-10 text-success border border-success rounded-pill px-3">โอนแล้ว</span>
+                                    {% else %}
+                                        <span class="badge bg-danger bg-opacity-10 text-danger border border-danger rounded-pill px-3">รอฝ่ายบัญชี</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="4" class="text-center py-4 text-muted small">ยังไม่เคยสร้างใบคุม</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- ขวา: กล่องกรอกข้อมูลบัญชี และ ยอดรวม -->
+            <div class="col-lg-4">
+                <div class="card shadow border-0 rounded-4 sticky-top" style="top: 90px; background: linear-gradient(180deg, #ffffff 0%, #f8f9fa 100%);">
+                    <div class="card-body p-4">
+                        <h6 class="fw-bold text-dark mb-4 text-center"><i class="fas fa-university text-primary me-2"></i>ข้อมูลบัญชีรับเงิน (รอบนี้)</h6>
+                        
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold text-muted">ธนาคารปลายทาง <span class="text-danger">*</span></label>
+                            <select name="bank_name" class="form-select border-primary shadow-sm" required>
+                                <option value="" disabled selected>-- เลือกธนาคาร --</option>
+                                {% for code, name in bank_choices %}
+                                <option value="{{ code }}">{{ name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold text-muted">เลขที่บัญชี / พร้อมเพย์ <span class="text-danger">*</span></label>
+                            <input type="text" name="bank_account_number" class="form-control border-primary shadow-sm font-monospace fs-5" required placeholder="000-0-00000-0">
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label small fw-bold text-muted">ชื่อบัญชี <span class="text-danger">*</span></label>
+                            <input type="text" name="bank_account_name" class="form-control border-primary shadow-sm" required placeholder="นาย สมมติ รักดี">
+                        </div>
+
+                        <hr class="border-secondary opacity-25 mb-4">
+
+                        <div class="d-flex justify-content-between align-items-center mb-4">
+                            <span class="text-muted fw-bold">ยอดที่เลือกสุทธิ</span>
+                            <div class="text-end">
+                                <span class="fs-6 fw-bold text-dark">฿ </span>
+                                <span class="fs-2 fw-bold text-danger" id="grandTotalDisplay">0.00</span>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn btn-success w-100 py-3 rounded-pill fw-bold shadow-sm fs-5" id="submitBtn" disabled>
+                            <i class="fas fa-paper-plane me-2"></i> สร้างใบคุมเบิกรวม (MEC)
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+<script>
+    function calculateTotal() {
+        let total = 0;
+        let checkedBoxes = document.querySelectorAll('.cart-checkbox:checked');
+        
+        checkedBoxes.forEach(function(cb) {
+            total += parseFloat(cb.getAttribute('data-amount') || 0);
+        });
+
+        // อัปเดตตัวเลขแบบมีคอมม่า
+        document.getElementById('grandTotalDisplay').innerText = total.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        
+        // ถ้าติ๊กเลือกอย่างน้อย 1 ใบ ให้เปิดปุ่ม Submit
+        document.getElementById('submitBtn').disabled = (checkedBoxes.length === 0);
+    }
+
+    function toggleAllCheckboxes(source) {
+        let checkboxes = document.querySelectorAll('.cart-checkbox');
+        checkboxes.forEach(function(cb) {
+            cb.checked = source.checked;
+        });
+        calculateTotal();
+    }
+</script>
+{% endblock %}

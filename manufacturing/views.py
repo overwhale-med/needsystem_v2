@@ -537,6 +537,9 @@ def production_process(request, pk):
     messages.success(request, f"🎉 สำเร็จ! รับ {main_product.name} ({order.quantity} หลัง) เข้าคลังเรียบร้อยแล้ว!")
     return redirect('production_list')
 
+# ==========================================
+# 🌟 [REVERTED] ฟังก์ชัน production_detail กลับสู่โหมดดูข้อมูลปกติ 🌟
+# ==========================================
 @login_required
 def production_detail(request, pk):
     order = get_object_or_404(ProductionOrder, pk=pk)

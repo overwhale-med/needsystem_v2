@@ -147,7 +147,7 @@ class BOM(models.Model):
     name = models.CharField(max_length=200, verbose_name="ชื่อสูตร (เช่น สูตรมาตรฐาน)")
     labor_cost = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, verbose_name="ค่าแรงประกอบ") # 🌟 [NEW] เพิ่มฟิลด์เก็บค่าแรงประกอบตามความต้องการผู้ใช้
     note = models.TextField(blank=True, verbose_name="หมายเหตุ")
-    
+
     def __str__(self): return f"สูตรผลิต: {self.product.name}"
 
     class Meta:
@@ -232,7 +232,7 @@ class ProductionOrder(models.Model):
     note = models.TextField(blank=True, verbose_name="หมายเหตุ")
     is_closed = models.BooleanField(default=False, verbose_name="ปิดจ๊อบแล้ว (งานเสร็จสมบูรณ์)")
     is_onsite = models.BooleanField(default=False, verbose_name="งานประกอบหน้างาน (On-site)")
-    
+
     delivery_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, verbose_name="ค่าจ้างขนส่ง (สำหรับงานนี้)")
     proof_of_delivery = models.ImageField(upload_to='delivery_proofs/%Y/%m/', null=True, blank=True, verbose_name="รูปถ่ายใบส่งมอบสินค้า")
     logistics_claim = models.ForeignKey('LogisticsClaim', on_delete=models.SET_NULL, null=True, blank=True, related_name='production_orders', verbose_name="ใบตั้งเบิกค่ารถขนส่ง")
@@ -317,3 +317,173 @@ class ProductionOrderMaterial(models.Model):
     class Meta:
         verbose_name = "3. วัตถุดิบในใบสั่งผลิต"
         verbose_name_plural = "3. จัดการวัตถุดิบในงานผลิต"
+
+# ==========================================
+# 🌟 [NEW] ตาราง: ใบคุมเบิกรวม (Master Expense Claim) 🌟
+# ==========================================
+class MasterExpenseClaim(models.Model):
+    STATUS_CHOICES = [
+        ('PENDING', 'รอโอนเงิน (Pending)'),
+        ('PAID', 'โอนเงินแล้ว (Paid)'),
+        ('REJECTED', 'ไม่อนุมัติ (Rejected)')
+    ]
+    BANK_CHOICES = [
+        ('KBANK', 'กสิกรไทย (KBANK)'),
+        ('SCB', 'ไทยพาณิชย์ (SCB)'),
+        ('BBL', 'กรุงเทพ (BBL)'),
+        ('KTB', 'กรุงไทย (KTB)'),
+        ('BAY', 'กรุงศรีอยุธยา (BAY)'),
+        ('TTB', 'ทหารไทยธนชาต (TTB)'),
+        ('GSB', 'ออมสิน (GSB)'),
+        ('BAAC', 'ธ.ก.ส. (BAAC)'),
+        ('PROMPTPAY', 'พร้อมเพย์ (PromptPay)'),
+        ('OTHER', 'อื่นๆ')
+    ]
+
+    code = models.CharField(max_length=20, unique=True, verbose_name="เลขที่ใบคุม")
+    requester = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, verbose_name="พนักงานผู้ขอเบิก")
+    total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, verbose_name="ยอดรวมสุทธิ")
+
+    bank_name = models.CharField(max_length=20, choices=BANK_CHOICES, verbose_name="ธนาคาร")
+    bank_account_number = models.CharField(max_length=50, verbose_name="เลขที่บัญชี / พร้อมเพย์")
+    bank_account_name = models.CharField(max_length=150, verbose_name="ชื่อบัญชี")
+
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING', verbose_name="สถานะ")
+    transfer_slip = models.ImageField(upload_to='master_claims/%Y/%m/', null=True, blank=True, verbose_name="สลิปโอนเงินจากบัญชี")
+
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="วันที่สร้างใบคุม")
+    paid_at = models.DateTimeField(null=True, blank=True, verbose_name="วันที่ทำจ่าย")
+
+    class Meta:
+        verbose_name = "ใบคุมเบิกรวม (JOB Expenses)"
+        verbose_name_plural = "ใบคุมเบิกรวม (JOB Expenses)"
+
+    def __str__(self): return f"{self.code} - {self.requester.first_name if self.requester else ''}"
+
+    def save(self, *args, **kwargs):
+        if not self.code:
+            now = timezone.now()
+            thai_year = (now.year + 543) % 100
+            prefix = f"MEC-{thai_year:02d}{now.strftime('%m')}"
+            last = MasterExpenseClaim.objects.filter(code__startswith=prefix).order_by('code').last()
+            seq = int(last.code.split('-')[-1]) + 1 if last else 1
+            self.code = f"{prefix}-{seq:04d}"
+        super().save(*args, **kwargs)
+
+# ==========================================
+# 🌟 ตารางที่ 1: ระบบตั้งเบิกค่าแรงเหมา (Labor Claim) 🌟
+# ==========================================
+class JobLaborClaim(models.Model):
+    STATUS_CHOICES = [
+        ('UNCLAIMED', 'รอตั้งเบิก (ในตะกร้า)'),
+        ('PENDING', 'รอจ่ายเงิน (Pending)'),
+        ('PAID', 'จ่ายเงินแล้ว (Paid)')
+    ]
+
+    code = models.CharField(max_length=20, unique=True, verbose_name="เลขที่ใบเบิก")
+    production_order = models.ForeignKey(ProductionOrder, on_delete=models.CASCADE, related_name='labor_claims', verbose_name="อ้างอิงเลขที่ JOB")
+    master_claim = models.ForeignKey(MasterExpenseClaim, on_delete=models.SET_NULL, null=True, blank=True, related_name='labor_items', verbose_name="ใบคุมรวม")
+    requester = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, verbose_name="พนักงานผู้หยอดกระปุก")
+
+    contractor_name = models.CharField(max_length=150, verbose_name="ชื่อผู้รับเหมา / หัวหน้าช่าง")
+    amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, verbose_name="ยอดเบิกค่าแรง")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='UNCLAIMED', verbose_name="สถานะการจ่ายเงิน")
+    slip_image = models.ImageField(upload_to='labor_slips/%Y/%m/', null=True, blank=True, verbose_name="หลักฐานหน้างาน")
+
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="วันที่ตั้งเบิก")
+    paid_at = models.DateTimeField(null=True, blank=True, verbose_name="วันที่จ่ายเงิน")
+
+    class Meta:
+        verbose_name = "ใบเบิกค่าแรงเหมา"
+        verbose_name_plural = "ใบเบิกค่าแรงเหมา"
+
+    def __str__(self): return f"{self.code} - {self.contractor_name}"
+
+    def save(self, *args, **kwargs):
+        if not self.code:
+            now = timezone.now()
+            thai_year = (now.year + 543) % 100
+            prefix = f"LBC-{thai_year:02d}{now.strftime('%m')}"
+            last = JobLaborClaim.objects.filter(code__startswith=prefix).order_by('code').last()
+            seq = int(last.code.split('-')[-1]) + 1 if last else 1
+            self.code = f"{prefix}-{seq:04d}"
+        super().save(*args, **kwargs)
+
+# ==========================================
+# 🌟 ตารางที่ 2: ระบบตั้งเบิกค่าติดตั้งแอร์ (Aircon Claim) 🌟
+# ==========================================
+class JobAirconClaim(models.Model):
+    STATUS_CHOICES = [
+        ('UNCLAIMED', 'รอตั้งเบิก (ในตะกร้า)'),
+        ('PENDING', 'รอจ่ายเงิน (Pending)'),
+        ('PAID', 'จ่ายเงินแล้ว (Paid)')
+    ]
+
+    code = models.CharField(max_length=20, unique=True, verbose_name="เลขที่ใบเบิก")
+    production_order = models.ForeignKey(ProductionOrder, on_delete=models.CASCADE, related_name='aircon_claims', verbose_name="อ้างอิงเลขที่ JOB")
+    master_claim = models.ForeignKey(MasterExpenseClaim, on_delete=models.SET_NULL, null=True, blank=True, related_name='aircon_items', verbose_name="ใบคุมรวม")
+    requester = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, verbose_name="พนักงานผู้หยอดกระปุก")
+
+    technician_name = models.CharField(max_length=150, verbose_name="ชื่อช่างแอร์ / ร้านแอร์")
+    description = models.TextField(verbose_name="รายละเอียด (เช่น แอร์ 12000 BTU)")
+    amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, verbose_name="ยอดเบิกค่าแอร์")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='UNCLAIMED', verbose_name="สถานะการจ่ายเงิน")
+    slip_image = models.ImageField(upload_to='aircon_slips/%Y/%m/', null=True, blank=True, verbose_name="หลักฐานการติดตั้ง")
+
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="วันที่ตั้งเบิก")
+    paid_at = models.DateTimeField(null=True, blank=True, verbose_name="วันที่จ่ายเงิน")
+
+    class Meta:
+        verbose_name = "ใบเบิกค่าติดตั้งแอร์"
+        verbose_name_plural = "ใบเบิกค่าติดตั้งแอร์"
+
+    def __str__(self): return f"{self.code} - {self.technician_name}"
+
+    def save(self, *args, **kwargs):
+        if not self.code:
+            now = timezone.now()
+            thai_year = (now.year + 543) % 100
+            prefix = f"ARC-{thai_year:02d}{now.strftime('%m')}"
+            last = JobAirconClaim.objects.filter(code__startswith=prefix).order_by('code').last()
+            seq = int(last.code.split('-')[-1]) + 1 if last else 1
+            self.code = f"{prefix}-{seq:04d}"
+        super().save(*args, **kwargs)
+
+# ==========================================
+# 🌟 ตารางที่ 3: ระบบตั้งเบิกค่าใช้จ่ายอื่นๆ (Other Expenses) 🌟
+# ==========================================
+class JobOtherExpense(models.Model):
+    STATUS_CHOICES = [
+        ('UNCLAIMED', 'รอตั้งเบิก (ในตะกร้า)'),
+        ('PENDING', 'รอจ่ายเงิน (Pending)'),
+        ('PAID', 'จ่ายเงินแล้ว (Paid)')
+    ]
+
+    code = models.CharField(max_length=20, unique=True, verbose_name="เลขที่ใบเบิก")
+    production_order = models.ForeignKey(ProductionOrder, on_delete=models.CASCADE, related_name='other_expenses', verbose_name="อ้างอิงเลขที่ JOB")
+    master_claim = models.ForeignKey(MasterExpenseClaim, on_delete=models.SET_NULL, null=True, blank=True, related_name='other_items', verbose_name="ใบคุมรวม")
+    requester = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, verbose_name="พนักงานผู้ขอเบิก")
+
+    description = models.CharField(max_length=255, verbose_name="รายการที่เบิก (เช่น ซื้อน็อต, ค่าน้ำมัน)")
+    amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, verbose_name="ยอดเบิก")
+    receipt_image = models.ImageField(upload_to='expense_receipts/%Y/%m/', null=True, blank=True, verbose_name="รูปบิลใบเสร็จ")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='UNCLAIMED', verbose_name="สถานะการจ่ายเงิน")
+
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="วันที่ตั้งเบิก")
+    paid_at = models.DateTimeField(null=True, blank=True, verbose_name="วันที่จ่ายเงิน")
+
+    class Meta:
+        verbose_name = "ใบเบิกค่าใช้จ่ายอื่นๆ"
+        verbose_name_plural = "ใบเบิกค่าใช้จ่ายอื่นๆ"
+
+    def __str__(self): return f"{self.code} - {self.description}"
+
+    def save(self, *args, **kwargs):
+        if not self.code:
+            now = timezone.now()
+            thai_year = (now.year + 543) % 100
+            prefix = f"OEX-{thai_year:02d}{now.strftime('%m')}"
+            last = JobOtherExpense.objects.filter(code__startswith=prefix).order_by('code').last()
+            seq = int(last.code.split('-')[-1]) + 1 if last else 1
+            self.code = f"{prefix}-{seq:04d}"
+        super().save(*args, **kwargs)

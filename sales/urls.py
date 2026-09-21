@@ -52,4 +52,7 @@ urlpatterns = [
     path('commissions/', views.commission_board, name='commission_board'),
     path('commissions/claim/<str:claim_type>/', views.commission_create_claim, name='commission_create_claim'),
     path('commissions/pay/<int:claim_id>/', views.knockdown_commission_pay, name='knockdown_commission_pay'),
+    path('master-job-report/', views.master_job_report, name='master_job_report'),
+    path('expense-cart/', views.expense_cart_view, name='expense_cart_view'),
+    path('expense-cart/submit/', views.submit_expense_cart, name='submit_expense_cart'),
 ]

@@ -25,7 +25,7 @@ from .models import Quotation, QuotationItem, QuotationDeposit, POSOrder, POSOrd
 from master_data.models import Customer, CompanyInfo, ShippingRate
 from hr.models import Employee, SalesGroup, CompanySalesTarget, CommissionLog, FundTransaction
 from .forms import QuotationForm
-from manufacturing.models import ProductionOrder, Salesperson as MfgSalesperson, Branch, MfgBranch, ProductionStatus
+from manufacturing.models import ProductionOrder, Salesperson as MfgSalesperson, Branch, MfgBranch, ProductionStatus, JobLaborClaim, JobAirconClaim, JobOtherExpense, MasterExpenseClaim
 from inventory.models import Product, InventoryDoc, StockMovement, Category
 from solar_jobs.models import SolarJob
 
@@ -2146,3 +2146,281 @@ def knockdown_commission_pay(request, claim_id):
         messages.success(request, f"✅ บัญชีทำรายการโอนเงินค่าคอมมิชชันน็อคดาวน์ {claim.code} สำเร็จ!")
 
     return redirect('accounting_verification_hub', task_type='knockdown_commissions')
+
+# ==========================================
+# 🌟 [UPDATED] Master Job Report (ปรับปรุงระบบป้องกันเบิกซ้ำ / แก้ไข / ลบ) 🌟
+# ==========================================
+@login_required
+def master_job_report(request):
+    current_emp = getattr(request.user, 'employee', None)
+    is_authorized = request.user.is_superuser
+    if current_emp:
+        rank = current_emp.business_rank.lower() if current_emp.business_rank else ""
+        dept_name = getattr(current_emp.department, 'name', '')
+        if rank in ['manager', 'director'] or 'บัญชี' in dept_name or 'Accounting' in dept_name:
+            is_authorized = True
+
+    if not is_authorized:
+        messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์เข้าถึงหน้า Master Job Report")
+        return redirect('dashboard')
+
+    if request.method == 'POST' and 'action' in request.POST:
+        action = request.POST.get('action')
+
+        # -----------------------------------------
+        # 1. ระบบสร้างบิลใหม่ (หยอดตะกร้า)
+        # -----------------------------------------
+        if action == 'submit_expense_claim':
+            job_id = request.POST.get('job_id')
+            claim_type = request.POST.get('claim_type')
+
+            if not job_id:
+                messages.error(request, "❌ ไม่พบรหัสอ้างอิง JOB")
+                return redirect('master_job_report')
+
+            order = get_object_or_404(ProductionOrder, pk=job_id)
+
+            try:
+                amount_str = request.POST.get('claim_amount', '0').replace(',', '')
+                amount = Decimal(amount_str)
+                slip_file = request.FILES.get('claim_slip')
+
+                if amount <= 0:
+                    messages.error(request, "❌ ยอดเงินเบิกต้องมากกว่า 0 บาท")
+                    return redirect('master_job_report')
+                if not slip_file:
+                    messages.error(request, "❌ กรุณาแนบรูปบิล/หลักฐานหน้างาน")
+                    return redirect('master_job_report')
+
+                if claim_type == 'LABOR':
+                    # 🌟 ป้องกันการเบิกซ้ำ สำหรับค่าแรงเหมา
+                    if order.labor_claims.exists():
+                        messages.error(request, "❌ งานนี้มีรายการเบิกค่าแรงอยู่แล้ว ไม่สามารถตั้งเบิกซ้ำได้")
+                        return redirect('master_job_report')
+
+                    contractor_name = request.POST.get('contractor_name', '')
+                    JobLaborClaim.objects.create(
+                        production_order=order, requester=current_emp, contractor_name=contractor_name,
+                        amount=amount, slip_image=slip_file, status='UNCLAIMED'
+                    )
+                elif claim_type == 'AIRCON':
+                    # 🌟 ป้องกันการเบิกซ้ำ สำหรับค่าแอร์
+                    if order.aircon_claims.exists():
+                        messages.error(request, "❌ งานนี้มีรายการเบิกค่าแอร์อยู่แล้ว ไม่สามารถตั้งเบิกซ้ำได้")
+                        return redirect('master_job_report')
+
+                    tech_name = request.POST.get('technician_name', '')
+                    desc = request.POST.get('aircon_desc', '')
+                    JobAirconClaim.objects.create(
+                        production_order=order, requester=current_emp, technician_name=tech_name,
+                        description=desc, amount=amount, slip_image=slip_file, status='UNCLAIMED'
+                    )
+                elif claim_type == 'OTHER':
+                    desc = request.POST.get('other_desc', '')
+                    JobOtherExpense.objects.create(
+                        production_order=order, requester=current_emp, description=desc,
+                        amount=amount, receipt_image=slip_file, status='UNCLAIMED'
+                    )
+
+                messages.success(request, f"🛒 หยอดบิลงาน {order.code} ลงตะกร้าเบิกส่วนตัวสำเร็จ!")
+            except Exception as e:
+                messages.error(request, f"❌ เกิดข้อผิดพลาด: {str(e)}")
+
+        # -----------------------------------------
+        # 2. ระบบแก้ไขบิลในตะกร้า (Edit)
+        # -----------------------------------------
+        elif action == 'edit_expense_claim':
+            claim_id = request.POST.get('claim_id')
+            claim_type = request.POST.get('claim_type')
+
+            try:
+                amount_str = request.POST.get('claim_amount', '0').replace(',', '')
+                amount = Decimal(amount_str)
+                slip_file = request.FILES.get('claim_slip')
+
+                if amount <= 0:
+                    messages.error(request, "❌ ยอดเงินต้องมากกว่า 0 บาท")
+                    return redirect('master_job_report')
+
+                if claim_type == 'LABOR':
+                    claim = get_object_or_404(JobLaborClaim, pk=claim_id, status='UNCLAIMED')
+                    claim.contractor_name = request.POST.get('contractor_name', claim.contractor_name)
+                    claim.amount = amount
+                    if slip_file: claim.slip_image = slip_file
+                    claim.save()
+                elif claim_type == 'AIRCON':
+                    claim = get_object_or_404(JobAirconClaim, pk=claim_id, status='UNCLAIMED')
+                    claim.technician_name = request.POST.get('technician_name', claim.technician_name)
+                    claim.description = request.POST.get('aircon_desc', claim.description)
+                    claim.amount = amount
+                    if slip_file: claim.slip_image = slip_file
+                    claim.save()
+                elif claim_type == 'OTHER':
+                    claim = get_object_or_404(JobOtherExpense, pk=claim_id, status='UNCLAIMED')
+                    claim.description = request.POST.get('other_desc', claim.description)
+                    claim.amount = amount
+                    if slip_file: claim.receipt_image = slip_file
+                    claim.save()
+
+                messages.success(request, "✅ บันทึกการแก้ไขข้อมูลสำเร็จ!")
+            except Exception as e:
+                messages.error(request, "❌ ไม่สามารถแก้ไขได้ หรือบิลนี้ถูกส่งไปแล้ว")
+
+        # -----------------------------------------
+        # 3. ระบบลบบิลออกจากตะกร้า (Delete)
+        # -----------------------------------------
+        elif action == 'delete_expense_claim':
+            claim_id = request.POST.get('claim_id')
+            claim_type = request.POST.get('claim_type')
+
+            try:
+                if claim_type == 'LABOR':
+                    get_object_or_404(JobLaborClaim, pk=claim_id, status='UNCLAIMED').delete()
+                elif claim_type == 'AIRCON':
+                    get_object_or_404(JobAirconClaim, pk=claim_id, status='UNCLAIMED').delete()
+                elif claim_type == 'OTHER':
+                    get_object_or_404(JobOtherExpense, pk=claim_id, status='UNCLAIMED').delete()
+
+                messages.success(request, "🗑️ ลบรายการตั้งเบิกออกจากตะกร้าเรียบร้อยแล้ว")
+            except Exception as e:
+                messages.error(request, "❌ ไม่สามารถลบได้ หรือบิลนี้ถูกส่งไปแล้ว")
+
+        return redirect('master_job_report')
+
+    # โค้ดเดิมดึงข้อมูลมาแสดง...
+    jobs_query = ProductionOrder.objects.select_related('quotation_ref', 'logistics_claim').prefetch_related(
+        'labor_claims', 'aircon_claims', 'other_expenses'
+    ).order_by('-id')
+
+    search_query = request.GET.get('q', '')
+    if search_query:
+        jobs_query = jobs_query.filter(
+            Q(code__icontains=search_query) | Q(quotation_ref__code__icontains=search_query) | Q(customer_name__icontains=search_query)
+        ).distinct()
+
+    paginator = Paginator(jobs_query, 20)
+    page_obj = paginator.get_page(request.GET.get('page'))
+
+    qt_ids = [job.quotation_ref_id for job in page_obj if job.quotation_ref_id]
+    invoices = Invoice.objects.filter(quotation_ref_id__in=qt_ids)
+    inv_dict = {inv.quotation_ref_id: inv for inv in invoices}
+
+    tickets = CommissionTicket.objects.filter(Q(quotation_ref_id__in=qt_ids) | Q(invoice_ref__quotation_ref_id__in=qt_ids))
+    ticket_dict_2 = {}
+    ticket_dict_3 = {}
+    for t in tickets:
+        if t.ticket_type == '2%' and t.quotation_ref_id:
+            ticket_dict_2.setdefault(t.quotation_ref_id, []).append(t)
+        elif t.ticket_type == '3%' and getattr(t.invoice_ref, 'quotation_ref_id', None):
+            ticket_dict_3.setdefault(t.invoice_ref.quotation_ref_id, []).append(t)
+
+    cart_count = 0
+    if current_emp:
+        cart_count = (
+            JobLaborClaim.objects.filter(requester=current_emp, status='UNCLAIMED').count() +
+            JobAirconClaim.objects.filter(requester=current_emp, status='UNCLAIMED').count() +
+            JobOtherExpense.objects.filter(requester=current_emp, status='UNCLAIMED').count()
+        )
+
+    for job in page_obj:
+        if job.quotation_ref_id:
+            job.matched_invoice = inv_dict.get(job.quotation_ref_id)
+            job.matched_tickets_2 = ticket_dict_2.get(job.quotation_ref_id, [])
+            job.matched_tickets_3 = ticket_dict_3.get(job.quotation_ref_id, [])
+        else:
+            job.matched_invoice = None
+            job.matched_tickets_2 = []
+            job.matched_tickets_3 = []
+
+    return render(request, 'sales/master_job_report.html', {
+        'page_obj': page_obj, 'search_query': search_query, 'cart_count': cart_count
+    })
+
+# ==========================================
+# 🛒 [NEW] ฟังก์ชันดูตะกร้าเบิกส่วนตัว (Shopping Cart)
+# ==========================================
+from manufacturing.models import MasterExpenseClaim
+
+@login_required
+def expense_cart_view(request):
+    current_emp = getattr(request.user, 'employee', None)
+    if not current_emp:
+        messages.error(request, "❌ ข้อมูลพนักงานไม่สมบูรณ์")
+        return redirect('master_job_report')
+
+    labor_items = JobLaborClaim.objects.filter(requester=current_emp, status='UNCLAIMED').order_by('created_at')
+    aircon_items = JobAirconClaim.objects.filter(requester=current_emp, status='UNCLAIMED').order_by('created_at')
+    other_items = JobOtherExpense.objects.filter(requester=current_emp, status='UNCLAIMED').order_by('created_at')
+
+    # ประวัติใบคุมที่เคยเบิก
+    master_claims = MasterExpenseClaim.objects.filter(requester=current_emp).order_by('-created_at')
+
+    # ดึงรายชื่อธนาคารไปใช้ใน Dropdown
+    bank_choices = MasterExpenseClaim.BANK_CHOICES
+
+    return render(request, 'sales/expense_cart.html', {
+        'labor_items': labor_items,
+        'aircon_items': aircon_items,
+        'other_items': other_items,
+        'master_claims': master_claims,
+        'bank_choices': bank_choices
+    })
+
+# ==========================================
+# 📦 [NEW] ฟังก์ชันกดสร้างใบคุมรวม (Submit Cart)
+# ==========================================
+@login_required
+@transaction.atomic
+def submit_expense_cart(request):
+    if request.method == 'POST':
+        current_emp = getattr(request.user, 'employee', None)
+
+        # รับค่าบิลที่ถูกติ๊กเลือก
+        selected_labors = request.POST.getlist('labor_ids')
+        selected_aircons = request.POST.getlist('aircon_ids')
+        selected_others = request.POST.getlist('other_ids')
+
+        # ข้อมูลบัญชีธนาคาร
+        bank_name = request.POST.get('bank_name')
+        bank_acc_num = request.POST.get('bank_account_number')
+        bank_acc_name = request.POST.get('bank_account_name')
+
+        if not (selected_labors or selected_aircons or selected_others):
+            messages.error(request, "❌ กรุณาเลือกบิลอย่างน้อย 1 รายการเพื่อสร้างใบคุมรวม")
+            return redirect('expense_cart_view')
+
+        if not bank_name or not bank_acc_num or not bank_acc_name:
+            messages.error(request, "❌ กรุณากรอกข้อมูลบัญชีธนาคารให้ครบถ้วนเพื่อความรวดเร็วในการโอนเงิน")
+            return redirect('expense_cart_view')
+
+        # ดึงบิลที่ติ๊ก และรวมยอดเงิน
+        labor_qs = JobLaborClaim.objects.filter(id__in=selected_labors, requester=current_emp, status='UNCLAIMED')
+        aircon_qs = JobAirconClaim.objects.filter(id__in=selected_aircons, requester=current_emp, status='UNCLAIMED')
+        other_qs = JobOtherExpense.objects.filter(id__in=selected_others, requester=current_emp, status='UNCLAIMED')
+
+        total_labor = sum(item.amount for item in labor_qs)
+        total_aircon = sum(item.amount for item in aircon_qs)
+        total_other = sum(item.amount for item in other_qs)
+        grand_total = total_labor + total_aircon + total_other
+
+        if grand_total > 0:
+            # สร้างใบคุมรวม Master Expense Claim
+            master_claim = MasterExpenseClaim.objects.create(
+                requester=current_emp,
+                total_amount=grand_total,
+                bank_name=bank_name,
+                bank_account_number=bank_acc_num,
+                bank_account_name=bank_acc_name,
+                status='PENDING'
+            )
+
+            # ผูกบิลย่อยเข้ากับใบคุมนี้ และเปลี่ยนสถานะเป็น PENDING เพื่อส่งให้บัญชี
+            labor_qs.update(master_claim=master_claim, status='PENDING')
+            aircon_qs.update(master_claim=master_claim, status='PENDING')
+            other_qs.update(master_claim=master_claim, status='PENDING')
+
+            messages.success(request, f"🎉 สร้างใบคุมรวม {master_claim.code} จำนวน {grand_total:,.2f} บาท สำเร็จ! (ข้อมูลส่งถึงโต๊ะฝ่ายบัญชีแล้วครับ)")
+        else:
+            messages.error(request, "❌ ยอดเงินเบิกต้องมากกว่า 0 บาท")
+
+    return redirect('expense_cart_view')

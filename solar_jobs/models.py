@@ -203,3 +203,144 @@ class SolarPurchasePreparationItem(models.Model):
 
     def __str__(self):
         return f"{self.product.name} ({self.quantity_needed})"
+
+# ==========================================
+# 🌟 [NEW] ตารางที่ 1: ระบบตั้งเบิกค่าสำรวจหน้างาน (Solar Survey Claim) 🌟
+# ==========================================
+class SolarSurveyClaim(models.Model):
+    STATUS_CHOICES = [
+        ('PENDING', 'รอจ่ายเงิน (Pending)'),
+        ('PAID', 'จ่ายเงินแล้ว (Paid)')
+    ]
+
+    code = models.CharField(max_length=20, unique=True, verbose_name="เลขที่ใบเบิก")
+    job = models.ForeignKey(SolarJob, on_delete=models.CASCADE, related_name='survey_claims', verbose_name="อ้างอิงใบสั่งงาน (SOL)")
+    requester = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, verbose_name="พนักงานผู้ขอเบิก")
+    amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, verbose_name="ยอดเบิกค่าสำรวจ")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING', verbose_name="สถานะการจ่ายเงิน")
+    slip_image = models.ImageField(upload_to='solar_survey_slips/%Y/%m/', null=True, blank=True, verbose_name="สลิปหลักฐานการโอน")
+
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="วันที่ตั้งเบิก")
+    paid_at = models.DateTimeField(null=True, blank=True, verbose_name="วันที่จ่ายเงิน")
+
+    class Meta:
+        verbose_name = "ใบเบิกค่าสำรวจหน้างาน (Solar)"
+        verbose_name_plural = "ใบเบิกค่าสำรวจหน้างาน (Solar)"
+
+    def __str__(self): return f"{self.code} - {self.requester}"
+
+    def save(self, *args, **kwargs):
+        if not self.code:
+            now = timezone.now()
+            thai_year = (now.year + 543) % 100
+            prefix = f"SSV-{thai_year:02d}{now.strftime('%m')}"
+            last = SolarSurveyClaim.objects.filter(code__startswith=prefix).order_by('code').last()
+            seq = int(last.code.split('-')[-1]) + 1 if last else 1
+            self.code = f"{prefix}-{seq:04d}"
+        super().save(*args, **kwargs)
+
+# ==========================================
+# 🌟 [NEW] ตารางที่ 2: ระบบตั้งเบิกค่าใช้จ่ายในการติดตั้ง (Solar Install Claim) 🌟
+# ==========================================
+class SolarInstallClaim(models.Model):
+    STATUS_CHOICES = [
+        ('PENDING', 'รอจ่ายเงิน (Pending)'),
+        ('PAID', 'จ่ายเงินแล้ว (Paid)')
+    ]
+
+    code = models.CharField(max_length=20, unique=True, verbose_name="เลขที่ใบเบิก")
+    job = models.ForeignKey(SolarJob, on_delete=models.CASCADE, related_name='install_claims', verbose_name="อ้างอิงใบสั่งงาน (SOL)")
+    contractor_name = models.CharField(max_length=150, verbose_name="ชื่อทีมรับเหมา / หัวหน้าช่าง")
+    amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, verbose_name="ยอดเบิกค่าติดตั้ง")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING', verbose_name="สถานะการจ่ายเงิน")
+    slip_image = models.ImageField(upload_to='solar_install_slips/%Y/%m/', null=True, blank=True, verbose_name="สลิปหลักฐานการโอน")
+
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="วันที่ตั้งเบิก")
+    paid_at = models.DateTimeField(null=True, blank=True, verbose_name="วันที่จ่ายเงิน")
+
+    class Meta:
+        verbose_name = "ใบเบิกค่าติดตั้ง (Solar)"
+        verbose_name_plural = "ใบเบิกค่าติดตั้ง (Solar)"
+
+    def __str__(self): return f"{self.code} - {self.contractor_name}"
+
+    def save(self, *args, **kwargs):
+        if not self.code:
+            now = timezone.now()
+            thai_year = (now.year + 543) % 100
+            prefix = f"SIC-{thai_year:02d}{now.strftime('%m')}"
+            last = SolarInstallClaim.objects.filter(code__startswith=prefix).order_by('code').last()
+            seq = int(last.code.split('-')[-1]) + 1 if last else 1
+            self.code = f"{prefix}-{seq:04d}"
+        super().save(*args, **kwargs)
+
+# ==========================================
+# 🌟 [NEW] ตารางที่ 3: ระบบตั้งเบิกสำรองค่าแรง (Solar Advance Labor Claim) 🌟
+# ==========================================
+class SolarAdvanceLaborClaim(models.Model):
+    STATUS_CHOICES = [
+        ('PENDING', 'รอจ่ายเงิน (Pending)'),
+        ('PAID', 'จ่ายเงินแล้ว (Paid)')
+    ]
+
+    code = models.CharField(max_length=20, unique=True, verbose_name="เลขที่ใบเบิก")
+    job = models.ForeignKey(SolarJob, on_delete=models.CASCADE, related_name='advance_labor_claims', verbose_name="อ้างอิงใบสั่งงาน (SOL)")
+    contractor_name = models.CharField(max_length=150, verbose_name="ชื่อทีมรับเหมา / หัวหน้าช่าง")
+    amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, verbose_name="ยอดเบิกสำรองค่าแรง")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING', verbose_name="สถานะการจ่ายเงิน")
+    slip_image = models.ImageField(upload_to='solar_advance_slips/%Y/%m/', null=True, blank=True, verbose_name="สลิปหลักฐานการโอน")
+
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="วันที่ตั้งเบิก")
+    paid_at = models.DateTimeField(null=True, blank=True, verbose_name="วันที่จ่ายเงิน")
+
+    class Meta:
+        verbose_name = "ใบเบิกสำรองค่าแรง (Solar)"
+        verbose_name_plural = "ใบเบิกสำรองค่าแรง (Solar)"
+
+    def __str__(self): return f"{self.code} - {self.contractor_name}"
+
+    def save(self, *args, **kwargs):
+        if not self.code:
+            now = timezone.now()
+            thai_year = (now.year + 543) % 100
+            prefix = f"SAD-{thai_year:02d}{now.strftime('%m')}"
+            last = SolarAdvanceLaborClaim.objects.filter(code__startswith=prefix).order_by('code').last()
+            seq = int(last.code.split('-')[-1]) + 1 if last else 1
+            self.code = f"{prefix}-{seq:04d}"
+        super().save(*args, **kwargs)
+
+# ==========================================
+# 🌟 [NEW] ตารางที่ 4: ระบบตั้งเบิกค่าใช้จ่ายอื่นๆ (Solar Other Expenses) 🌟
+# ==========================================
+class SolarOtherExpense(models.Model):
+    STATUS_CHOICES = [
+        ('PENDING', 'รอจ่ายเงิน (Pending)'),
+        ('PAID', 'จ่ายเงินแล้ว (Paid)')
+    ]
+
+    code = models.CharField(max_length=20, unique=True, verbose_name="เลขที่ใบเบิก")
+    job = models.ForeignKey(SolarJob, on_delete=models.CASCADE, related_name='other_expenses', verbose_name="อ้างอิงใบสั่งงาน (SOL)")
+    requester = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, verbose_name="พนักงานผู้ขอเบิก")
+    description = models.CharField(max_length=255, verbose_name="รายการที่เบิก")
+    amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, verbose_name="ยอดเบิก")
+    receipt_image = models.ImageField(upload_to='solar_expense_receipts/%Y/%m/', null=True, blank=True, verbose_name="รูปบิลใบเสร็จ/สลิป")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING', verbose_name="สถานะการจ่ายเงิน")
+
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="วันที่ตั้งเบิก")
+    paid_at = models.DateTimeField(null=True, blank=True, verbose_name="วันที่จ่ายเงิน")
+
+    class Meta:
+        verbose_name = "ใบเบิกค่าใช้จ่ายอื่นๆ (Solar)"
+        verbose_name_plural = "ใบเบิกค่าใช้จ่ายอื่นๆ (Solar)"
+
+    def __str__(self): return f"{self.code} - {self.description}"
+
+    def save(self, *args, **kwargs):
+        if not self.code:
+            now = timezone.now()
+            thai_year = (now.year + 543) % 100
+            prefix = f"SOE-{thai_year:02d}{now.strftime('%m')}"
+            last = SolarOtherExpense.objects.filter(code__startswith=prefix).order_by('code').last()
+            seq = int(last.code.split('-')[-1]) + 1 if last else 1
+            self.code = f"{prefix}-{seq:04d}"
+        super().save(*args, **kwargs)

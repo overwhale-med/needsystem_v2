@@ -1,0 +1,104 @@
+{% extends 'core/base.html' %}
+{% load humanize %}
+
+{% block content %}
+<div class="container-fluid py-4 px-4">
+    <div class="d-flex justify-content-between align-items-end mb-4">
+        <div>
+            <h3 class="fw-bold text-dark mb-1"><i class="fas fa-file-invoice-dollar text-info me-2"></i>ทำจ่ายค่าใช้จ่ายตามใบงาน (JOB Expenses)</h3>
+            <p class="text-muted mb-0">ศูนย์ตรวจสอบและโอนเงิน ใบคุมการเบิกรวม (Master Expense Claim)</p>
+        </div>
+        <a href="{% url 'accounting_dashboard' %}" class="btn btn-outline-secondary rounded-pill px-4 shadow-sm fw-bold">
+            <i class="fas fa-arrow-left me-2"></i> กลับแผงควบคุม
+        </a>
+    </div>
+
+    <div class="row g-4">
+        {% for claim in pending_claims %}
+        <div class="col-md-6 col-xl-4">
+            <div class="card border-info shadow-sm rounded-4 h-100 border-2">
+                <div class="card-header bg-info bg-opacity-10 border-bottom-0 py-3 d-flex justify-content-between align-items-center rounded-top-4">
+                    <h6 class="fw-bold text-dark mb-0"><i class="fas fa-receipt text-info me-2"></i>{{ claim.code }}</h6>
+                    <span class="badge bg-danger rounded-pill px-3 shadow-sm">รอโอนเงิน</span>
+                </div>
+                <div class="card-body p-4">
+                    <div class="mb-3">
+                        <span class="text-muted small d-block">ผู้ขอเบิก (พนักงาน)</span>
+                        <span class="fw-bold text-dark"><i class="fas fa-user-tie text-primary me-2"></i>{{ claim.requester.first_name }} {{ claim.requester.last_name }}</span>
+                    </div>
+
+                    <!-- 🌟 ข้อมูลธนาคารโอนเงิน -->
+                    <div class="p-3 bg-light rounded-3 mb-4 border">
+                        <span class="text-muted small fw-bold d-block mb-2"><i class="fas fa-university text-primary me-1"></i> ข้อมูลบัญชีโอนเงิน:</span>
+                        <div class="d-flex justify-content-between mb-1">
+                            <span class="small text-muted">ธนาคาร:</span>
+                            <span class="fw-bold text-dark">{{ claim.get_bank_name_display }}</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-1">
+                            <span class="small text-muted">เลขบัญชี:</span>
+                            <span class="fw-bold text-primary font-monospace fs-5">{{ claim.bank_account_number }}</span>
+                        </div>
+                        <div class="d-flex justify-content-between mt-2 pt-2 border-top">
+                            <span class="small text-muted mt-1">ชื่อบัญชี:</span>
+                            <span class="fw-bold text-dark fs-6">{{ claim.bank_account_name }}</span>
+                        </div>
+                    </div>
+
+                    <!-- 🌟 ปุ่มดูรายละเอียดบิลย่อย -->
+                    <button class="btn btn-sm btn-outline-secondary w-100 rounded-pill mb-3 fw-bold shadow-sm" type="button" data-bs-toggle="collapse" data-bs-target="#collapseItems{{ claim.id }}">
+                        <i class="fas fa-list me-1"></i> ดูรายละเอียดบิลย่อยที่รวมมา
+                    </button>
+
+                    <div class="collapse mb-4" id="collapseItems{{ claim.id }}">
+                        <div class="card card-body bg-light border-0 rounded-3 p-2 small">
+                            {% for labor in claim.labor_items.all %}
+                                <div class="d-flex justify-content-between text-muted border-bottom py-1">
+                                    <span>[แรง] {{ labor.production_order.code }}</span>
+                                    <span class="fw-bold text-dark">฿{{ labor.amount|intcomma }}</span>
+                                </div>
+                            {% endfor %}
+                            {% for aircon in claim.aircon_items.all %}
+                                <div class="d-flex justify-content-between text-muted border-bottom py-1">
+                                    <span>[แอร์] {{ aircon.production_order.code }}</span>
+                                    <span class="fw-bold text-dark">฿{{ aircon.amount|intcomma }}</span>
+                                </div>
+                            {% endfor %}
+                            {% for other in claim.other_items.all %}
+                                <div class="d-flex justify-content-between text-muted border-bottom py-1">
+                                    <span>[อื่นๆ] {{ other.production_order.code }}</span>
+                                    <span class="fw-bold text-dark">฿{{ other.amount|intcomma }}</span>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <!-- 🌟 ยอดโอน และ ฟอร์มแนบสลิป -->
+                    <div class="d-flex justify-content-between align-items-center border-top pt-3 mb-4">
+                        <span class="fw-bold text-muted text-uppercase">ยอดรวมที่ต้องโอน</span>
+                        <h3 class="fw-bold text-danger mb-0">฿ {{ claim.total_amount|intcomma }}</h3>
+                    </div>
+
+                    <form method="POST" action="{% url 'pay_job_expense_claim' claim.id %}" enctype="multipart/form-data">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold text-dark"><i class="fas fa-paperclip text-success me-1"></i> แนบสลิปโอนเงิน (สลิปบัญชี) <span class="text-danger">*</span></label>
+                            <input type="file" name="transfer_slip" class="form-control border-success" accept="image/*" required>
+                        </div>
+                        <button type="submit" class="btn btn-success w-100 rounded-pill fw-bold py-2 shadow-sm">
+                            <i class="fas fa-check-circle me-1"></i> ยืนยันการโอนเงิน (PAID)
+                        </button>
+                    </form>
+
+                </div>
+            </div>
+        </div>
+        {% empty %}
+        <div class="col-12 text-center py-5">
+            <i class="fas fa-check-circle fa-4x text-success opacity-25 mb-3"></i>
+            <h5 class="text-muted fw-bold">ไม่มีใบคุมรอทำจ่าย</h5>
+            <p class="text-muted small">ยอดเยี่ยม! คุณจัดการเงินทุกยอดเรียบร้อยแล้ว</p>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

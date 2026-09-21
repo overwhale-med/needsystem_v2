@@ -25,4 +25,5 @@ urlpatterns = [
 
     path('api/update-job-status/', views.update_job_status, name='update_job_status'),
     path('overview/', views.solar_job_overview, name='solar_job_overview'),
+    path('master-job-report/', views.solar_master_job_report, name='solar_master_job_report'),
 ]

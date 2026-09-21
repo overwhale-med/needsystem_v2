@@ -3,6 +3,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.db.models import Sum
 from django.utils import timezone
+from django.db import transaction
 from .models import Income, Expense
 
 from sales.models import POSOrder, Invoice, Quotation
@@ -18,7 +19,6 @@ def accounting_dashboard(request):
     current_month = today.month
     current_year = today.year
 
-    # 1. คำนวณรายรับ-รายจ่าย เฉพาะเดือนปัจจุบัน
     incomes = Income.objects.filter(date__month=current_month, date__year=current_year)
     expenses = Expense.objects.filter(date__month=current_month, date__year=current_year)
 
@@ -26,7 +26,6 @@ def accounting_dashboard(request):
     total_expense = expenses.aggregate(Sum('amount'))['amount__sum'] or 0
     net_balance = total_income - total_expense
 
-    # 2. นับจำนวนงานด่วนข้ามแผนก (รวมมัดจำทั้งบ้านน็อคดาวน์และโซล่าเซลล์)
     pending_deposits_quotation = Quotation.objects.filter(is_deposit_paid=True, is_deposit_verified=False).count()
     pending_deposits_solar = SolarQuotation.objects.filter(is_deposit_paid=True, is_deposit_verified=False).count()
     pending_deposits = pending_deposits_quotation + pending_deposits_solar
@@ -34,10 +33,9 @@ def accounting_dashboard(request):
     pending_sales = (
         Invoice.objects.filter(status='PENDING').count() +
         POSOrder.objects.filter(status='PENDING').count() +
-        SolarInvoice.objects.filter(status='PENDING_VERIFY').count() # 🌟 [NEW] นับบิลโซล่าที่รอบัญชีตรวจ
+        SolarInvoice.objects.filter(status='PENDING_VERIFY').count()
     )
 
-    # 🌟 [FIXED] แยกนับบิล PO น็อคดาวน์และโซล่าเซลล์ 🌟
     pending_purchases_normal = PurchaseOrder.objects.filter(status='APPROVED', payment_status__in=['PENDING', 'DEPOSIT']).count()
     pending_purchases_solar = SolarPurchaseOrder.objects.filter(status='APPROVED', payment_status__in=['PENDING', 'DEPOSIT']).count()
     pending_purchases = pending_purchases_normal + pending_purchases_solar
@@ -45,9 +43,12 @@ def accounting_dashboard(request):
     pending_logistics = LogisticsClaim.objects.filter(status='PENDING').count()
     pending_blueprints = BlueprintClaim.objects.filter(status='PENDING').count()
 
-    total_pending_payments = pending_purchases + pending_logistics + pending_blueprints
+    # 🌟 [NEW] นับคิวใบคุมเบิกรวม (Master Expense Claim) 🌟
+    from manufacturing.models import MasterExpenseClaim
+    pending_job_expenses = MasterExpenseClaim.objects.filter(status='PENDING').count()
 
-    # 3. ดึงรายการเคลื่อนไหวล่าสุด 10 รายการ
+    total_pending_payments = pending_purchases + pending_logistics + pending_blueprints + pending_job_expenses
+
     recent_incomes = list(Income.objects.all().order_by('-date', '-id')[:5])
     recent_expenses = list(Expense.objects.all().order_by('-date', '-id')[:5])
 
@@ -59,13 +60,12 @@ def accounting_dashboard(request):
     context = {
         'total_income': total_income, 'total_expense': total_expense, 'net_balance': net_balance,
         'pending_deposits': pending_deposits, 'pending_sales': pending_sales,
-
-        # 🌟 [FIXED] ส่งตัวแปรแยกกันไปแสดงผลที่หน้าเว็บ 🌟
         'pending_purchases_normal': pending_purchases_normal,
         'pending_purchases_solar': pending_purchases_solar,
-
         'pending_logistics': pending_logistics,
-        'pending_blueprints': pending_blueprints, 'total_pending_payments': total_pending_payments,
+        'pending_blueprints': pending_blueprints,
+        'pending_job_expenses': pending_job_expenses, # 🌟 เพิ่มตัวแปรนี้
+        'total_pending_payments': total_pending_payments,
         'recent_transactions': recent_transactions,
     }
     return render(request, 'accounting/dashboard.html', context)
@@ -430,3 +430,61 @@ def commission_recon_board(request):
 
     context = {'tab': tab, 'data_list': data_list}
     return render(request, 'accounting/commission_recon.html', context)
+
+# ==========================================
+# 🌟 [NEW] ศูนย์รวมทำจ่ายใบคุมรวมค่าใช้จ่ายตามใบงาน (JOB Expenses) 🌟
+# ==========================================
+from manufacturing.models import MasterExpenseClaim
+
+@login_required
+def accounting_job_expense_hub(request):
+    # เช็คสิทธิ์บัญชี
+    is_accounting = False
+    if request.user.is_superuser:
+        is_accounting = True
+    elif hasattr(request.user, 'employee') and request.user.employee:
+        dept = request.user.employee.department.name if request.user.employee.department else ''
+        if 'บัญชี' in dept or 'Account' in dept: is_accounting = True
+
+    if not is_accounting:
+        messages.error(request, "❌ หน้าต่างนี้สงวนสิทธิ์เฉพาะเจ้าหน้าที่ฝ่ายบัญชีเท่านั้น")
+        return redirect('dashboard')
+
+    # ดึงใบคุมรวมที่รอจ่าย พร้อมดึงข้อมูลบิลย่อยที่ผูกอยู่
+    pending_claims = MasterExpenseClaim.objects.filter(status='PENDING').prefetch_related(
+        'labor_items', 'aircon_items', 'other_items'
+    ).order_by('created_at')
+
+    return render(request, 'accounting/job_expense_hub.html', {
+        'pending_claims': pending_claims
+    })
+
+@login_required
+@transaction.atomic
+def pay_job_expense_claim(request, claim_id):
+    claim = get_object_or_404(MasterExpenseClaim, pk=claim_id)
+
+    if request.method == 'POST' and 'transfer_slip' in request.FILES:
+        # 1. รับสลิปและอัปเดตใบคุมรวมเป็น PAID
+        claim.transfer_slip = request.FILES['transfer_slip']
+        claim.status = 'PAID'
+        claim.paid_at = timezone.now()
+        claim.save()
+
+        # 2. 🌟 ความฉลาดของระบบ: สั่งอัปเดตบิลย่อยทั้งหมดให้กลายเป็น PAID โดยอัตโนมัติ 🌟
+        claim.labor_items.update(status='PAID', paid_at=timezone.now())
+        claim.aircon_items.update(status='PAID', paid_at=timezone.now())
+        claim.other_items.update(status='PAID', paid_at=timezone.now())
+
+        # 3. สร้างรายจ่ายลงบัญชีให้อัตโนมัติ
+        emp_name = claim.requester.first_name if claim.requester else "พนักงาน"
+        Expense.objects.create(
+            title=f"จ่ายค่าเบิกเงินหน้างาน (ใบคุม: {claim.code}) - {emp_name}",
+            amount=claim.total_amount,
+            date=timezone.now().date(),
+            note=f"โอนเข้าบัญชี {claim.get_bank_name_display()} {claim.bank_account_number} ({claim.bank_account_name})"
+        )
+
+        messages.success(request, f"✅ บัญชีทำรายการโอนเงินยอด {claim.total_amount:,.2f} บาท สำเร็จ! ระบบอัปเดตป้ายสีเขียวให้ตาราง Master Job Report อัตโนมัติแล้ว")
+
+    return redirect('accounting_job_expense_hub')

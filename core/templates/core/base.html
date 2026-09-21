@@ -129,6 +129,10 @@
                             {% if request.user.is_superuser or group_name == "Executive" or group_name == "Planner_Team" %}
                             <li><a class="dropdown-item" href="{% url 'planner_board' %}"><i class="fas fa-clipboard-list me-2 text-info"></i> กระดานวางแผนการผลิต</a></li>
                             <li><a class="dropdown-item" href="{% url 'production_list' %}"><i class="fas fa-table me-2 text-secondary"></i> กระดานควบคุมงานผลิต (ดูภาพรวม)</a></li>
+
+                            <!-- 🌟 [NEW] เพิ่มเมนู รายการควบคุมค่าใช้จ่ายตามใบงาน(JOB) ตรงนี้ 🌟 -->
+                            <li><a class="dropdown-item fw-bold text-success" href="{% url 'master_job_report' %}"><i class="fas fa-file-invoice-dollar me-2 text-success"></i> รายการควบคุมค่าใช้จ่ายตามใบงาน(JOB)</a></li>
+
                             <li><hr class="dropdown-divider"></li>
                             {% endif %}
 
