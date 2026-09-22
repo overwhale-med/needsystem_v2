@@ -432,7 +432,7 @@ def commission_recon_board(request):
     return render(request, 'accounting/commission_recon.html', context)
 
 # ==========================================
-# 🌟 [NEW] ศูนย์รวมทำจ่ายใบคุมรวมค่าใช้จ่ายตามใบงาน (JOB Expenses) 🌟
+# 🌟 [UPDATED] ศูนย์รวมทำจ่ายใบคุมรวมค่าใช้จ่ายตามใบงาน (JOB Expenses) 🌟
 # ==========================================
 from manufacturing.models import MasterExpenseClaim
 
@@ -450,13 +450,23 @@ def accounting_job_expense_hub(request):
         messages.error(request, "❌ หน้าต่างนี้สงวนสิทธิ์เฉพาะเจ้าหน้าที่ฝ่ายบัญชีเท่านั้น")
         return redirect('dashboard')
 
-    # ดึงใบคุมรวมที่รอจ่าย พร้อมดึงข้อมูลบิลย่อยที่ผูกอยู่
-    pending_claims = MasterExpenseClaim.objects.filter(status='PENDING').prefetch_related(
-        'labor_items', 'aircon_items', 'other_items'
-    ).order_by('created_at')
+    # 🌟 [NEW] รับพารามิเตอร์ tab เพื่อกรองใบคุม
+    tab = request.GET.get('tab', 'pending')
+
+    if tab == 'paid':
+        # ดึงประวัติที่จ่ายแล้ว (PAID) เรียงตามวันที่จ่าย
+        claims = MasterExpenseClaim.objects.filter(status='PAID').prefetch_related(
+            'labor_items', 'aircon_items', 'other_items'
+        ).order_by('-paid_at', '-created_at')
+    else:
+        # ดึงคิวงานปัจจุบัน (PENDING) เรียงตามวันที่ตั้งเบิก
+        claims = MasterExpenseClaim.objects.filter(status='PENDING').prefetch_related(
+            'labor_items', 'aircon_items', 'other_items'
+        ).order_by('created_at')
 
     return render(request, 'accounting/job_expense_hub.html', {
-        'pending_claims': pending_claims
+        'claims': claims,
+        'tab': tab
     })
 
 @login_required
@@ -488,3 +498,26 @@ def pay_job_expense_claim(request, claim_id):
         messages.success(request, f"✅ บัญชีทำรายการโอนเงินยอด {claim.total_amount:,.2f} บาท สำเร็จ! ระบบอัปเดตป้ายสีเขียวให้ตาราง Master Job Report อัตโนมัติแล้ว")
 
     return redirect('accounting_job_expense_hub')
+
+@login_required
+def accounting_job_expense_detail(request, claim_id):
+    # เช็คสิทธิ์บัญชี
+    is_accounting = False
+    if request.user.is_superuser:
+        is_accounting = True
+    elif hasattr(request.user, 'employee') and request.user.employee:
+        dept = request.user.employee.department.name if request.user.employee.department else ''
+        if 'บัญชี' in dept or 'Account' in dept: is_accounting = True
+
+    if not is_accounting:
+        messages.error(request, "❌ หน้าต่างนี้สงวนสิทธิ์เฉพาะเจ้าหน้าที่ฝ่ายบัญชีเท่านั้น")
+        return redirect('dashboard')
+
+    # ดึงข้อมูลใบคุม พร้อมบิลย่อยทั้งหมด
+    claim = get_object_or_404(MasterExpenseClaim.objects.prefetch_related(
+        'labor_items', 'aircon_items', 'other_items'
+    ), pk=claim_id)
+
+    return render(request, 'accounting/job_expense_detail.html', {
+        'claim': claim
+    })

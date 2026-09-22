@@ -1,0 +1,252 @@
+{% extends 'core/base.html' %}
+{% load humanize %}
+
+{% block content %}
+<style>
+    /* 🌟 สไตล์สำหรับการรันเลขลำดับในตารางอัตโนมัติ 🌟 */
+    .auto-number tbody { counter-reset: rowNumber; }
+    .auto-number tbody tr { counter-increment: rowNumber; }
+    .auto-number tbody tr td.row-number::before { content: counter(rowNumber); }
+
+    /* 🌟 สไตล์มาตรฐานสำหรับสั่งพิมพ์ (Print Layout) 🌟 */
+    @media print {
+        /* ซ่อนเมนูและปุ่มที่ไม่จำเป็นตอนปริ้นต์ */
+        .navbar, .sidebar, form, .d-print-none, .btn { display: none !important; }
+        
+        /* ตั้งค่าหน้ากระดาษ A4 */
+        @page { size: A4 portrait; margin: 15mm; }
+        body { background-color: #fff !important; font-size: 11pt !important; color: #000 !important; }
+        .container, .container-fluid { padding: 0 !important; width: 100% !important; max-width: 100% !important; }
+        .main-content { margin-left: 0 !important; padding: 0 !important; }
+
+        /* ปรับกรอบและสีให้เป็นขาวดำทางการ */
+        .card { border: none !important; box-shadow: none !important; border-radius: 0 !important; }
+        .card-body { padding: 0 !important; }
+        .bg-light { background-color: transparent !important; }
+        
+        /* ตารางเส้นดำทึบตามมาตรฐานบัญชี */
+        .table { width: 100% !important; margin-bottom: 20px !important; border-collapse: collapse !important; }
+        .table-bordered th, .table-bordered td { border: 1px solid #000 !important; color: #000 !important; padding: 8px !important; }
+        .table th { background-color: #f2f2f2 !important; -webkit-print-color-adjust: exact; font-weight: bold !important; text-align: center !important; }
+        
+        /* ซ่อนป้าย Badge สีสันบนเว็บ */
+        .badge-print-clean { background: transparent !important; color: #000 !important; padding: 0 !important; border: none !important; font-weight: bold; }
+        .badge-print-clean i { display: none !important; } /* ซ่อนไอคอนตอนปริ้นต์ */
+    }
+</style>
+
+<div class="container py-4">
+    <!-- แถบปุ่มกด (ซ่อนตอนปริ้นต์) -->
+    <div class="d-flex justify-content-between align-items-end mb-4 d-print-none">
+        <div>
+            <h3 class="fw-bold text-dark mb-1"><i class="fas fa-file-contract text-primary me-2"></i>รายละเอียดใบเบิกค่าใช้จ่าย</h3>
+            <p class="text-muted mb-0">ระบบแสดงผลในรูปแบบเอกสารมาตรฐาน สามารถกดสั่งพิมพ์ได้ทันที</p>
+        </div>
+        <div>
+            <button class="btn btn-primary rounded-pill px-4 shadow-sm fw-bold me-2" onclick="window.print()">
+                <i class="fas fa-print me-2"></i> พิมพ์เอกสาร (Print)
+            </button>
+            <button class="btn btn-outline-secondary rounded-pill px-4 shadow-sm fw-bold" onclick="window.close()">
+                <i class="fas fa-times me-2"></i> ปิดหน้าต่าง
+            </button>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- 📄 เริ่มหน้ากระดาษ A4 (เอกสารทางการ) -->
+    <!-- ========================================== -->
+    <div class="card shadow border-0 rounded-0 p-3 p-md-5 bg-white mx-auto" style="max-width: 900px; min-height: 1000px;">
+        
+        <!-- 1. หัวกระดาษ (Header) -->
+        <div class="text-center mb-4 border-bottom border-dark pb-3">
+            <h4 class="fw-bold text-dark mb-1">บริษัท นีด ช็อปปิ้ง จำกัด</h4>
+            <h5 class="fw-bold text-dark mb-3">ใบเบิกค่าใช้จ่าย (Expense Claim Form)</h5>
+        </div>
+
+        <!-- 2. ข้อมูลเอกสารและบัญชี (Document & Payment Info) -->
+        <div class="row mb-4 text-dark" style="font-size: 0.95rem;">
+            <div class="col-7">
+                <table class="table-borderless table-sm">
+                    <tr><td class="fw-bold" style="width: 120px;">ผู้ขอเบิก:</td><td>{{ claim.requester.first_name }} {{ claim.requester.last_name }}</td></tr>
+                    <tr><td class="fw-bold">โอนเข้าธนาคาร:</td><td>{{ claim.get_bank_name_display }}</td></tr>
+                    <tr><td class="fw-bold">เลขที่บัญชี:</td><td class="font-monospace fw-bold fs-6">{{ claim.bank_account_number }}</td></tr>
+                    <tr><td class="fw-bold">ชื่อบัญชี:</td><td>{{ claim.bank_account_name }}</td></tr>
+                </table>
+            </div>
+            <div class="col-5">
+                <table class="table-borderless table-sm w-100">
+                    <tr><td class="fw-bold text-end" style="width: 100px;">เลขที่ใบคุม:</td><td class="fw-bold text-end text-primary fs-5">{{ claim.code }}</td></tr>
+                    <tr><td class="fw-bold text-end">วันที่ทำรายการ:</td><td class="text-end">{{ claim.paid_at|date:"d/m/Y H:i"|default:"-" }}</td></tr>
+                    <tr>
+                        <td class="fw-bold text-end align-middle">สถานะ:</td>
+                        <td class="text-end">
+                            {% if claim.status == 'PAID' %}
+                                <span class="badge bg-success bg-opacity-10 text-success border border-success badge-print-clean">ทำรายการโอนแล้ว (PAID)</span>
+                            {% else %}
+                                <span class="badge bg-danger bg-opacity-10 text-danger border border-danger badge-print-clean">รอทำจ่าย (PENDING)</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+
+        <!-- 3. ตารางรายการเบิก (Items Table) -->
+        <table class="table table-bordered border-dark align-middle auto-number mb-0">
+            <thead class="bg-light text-dark">
+                <tr>
+                    <th class="text-center py-2" style="width: 7%;">ลำดับ</th>
+                    <th class="py-2" style="width: 25%;">หมวดหมู่ / อ้างอิง JOB</th>
+                    <th class="py-2" style="width: 48%;">รายละเอียดการเบิกจ่าย</th>
+                    <th class="text-end py-2" style="width: 20%;">จำนวนเงิน (บาท)</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- รายการค่าแรง -->
+                {% for item in claim.labor_items.all %}
+                <tr>
+                    <td class="text-center row-number"></td>
+                    <td><span class="badge bg-warning text-dark me-1 badge-print-clean">ค่าแรง</span> {{ item.production_order.code }}</td>
+                    <td>{{ item.contractor_name }}</td>
+                    <td class="text-end fw-bold">{{ item.amount|intcomma }}</td>
+                </tr>
+                {% endfor %}
+
+                <!-- รายการค่าแอร์ -->
+                {% for item in claim.aircon_items.all %}
+                <tr>
+                    <td class="text-center row-number"></td>
+                    <td><span class="badge bg-info text-dark me-1 badge-print-clean">ค่าแอร์</span> {{ item.production_order.code }}</td>
+                    <td>{{ item.technician_name }} ({{ item.description }})</td>
+                    <td class="text-end fw-bold">{{ item.amount|intcomma }}</td>
+                </tr>
+                {% endfor %}
+
+                <!-- รายการค่าอื่นๆ -->
+                {% for item in claim.other_items.all %}
+                <tr>
+                    <td class="text-center row-number"></td>
+                    <td><span class="badge bg-secondary me-1 badge-print-clean">ค่าอื่นๆ</span> {{ item.production_order.code }}</td>
+                    <td>{{ item.description }}</td>
+                    <td class="text-end fw-bold">{{ item.amount|intcomma }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <!-- สรุปยอดรวม และ ตัวอักษรภาษาไทย -->
+                <tr>
+                    <td colspan="3" class="text-center fw-bold align-middle bg-light border-dark py-3">
+                        ( <span id="thaiBahtText" class="text-primary badge-print-clean" style="font-size: 1.1rem;">-</span> )
+                    </td>
+                    <td class="text-end fw-bold text-dark fs-5 align-middle border-dark py-3 bg-light">
+                        {{ claim.total_amount|intcomma }}
+                    </td>
+                </tr>
+            </tfoot>
+        </table>
+
+        <!-- 4. ส่วนลงนามอนุมัติ (Signature Block) -->
+        <div class="row text-center mt-5 pt-5 text-dark" style="font-size: 0.95rem;">
+            <div class="col-4">
+                <p class="mb-2">..........................................................</p>
+                <p class="mb-1">( {{ claim.requester.first_name }} {{ claim.requester.last_name }} )</p>
+                <p class="fw-bold mb-1">ผู้ขอเบิก (Requester)</p>
+                <p class="text-muted small">วันที่ ....... / ....... / .......</p>
+            </div>
+            <div class="col-4">
+                <p class="mb-2">..........................................................</p>
+                <p class="mb-1">( ........................................................ )</p>
+                <p class="fw-bold mb-1">ผู้ตรวจสอบ (Checked By)</p>
+                <p class="text-muted small">วันที่ ....... / ....... / .......</p>
+            </div>
+            <div class="col-4">
+                <p class="mb-2">..........................................................</p>
+                <p class="mb-1">( ........................................................ )</p>
+                <p class="fw-bold mb-1">ผู้อนุมัติ (Approved By)</p>
+                <p class="text-muted small">วันที่ ....... / ....... / .......</p>
+            </div>
+        </div>
+
+    </div>
+    <!-- 📄 จบหน้ากระดาษ -->
+
+    <!-- สลิปการโอนเงิน (แสดงเฉพาะบนจอ ไม่ปริ้นต์ออกมา) -->
+    {% if claim.transfer_slip %}
+    <div class="card shadow-sm border-0 rounded-4 mt-4 d-print-none mx-auto" style="max-width: 900px;">
+        <div class="card-header bg-success bg-opacity-10 border-0 py-3 text-center">
+            <h6 class="fw-bold text-success mb-0"><i class="fas fa-check-circle me-2"></i>หลักฐานการโอนเงินจากฝ่ายบัญชี (แสดงเฉพาะบนเว็บ)</h6>
+        </div>
+        <div class="card-body text-center p-4">
+            <img src="{{ claim.transfer_slip.url }}" alt="Transfer Slip" class="img-fluid rounded shadow-sm" style="max-height: 500px;">
+        </div>
+    </div>
+    {% endif %}
+
+</div>
+
+<!-- 🌟 สคริปต์แปลงตัวเลขเป็นภาษาไทย (Thai Baht Text) 🌟 -->
+<script>
+    function ThaiBaht(Number) {
+        var TxtNumArr = ["ศูนย์", "หนึ่ง", "สอง", "สาม", "สี่", "ห้า", "หก", "เจ็ด", "แปด", "เก้า", "สิบ"];
+        var TxtDigitArr = ["", "สิบ", "ร้อย", "พัน", "หมื่น", "แสน", "ล้าน"];
+        var BahtText = "";
+        
+        if (isNaN(Number)) return "ข้อมูลไม่ถูกต้อง";
+        if (Number == 0) return "ศูนย์บาทถ้วน";
+        
+        Number = parseFloat(Number).toFixed(2);
+        var SplitStr = Number.split('.');
+        var num = SplitStr[0];
+        var dec = SplitStr[1];
+        
+        // แปลงหลักบาท
+        if (num.length > 0) {
+            for (var i = 0; i < num.length; i++) {
+                var tmp = parseInt(num.substring(i, i + 1));
+                if (tmp != 0) {
+                    if ((i == (num.length - 1)) && (tmp == 1) && (num.length > 1)) {
+                        BahtText += "เอ็ด";
+                    } else if ((i == (num.length - 2)) && (tmp == 2)) {
+                        BahtText += "ยี่";
+                    } else if ((i == (num.length - 2)) && (tmp == 1)) {
+                        BahtText += "";
+                    } else {
+                        BahtText += TxtNumArr[tmp];
+                    }
+                    BahtText += TxtDigitArr[num.length - i - 1];
+                }
+            }
+            BahtText += "บาท";
+        }
+        
+        // แปลงหลักสตางค์
+        if (dec == "00") {
+            BahtText += "ถ้วน";
+        } else {
+            for (var i = 0; i < dec.length; i++) {
+                var tmp = parseInt(dec.substring(i, i + 1));
+                if (tmp != 0) {
+                    if ((i == (dec.length - 1)) && (tmp == 1) && (dec.length > 1)) {
+                        BahtText += "เอ็ด";
+                    } else if ((i == (dec.length - 2)) && (tmp == 2)) {
+                        BahtText += "ยี่";
+                    } else if ((i == (dec.length - 2)) && (tmp == 1)) {
+                        BahtText += "";
+                    } else {
+                        BahtText += TxtNumArr[tmp];
+                    }
+                    BahtText += TxtDigitArr[dec.length - i - 1];
+                }
+            }
+            BahtText += "สตางค์";
+        }
+        return BahtText;
+    }
+
+    // วางข้อความภาษาไทยลงในช่องที่กำหนดทันทีที่โหลดหน้าเสร็จ
+    document.addEventListener("DOMContentLoaded", function() {
+        var totalAmount = {{ claim.total_amount }};
+        document.getElementById('thaiBahtText').innerText = ThaiBaht(totalAmount);
+    });
+</script>
+{% endblock %}

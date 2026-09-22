@@ -7,6 +7,11 @@
     .task-btn:hover { background-color: #fff8e1; border-color: #ffc107; transform: translateX(5px); }
     .modal-task-btn { transition: all 0.2s ease; }
     .modal-task-btn:hover { background-color: #fff !important; border-color: #0d6efd !important; transform: translateY(-2px); box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+    
+    /* 🌟 สไตล์เพิ่มเติมสำหรับ Dropdown ให้สวยงาม 🌟 */
+    .dropdown-menu-custom { border-radius: 12px; border: none; box-shadow: 0 10px 30px rgba(0,0,0,0.1); padding: 10px; margin-top: 10px !important; }
+    .dropdown-item-custom { border-radius: 8px; padding: 10px 15px; font-size: 0.9rem; font-weight: 500; color: #495057; transition: all 0.2s; margin-bottom: 2px; }
+    .dropdown-item-custom:hover { background-color: #f8f9fa; color: #0d6efd; transform: translateX(3px); }
 </style>
 
 <div class="container-fluid py-4 px-4">
@@ -15,19 +20,54 @@
             <h3 class="fw-bold text-dark mb-1"><i class="fas fa-chart-line text-success me-2"></i>ศูนย์บัญชาการฝ่ายบัญชี (Accounting)</h3>
             <p class="text-muted mb-0">ข้อมูลสรุปกระแสเงินสดประจำเดือน {% now "F Y" %}</p>
         </div>
-        <div>
-            <!-- 🌟 [NEW] ปุ่ม Master Job Report ที่เพิ่งสร้าง 🌟 -->
-            <a href="{% url 'master_job_report' %}" class="btn btn-primary text-white shadow-sm rounded-pill px-4 me-2 fw-bold">
-                <i class="fas fa-clipboard-list me-1"></i> ควบคุมรายจ่ายตาม(JOB)-ระบบน็อคดาวน์
-            </a>
+        
+        <!-- 🌟 กลุ่มปุ่มควบคุม (ปรับปรุงใหม่เป็น Dropdown) 🌟 -->
+        <div class="d-flex align-items-center">
+            
+            <!-- ปุ่ม Dropdown รวบรวมเมนูควบคุม/ตรวจสอบ -->
+            <div class="dropdown me-3">
+                <button class="btn btn-primary text-white shadow-sm rounded-pill px-4 fw-bold dropdown-toggle" type="button" id="controlMenuButton" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="fas fa-cogs me-1"></i> ควบคุม/ตรวจสอบรายการเบิกจ่าย
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end dropdown-menu-custom" aria-labelledby="controlMenuButton" style="width: 350px;">
+                    <li>
+                        <h6 class="dropdown-header fw-bold text-primary"><i class="fas fa-hammer me-1"></i> หมวดหมู่: บ้านน็อคดาวน์</h6>
+                    </li>
+                    <li>
+                        <a class="dropdown-item dropdown-item-custom" href="{% url 'master_job_report' %}">
+                            <i class="fas fa-clipboard-list fa-fw me-2 text-secondary"></i> ควบคุมรายจ่ายตาม(JOB)-น็อคดาวน์
+                        </a>
+                    </li>
+                    <li><hr class="dropdown-divider opacity-25"></li>
+                    <li>
+                        <h6 class="dropdown-header fw-bold text-warning"><i class="fas fa-sun me-1"></i> หมวดหมู่: โซล่าเซลล์</h6>
+                    </li>
+                    <li>
+                        <a class="dropdown-item dropdown-item-custom" href="{% url 'solar_master_job_report' %}">
+                            <i class="fas fa-solar-panel fa-fw me-2 text-secondary"></i> ควบคุมรายจ่ายตาม(JOB)-โซล่าเซลล์
+                        </a>
+                    </li>
+                    <li><hr class="dropdown-divider opacity-25"></li>
+                    <li>
+                        <h6 class="dropdown-header fw-bold text-success"><i class="fas fa-coins me-1"></i> หมวดหมู่: ค่าตอบแทน & การเบิกจ่าย</h6>
+                    </li>
+                    <li>
+                        <a class="dropdown-item dropdown-item-custom" href="{% url 'accounting_commission_recon' %}">
+                            <i class="fas fa-search-dollar fa-fw me-2 text-secondary"></i> ควบคุมการเบิกคอมมิชชั่น (รวม)
+                        </a>
+                    </li>
+                    <li>
+                        <a class="dropdown-item dropdown-item-custom" href="{% url 'accounting_job_expense_hub' %}">
+                            <i class="fas fa-file-invoice-dollar fa-fw me-2 text-secondary"></i> ทำจ่ายค่าใช้จ่ายตามใบงาน (JOB Expenses)
+                            {% if pending_job_expenses > 0 %}
+                                <span class="badge bg-danger rounded-pill float-end">{{ pending_job_expenses }}</span>
+                            {% endif %}
+                        </a>
+                    </li>
+                </ul>
+            </div>
 
-            <a href="{% url 'solar_master_job_report' %}" class="btn btn-warning text-dark shadow-sm rounded-pill px-4 me-2 fw-bold">
-                <i class="fas fa-solar-panel me-1"></i> ควบคุมรายจ่ายตาม(JOB)-ระบบโซล่าเซลล์
-            </a>
-
-            <a href="{% url 'accounting_commission_recon' %}" class="btn btn-info text-white shadow-sm rounded-pill px-4 me-2 fw-bold">
-                <i class="fas fa-search-dollar me-1"></i> ควบคุมการเบิกคอมมิชชั่น(รวม)
-            </a>
+            <!-- ปุ่มบันทึกรับ-จ่าย (คงไว้ด้านนอกให้กดง่าย) -->
             <button class="btn btn-success shadow-sm rounded-pill px-3 me-2 fw-bold"><i class="fas fa-plus-circle me-1"></i> รับรายได้</button>
             <button class="btn btn-danger shadow-sm rounded-pill px-3 fw-bold"><i class="fas fa-minus-circle me-1"></i> บันทึกรายจ่าย</button>
         </div>
@@ -158,7 +198,6 @@
                                 <small class="text-muted">บิลสั่งซื้อวัตถุดิบบ้านน็อคดาวน์</small>
                             </div>
                         </div>
-                        <!-- 🌟 [FIXED] ใช้ตัวแปร pending_purchases_normal 🌟 -->
                         <span class="badge bg-danger rounded-pill px-3 shadow-sm">{{ pending_purchases_normal }} รายการ</span>
                     </div>
                 </a>
@@ -174,7 +213,6 @@
                                 <small class="text-muted">บิลสั่งซื้ออุปกรณ์โซล่าเซลล์</small>
                             </div>
                         </div>
-                        <!-- 🌟 [FIXED] ใช้ตัวแปร pending_purchases_solar 🌟 -->
                         <span class="badge bg-danger rounded-pill px-3 shadow-sm">{{ pending_purchases_solar }} รายการ</span>
                     </div>
                 </a>

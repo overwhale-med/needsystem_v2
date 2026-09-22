@@ -12,5 +12,6 @@ urlpatterns = [
     path('verify/<str:task_type>/', views.verification_hub, name='accounting_verification_hub'),
     path('approve/<str:task_type>/<int:item_id>/', views.approve_transaction, name='accounting_approve_transaction'),
     path('accounting/job-expense-hub/', views.accounting_job_expense_hub, name='accounting_job_expense_hub'),
+    path('accounting/job-expense-detail/<int:claim_id>/', views.accounting_job_expense_detail, name='accounting_job_expense_detail'), # 🌟 บรรทัดที่เพิ่มใหม่
     path('accounting/job-expense-pay/<int:claim_id>/', views.pay_job_expense_claim, name='pay_job_expense_claim'),
 ]

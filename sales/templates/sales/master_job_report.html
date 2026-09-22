@@ -210,29 +210,38 @@
                             {% endif %}
                         </td>
 
-                        <!-- 🌟 7. ค่าแรงเหมา (ระบบใหม่) 🌟 -->
+                        <!-- 🌟 7. ค่าแรงเหมา (อัปเดตใหม่) 🌟 -->
                         <td class="text-center bg-light">
                             {% if job.labor_claims.all %}
                                 {% with claim=job.labor_claims.first %}
                                     <div class="mb-1">
                                         {% if claim.status == 'PAID' %}
                                             <span class="badge-status bg-green-soft d-block mb-1 mx-auto" style="width: max-content;">จ่ายแล้ว</span>
-                                            <button class="btn btn-sm btn-outline-secondary rounded-pill px-2 py-0 d-print-none" style="font-size: 0.7rem;" data-bs-toggle="modal" data-bs-target="#editLaborModal{{ claim.id }}">🔍 ดูรายการ</button>
+                                            {% if claim.master_claim %}
+                                                <a href="{% url 'accounting_job_expense_detail' claim.master_claim.id %}" target="_blank" class="btn btn-sm btn-outline-dark rounded-pill px-2 py-0 d-print-none fw-bold" style="font-size: 0.7rem;">
+                                                    <i class="fas fa-file-invoice"></i> {{ claim.master_claim.code }}
+                                                </a>
+                                            {% endif %}
                                         {% elif claim.status == 'PENDING' %}
                                             <span class="badge-status bg-red-soft d-block mb-1 mx-auto" style="width: max-content;">รอโอนเงิน</span>
-                                            <button class="btn btn-sm btn-outline-secondary rounded-pill px-2 py-0 d-print-none" style="font-size: 0.7rem;" data-bs-toggle="modal" data-bs-target="#editLaborModal{{ claim.id }}">🔍 ดูรายการ</button>
+                                            {% if claim.master_claim %}
+                                                <a href="{% url 'accounting_job_expense_detail' claim.master_claim.id %}" target="_blank" class="btn btn-sm btn-outline-dark rounded-pill px-2 py-0 d-print-none fw-bold" style="font-size: 0.7rem;">
+                                                    <i class="fas fa-file-invoice"></i> {{ claim.master_claim.code }}
+                                                </a>
+                                            {% endif %}
                                         {% else %}
                                             <span class="badge-status bg-yellow-soft border-warning d-block mb-1 mx-auto" style="width: max-content;">ในตะกร้า</span>
                                             <button class="btn btn-sm btn-outline-primary rounded-pill px-2 py-0 d-print-none" style="font-size: 0.7rem;" data-bs-toggle="modal" data-bs-target="#editLaborModal{{ claim.id }}">✏️ แก้ไข</button>
                                         {% endif %}
                                     </div>
                                     
-                                    <!-- Modal แก้ไข/ดู ค่าแรง -->
+                                    {% if claim.status == 'UNCLAIMED' %}
+                                    <!-- Modal แก้ไข ค่าแรง (โหลดเฉพาะตอนอยู่ในตะกร้า) -->
                                     <div class="modal fade text-start" id="editLaborModal{{ claim.id }}" tabindex="-1">
                                         <div class="modal-dialog modal-dialog-centered">
                                             <div class="modal-content border-0 rounded-4 shadow-lg">
                                                 <div class="modal-header bg-warning text-dark border-0 rounded-top-4">
-                                                    <h6 class="modal-title fw-bold">{% if claim.status == 'UNCLAIMED' %}✏️ แก้ไขรายการ{% else %}🔍 ดูรายการ{% endif %} - ค่าแรงเหมา</h6>
+                                                    <h6 class="modal-title fw-bold">✏️ แก้ไขรายการ - ค่าแรงเหมา</h6>
                                                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                                                 </div>
                                                 <form method="POST" action="{% url 'master_job_report' %}" enctype="multipart/form-data">
@@ -244,30 +253,24 @@
                                                     <div class="modal-body p-4 bg-light">
                                                         <div class="mb-3">
                                                             <label class="form-label fw-bold small">ชื่อผู้รับเหมา / หัวหน้าช่าง</label>
-                                                            <input type="text" name="contractor_name" class="form-control" value="{{ claim.contractor_name }}" {% if claim.status != 'UNCLAIMED' %}disabled{% endif %} required>
+                                                            <input type="text" name="contractor_name" class="form-control" value="{{ claim.contractor_name }}" required>
                                                         </div>
                                                         <div class="row g-2 mb-3">
                                                             <div class="col-md-6">
                                                                 <label class="form-label fw-bold text-danger small">ยอดเงินที่เบิก (บาท)</label>
-                                                                <input type="text" name="claim_amount" class="form-control fw-bold text-danger text-end" value="{{ claim.amount|floatformat:2 }}" {% if claim.status != 'UNCLAIMED' %}disabled{% endif %} required onkeyup="this.value = this.value.replace(/[^0-9.]/g, '')">
+                                                                <input type="text" name="claim_amount" class="form-control fw-bold text-danger text-end" value="{{ claim.amount|floatformat:2|intcomma }}" required onkeyup="this.value = this.value.replace(/[^0-9.,]/g, '')">
                                                             </div>
                                                             <div class="col-md-6">
                                                                 <label class="form-label fw-bold text-primary small">รูปหลักฐาน</label>
-                                                                {% if claim.status == 'UNCLAIMED' %}
-                                                                    <input type="file" name="claim_slip" class="form-control" accept="image/*">
-                                                                    <small class="text-muted" style="font-size:0.65rem;">(ปล่อยว่างถ้าไม่ต้องการเปลี่ยนรูป)</small>
-                                                                {% endif %}
+                                                                <input type="file" name="claim_slip" class="form-control" accept="image/*">
+                                                                <small class="text-muted" style="font-size:0.65rem;">(ปล่อยว่างถ้าไม่ต้องการเปลี่ยนรูป)</small>
                                                                 {% if claim.slip_image %}
                                                                     <div class="mt-1"><a href="{{ claim.slip_image.url }}" target="_blank" class="badge bg-primary text-decoration-none">🖼️ ดูรูปที่แนบไว้</a></div>
                                                                 {% endif %}
                                                             </div>
                                                         </div>
-                                                        {% if claim.status != 'UNCLAIMED' %}
-                                                            <div class="alert alert-danger py-2 small mb-0"><i class="fas fa-lock me-1"></i> รายการนี้ถูกส่งให้บัญชีแล้ว ไม่สามารถแก้ไขได้</div>
-                                                        {% endif %}
                                                     </div>
                                                     
-                                                    {% if claim.status == 'UNCLAIMED' %}
                                                     <div class="modal-footer bg-white border-top-0 rounded-bottom-4 d-flex justify-content-between">
                                                         <button type="submit" name="action" value="delete_expense_claim" class="btn btn-outline-danger rounded-pill px-3" onclick="return confirm('ยืนยันการลบรายการนี้ออกจากตะกร้า?')"><i class="fas fa-trash"></i> ลบทิ้ง</button>
                                                         <div>
@@ -275,11 +278,11 @@
                                                             <button type="submit" class="btn btn-warning rounded-pill px-4 fw-bold text-dark"><i class="fas fa-save me-1"></i> บันทึก</button>
                                                         </div>
                                                     </div>
-                                                    {% endif %}
                                                 </form>
                                             </div>
                                         </div>
                                     </div>
+                                    {% endif %}
                                 {% endwith %}
                             {% else %}
                                 <button class="btn btn-sm btn-outline-success border-success rounded-pill px-2 py-0 mt-1 shadow-sm d-print-none" style="font-size: 0.7rem; font-weight: bold;" onclick="openExpenseModal('{{ job.id }}', '{{ job.code }}', 'LABOR')">
@@ -288,29 +291,38 @@
                             {% endif %}
                         </td>
 
-                        <!-- 🌟 8. ค่าแอร์ (ระบบใหม่) 🌟 -->
+                        <!-- 🌟 8. ค่าแอร์ (อัปเดตใหม่) 🌟 -->
                         <td class="text-center bg-light">
                             {% if job.aircon_claims.all %}
                                 {% with claim=job.aircon_claims.first %}
                                     <div class="mb-1">
                                         {% if claim.status == 'PAID' %}
                                             <span class="badge-status bg-green-soft d-block mb-1 mx-auto" style="width: max-content;">จ่ายแล้ว</span>
-                                            <button class="btn btn-sm btn-outline-secondary rounded-pill px-2 py-0 d-print-none" style="font-size: 0.7rem;" data-bs-toggle="modal" data-bs-target="#editAirconModal{{ claim.id }}">🔍 ดูรายการ</button>
+                                            {% if claim.master_claim %}
+                                                <a href="{% url 'accounting_job_expense_detail' claim.master_claim.id %}" target="_blank" class="btn btn-sm btn-outline-dark rounded-pill px-2 py-0 d-print-none fw-bold" style="font-size: 0.7rem;">
+                                                    <i class="fas fa-file-invoice"></i> {{ claim.master_claim.code }}
+                                                </a>
+                                            {% endif %}
                                         {% elif claim.status == 'PENDING' %}
                                             <span class="badge-status bg-red-soft d-block mb-1 mx-auto" style="width: max-content;">รอโอนเงิน</span>
-                                            <button class="btn btn-sm btn-outline-secondary rounded-pill px-2 py-0 d-print-none" style="font-size: 0.7rem;" data-bs-toggle="modal" data-bs-target="#editAirconModal{{ claim.id }}">🔍 ดูรายการ</button>
+                                            {% if claim.master_claim %}
+                                                <a href="{% url 'accounting_job_expense_detail' claim.master_claim.id %}" target="_blank" class="btn btn-sm btn-outline-dark rounded-pill px-2 py-0 d-print-none fw-bold" style="font-size: 0.7rem;">
+                                                    <i class="fas fa-file-invoice"></i> {{ claim.master_claim.code }}
+                                                </a>
+                                            {% endif %}
                                         {% else %}
                                             <span class="badge-status bg-yellow-soft border-warning d-block mb-1 mx-auto" style="width: max-content;">ในตะกร้า</span>
                                             <button class="btn btn-sm btn-outline-primary rounded-pill px-2 py-0 d-print-none" style="font-size: 0.7rem;" data-bs-toggle="modal" data-bs-target="#editAirconModal{{ claim.id }}">✏️ แก้ไข</button>
                                         {% endif %}
                                     </div>
 
-                                    <!-- Modal แก้ไข/ดู ค่าแอร์ -->
+                                    {% if claim.status == 'UNCLAIMED' %}
+                                    <!-- Modal แก้ไข ค่าแอร์ (โหลดเฉพาะตอนอยู่ในตะกร้า) -->
                                     <div class="modal fade text-start" id="editAirconModal{{ claim.id }}" tabindex="-1">
                                         <div class="modal-dialog modal-dialog-centered">
                                             <div class="modal-content border-0 rounded-4 shadow-lg">
                                                 <div class="modal-header bg-info text-white border-0 rounded-top-4">
-                                                    <h6 class="modal-title fw-bold">{% if claim.status == 'UNCLAIMED' %}✏️ แก้ไขรายการ{% else %}🔍 ดูรายการ{% endif %} - ค่าแอร์</h6>
+                                                    <h6 class="modal-title fw-bold">✏️ แก้ไขรายการ - ค่าแอร์</h6>
                                                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                                                 </div>
                                                 <form method="POST" action="{% url 'master_job_report' %}" enctype="multipart/form-data">
@@ -322,34 +334,28 @@
                                                     <div class="modal-body p-4 bg-light">
                                                         <div class="mb-2">
                                                             <label class="form-label fw-bold small">ชื่อช่างแอร์ / ร้านแอร์</label>
-                                                            <input type="text" name="technician_name" class="form-control" value="{{ claim.technician_name }}" {% if claim.status != 'UNCLAIMED' %}disabled{% endif %} required>
+                                                            <input type="text" name="technician_name" class="form-control" value="{{ claim.technician_name }}" required>
                                                         </div>
                                                         <div class="mb-3">
                                                             <label class="form-label fw-bold small">รายละเอียดการติดตั้ง</label>
-                                                            <input type="text" name="aircon_desc" class="form-control" value="{{ claim.description }}" {% if claim.status != 'UNCLAIMED' %}disabled{% endif %} required>
+                                                            <input type="text" name="aircon_desc" class="form-control" value="{{ claim.description }}" required>
                                                         </div>
                                                         <div class="row g-2 mb-3">
                                                             <div class="col-md-6">
                                                                 <label class="form-label fw-bold text-danger small">ยอดเงินที่เบิก (บาท)</label>
-                                                                <input type="text" name="claim_amount" class="form-control fw-bold text-danger text-end" value="{{ claim.amount|floatformat:2 }}" {% if claim.status != 'UNCLAIMED' %}disabled{% endif %} required onkeyup="this.value = this.value.replace(/[^0-9.]/g, '')">
+                                                                <input type="text" name="claim_amount" class="form-control fw-bold text-danger text-end" value="{{ claim.amount|floatformat:2|intcomma }}" required onkeyup="this.value = this.value.replace(/[^0-9.,]/g, '')">
                                                             </div>
                                                             <div class="col-md-6">
                                                                 <label class="form-label fw-bold text-primary small">รูปหลักฐาน</label>
-                                                                {% if claim.status == 'UNCLAIMED' %}
-                                                                    <input type="file" name="claim_slip" class="form-control" accept="image/*">
-                                                                    <small class="text-muted" style="font-size:0.65rem;">(ปล่อยว่างถ้าไม่ต้องการเปลี่ยนรูป)</small>
-                                                                {% endif %}
+                                                                <input type="file" name="claim_slip" class="form-control" accept="image/*">
+                                                                <small class="text-muted" style="font-size:0.65rem;">(ปล่อยว่างถ้าไม่ต้องการเปลี่ยนรูป)</small>
                                                                 {% if claim.slip_image %}
                                                                     <div class="mt-1"><a href="{{ claim.slip_image.url }}" target="_blank" class="badge bg-primary text-decoration-none">🖼️ ดูรูปที่แนบไว้</a></div>
                                                                 {% endif %}
                                                             </div>
                                                         </div>
-                                                        {% if claim.status != 'UNCLAIMED' %}
-                                                            <div class="alert alert-danger py-2 small mb-0"><i class="fas fa-lock me-1"></i> รายการนี้ถูกส่งให้บัญชีแล้ว ไม่สามารถแก้ไขได้</div>
-                                                        {% endif %}
                                                     </div>
                                                     
-                                                    {% if claim.status == 'UNCLAIMED' %}
                                                     <div class="modal-footer bg-white border-top-0 rounded-bottom-4 d-flex justify-content-between">
                                                         <button type="submit" name="action" value="delete_expense_claim" class="btn btn-outline-danger rounded-pill px-3" onclick="return confirm('ยืนยันการลบรายการนี้ออกจากตะกร้า?')"><i class="fas fa-trash"></i> ลบทิ้ง</button>
                                                         <div>
@@ -357,11 +363,11 @@
                                                             <button type="submit" class="btn btn-info text-white rounded-pill px-4 fw-bold"><i class="fas fa-save me-1"></i> บันทึก</button>
                                                         </div>
                                                     </div>
-                                                    {% endif %}
                                                 </form>
                                             </div>
                                         </div>
                                     </div>
+                                    {% endif %}
                                 {% endwith %}
                             {% else %}
                                 <button class="btn btn-sm btn-outline-success border-success rounded-pill px-2 py-0 mt-1 shadow-sm d-print-none" style="font-size: 0.7rem; font-weight: bold;" onclick="openExpenseModal('{{ job.id }}', '{{ job.code }}', 'AIRCON')">
@@ -370,7 +376,7 @@
                             {% endif %}
                         </td>
 
-                        <!-- 🌟 9. ค่าใช้จ่ายอื่นๆ (ระบบใหม่ แบบเบิกได้หลายบิล) 🌟 -->
+                        <!-- 🌟 9. ค่าใช้จ่ายอื่นๆ (อัปเดตปุ่มจัดการใน Modal) 🌟 -->
                         <td class="text-center bg-light">
                             {% if job.other_expenses.all %}
                                 <button class="btn btn-sm btn-info text-white rounded-pill px-2 py-0 shadow-sm d-print-none" style="font-size: 0.7rem;" data-bs-toggle="modal" data-bs-target="#expenseModal{{ job.id }}">
@@ -393,7 +399,7 @@
                                                             <th>รายการ</th>
                                                             <th class="text-end">ยอดเงิน</th>
                                                             <th class="text-center">สถานะ</th>
-                                                            <th class="text-center pe-4">จัดการ (เฉพาะในตะกร้า)</th>
+                                                            <th class="text-center pe-4">จัดการ / เอกสารอ้างอิง</th>
                                                         </tr>
                                                     </thead>
                                                     <tbody>
@@ -422,7 +428,7 @@
                                                                 </td>
                                                                 <td class="text-end" style="width: 15%;">
                                                                     {% if exp.status == 'UNCLAIMED' %}
-                                                                        <input type="text" name="claim_amount" class="form-control form-control-sm text-end fw-bold text-danger" value="{{ exp.amount|floatformat:2 }}" required onkeyup="this.value = this.value.replace(/[^0-9.]/g, '')">
+                                                                        <input type="text" name="claim_amount" class="form-control form-control-sm text-end fw-bold text-danger" value="{{ exp.amount|floatformat:2|intcomma }}" required onkeyup="this.value = this.value.replace(/[^0-9.,]/g, '')">
                                                                     {% else %}
                                                                         <span class="fw-bold text-danger">{{ exp.amount|intcomma }}</span>
                                                                     {% endif %}
@@ -443,7 +449,14 @@
                                                                             <button type="submit" name="action" value="delete_expense_claim" class="btn btn-sm btn-danger py-0 px-2" title="ลบทิ้ง" onclick="return confirm('ยืนยันการลบรายการนี้?')"><i class="fas fa-trash"></i></button>
                                                                         </div>
                                                                     {% else %}
-                                                                        <i class="fas fa-lock text-muted opacity-50"></i>
+                                                                        <!-- 🌟 แสดงปุ่ม MEC ถ้าถูกส่งเบิกแล้ว 🌟 -->
+                                                                        {% if exp.master_claim %}
+                                                                            <a href="{% url 'accounting_job_expense_detail' exp.master_claim.id %}" target="_blank" class="btn btn-sm btn-outline-dark rounded-pill px-2 py-0 fw-bold" style="font-size: 0.7rem;">
+                                                                                <i class="fas fa-file-invoice"></i> {{ exp.master_claim.code }}
+                                                                            </a>
+                                                                        {% else %}
+                                                                            <i class="fas fa-lock text-muted opacity-50"></i>
+                                                                        {% endif %}
                                                                     {% endif %}
                                                                 </td>
                                                             </form>
@@ -532,7 +545,7 @@
                             <label class="form-label fw-bold text-danger small"><i class="fas fa-coins me-1"></i> ยอดเงินที่เบิก <span class="text-danger">*</span></label>
                             <div class="input-group">
                                 <span class="input-group-text bg-white fw-bold">฿</span>
-                                <input type="text" name="claim_amount" class="form-control fw-bold text-danger border-danger text-end" required placeholder="0.00" onkeyup="this.value = this.value.replace(/[^0-9.]/g, '')">
+                                <input type="text" name="claim_amount" class="form-control fw-bold text-danger border-danger text-end" required placeholder="0.00" onkeyup="this.value = this.value.replace(/[^0-9.,]/g, '')">
                             </div>
                         </div>
                         <div class="col-md-6">
