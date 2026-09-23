@@ -11,7 +11,8 @@
         <a href="{% url 'po_receive_list' %}" class="btn btn-outline-secondary rounded-pill px-4"><i class="fas fa-arrow-left me-2"></i> ยกเลิก</a>
     </div>
 
-    <form method="POST">
+    <!-- 🌟 [FIXED] อย่าลืมใส่ enctype="multipart/form-data" เพื่อให้ส่งไฟล์รูปได้ -->
+    <form method="POST" enctype="multipart/form-data">
         {% csrf_token %}
 
         <div class="card shadow-sm border-0 rounded-4 mb-4 bg-light">
@@ -20,13 +21,19 @@
                     <label class="form-label text-muted small fw-bold">ร้านค้า (Supplier)</label>
                     <input type="text" class="form-control bg-white" value="{{ po.supplier.name }}" readonly>
                 </div>
-                <div class="col-md-3">
-                    <label class="form-label text-muted small fw-bold">เลขที่ใบส่งของ / อ้างอิง <span class="text-danger">*</span></label>
-                    <input type="text" name="doc_reference" class="form-control" placeholder="ระบุใบสั่งซื้อ หรือใบส่่งของ" required>
+
+                <!-- 🌟 ซ่อนช่องอ้างอิงเดิมไว้ เผื่อระบบเก่าเรียกใช้ 🌟 -->
+                <input type="hidden" name="doc_reference" value="รับตามใบสั่งซื้อ {{ po.code }}">
+
+                <div class="col-md-6">
+                    <label class="form-label text-muted small fw-bold">รูปใบส่งของ/รับของ <span class="text-danger">*</span></label>
+                    <input type="file" name="slip_image" class="form-control bg-white border-primary" accept="image/*" required>
                 </div>
-                <div class="col-md-3">
+
+                <!-- 🌟 [FIXED] เปลี่ยนช่องหมายเหตุเป็น Textarea ใหญ่ๆ 🌟 -->
+                <div class="col-12 mt-3">
                     <label class="form-label text-muted small fw-bold">หมายเหตุ (ถ้ามี)</label>
-                    <input type="text" name="doc_note" class="form-control" placeholder="สภาพกล่อง ฯลฯ">
+                    <textarea name="doc_note" class="form-control bg-white" rows="3" placeholder="ระบุสภาพสินค้า กล่อง หรือคำอธิบายเพิ่มเติม..."></textarea>
                 </div>
             </div>
         </div>

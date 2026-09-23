@@ -267,21 +267,74 @@
                                 </td>
                             {% else %}
                                 <td class="text-center">
-                                    <span class="fw-bold text-primary fs-6">{% if task_type == 'deposits' %}฿ {{ item.deposit_amount|floatformat:2|intcomma }}{% elif task_type == 'po_payments' or task_type == 'solar_po_payments' %}฿ {{ item.total_amount|floatformat:2|intcomma }}{% endif %}</span>
+                                    <span class="fw-bold text-primary fs-6">
+                                        {% if task_type == 'deposits' %}
+
+                                            <!-- 🌟 1. กรณี: โซล่าเซลล์ (ใช้ระบบเดิม เก็บในตัวมันเอง) 🌟 -->
+                                            {% if item.system_type == 'solar' %}
+                                                ฿ {{ item.deposit_amount|floatformat:2|intcomma }}
+
+                                            <!-- 🌟 2. กรณี: บ้านน็อคดาวน์ (เช็คว่ามีประวัติในตารางลูก deposits หรือไม่) 🌟 -->
+                                            {% elif item.system_type == 'quotation' and item.deposits.exists %}
+                                                ฿ {{ item.deposits.last.amount|floatformat:2|intcomma }}
+
+                                            <!-- 🌟 3. กรณี: บ้านน็อคดาวน์ (บิลเก่า ที่ยังใช้ระบบเดิม) 🌟 -->
+                                            {% else %}
+                                                ฿ {{ item.deposit_amount|floatformat:2|intcomma }}
+                                            {% endif %}
+
+                                        {% elif task_type == 'po_payments' or task_type == 'solar_po_payments' %}
+                                            ฿ {{ item.total_amount|floatformat:2|intcomma }}
+                                        {% endif %}
+                                    </span>
                                 </td>
                                 <td class="text-center">
                                     <div class="d-flex align-items-center justify-content-center gap-2">
                                         {% if task_type == 'deposits' %}
-                                            {% if item.deposit_method == 'TRANSFER' %}
-                                                <span class="badge bg-info bg-opacity-10 text-info border border-info rounded-pill"><i class="fas fa-mobile-alt me-1"></i> โอนเงิน</span>
-                                            {% elif item.deposit_method == 'CASH' %}
-                                                <span class="badge bg-success bg-opacity-10 text-success border border-success rounded-pill"><i class="fas fa-money-bill-wave me-1"></i> เงินสด</span>
-                                            {% elif item.deposit_method == 'CHECK' %}
-                                                <span class="badge bg-warning bg-opacity-10 text-warning border border-warning rounded-pill"><i class="fas fa-money-check me-1"></i> เช็คธนาคาร</span>
-                                            {% endif %}
 
-                                            {% if item.deposit_slip %}
-                                                <img src="{{ item.deposit_slip.url }}" class="slip-thumbnail border shadow-sm" loading="lazy" data-bs-toggle="modal" data-bs-target="#slipModal" onclick="document.getElementById('slipImageFull').src='{{ item.deposit_slip.url }}'" title="คลิกเพื่อดูหลักฐาน">
+                                            <!-- 🌟 1. กรณี: โซล่าเซลล์ (ใช้ระบบเดิม) 🌟 -->
+                                            {% if item.system_type == 'solar' %}
+                                                {% if item.deposit_method == 'TRANSFER' %}
+                                                    <span class="badge bg-info bg-opacity-10 text-info border border-info rounded-pill"><i class="fas fa-mobile-alt me-1"></i> โอนเงิน</span>
+                                                {% elif item.deposit_method == 'CASH' %}
+                                                    <span class="badge bg-success bg-opacity-10 text-success border border-success rounded-pill"><i class="fas fa-money-bill-wave me-1"></i> เงินสด</span>
+                                                {% elif item.deposit_method == 'CHECK' %}
+                                                    <span class="badge bg-warning bg-opacity-10 text-warning border border-warning rounded-pill"><i class="fas fa-money-check me-1"></i> เช็คธนาคาร</span>
+                                                {% endif %}
+
+                                                {% if item.deposit_slip %}
+                                                    <img src="{{ item.deposit_slip.url }}" class="slip-thumbnail border shadow-sm" loading="lazy" data-bs-toggle="modal" data-bs-target="#slipModal" onclick="document.getElementById('slipImageFull').src='{{ item.deposit_slip.url }}'" title="คลิกเพื่อดูหลักฐาน">
+                                                {% endif %}
+
+                                            <!-- 🌟 2. กรณี: บ้านน็อคดาวน์ (ดึงจากตารางลูก deposits ตัวล่าสุด) 🌟 -->
+                                            {% elif item.system_type == 'quotation' and item.deposits.exists %}
+                                                {% with dep=item.deposits.last %}
+                                                    {% if dep.payment_method == 'TRANSFER' %}
+                                                        <span class="badge bg-info bg-opacity-10 text-info border border-info rounded-pill"><i class="fas fa-mobile-alt me-1"></i> โอนเงิน</span>
+                                                    {% elif dep.payment_method == 'CASH' %}
+                                                        <span class="badge bg-success bg-opacity-10 text-success border border-success rounded-pill"><i class="fas fa-money-bill-wave me-1"></i> เงินสด</span>
+                                                    {% elif dep.payment_method == 'CHECK' %}
+                                                        <span class="badge bg-warning bg-opacity-10 text-warning border border-warning rounded-pill"><i class="fas fa-money-check me-1"></i> เช็คธนาคาร</span>
+                                                    {% endif %}
+
+                                                    {% if dep.deposit_slip %}
+                                                        <img src="{{ dep.deposit_slip.url }}" class="slip-thumbnail border shadow-sm" loading="lazy" data-bs-toggle="modal" data-bs-target="#slipModal" onclick="document.getElementById('slipImageFull').src='{{ dep.deposit_slip.url }}'" title="คลิกเพื่อดูหลักฐาน">
+                                                    {% endif %}
+                                                {% endwith %}
+
+                                            <!-- 🌟 3. กรณี: บ้านน็อคดาวน์ (บิลเก่า ใช้ระบบเดิม) 🌟 -->
+                                            {% else %}
+                                                {% if item.deposit_method == 'TRANSFER' %}
+                                                    <span class="badge bg-info bg-opacity-10 text-info border border-info rounded-pill"><i class="fas fa-mobile-alt me-1"></i> โอนเงิน</span>
+                                                {% elif item.deposit_method == 'CASH' %}
+                                                    <span class="badge bg-success bg-opacity-10 text-success border border-success rounded-pill"><i class="fas fa-money-bill-wave me-1"></i> เงินสด</span>
+                                                {% elif item.deposit_method == 'CHECK' %}
+                                                    <span class="badge bg-warning bg-opacity-10 text-warning border border-warning rounded-pill"><i class="fas fa-money-check me-1"></i> เช็คธนาคาร</span>
+                                                {% endif %}
+
+                                                {% if item.deposit_slip %}
+                                                    <img src="{{ item.deposit_slip.url }}" class="slip-thumbnail border shadow-sm" loading="lazy" data-bs-toggle="modal" data-bs-target="#slipModal" onclick="document.getElementById('slipImageFull').src='{{ item.deposit_slip.url }}'" title="คลิกเพื่อดูหลักฐาน">
+                                                {% endif %}
                                             {% endif %}
                                         {% else %}
                                             <span class="text-muted small">-</span>
@@ -295,23 +348,25 @@
                             </td>
 
                             <td class="text-center pe-4">
-                                <form method="POST" action="{% url 'accounting_approve_transaction' task_type item.id %}">
-                                    {% csrf_token %}
-                                    <input type="hidden" name="doc_type" value="{% if item.total_amount %}pos{% else %}invoice{% endif %}">
-                                    <input type="hidden" name="doc_system" value="{{ item.system_type|default:'' }}">
-
-                                    <!-- 🌟 [NEW] ระบบแยกปุ่ม รับเงิน (สีเขียว) / จ่ายเงิน (สีแดง) 🌟 -->
-                                    {% if task_type == 'po_payments' or task_type == 'solar_po_payments' %}
-                                        <button type="submit" class="btn btn-sm btn-danger rounded-pill px-3 shadow-sm fw-bold w-100" onclick="return confirm('ยืนยันยอดเงินถูกต้อง และอนุมัติทำจ่ายเงินใช่หรือไม่?');">
-                                            <i class="fas fa-file-invoice-dollar me-1"></i> อนุมัติจ่ายเงิน
-                                        </button>
-                                    {% else %}
+                                <!-- 🌟 [FIXED] แยกระบบปุ่ม ตรวจสอบ(PO) และ อนุมัติ(รับเงิน) 🌟 -->
+                                {% if task_type == 'po_payments' %}
+                                    <a href="{% url 'accounting_po_payment_detail' 'knockdown' item.id %}" class="btn btn-sm btn-primary rounded-pill px-3 shadow-sm fw-bold w-100">
+                                        <i class="fas fa-search-dollar me-1"></i> ตรวจสอบและทำจ่าย
+                                    </a>
+                                {% elif task_type == 'solar_po_payments' %}
+                                    <a href="{% url 'accounting_po_payment_detail' 'solar' item.id %}" class="btn btn-sm btn-primary rounded-pill px-3 shadow-sm fw-bold w-100">
+                                        <i class="fas fa-search-dollar me-1"></i> ตรวจสอบและทำจ่าย
+                                    </a>
+                                {% else %}
+                                    <form method="POST" action="{% url 'accounting_approve_transaction' task_type item.id %}">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="doc_type" value="{% if item.total_amount %}pos{% else %}invoice{% endif %}">
+                                        <input type="hidden" name="doc_system" value="{{ item.system_type|default:'' }}">
                                         <button type="submit" class="btn btn-sm btn-success rounded-pill px-3 shadow-sm fw-bold w-100" onclick="return confirm('ยืนยันตรวจสอบหลักฐาน และรับเงินเข้าระบบใช่หรือไม่?');">
                                             <i class="fas fa-check-circle me-1"></i> อนุมัติรับเงิน
                                         </button>
-                                    {% endif %}
-
-                                </form>
+                                    </form>
+                                {% endif %}
                             </td>
                         </tr>
                         {% empty %}

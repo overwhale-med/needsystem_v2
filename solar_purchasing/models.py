@@ -19,11 +19,11 @@ class SolarPurchaseOrder(models.Model):
 
     # 🌟 รหัส POS- (Purchase Order Solar)
     code = models.CharField(max_length=20, unique=True, verbose_name="เลขที่ใบสั่งซื้อโซล่า (POS)")
-    
+
     # 🌟 รองรับ Supplier ทั้งในระบบและนอกระบบ (Free Text)
     supplier = models.ForeignKey(Supplier, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="ผู้ขาย (Supplier)")
     supplier_name_free_text = models.CharField(max_length=255, blank=True, verbose_name="ชื่อร้านค้า (กรณีเร่งด่วน/ไม่อยู่ในระบบ)")
-    
+
     buyer = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, verbose_name="ผู้จัดซื้อ")
 
     date = models.DateField(default=timezone.now, verbose_name="วันที่สั่งซื้อ")
@@ -51,7 +51,7 @@ class SolarPurchaseOrder(models.Model):
             today = datetime.date.today()
             thai_year = (today.year + 543) % 100
             prefix = f"POS-{thai_year:02d}{today.strftime('%m')}"
-            
+
             last_po = SolarPurchaseOrder.objects.filter(code__startswith=prefix).order_by('code').last()
             if last_po:
                 try: seq = int(last_po.code.split('-')[-1]) + 1
@@ -64,7 +64,7 @@ class SolarPurchaseOrder(models.Model):
 
 class SolarPurchaseOrderItem(models.Model):
     po = models.ForeignKey(SolarPurchaseOrder, related_name='items', on_delete=models.CASCADE)
-    
+
     # 🌟 [FIXED] เปลี่ยน Foreign Key ไปหา SolarProduct
     product = models.ForeignKey(SolarProduct, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="รหัสวัตถุดิบ (จากคลังโซล่า)")
     item_name_free_text = models.CharField(max_length=255, blank=True, verbose_name="ชื่อสินค้า (กรณีด่วน/ไม่มีรหัสคลัง)")
@@ -83,3 +83,53 @@ class SolarPurchaseOrderItem(models.Model):
     def __str__(self):
         name = self.product.name if self.product else self.item_name_free_text
         return f"{name} ({self.quantity})"
+
+from PIL import Image
+
+# ==========================================
+# 🌟 ตารางประวัติการชำระเงิน PO โซล่าเซลล์ (พร้อมออกเลข PV) 🌟
+# ==========================================
+class SolarPurchaseOrderPayment(models.Model):
+    po = models.ForeignKey(SolarPurchaseOrder, related_name='payments', on_delete=models.CASCADE)
+
+    # รันเลขใบคุม (Payment Voucher) สำหรับฝั่งโซล่า
+    pv_code = models.CharField(max_length=20, unique=True, blank=True, null=True, verbose_name="เลขที่ใบคุมจ่าย (PV)")
+
+    payment_date = models.DateField(default=timezone.now, verbose_name="วันที่ชำระเงิน")
+    amount = models.DecimalField(max_digits=12, decimal_places=2, verbose_name="ยอดชำระ")
+    payment_method = models.CharField(max_length=50, default="โอนเงินผ่านธนาคาร", verbose_name="ช่องทางการชำระ")
+    slip_image = models.ImageField(upload_to='solar_po_payments/%Y/%m/', null=True, blank=True, verbose_name="สลิปโอนเงิน")
+    note = models.TextField(blank=True, verbose_name="หมายเหตุ")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "ประวัติการชำระเงิน PO โซล่า"
+        verbose_name_plural = "ประวัติการชำระเงิน PO โซล่า"
+
+    def __str__(self):
+        return f"{self.pv_code or 'No-PV'} - {self.amount}"
+
+    def save(self, *args, **kwargs):
+        # 🌟 รันเลขใบคุมอัตโนมัติ PV-SOL-YYMM-XXX
+        if not self.pv_code:
+            now = timezone.now()
+            thai_year = (now.year + 543) % 100
+            prefix = f"PV-SOL-{thai_year:02d}{now.strftime('%m')}"
+            last_pv = SolarPurchaseOrderPayment.objects.filter(pv_code__startswith=prefix).order_by('pv_code').last()
+            if last_pv and last_pv.pv_code:
+                try: seq = int(last_pv.pv_code.split('-')[-1]) + 1
+                except: seq = 1
+            else:
+                seq = 1
+            self.pv_code = f"{prefix}-{seq:03d}"
+
+        super().save(*args, **kwargs)
+
+        # ย่อขนาดรูปภาพ
+        if self.slip_image:
+            try:
+                img = Image.open(self.slip_image.path)
+                if img.height > 800 or img.width > 800:
+                    img.thumbnail((800, 800))
+                    img.save(self.slip_image.path, quality=85, optimize=True)
+            except Exception: pass

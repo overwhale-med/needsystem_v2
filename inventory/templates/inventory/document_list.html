@@ -17,7 +17,7 @@
 </style>
 
 <div class="container-fluid py-4">
-    
+
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
             <h3 class="fw-bold text-dark mb-1">
@@ -39,7 +39,7 @@
                     <i class="fas fa-plus-circle me-1"></i> สร้างใบเบิกใหม่
                 </a>
             {% endif %}
-            
+
             <a href="{% url 'inventory_dashboard' %}" class="btn btn-outline-secondary rounded-pill px-3 ms-2">
                 กลับ Dashboard
             </a>
@@ -102,10 +102,13 @@
                     <tr>
                         <th class="ps-4">เลขที่เอกสาร</th>
                         <th>วันที่</th>
-                        <th>อ้างอิง (PO / Ref)</th>
-                        <th>รายการสำคัญ</th>
+                        <th>เลขที่ใบสั่งซื้อ (PO)</th>
+                        <th>ชื่อร้านค้า</th>
+                        <!-- 🌟 เพิ่มคอลัมน์รูปใบส่งของ และ หมายเหตุ 🌟 -->
+                        <th class="text-center">รูปใบส่งของ/รับของ</th>
                         <th class="text-center">จำนวนรวม</th>
                         <th>ผู้ทำรายการ</th>
+                        <th class="text-center">หมายเหตุ</th>
                         <th class="text-end pe-4">จัดการ</th>
                     </tr>
                 </thead>
@@ -131,21 +134,32 @@
                         <td>
                             {% if doc.po_reference %}
                                 <div class="mb-1">
-                                    <span class="badge bg-primary bg-opacity-10 text-primary border border-primary rounded-pill px-2 py-1">
+                                    <a href="{% url 'po_print' doc.po_reference.id %}" target="_blank" class="fw-bold text-primary font-monospace text-decoration-none hover-scale d-inline-block">
                                         <i class="fas fa-shopping-cart me-1"></i> {{ doc.po_reference.code }}
-                                    </span>
+                                    </a>
                                 </div>
                             {% endif %}
-                            <span class="small text-muted">{{ doc.reference|default:"-" }}</span>
+                            <!-- 🌟 ซ่อนขีดกลาง (อ้างอิงอื่นๆ) ออกไปแล้วครับ 🌟 -->
                         </td>
                         <td>
-                            {% for move in doc.movements.all|slice:":2" %}
-                                <div class="small text-dark">• {{ move.product.name }}</div>
-                            {% endfor %}
-                            {% if doc.movements.count > 2 %}
-                                <small class="text-muted fst-italic">+ อีก {{ doc.movements.count|add:"-2" }} รายการ</small>
+                            {% if doc.po_reference.supplier %}
+                                <div class="small fw-bold text-dark"><i class="fas fa-store text-muted me-1"></i> {{ doc.po_reference.supplier.name|truncatechars:20 }}</div>
+                            {% else %}
+                                <div class="small text-muted">- ไม่ระบุร้านค้า -</div>
                             {% endif %}
                         </td>
+
+                        <!-- 🌟 โชว์รูปใบส่งของ (ถ้ามี) 🌟 -->
+                        <td class="text-center">
+                            {% if doc.slip_image %}
+                                <a href="{{ doc.slip_image.url }}" target="_blank" class="badge bg-success bg-opacity-10 text-success border border-success rounded-pill px-3 py-2 text-decoration-none hover-scale">
+                                    <i class="fas fa-image me-1"></i> ดูรูปภาพ
+                                </a>
+                            {% else %}
+                                <span class="text-muted small">-</span>
+                            {% endif %}
+                        </td>
+
                         <td class="text-center">
                             <span class="badge bg-light text-dark border rounded-pill px-3">
                                 {{ doc.movements.count }} รายการ
@@ -154,9 +168,29 @@
                         <td>
                             <div class="d-flex align-items-center">
                                 <i class="fas fa-user-circle text-muted me-2"></i>
-                                <span class="small">{{ doc.created_by.first_name }}</span>
+                                <span class="small fw-bold">
+                                    {% if doc.created_by.first_name %}
+                                        {{ doc.created_by.first_name }} {{ doc.created_by.last_name }}
+                                    {% else %}
+                                        {{ doc.created_by.username }}
+                                    {% endif %}
+                                </span>
                             </div>
                         </td>
+
+                        <!-- 🌟 ปุ่มดูหมายเหตุแบบ Tooltip/Popover 🌟 -->
+                        <td class="text-center">
+                            {% if doc.description %}
+                                <!-- ใช้ data-bs-toggle="popover" ให้คลิกแล้วมีกล่องข้อความเด้งขึ้นมา -->
+                                <button type="button" class="btn btn-sm btn-warning text-dark rounded-circle shadow-sm"
+                                        data-bs-toggle="popover" data-bs-placement="left" data-bs-content="{{ doc.description }}" title="หมายเหตุเพิ่มเติม">
+                                    <i class="fas fa-comment-alt"></i>
+                                </button>
+                            {% else %}
+                                <span class="text-muted opacity-25">-</span>
+                            {% endif %}
+                        </td>
+
                         <td class="text-end pe-4">
                             <a href="{% url 'print_document' doc.doc_no %}" target="_blank" class="btn btn-sm btn-outline-secondary rounded-pill px-3">
                                 <i class="fas fa-print me-1"></i> พิมพ์
@@ -165,7 +199,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="7" class="text-center py-5 text-muted">
+                        <td colspan="9" class="text-center py-5 text-muted">
                             <i class="fas fa-folder-open fa-3x mb-3 text-light"></i><br>
                             ไม่พบเอกสารในช่วงเวลาที่เลือก
                         </td>
@@ -187,6 +221,15 @@
             allowInput: true,         // อนุญาตให้พิมพ์เองได้
             placeholder: "dd/mm/yyyy" // ข้อความจางๆ ตอนยังไม่เลือก
         });
+    });
+</script>
+<script>
+    // สั่งให้ Popover ทำงานเมื่อโหลดหน้าเว็บเสร็จ
+    document.addEventListener("DOMContentLoaded", function() {
+        var popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'))
+        var popoverList = popoverTriggerList.map(function (popoverTriggerEl) {
+          return new bootstrap.Popover(popoverTriggerEl)
+        })
     });
 </script>
 {% endblock %}

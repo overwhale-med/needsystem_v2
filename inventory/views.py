@@ -319,7 +319,17 @@ def po_receive_process(request, po_id):
                 items_to_receive.append({'item_obj': item, 'receive_qty': receive_qty})
 
         if not has_error and items_to_receive:
-            doc = InventoryDoc.objects.create(doc_type='GR', po_reference=po, reference=reference_doc, description=note, created_by=request.user)
+            # 🌟 [FIXED] รับไฟล์รูปภาพจากหน้าฟอร์มมาบันทึกด้วย
+            slip_file = request.FILES.get('slip_image')
+
+            doc = InventoryDoc.objects.create(
+                doc_type='GR',
+                po_reference=po,
+                reference=reference_doc,
+                description=note,
+                created_by=request.user,
+                slip_image=slip_file # 🌟 บันทึกรูป
+            )
             for data in items_to_receive:
                 item = data['item_obj']
                 qty = data['receive_qty']

@@ -380,25 +380,75 @@
                                     </div>
                                 </td>
                                 
+                                <!-- 🌟 [FIXED] อัปเดตการดึงข้อมูลสลิปและยอดมัดจำจากตารางลูก QuotationDeposit 🌟 -->
                                 <td class="text-center py-3">
                                     {% if qt.is_deposit_paid %}
-                                        <div class="fw-bold text-success" style="font-size: 0.85rem;">฿{{ qt.deposit_amount|floatformat:2|intcomma }}</div>
-                                        <div class="d-flex align-items-center justify-content-center gap-1 mt-1">
-                                            {% if qt.deposit_method == 'TRANSFER' %}
-                                                <i class="fas fa-mobile-alt text-info" title="โอนเงิน"></i>
-                                            {% elif qt.deposit_method == 'CASH' %}
-                                                <i class="fas fa-money-bill-wave text-success" title="เงินสด"></i>
-                                            {% elif qt.deposit_method == 'CHECK' %}
-                                                <i class="fas fa-money-check text-warning" title="เช็ค"></i>
-                                            {% endif %}
+                                        
+                                        <!-- เช็คว่ามีข้อมูลในตารางลูก (QuotationDeposit) หรือไม่ -->
+                                        {% if qt.quotationdeposit_set.all %}
+                                            {% for dep in qt.quotationdeposit_set.all %}
+                                                <div class="mb-2 pb-1 {% if not forloop.last %}border-bottom{% endif %}">
+                                                    <div class="fw-bold text-success" style="font-size: 0.85rem;">฿{{ dep.amount|floatformat:2|intcomma }}</div>
+                                                    <div class="d-flex align-items-center justify-content-center gap-1 mt-1">
+                                                        {% if dep.payment_method == 'TRANSFER' %}
+                                                            <i class="fas fa-mobile-alt text-info" title="โอนเงิน"></i>
+                                                        {% elif dep.payment_method == 'CASH' %}
+                                                            <i class="fas fa-money-bill-wave text-success" title="เงินสด"></i>
+                                                        {% elif dep.payment_method == 'CHECK' %}
+                                                            <i class="fas fa-money-check text-warning" title="เช็ค"></i>
+                                                        {% endif %}
 
-                                            {% if qt.deposit_slip %}
-                                                <img src="{{ qt.deposit_slip.url }}" class="slip-thumbnail mx-1" data-bs-toggle="modal" data-bs-target="#slipModal" onclick="document.getElementById('slipImageFull').src='{{ qt.deposit_slip.url }}'">
-                                            {% endif %}
-                                        </div>
+                                                        {% if dep.deposit_slip %}
+                                                            <img src="{{ dep.deposit_slip.url }}" class="slip-thumbnail mx-1" data-bs-toggle="modal" data-bs-target="#slipModal" onclick="document.getElementById('slipImageFull').src='{{ dep.deposit_slip.url }}'">
+                                                        {% endif %}
+                                                    </div>
+                                                </div>
+                                            {% endfor %}
+                                        
+                                        <!-- รองรับกรณีข้อมูลเก่า (Fallback) ที่ยังอ้างอิงฟอร์แมตเดิม -->
+                                        {% elif qt.deposits.all %}
+                                            {% for dep in qt.deposits.all %}
+                                                <div class="mb-2 pb-1 {% if not forloop.last %}border-bottom{% endif %}">
+                                                    <div class="fw-bold text-success" style="font-size: 0.85rem;">฿{{ dep.amount|floatformat:2|intcomma }}</div>
+                                                    <div class="d-flex align-items-center justify-content-center gap-1 mt-1">
+                                                        {% if dep.payment_method == 'TRANSFER' %}
+                                                            <i class="fas fa-mobile-alt text-info" title="โอนเงิน"></i>
+                                                        {% elif dep.payment_method == 'CASH' %}
+                                                            <i class="fas fa-money-bill-wave text-success" title="เงินสด"></i>
+                                                        {% elif dep.payment_method == 'CHECK' %}
+                                                            <i class="fas fa-money-check text-warning" title="เช็ค"></i>
+                                                        {% endif %}
 
+                                                        {% if dep.deposit_slip %}
+                                                            <img src="{{ dep.deposit_slip.url }}" class="slip-thumbnail mx-1" data-bs-toggle="modal" data-bs-target="#slipModal" onclick="document.getElementById('slipImageFull').src='{{ dep.deposit_slip.url }}'">
+                                                        {% endif %}
+                                                    </div>
+                                                </div>
+                                            {% endfor %}
+                                        
+                                        <!-- ถ้าย้ายข้อมูลไม่สมบูรณ์จริงๆ ดึงค่าเก่ามาโชว์ไปก่อน -->
+                                        {% else %}
+                                            <div class="fw-bold text-success" style="font-size: 0.85rem;">฿{{ qt.deposit_amount|floatformat:2|intcomma }}</div>
+                                            <div class="d-flex align-items-center justify-content-center gap-1 mt-1">
+                                                {% if qt.deposit_method == 'TRANSFER' %}
+                                                    <i class="fas fa-mobile-alt text-info" title="โอนเงิน"></i>
+                                                {% elif qt.deposit_method == 'CASH' %}
+                                                    <i class="fas fa-money-bill-wave text-success" title="เงินสด"></i>
+                                                {% elif qt.deposit_method == 'CHECK' %}
+                                                    <i class="fas fa-money-check text-warning" title="เช็ค"></i>
+                                                {% endif %}
+
+                                                {% if qt.deposit_slip %}
+                                                    <img src="{{ qt.deposit_slip.url }}" class="slip-thumbnail mx-1" data-bs-toggle="modal" data-bs-target="#slipModal" onclick="document.getElementById('slipImageFull').src='{{ qt.deposit_slip.url }}'">
+                                                {% endif %}
+                                            </div>
+                                        {% endif %}
+
+                                        <!-- ตรวจสอบสถานะว่า บัญชีตรวจมัดจำใบนี้หรือยัง -->
                                         {% if not qt.is_deposit_verified %}
-                                            <div class="mt-1"><span class="badge bg-warning text-dark border" style="font-size: 0.6rem;"><i class="fas fa-hourglass-half me-1"></i>รอตรวจ</span></div>
+                                            <div class="mt-2"><span class="badge bg-warning text-dark border shadow-sm px-2 py-1" style="font-size: 0.65rem;"><i class="fas fa-hourglass-half me-1"></i>รอตรวจ</span></div>
+                                        {% else %}
+                                            <div class="mt-2"><span class="badge bg-success bg-opacity-10 text-success border border-success shadow-sm px-2 py-1" style="font-size: 0.65rem;"><i class="fas fa-check-circle me-1"></i>ตรวจแล้ว</span></div>
                                         {% endif %}
                                     {% else %}
                                         <span class="text-muted small">-</span>

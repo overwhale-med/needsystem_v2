@@ -295,6 +295,12 @@ def ppo_list(request):
 
         ordered_qty = Decimal(0)
         created_pos = PurchaseOrder.objects.filter(ppo_ref=ppo.code).exclude(status='CANCELLED')
+
+        # 🌟 [NEW] เก็บรายการ PO และ JOB ส่งไปให้ปุ่มในหน้าจอ HTML นำไปสร้างป๊อปอัป
+        ppo.created_pos_list = created_pos
+        ppo.created_pos_count = created_pos.count()
+        ppo.job_count = ppo.production_orders.count()
+
         for po in created_pos:
             for po_item in po.items.all():
                 if po_item.product_id in mat_needed:
@@ -309,7 +315,14 @@ def ppo_list(request):
         elif ppo.progress_percent >= 100: ppo.po_status = 'GREEN'
         else: ppo.po_status = 'ORANGE'
 
-    return render(request, 'purchasing/ppo_list.html', {'ppos': ppos})
+    # 🌟 [NEW] นับคิวงาน (JOB) ที่รอสร้างใบเตรียม PPO
+    from manufacturing.models import ProductionOrder
+    pending_ppo_count = ProductionOrder.objects.filter(status='WAITING_MATERIALS', is_materials_ordered=False).count()
+
+    return render(request, 'purchasing/ppo_list.html', {
+        'ppos': ppos,
+        'pending_ppo_count': pending_ppo_count
+    })
 
 @login_required
 def ppo_detail(request, pk):
@@ -379,11 +392,16 @@ def ppo_detail(request, pk):
     grand_total = Decimal(0)
     all_suppliers = list(Supplier.objects.all().values('id', 'name'))
 
+    # 🌟 [NEW] ตัวแปรเก็บยอดคงเหลือรวม เพื่อเช็คว่าสั่งครบหมดทุกชิ้นหรือยัง
+    total_remaining_all = Decimal(0)
+
     for mat_id, data in material_reqs.items():
         mat = data['product']
         needed = float(data['needed'])
         ordered = float(data['ordered'])
         remaining = needed - ordered if needed - ordered > 0 else 0
+
+        total_remaining_all += Decimal(str(remaining)) # บวกยอดที่เหลือเข้ากองกลาง
 
         suppliers = []
         if hasattr(mat, 'multi_suppliers') and mat.multi_suppliers.exists():
@@ -398,8 +416,19 @@ def ppo_detail(request, pk):
         })
         grand_total += Decimal(str(needed)) * Decimal(str(mat.cost_price))
 
+    # 🌟 [NEW] ถ้าค่าค้างสั่งรวมเป็น 0 แปลว่าสั่งของครบ 100% แล้ว
+    is_fully_ordered = (total_remaining_all == 0)
+
     all_suppliers_json = json.dumps(all_suppliers)
-    return render(request, 'purchasing/ppo_detail.html', {'ppo': ppo, 'materials_list': materials_list, 'grand_total': grand_total, 'all_suppliers_json': all_suppliers_json, 'all_suppliers': all_suppliers, 'created_pos': created_pos})
+    return render(request, 'purchasing/ppo_detail.html', {
+        'ppo': ppo,
+        'materials_list': materials_list,
+        'grand_total': grand_total,
+        'all_suppliers_json': all_suppliers_json,
+        'all_suppliers': all_suppliers,
+        'created_pos': created_pos,
+        'is_fully_ordered': is_fully_ordered # 🌟 ส่งตัวแปรนี้ไปหน้าจอ
+    })
 
 @login_required
 def po_approve(request, po_id):

@@ -14,4 +14,11 @@ urlpatterns = [
     path('accounting/job-expense-hub/', views.accounting_job_expense_hub, name='accounting_job_expense_hub'),
     path('accounting/job-expense-detail/<int:claim_id>/', views.accounting_job_expense_detail, name='accounting_job_expense_detail'), # 🌟 บรรทัดที่เพิ่มใหม่
     path('accounting/job-expense-pay/<int:claim_id>/', views.pay_job_expense_claim, name='pay_job_expense_claim'),
+    # 🌟 ระบบตรวจสอบและทำจ่าย PO แยกระบบน็อคดาวน์และโซล่าเซลล์ 🌟
+    path('verify-po/<str:system_type>/<int:po_id>/', views.accounting_po_payment_detail, name='accounting_po_payment_detail'),
+    path('verify-po/<str:system_type>/<int:po_id>/submit/', views.accounting_po_payment_submit, name='accounting_po_payment_submit'),
+    # 🌟 หน้ารายงานประวัติการจ่ายเงิน PO แยกแผนก
+    path('po-payment-report/', views.accounting_po_payment_report, name='accounting_po_payment_report'),
+    # 🌟 พิมพ์ใบสำคัญจ่าย (Payment Voucher - PV)
+    path('print-pv/<str:system_type>/<int:pv_id>/', views.accounting_print_pv, name='accounting_print_pv'),
 ]

@@ -521,3 +521,202 @@ def accounting_job_expense_detail(request, claim_id):
     return render(request, 'accounting/job_expense_detail.html', {
         'claim': claim
     })
+
+# ==========================================
+# 🌟 [NEW] ระบบตรวจสอบและทำจ่ายใบสั่งซื้อ (PO Payment Voucher) 🌟
+# ==========================================
+from purchasing.models import PurchaseOrder, PurchaseOrderPayment
+from solar_purchasing.models import SolarPurchaseOrder, SolarPurchaseOrderPayment
+
+@login_required
+def accounting_po_payment_detail(request, system_type, po_id):
+    # ตรวจสอบสิทธิ์ฝ่ายบัญชี
+    is_accounting = False
+    if request.user.is_superuser:
+        is_accounting = True
+    elif hasattr(request.user, 'employee') and request.user.employee:
+        dept = request.user.employee.department.name if request.user.employee.department else ''
+        if 'บัญชี' in dept or 'Account' in dept: is_accounting = True
+
+    if not is_accounting:
+        messages.error(request, "❌ หน้าต่างนี้สงวนสิทธิ์เฉพาะเจ้าหน้าที่ฝ่ายบัญชีเท่านั้น")
+        return redirect('dashboard')
+
+    # ดึงข้อมูลใบสั่งซื้อตามระบบที่ระบุ
+    if system_type == 'knockdown':
+        po = get_object_or_404(PurchaseOrder, id=po_id)
+        supplier_name = po.supplier.name if po.supplier else 'ไม่ระบุ'
+    elif system_type == 'solar':
+        po = get_object_or_404(SolarPurchaseOrder, id=po_id)
+        supplier_name = po.supplier.name if po.supplier else getattr(po, 'supplier_name_free_text', 'ไม่ระบุ')
+    else:
+        messages.error(request, "❌ ไม่พบระบบที่ระบุ")
+        return redirect('accounting_dashboard')
+
+    # เช็คยอดเงินที่จ่ายไปแล้ว
+    payments = po.payments.all()
+    total_paid = payments.aggregate(Sum('amount'))['amount__sum'] or 0
+    balance = float(po.total_amount) - float(total_paid)
+
+    context = {
+        'po': po,
+        'system_type': system_type,
+        'supplier_name': supplier_name,
+        'payments': payments,
+        'total_paid': total_paid,
+        'balance': balance,
+    }
+    return render(request, 'accounting/po_payment_detail.html', context)
+
+
+@login_required
+@transaction.atomic
+def accounting_po_payment_submit(request, system_type, po_id):
+    if request.method == 'POST':
+        # รับค่าจากฟอร์ม
+        amount_str = request.POST.get('amount', '0').replace(',', '')
+        try: amount = float(amount_str)
+        except ValueError: amount = 0
+
+        payment_method = request.POST.get('payment_method', 'โอนเงินผ่านธนาคาร')
+        reference_no = request.POST.get('reference_no', '')
+        note = request.POST.get('note', '')
+        slip_image = request.FILES.get('slip_image')
+
+        if amount <= 0:
+            messages.error(request, "❌ ยอดเงินต้องมากกว่า 0 บาท")
+            return redirect('accounting_po_payment_detail', system_type=system_type, po_id=po_id)
+
+        # 🌟 แยกระบบบันทึกข้อมูล
+        if system_type == 'knockdown':
+            po = get_object_or_404(PurchaseOrder, id=po_id)
+            supplier_name = po.supplier.name if po.supplier else ''
+
+            # บันทึกประวัติและสร้างใบคุม (PV) ลงตาราง
+            payment_record = PurchaseOrderPayment.objects.create(
+                po=po, amount=amount, payment_method=payment_method,
+                reference_no=reference_no, note=note, slip_image=slip_image
+            )
+
+            # อัปเดตสถานะบิล
+            total_paid = po.payments.aggregate(Sum('amount'))['amount__sum'] or 0
+            if float(total_paid) >= float(po.total_amount):
+                po.payment_status = 'PAID'
+            else:
+                po.payment_status = 'DEPOSIT'
+            po.save()
+
+            # ลงบันทึกรายจ่าย (Expense) อัตโนมัติ
+            Expense.objects.create(
+                title=f"ทำจ่ายใบสั่งซื้อ น็อคดาวน์ #{po.code} (PV: {payment_record.pv_code})",
+                amount=amount, date=timezone.now().date(),
+                note=f"จ่ายให้ร้าน {supplier_name} - {note}"
+            )
+
+            hub_url = 'po_payments'
+
+        elif system_type == 'solar':
+            po = get_object_or_404(SolarPurchaseOrder, id=po_id)
+            supplier_name = po.supplier.name if po.supplier else getattr(po, 'supplier_name_free_text', '')
+
+            # บันทึกประวัติและสร้างใบคุม (PV) ลงตาราง
+            payment_record = SolarPurchaseOrderPayment.objects.create(
+                po=po, amount=amount, payment_method=payment_method,
+                note=note, slip_image=slip_image
+            )
+
+            # อัปเดตสถานะบิล
+            total_paid = po.payments.aggregate(Sum('amount'))['amount__sum'] or 0
+            if float(total_paid) >= float(po.total_amount):
+                po.payment_status = 'PAID'
+            else:
+                po.payment_status = 'DEPOSIT'
+            po.save()
+
+            # ลงบันทึกรายจ่าย (Expense) อัตโนมัติ
+            Expense.objects.create(
+                title=f"ทำจ่ายใบสั่งซื้อ โซล่าเซลล์ #{po.code} (PV: {payment_record.pv_code})",
+                amount=amount, date=timezone.now().date(),
+                note=f"จ่ายให้ร้าน {supplier_name} - {note}"
+            )
+
+            hub_url = 'solar_po_payments'
+
+        messages.success(request, f"✅ ออกใบคุมจ่ายเลขที่ {payment_record.pv_code} พร้อมโอนเงิน {amount:,.2f} บาท สำเร็จ! (ระบบลงบัญชีรายจ่ายให้อัตโนมัติแล้ว)")
+        return redirect('accounting_verification_hub', task_type=hub_url)
+
+    return redirect('accounting_dashboard')
+
+# ==========================================
+# 🌟 [NEW] รายงานประวัติการจ่ายเงินค่าวัตถุดิบ (PO Payment Report) 🌟
+# ==========================================
+@login_required
+def accounting_po_payment_report(request):
+    # เช็คสิทธิ์บัญชีและผู้บริหาร
+    is_authorized = False
+    if request.user.is_superuser:
+        is_authorized = True
+    elif hasattr(request.user, 'employee') and request.user.employee:
+        dept = request.user.employee.department.name if request.user.employee.department else ''
+        if 'บัญชี' in dept or 'Account' in dept or 'บริหาร' in dept or 'Executive' in dept:
+            is_authorized = True
+
+    if not is_authorized:
+        messages.error(request, "❌ หน้าต่างนี้สงวนสิทธิ์เฉพาะระดับบริหารและฝ่ายบัญชีเท่านั้น")
+        return redirect('dashboard')
+
+    # รับค่า Tab ปัจจุบัน (ค่าเริ่มต้นคือ knockdown)
+    tab = request.GET.get('tab', 'knockdown')
+
+    if tab == 'knockdown':
+        # ดึงประวัติการจ่ายเงินจากตาราง PurchaseOrderPayment
+        payments = PurchaseOrderPayment.objects.select_related('po', 'po__supplier').order_by('-created_at')
+    else:
+        # ดึงประวัติการจ่ายเงินจากตาราง SolarPurchaseOrderPayment
+        payments = SolarPurchaseOrderPayment.objects.select_related('po', 'po__supplier').order_by('-created_at')
+
+    context = {
+        'tab': tab,
+        'payments': payments,
+    }
+    return render(request, 'accounting/po_payment_report.html', context)
+
+# ==========================================
+# 🌟 [NEW] พิมพ์ใบสำคัญจ่าย (Payment Voucher - A4) 🌟
+# ==========================================
+from master_data.models import CompanyInfo
+
+@login_required
+def accounting_print_pv(request, system_type, pv_id):
+    # เช็คสิทธิ์เฉพาะบัญชีหรือผู้บริหาร
+    is_authorized = False
+    if request.user.is_superuser:
+        is_authorized = True
+    elif hasattr(request.user, 'employee') and request.user.employee:
+        dept = request.user.employee.department.name if request.user.employee.department else ''
+        if 'บัญชี' in dept or 'Account' in dept or 'บริหาร' in dept or 'Executive' in dept:
+            is_authorized = True
+
+    if not is_authorized:
+        messages.error(request, "❌ ไม่มีสิทธิ์เข้าถึงหน้าพิมพ์เอกสาร")
+        return redirect('dashboard')
+
+    company = CompanyInfo.objects.first()
+
+    if system_type == 'knockdown':
+        payment = get_object_or_404(PurchaseOrderPayment.objects.select_related('po', 'po__supplier', 'po__buyer'), pk=pv_id)
+        supplier_name = payment.po.supplier.name if payment.po.supplier else "ไม่ระบุ"
+    elif system_type == 'solar':
+        payment = get_object_or_404(SolarPurchaseOrderPayment.objects.select_related('po', 'po__supplier', 'po__buyer'), pk=pv_id)
+        supplier_name = payment.po.supplier.name if payment.po.supplier else getattr(payment.po, 'supplier_name_free_text', "ไม่ระบุ")
+    else:
+        messages.error(request, "❌ ไม่พบระบบที่ระบุ")
+        return redirect('accounting_po_payment_report')
+
+    context = {
+        'company': company,
+        'payment': payment,
+        'system_type': system_type,
+        'supplier_name': supplier_name,
+    }
+    return render(request, 'accounting/po_payment_pv_print.html', context)

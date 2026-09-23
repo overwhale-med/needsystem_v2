@@ -1,5 +1,5 @@
 {% extends 'core/base.html' %}
-{% load humanize %} 
+{% load humanize %}
 
 {% block content %}
 <div class="container-fluid py-4 px-4">
@@ -9,9 +9,17 @@
             <p class="text-muted small mb-0">ประวัติการรวมใบสั่งผลิต และแถบติดตามความคืบหน้าการเปิด PO</p>
         </div>
         <div>
-            <a href="{% url 'ppo_prepare' %}" class="btn btn-warning rounded-pill px-4 shadow-sm fw-bold">
+            <!-- 🌟 [FIXED] เพิ่ม position-relative และเงื่อนไขแสดงป้ายตัวเลขสีแดง 🌟 -->
+            <a href="{% url 'ppo_prepare' %}" class="btn btn-warning rounded-pill px-4 shadow-sm fw-bold position-relative">
                 <i class="fas fa-plus me-1"></i> สร้าง PPO ใหม่
+                {% if pending_ppo_count > 0 %}
+                <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger shadow-sm border border-2 border-white">
+                    {{ pending_ppo_count }}
+                    <span class="visually-hidden">รอสร้าง PPO</span>
+                </span>
+                {% endif %}
             </a>
+
             <a href="{% url 'purchasing_dashboard' %}" class="btn btn-outline-secondary rounded-pill px-4 ms-2 fw-bold"><i class="fas fa-arrow-left me-2"></i> กลับหน้าจัดซื้อ</a>
         </div>
     </div>
@@ -23,11 +31,11 @@
                     <tr>
                         <th class="ps-4 py-3 border-0">เลขที่ใบเตรียม (PPO)</th>
                         <th class="py-3 border-0">วันที่สร้าง</th>
-                        <th class="py-3 border-0">ใบสั่งผลิต (JOB) ที่ถูกรวม</th>
+                        <th class="py-3 border-0 text-center">ใบสั่งผลิต (JOB)</th>
+                        <!-- 🌟 [NEW] เพิ่มคอลัมน์ใบสั่งซื้อ -->
+                        <th class="py-3 border-0 text-center">ใบสั่งซื้อ (PO)</th>
                         <th class="py-3 border-0 text-end">จำนวนเงินรวม (ประเมิน)</th>
-                        
                         <th class="py-3 border-0 text-center" style="width: 15%;">ความคืบหน้า (Progress)</th>
-                        
                         <th class="pe-4 py-3 border-0 text-center">จัดการ</th>
                     </tr>
                 </thead>
@@ -36,13 +44,27 @@
                     <tr>
                         <td class="ps-4 fw-bold text-primary">{{ ppo.code }}</td>
                         <td class="text-muted small">{{ ppo.created_at|date:"d/m/Y H:i" }}</td>
-                        <td>
-                            {% for job in ppo.production_orders.all %}
-                                <span class="badge bg-secondary bg-opacity-10 text-dark border me-1">{{ job.code }}</span>
-                            {% endfor %}
+
+                        <!-- 🌟 ปุ่มดูรายการ JOB 🌟 -->
+                        <td class="text-center">
+                            <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3 fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#jobModal{{ ppo.id }}">
+                                <i class="fas fa-clipboard-list me-1"></i> ดูรายการ ({{ ppo.job_count }})
+                            </button>
                         </td>
+
+                        <!-- 🌟 ปุ่มดูรายการ PO 🌟 -->
+                        <td class="text-center">
+                            {% if ppo.created_pos_count > 0 %}
+                                <button type="button" class="btn btn-sm btn-outline-info rounded-pill px-3 fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#poModal{{ ppo.id }}">
+                                    <i class="fas fa-shopping-cart me-1"></i> ดูรายการ PO ({{ ppo.created_pos_count }})
+                                </button>
+                            {% else %}
+                                <span class="badge bg-light text-muted border px-3 py-2 rounded-pill shadow-sm"><i class="fas fa-hourglass-half me-1"></i> ยังไม่เปิด PO</span>
+                            {% endif %}
+                        </td>
+
                         <td class="text-end fw-bold text-danger">{{ ppo.total_estimated_cost|floatformat:2|intcomma }} บาท</td>
-                        
+
                         <td class="text-center">
                             {% if ppo.po_status == 'GREEN' %}
                                 <span class="badge bg-success rounded-pill px-3 py-2 shadow-sm w-100">
@@ -67,8 +89,57 @@
                             </a>
                         </td>
                     </tr>
+
+                    <!-- 🌟 ป๊อปอัป (Modal) แสดงรายการ JOB 🌟 -->
+                    <div class="modal fade" id="jobModal{{ ppo.id }}" tabindex="-1" aria-hidden="true">
+                        <div class="modal-dialog modal-dialog-centered">
+                            <div class="modal-content rounded-4 border-0 shadow-lg">
+                                <div class="modal-header border-bottom-0 pb-0">
+                                    <h5 class="modal-title fw-bold text-dark"><i class="fas fa-clipboard-list text-primary me-2"></i>รายการใบสั่งผลิต (JOB)</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                </div>
+                                <div class="modal-body p-4">
+                                    <p class="text-muted small mb-3">อ้างอิงจากใบเตรียมสั่งซื้อ: <strong>{{ ppo.code }}</strong></p>
+                                    <ul class="list-group list-group-flush border-top">
+                                        {% for job in ppo.production_orders.all %}
+                                            <li class="list-group-item d-flex justify-content-between align-items-center px-0 py-3">
+                                                <span class="fw-bold text-dark fs-6">{{ job.code }}</span>
+                                                <span class="badge bg-secondary bg-opacity-10 text-secondary border rounded-pill px-3">แผนกน็อคดาวน์</span>
+                                            </li>
+                                        {% endfor %}
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 🌟 ป๊อปอัป (Modal) แสดงรายการ PO 🌟 -->
+                    <div class="modal fade" id="poModal{{ ppo.id }}" tabindex="-1" aria-hidden="true">
+                        <div class="modal-dialog modal-dialog-centered">
+                            <div class="modal-content rounded-4 border-0 shadow-lg">
+                                <div class="modal-header border-bottom-0 pb-0">
+                                    <h5 class="modal-title fw-bold text-dark"><i class="fas fa-shopping-cart text-info me-2"></i>รายการใบสั่งซื้อ (PO)</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                </div>
+                                <div class="modal-body p-4">
+                                    <p class="text-muted small mb-3">อ้างอิงจากใบเตรียมสั่งซื้อ: <strong>{{ ppo.code }}</strong></p>
+                                    <div class="list-group gap-2">
+                                        {% for po in ppo.created_pos_list %}
+                                            <a href="{% url 'po_print' po.id %}" target="_blank" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center border rounded-3 shadow-sm p-3">
+                                                <div>
+                                                    <div class="fw-bold text-primary font-monospace fs-6">{{ po.code }} <i class="fas fa-external-link-alt small ms-1 opacity-50"></i></div>
+                                                    <small class="text-muted">{{ po.supplier.name|default:"ไม่ระบุร้านค้า" }}</small>
+                                                </div>
+                                                <span class="badge bg-success rounded-pill px-3 fs-6">฿ {{ po.total_amount|floatformat:2|intcomma }}</span>
+                                            </a>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                     {% empty %}
-                    <tr><td colspan="6" class="text-center py-5 text-muted"><i class="fas fa-box-open fa-3x mb-3 opacity-25"></i><br>ยังไม่มีประวัติใบเตรียมสั่งซื้อ</td></tr>
+                    <tr><td colspan="7" class="text-center py-5 text-muted"><i class="fas fa-box-open fa-3x mb-3 opacity-25"></i><br>ยังไม่มีประวัติใบเตรียมสั่งซื้อ</td></tr>
                     {% endfor %}
                 </tbody>
             </table>

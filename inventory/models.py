@@ -2,6 +2,7 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
 from master_data.models import Supplier
+from PIL import Image
 import datetime
 
 # 1. หมวดหมู่สินค้า
@@ -36,16 +37,16 @@ class Product(models.Model):
     barcode = models.CharField(max_length=50, blank=True, null=True, verbose_name="บาร์โค้ด")
     name = models.CharField(max_length=200, verbose_name="ชื่อสินค้า")
     unit = models.CharField(max_length=50, blank=True, null=True, verbose_name="หน่วยนับ")
-    
+
     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="หมวดหมู่สินค้า")
     rm_category = models.ForeignKey(RawMaterialCategory, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="หมวดหมู่วัตถุดิบ (แผนก)")
     sub_category = models.ForeignKey(SubCategory, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="หมวดหมู่ย่อย") # 🌟 เพิ่มแล้ว
-    
+
     cost_price = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="ราคาทุน")
     sell_price = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="ราคาขาย")
     stock_qty = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name="จำนวนคงเหลือ")
     min_level = models.DecimalField(max_digits=12, decimal_places=2, default=5, verbose_name="จุดสั่งซื้อ (Low Stock)")
-    
+
     supplier = models.ForeignKey(Supplier, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="ซัพพลายเออร์หลัก (Legacy)")
     image = models.ImageField(upload_to='products/', blank=True, null=True, verbose_name="รูปสินค้า")
     standard_blueprint = models.FileField(upload_to='standard_blueprints/', blank=True, null=True, verbose_name="ไฟล์แบบแปลนมาตรฐาน (PDF/รูปภาพ)")
@@ -81,6 +82,10 @@ class InventoryDoc(models.Model):
     doc_type = models.CharField(max_length=2, choices=DOC_TYPES, verbose_name="ประเภทเอกสาร")
     po_reference = models.ForeignKey('purchasing.PurchaseOrder', on_delete=models.SET_NULL, null=True, blank=True, related_name='receipt_docs', verbose_name="อ้างอิงใบสั่งซื้อ (PO)")
     reference = models.CharField(max_length=100, blank=True, verbose_name="อ้างอิงอื่นๆ (เช่น ทะเบียนรถ, ใบส่งของ)")
+
+    # 🌟 [NEW] เพิ่มช่องเก็บรูปภาพใบส่งของ 🌟
+    slip_image = models.ImageField(upload_to='inventory_receipts/%Y/%m/', null=True, blank=True, verbose_name="รูปใบส่งของ/รับของ")
+
     description = models.TextField(blank=True, verbose_name="หมายเหตุ")
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, verbose_name="ผู้ทำรายการ")
     created_at = models.DateTimeField(default=timezone.now, verbose_name="วันที่เอกสาร")
@@ -99,7 +104,18 @@ class InventoryDoc(models.Model):
             self.doc_no = f"{prefix}{running_number:03d}"
         super().save(*args, **kwargs)
 
+        # 🌟 [NEW] ระบบบีบอัดรูปอัตโนมัติ ช่วยเซฟพื้นที่ Server 🌟
+        if self.slip_image:
+            try:
+                img = Image.open(self.slip_image.path)
+                if img.height > 800 or img.width > 800:
+                    img.thumbnail((800, 800))
+                    img.save(self.slip_image.path, quality=85, optimize=True)
+            except Exception: pass
+
+    # 🌟 [FIXED] เพิ่มฟังก์ชันแสดงชื่อเอกสารและ Meta ที่ตกหล่นกลับมาแล้ว 🌟
     def __str__(self): return f"{self.doc_no} ({self.get_doc_type_display()})"
+    
     class Meta:
         verbose_name = "3. เอกสารคลังสินค้า"
         verbose_name_plural = "3. เอกสารคลังสินค้า (Docs)"
@@ -110,10 +126,10 @@ class InventoryDoc(models.Model):
 class StockMovement(models.Model):
     doc = models.ForeignKey(InventoryDoc, on_delete=models.CASCADE, related_name='movements', verbose_name="เลขที่เอกสาร", null=True, blank=True)
     product = models.ForeignKey(Product, on_delete=models.CASCADE, verbose_name="สินค้า")
-    
+
     # 🌟 [UPDATE] ปลดล็อคให้รองรับทศนิยม 2 ตำแหน่ง 🌟
     quantity = models.DecimalField(max_digits=12, decimal_places=2, verbose_name="จำนวน")
-    
+
     movement_type = models.CharField(max_length=10, choices=[('IN', 'เข้า'), ('OUT', 'ออก')], verbose_name="ประเภท")
     reference_doc = models.CharField(max_length=50, blank=True, verbose_name="อ้างอิงเดิม (Legacy)")
     note = models.TextField(blank=True, verbose_name="หมายเหตุ")
@@ -132,7 +148,7 @@ class StockMovement(models.Model):
         verbose_name_plural = "4. รายการเคลื่อนไหว (Details)"
 
 class FinishedGood(Product):
-    class Meta: 
+    class Meta:
         proxy = True
         verbose_name = "2.1 แคตตาล็อกสินค้าพร้อมขาย (สำหรับฝ่ายขาย)"
         verbose_name_plural = "2.1 แคตตาล็อกสินค้าพร้อมขาย (สำหรับฝ่ายขาย)"
