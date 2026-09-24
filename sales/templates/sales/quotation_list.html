@@ -33,7 +33,7 @@
     .badge-soft-info { background-color: rgba(13, 202, 240, 0.1); color: #087990; border: 1px solid rgba(13, 202, 240, 0.2); }
     .badge-soft-secondary { background-color: rgba(108, 117, 125, 0.1); color: #495057; border: 1px solid rgba(108, 117, 125, 0.2); }
     .badge-soft-danger { background-color: rgba(220, 53, 69, 0.1); color: #c82333; border: 1px solid rgba(220, 53, 69, 0.2); }
-    
+
     /* 🌟 สไตล์สถานะการผลิตใหม่ (ตาม Kanban) 🌟 */
     .badge-soft-production { background-color: rgba(13, 110, 253, 0.1); color: #0d6efd; border: 1px solid rgba(13, 110, 253, 0.2); }
     .badge-soft-qc { background-color: rgba(111, 66, 193, 0.1); color: #6f42c1; border: 1px solid rgba(111, 66, 193, 0.2); }
@@ -128,7 +128,7 @@
                                     <option value="DRAFT" {% if status_filter == 'DRAFT' %}selected{% endif %}>รออนุมัติ</option>
                                     <option value="APPROVED" {% if status_filter == 'APPROVED' %}selected{% endif %}>อนุมัติแล้ว</option>
                                     <option value="PENDING_CLOSING" {% if status_filter == 'PENDING_CLOSING' %}selected{% endif %}>รอรับมัดจำ</option>
-                                    <option value="PENDING_VERIFY" {% if status_filter == 'PENDING_VERIFY' %}selected{% endif %}>รอตรวจมัดจำ (บัญชี)</option>
+                                    <option value="PENDING_VERIFY" {% if status_filter == 'PENDING_VERIFY' %}selected{% endif %}>รอบัญชีตรวจสอบ</option>
                                     <option value="READY" {% if status_filter == 'READY' %}selected{% endif %}>พร้อมส่งงานผลิต</option>
                                     <option value="IN_PRODUCTION" {% if status_filter == 'IN_PRODUCTION' %}selected{% endif %}>กำลังดำเนินการผลิต</option>
                                     <option value="CONVERTED" {% if status_filter == 'CONVERTED' %}selected{% endif %}>เปิดบิลแล้ว</option>
@@ -194,12 +194,13 @@
                     <table class="table table-hover align-middle mb-0 border-0">
                         <thead class="text-secondary small text-uppercase" style="background-color: #f8f9fc; border-bottom: 2px solid #eef2f7;">
                             <tr>
-                                <th class="ps-4 py-3 fw-bold" style="width: 18%;">ข้อมูลเอกสาร / ลูกค้า</th>
-                                <th class="py-3 fw-bold" style="width: 18%;">พนักงานขาย / สาขา</th>
-                                <th class="py-3 fw-bold" style="width: 20%;">สถานะดำเนินการ / ฝ่ายผลิต</th>
-                                <th class="text-center py-3 fw-bold" style="width: 14%;">ยอดมัดจำ / หลักฐาน</th>
-                                <th class="text-end py-3 fw-bold" style="width: 14%;">ยอดสุทธิ (บาท)</th>
-                                <th class="text-center py-3 fw-bold" style="width: 16%;">จัดการ</th>
+                                <th class="ps-4 py-3 fw-bold" style="width: 18%;">เลขที่เอกสาร/ชื่อลูกค้า</th>
+                                <th class="py-3 fw-bold" style="width: 15%;">พนักงานขาย / สาขา</th>
+                                <th class="py-3 fw-bold" style="width: 18%;">สถานะ/ขั้นตอนการผลิต</th>
+                                <th class="text-center py-3 fw-bold" style="width: 11%;">ยอดรับเงินมัดจำ</th>
+                                <th class="text-center py-3 fw-bold" style="width: 11%;">ชำระตามงวด</th>
+                                <th class="text-end py-3 fw-bold" style="width: 13%;">ยอดสุทธิ (บาท)</th>
+                                <th class="text-center py-3 fw-bold" style="width: 14%;">จัดการ</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -279,13 +280,13 @@
                                 <td class="py-3">
                                     <div class="d-flex flex-column align-items-start gap-1">
                                         <div class="d-flex align-items-center gap-2 mb-1">
-                                            
+
                                             <!-- 🌟 แสดงสถานะของเอกสารฝั่ง Sales 🌟 -->
                                             {% if qt.status == 'APPROVED' %}
                                                 {% if not qt.is_deposit_paid %}
                                                     <span class="badge-soft badge-soft-warning"><i class="fas fa-hourglass-half me-1"></i>รอรับมัดจำ</span>
                                                 {% elif qt.is_deposit_paid and not qt.is_deposit_verified %}
-                                                    <span class="badge-soft badge-soft-secondary"><i class="fas fa-user-clock me-1"></i>รอตรวจมัดจำ</span>
+                                                    <span class="badge-soft badge-soft-secondary"><i class="fas fa-user-clock me-1"></i>รอตรวจสอบมัดจำ</span>
                                                 {% else %}
                                                     <span class="badge-soft badge-soft-success"><i class="fas fa-check-circle me-1"></i>อนุมัติแล้ว</span>
                                                 {% endif %}
@@ -296,7 +297,7 @@
                                             {% elif qt.status == 'DRAFT' %}
                                                 <span class="badge-soft badge-soft-secondary"><i class="fas fa-file-alt me-1"></i>รออนุมัติ</span>
                                             {% endif %}
-                                            
+
                                             <!-- 🌟 [NEW] แสดงสถานะจากกระดาน Kanban ของฝ่ายผลิต 🌟 -->
                                             {% with job=qt.production_orders.first %}
                                                 {% if job %}
@@ -331,7 +332,7 @@
 
                                                 <!-- 🌟 [NEW] สมองกลแสดง Progress Bar อัจฉริยะ (แบ่งสีตามสถานะ) 🌟 -->
                                                 {% if job.status in 'IN_PROGRESS,COMPLETED,WAITING_QC,REWORK' and not job.is_closed %}
-                                                    
+
                                                     <!-- กรณี 1: กำลังประกอบ (สีเขียว/น้ำเงิน) -->
                                                     {% if job.status == 'IN_PROGRESS' %}
                                                         <div class="w-100 mt-2 pe-3" tabindex="0" data-bs-toggle="popover" title="ความคืบหน้าการผลิต" data-bs-content="{% for d in job.completed_departments.all %}<i class='fas fa-check-circle text-success me-1'></i> {{ d.name }}<br>{% empty %}<span class='text-muted'>ยังไม่เริ่มดำเนินการ</span>{% endfor %}" data-bs-html="true">
@@ -343,10 +344,10 @@
                                                                 <div class="progress-bar {% if job.progress_percentage == 100 %}bg-success{% else %}bg-primary{% endif %}" role="progressbar" style="width: {{ job.progress_percentage }}%;"></div>
                                                             </div>
                                                         </div>
-                                                    
+
                                                     <!-- กรณี 2: เข้าสู่โหมด QC (สีม่วง) -->
                                                     {% elif job.status == 'WAITING_QC' or job.status == 'REWORK' %}
-                                                        
+
                                                         <!-- คำนวณเปอร์เซ็นต์ QC อัตโนมัติใน Template -->
                                                         {% with total_qc=6 %}
                                                         {% with passed_qc=0 %}
@@ -357,10 +358,10 @@
                                                             {% if job.qc_electrical %}{% widthratio passed_qc|add:1 1 1 as passed_qc %}{% endif %}
                                                             {% if job.qc_plumbing %}{% widthratio passed_qc|add:1 1 1 as passed_qc %}{% endif %}
                                                             {% if job.qc_aircon %}{% widthratio passed_qc|add:1 1 1 as passed_qc %}{% endif %}
-                                                            
+
                                                             <!-- คำนวณเป็นร้อยละ -->
                                                             {% widthratio passed_qc total_qc 100 as qc_percent %}
-                                                            
+
                                                             <div class="w-100 mt-2 pe-3" tabindex="0" data-bs-toggle="popover" title="ความคืบหน้าการตรวจ QC" data-bs-content="<div class='small'>{% if job.qc_paint %}<i class='fas fa-check-circle text-success me-1'></i> 1. งานสี<br>{% endif %}{% if job.qc_internal %}<i class='fas fa-check-circle text-success me-1'></i> 2. ภายใน<br>{% endif %}{% if job.qc_external %}<i class='fas fa-check-circle text-success me-1'></i> 3. ภายนอก<br>{% endif %}{% if job.qc_electrical %}<i class='fas fa-check-circle text-success me-1'></i> 4. ไฟฟ้า<br>{% endif %}{% if job.qc_plumbing %}<i class='fas fa-check-circle text-success me-1'></i> 5. ประปา<br>{% endif %}{% if job.qc_aircon %}<i class='fas fa-check-circle text-success me-1'></i> 6. แอร์<br>{% endif %}</div>" data-bs-html="true">
                                                                 <div class="d-flex justify-content-between text-muted" style="font-size: 0.65rem;">
                                                                     <span>ความคืบหน้า (QC)</span>
@@ -379,76 +380,122 @@
                                         {% endwith %}
                                     </div>
                                 </td>
-                                
-                                <!-- 🌟 [FIXED] อัปเดตการดึงข้อมูลสลิปและยอดมัดจำจากตารางลูก QuotationDeposit 🌟 -->
+
+                                <!-- 🌟 [FIXED] อัปเดตชื่อตัวแปรให้ตรงกับ related_name='deposits' ใน Models 🌟 -->
+
+                                <!-- 🌟 1. คอลัมน์ยอดมัดจำ (ก้อนแรกเท่านั้น) 🌟 -->
                                 <td class="text-center py-3">
                                     {% if qt.is_deposit_paid %}
-                                        
-                                        <!-- เช็คว่ามีข้อมูลในตารางลูก (QuotationDeposit) หรือไม่ -->
-                                        {% if qt.quotationdeposit_set.all %}
-                                            {% for dep in qt.quotationdeposit_set.all %}
-                                                <div class="mb-2 pb-1 {% if not forloop.last %}border-bottom{% endif %}">
-                                                    <div class="fw-bold text-success" style="font-size: 0.85rem;">฿{{ dep.amount|floatformat:2|intcomma }}</div>
-                                                    <div class="d-flex align-items-center justify-content-center gap-1 mt-1">
-                                                        {% if dep.payment_method == 'TRANSFER' %}
-                                                            <i class="fas fa-mobile-alt text-info" title="โอนเงิน"></i>
-                                                        {% elif dep.payment_method == 'CASH' %}
-                                                            <i class="fas fa-money-bill-wave text-success" title="เงินสด"></i>
-                                                        {% elif dep.payment_method == 'CHECK' %}
-                                                            <i class="fas fa-money-check text-warning" title="เช็ค"></i>
-                                                        {% endif %}
+                                        <!-- เช็คว่ามีข้อมูลงวดมัดจำในตารางลูกหรือไม่ (เรียกผ่าน related_name="deposits") -->
+                                        {% if qt.deposits.all %}
+                                            <!-- ดึงเฉพาะก้อนแรกสุด (first) มาแสดง -->
+                                            {% with first_dep=qt.deposits.first %}
+                                                <div class="mb-2 pb-1">
+                                                    <div class="fw-bold text-success" style="font-size: 0.85rem;">฿{{ first_dep.amount|floatformat:2|intcomma }}</div>
 
-                                                        {% if dep.deposit_slip %}
-                                                            <img src="{{ dep.deposit_slip.url }}" class="slip-thumbnail mx-1" data-bs-toggle="modal" data-bs-target="#slipModal" onclick="document.getElementById('slipImageFull').src='{{ dep.deposit_slip.url }}'">
+                                                    <div class="mt-1">
+                                                        <a href="{% url 'deposit_print' qt.id %}?rvd={{ first_dep.id }}" target="_blank" class="badge bg-light text-secondary border border-secondary shadow-sm text-decoration-none hover-scale">
+                                                            <i class="fas fa-print me-1"></i>{{ first_dep.code }}
+                                                        </a>
+                                                    </div>
+
+                                                    <div class="d-flex align-items-center justify-content-center gap-1 mt-1">
+                                                        {% if first_dep.payment_method == 'TRANSFER' %}<i class="fas fa-mobile-alt text-info" title="โอนเงิน"></i>
+                                                        {% elif first_dep.payment_method == 'CASH' %}<i class="fas fa-money-bill-wave text-success" title="เงินสด"></i>
+                                                        {% elif first_dep.payment_method == 'CHECK' %}<i class="fas fa-money-check text-warning" title="เช็ค"></i>{% endif %}
+
+                                                        <!-- 🌟 โชว์รูปสลิปจากตารางลูก 🌟 -->
+                                                        {% if first_dep.deposit_slip %}
+                                                            <img src="{{ first_dep.deposit_slip.url }}" class="slip-thumbnail mx-1" data-bs-toggle="modal" data-bs-target="#slipModal" onclick="document.getElementById('slipImageFull').src='{{ first_dep.deposit_slip.url }}'">
                                                         {% endif %}
                                                     </div>
                                                 </div>
-                                            {% endfor %}
-                                        
-                                        <!-- รองรับกรณีข้อมูลเก่า (Fallback) ที่ยังอ้างอิงฟอร์แมตเดิม -->
-                                        {% elif qt.deposits.all %}
-                                            {% for dep in qt.deposits.all %}
-                                                <div class="mb-2 pb-1 {% if not forloop.last %}border-bottom{% endif %}">
-                                                    <div class="fw-bold text-success" style="font-size: 0.85rem;">฿{{ dep.amount|floatformat:2|intcomma }}</div>
-                                                    <div class="d-flex align-items-center justify-content-center gap-1 mt-1">
-                                                        {% if dep.payment_method == 'TRANSFER' %}
-                                                            <i class="fas fa-mobile-alt text-info" title="โอนเงิน"></i>
-                                                        {% elif dep.payment_method == 'CASH' %}
-                                                            <i class="fas fa-money-bill-wave text-success" title="เงินสด"></i>
-                                                        {% elif dep.payment_method == 'CHECK' %}
-                                                            <i class="fas fa-money-check text-warning" title="เช็ค"></i>
-                                                        {% endif %}
-
-                                                        {% if dep.deposit_slip %}
-                                                            <img src="{{ dep.deposit_slip.url }}" class="slip-thumbnail mx-1" data-bs-toggle="modal" data-bs-target="#slipModal" onclick="document.getElementById('slipImageFull').src='{{ dep.deposit_slip.url }}'">
-                                                        {% endif %}
-                                                    </div>
-                                                </div>
-                                            {% endfor %}
-                                        
-                                        <!-- ถ้าย้ายข้อมูลไม่สมบูรณ์จริงๆ ดึงค่าเก่ามาโชว์ไปก่อน -->
+                                            {% endwith %}
                                         {% else %}
-                                            <div class="fw-bold text-success" style="font-size: 0.85rem;">฿{{ qt.deposit_amount|floatformat:2|intcomma }}</div>
-                                            <div class="d-flex align-items-center justify-content-center gap-1 mt-1">
-                                                {% if qt.deposit_method == 'TRANSFER' %}
-                                                    <i class="fas fa-mobile-alt text-info" title="โอนเงิน"></i>
-                                                {% elif qt.deposit_method == 'CASH' %}
-                                                    <i class="fas fa-money-bill-wave text-success" title="เงินสด"></i>
-                                                {% elif qt.deposit_method == 'CHECK' %}
-                                                    <i class="fas fa-money-check text-warning" title="เช็ค"></i>
-                                                {% endif %}
-
-                                                {% if qt.deposit_slip %}
-                                                    <img src="{{ qt.deposit_slip.url }}" class="slip-thumbnail mx-1" data-bs-toggle="modal" data-bs-target="#slipModal" onclick="document.getElementById('slipImageFull').src='{{ qt.deposit_slip.url }}'">
-                                                {% endif %}
-                                            </div>
+                                            <span class="text-muted small">-</span>
                                         {% endif %}
 
-                                        <!-- ตรวจสอบสถานะว่า บัญชีตรวจมัดจำใบนี้หรือยัง -->
+                                        <!-- สถานะตรวจมัดจำก้อนแรก -->
                                         {% if not qt.is_deposit_verified %}
-                                            <div class="mt-2"><span class="badge bg-warning text-dark border shadow-sm px-2 py-1" style="font-size: 0.65rem;"><i class="fas fa-hourglass-half me-1"></i>รอตรวจ</span></div>
+                                            <div class="mt-2"><span class="badge bg-warning text-dark border shadow-sm px-2 py-1" style="font-size: 0.65rem;"><i class="fas fa-hourglass-half me-1"></i>รอตรวจสอบมัดจำ</span></div>
                                         {% else %}
-                                            <div class="mt-2"><span class="badge bg-success bg-opacity-10 text-success border border-success shadow-sm px-2 py-1" style="font-size: 0.65rem;"><i class="fas fa-check-circle me-1"></i>ตรวจแล้ว</span></div>
+                                            <div class="mt-2"><span class="badge bg-success bg-opacity-10 text-success border border-success shadow-sm px-2 py-1" style="font-size: 0.65rem;"><i class="fas fa-check-circle me-1"></i>รับมัดจำแล้ว</span></div>
+                                        {% endif %}
+                                    {% else %}
+                                        <span class="text-muted small">-</span>
+                                    {% endif %}
+                                </td>
+
+                                <!-- 🌟 2. คอลัมน์ชำระตามงวด (ก้อนที่ 2 เป็นต้นไป) 🌟 -->
+                                <td class="text-center py-3 border-start">
+                                    {% if qt.is_deposit_paid %}
+
+                                        <!-- กำหนดตัวแปรเก็บรายการงวดที่ 2 เป็นต้นไป -->
+                                        {% with installments=qt.deposits.all|slice:"1:" %}
+                                            {% if installments %}
+                                                <div class="mb-2 pb-2 border-bottom">
+                                                    <span class="badge bg-secondary bg-opacity-10 text-secondary border rounded-pill px-2 py-1 mb-2 d-inline-block shadow-sm" style="font-size: 0.7rem;">
+                                                        <i class="fas fa-list me-1"></i> มี {{ installments|length }} รายการ
+                                                    </span>
+                                                    <button class="btn btn-sm btn-outline-info text-dark rounded-pill fw-bold shadow-sm w-100" data-bs-toggle="modal" data-bs-target="#installmentModal{{ qt.id }}">
+                                                        <i class="fas fa-search me-1"></i> เปิดดูรายการ
+                                                    </button>
+                                                </div>
+
+                                                <!-- 🌟 Modal สำหรับแสดงประวัติชำระตามงวด 🌟 -->
+                                                <div class="modal fade" id="installmentModal{{ qt.id }}" tabindex="-1" aria-hidden="true">
+                                                    <div class="modal-dialog modal-dialog-centered modal-sm">
+                                                        <div class="modal-content border-0 rounded-4 shadow-lg">
+                                                            <div class="modal-header bg-light border-0">
+                                                                <h6 class="modal-title fw-bold text-dark"><i class="fas fa-history text-info me-2"></i>ประวัติชำระตามงวด</h6>
+                                                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                            </div>
+                                                            <div class="modal-body p-3 text-center bg-white" style="max-height: 60vh; overflow-y: auto;">
+                                                                <div class="text-muted small mb-3">อ้างอิงเอกสาร: <strong>{{ qt.code }}</strong></div>
+
+                                                                {% for dep in installments %}
+                                                                    <div class="mb-3 pb-3 {% if not forloop.last %}border-bottom{% endif %} bg-light rounded-3 p-2 border">
+                                                                        <div class="fw-bold text-success" style="font-size: 0.95rem;">฿{{ dep.amount|floatformat:2|intcomma }}</div>
+                                                                        <div class="mt-1">
+                                                                            <a href="{% url 'deposit_print' qt.id %}?rvd={{ dep.id }}" target="_blank" class="badge bg-white text-secondary border shadow-sm text-decoration-none hover-scale">
+                                                                                <i class="fas fa-print me-1"></i>{{ dep.code }}
+                                                                            </a>
+                                                                        </div>
+                                                                        <div class="d-flex align-items-center justify-content-center gap-1 mt-2">
+                                                                            {% if dep.payment_method == 'TRANSFER' %}<i class="fas fa-mobile-alt text-info" title="โอนเงิน"></i>
+                                                                            {% elif dep.payment_method == 'CASH' %}<i class="fas fa-money-bill-wave text-success" title="เงินสด"></i>
+                                                                            {% elif dep.payment_method == 'CHECK' %}<i class="fas fa-money-check text-warning" title="เช็ค"></i>{% endif %}
+
+                                                                            {% if dep.deposit_slip %}
+                                                                                <!-- data-bs-dismiss="modal" ป้องกันบัคหน้าจอดำค้างซ้อนกันเวลาดูรูปสลิปใหญ่ -->
+                                                                                <img src="{{ dep.deposit_slip.url }}" class="slip-thumbnail mx-1" data-bs-toggle="modal" data-bs-target="#slipModal" data-bs-dismiss="modal" onclick="document.getElementById('slipImageFull').src='{{ dep.deposit_slip.url }}'">
+                                                                            {% endif %}
+                                                                        </div>
+                                                                        {% if dep.is_verified %}
+                                                                            <span class="badge bg-success bg-opacity-10 text-success border border-success mt-2"><i class="fas fa-check-circle me-1"></i>ตรวจแล้ว</span>
+                                                                        {% else %}
+                                                                            <span class="badge bg-warning text-dark border mt-2"><i class="fas fa-hourglass-half me-1"></i>รอตรวจ</span>
+                                                                        {% endif %}
+                                                                    </div>
+                                                                {% endfor %}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            {% else %}
+                                                <div class="mb-2 pb-2 border-bottom">
+                                                    <span class="text-muted small">-</span>
+                                                </div>
+                                            {% endif %}
+                                        {% endwith %}
+
+                                        <!-- 🌟 ปุ่ม "+ เพิ่มค่างวด" สำหรับจ่ายก้อนต่อๆ ไป 🌟 -->
+                                        {% if qt.balance_due > 0 and qt.status != 'CANCELLED' and qt.status != 'CONVERTED' %}
+                                            <div>
+                                                <button class="btn btn-sm btn-outline-warning text-dark rounded-pill fw-bold shadow-sm w-100" data-bs-toggle="modal" data-bs-target="#depositModal{{ qt.id }}">
+                                                    <i class="fas fa-plus me-1"></i> เพิ่มค่างวด
+                                                </button>
+                                            </div>
                                         {% endif %}
                                     {% else %}
                                         <span class="text-muted small">-</span>
@@ -476,22 +523,28 @@
                                                 <a href="{% url 'quotation_approve' qt.id %}" class="btn btn-success btn-primary-action rounded-pill text-white shadow-sm" onclick="return confirm('ยืนยันการอนุมัติเอกสารนี้?');"><i class="fas fa-check-circle me-1"></i> อนุมัติ</a>
 
                                             {% elif qt.status == 'APPROVED' and not qt.is_deposit_paid %}
-                                                <button class="btn btn-warning btn-primary-action rounded-pill text-dark shadow-sm" data-bs-toggle="modal" data-bs-target="#depositModal{{ qt.id }}"><i class="fas fa-hand-holding-usd me-1"></i> รับมัดจำ</button>
+                                                <button class="btn btn-warning btn-primary-action rounded-pill text-dark shadow-sm" data-bs-toggle="modal" data-bs-target="#depositModal{{ qt.id }}"><i class="fas fa-hand-holding-usd me-1"></i> รับมัดจำแรก</button>
 
-                                            {% elif qt.status == 'APPROVED' and qt.is_deposit_paid and not qt.is_deposit_verified %}
-                                                <span class="btn btn-secondary btn-primary-action rounded-pill text-white shadow-sm" style="cursor: not-allowed; opacity: 0.8;"><i class="fas fa-user-clock me-1"></i> รอตรวจรับเงิน</span>
+                                            {% elif qt.status == 'APPROVED' and qt.is_deposit_paid %}
+                                                <!-- ถ้ายังไม่สั่งผลิต และตรวจมัดจำแรกผ่านแล้ว -->
+                                                {% if qt.is_deposit_verified and not qt.production_orders.all %}
+                                                    <button class="btn btn-info btn-primary-action rounded-pill text-dark shadow-sm" data-bs-toggle="modal" data-bs-target="#produceModal{{ qt.id }}"><i class="fas fa-industry me-1"></i> สั่งผลิต</button>
 
-                                            {% elif qt.status == 'APPROVED' and qt.is_deposit_paid and qt.is_deposit_verified and not qt.production_orders.all %}
-                                                <button class="btn btn-info btn-primary-action rounded-pill text-dark shadow-sm" data-bs-toggle="modal" data-bs-target="#produceModal{{ qt.id }}"><i class="fas fa-industry me-1"></i> สั่งผลิต</button>
+                                                <!-- ถ้าสั่งผลิตไปแล้ว รอแค่ผลิตเสร็จแล้วค่อยโชว์ปุ่มเปิดบิล -->
+                                                {% elif qt.production_orders.all %}
+                                                    {% with job=qt.production_orders.first %}
+                                                        <!-- 🌟 รอแผนก QC กดผ่านให้เป็น COMPLETED ถึงจะให้ฝ่ายขายเปิดบิลเก็บ 10% 🌟 -->
+                                                        {% if job and job.status == 'COMPLETED' %}
+                                                            <a href="{% url 'convert_quote_to_invoice' qt.id %}" class="btn btn-primary-action rounded-pill text-white shadow-sm" style="background-color: #6f42c1; border-color: #6f42c1;" onclick="return confirm('เปิดบิลขายเก็บยอดคงเหลือจากใบเสนอราคานี้ใช่หรือไม่?');"><i class="fas fa-file-invoice-dollar me-1"></i> เปิดบิล</a>
+                                                        {% else %}
+                                                            <span class="btn btn-secondary btn-primary-action rounded-pill text-white shadow-sm" style="cursor: not-allowed; opacity: 0.7;"><i class="fas fa-cogs me-1"></i> กำลังผลิต</span>
+                                                        {% endif %}
+                                                    {% endwith %}
 
-                                            {% elif qt.status == 'APPROVED' and qt.production_orders.all %}
-                                                {% with job=qt.production_orders.first %}
-                                                    {% if job and job.status == 'COMPLETED' %}
-                                                        <a href="{% url 'convert_quote_to_invoice' qt.id %}" class="btn btn-primary-action rounded-pill text-white shadow-sm" style="background-color: #6f42c1; border-color: #6f42c1;" onclick="return confirm('เปิดบิลขายจากใบเสนอราคานี้ใช่หรือไม่?');"><i class="fas fa-file-invoice-dollar me-1"></i> เปิดบิลขาย</a>
-                                                    {% else %}
-                                                        <span class="btn btn-secondary btn-primary-action rounded-pill text-white shadow-sm" style="cursor: not-allowed; opacity: 0.7;"><i class="fas fa-cogs me-1"></i> กำลังผลิต</span>
-                                                    {% endif %}
-                                                {% endwith %}
+                                                <!-- ถ้ารอมัดจำแรกตรวจ ก็บอกว่ารอตรวจ -->
+                                                {% elif not qt.is_deposit_verified %}
+                                                    <span class="btn btn-secondary btn-primary-action rounded-pill text-white shadow-sm" style="cursor: not-allowed; opacity: 0.8;"><i class="fas fa-user-clock me-1"></i> รอบัญชีตรวจสอบ</span>
+                                                {% endif %}
 
                                             {% elif qt.status == 'CONVERTED' %}
                                                 {% with job=qt.production_orders.first %}
@@ -544,12 +597,15 @@
                                 </td>
                             </tr>
 
-                            {% if qt.status == 'APPROVED' and not qt.is_deposit_paid %}
+                            {% if qt.status == 'APPROVED' and not qt.is_deposit_paid or qt.status == 'APPROVED' and qt.is_deposit_paid and qt.balance_due > 0 %}
                             <div class="modal fade" id="depositModal{{ qt.id }}" tabindex="-1">
                                 <div class="modal-dialog modal-dialog-centered">
                                     <div class="modal-content border-0 rounded-4 shadow-lg text-start">
                                         <div class="modal-header bg-warning border-0">
-                                            <h5 class="modal-title fw-bold text-dark"><i class="fas fa-hand-holding-usd me-2"></i>บันทึกรับเงินมัดจำ ({{ qt.code }})</h5>
+                                            <h5 class="modal-title fw-bold text-dark">
+                                                <i class="fas fa-hand-holding-usd me-2"></i>
+                                                {% if qt.is_deposit_paid %}บันทึกรับค่างวด{% else %}บันทึกรับเงินมัดจำก้อนแรก{% endif %} ({{ qt.code }})
+                                            </h5>
                                             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                                         </div>
                                         <form method="POST" action="{% url 'record_deposit' qt.id %}" enctype="multipart/form-data">
@@ -557,10 +613,21 @@
                                             <input type="hidden" name="next" value="{{ request.get_full_path }}">
                                             <div class="modal-body p-4">
                                                 <div class="alert alert-info py-2 small mb-4">
-                                                    <i class="fas fa-info-circle me-1"></i> ยอดสุทธิ: <strong>{{ qt.grand_total|floatformat:2|intcomma }} บาท</strong>
+                                                    <div class="d-flex justify-content-between mb-1">
+                                                        <span>ยอดรวมทั้งหมด:</span> <strong>{{ qt.grand_total|floatformat:2|intcomma }} บาท</strong>
+                                                    </div>
+                                                    {% if qt.is_deposit_paid %}
+                                                    <div class="d-flex justify-content-between mb-1 text-success">
+                                                        <span>ชำระมาแล้ว:</span> <strong>{{ qt.deposit_amount|floatformat:2|intcomma }} บาท</strong>
+                                                    </div>
+                                                    <hr class="my-1 border-info">
+                                                    {% endif %}
+                                                    <div class="d-flex justify-content-between text-danger" style="font-size: 1rem;">
+                                                        <span>ยอดค้างชำระ (รับเพิ่มได้ไม่เกิน):</span> <strong>{{ qt.balance_due|floatformat:2|intcomma }} บาท</strong>
+                                                    </div>
                                                 </div>
                                                 <div class="mb-3">
-                                                    <label class="form-label fw-bold text-muted">ยอดมัดจำที่ได้รับ (บาท)</label>
+                                                    <label class="form-label fw-bold text-muted">ยอดเงินที่ได้รับงวดนี้ (บาท)</label>
                                                     <input type="text" name="deposit_amount" class="form-control form-control-lg text-end fw-bold text-primary deposit-input" value="" autocomplete="off" required>
                                                 </div>
                                                 <div class="mb-3">
@@ -585,7 +652,7 @@
                                             </div>
                                             <div class="modal-footer bg-light border-0">
                                                 <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">ยกเลิก</button>
-                                                <button type="submit" class="btn btn-warning rounded-pill px-4 fw-bold shadow-sm text-dark" onclick="return confirm('ยืนยันรับมัดจำ?\nยอดนี้จะถูกนำไปหักในใบเสร็จรับเงิน')">บันทึกยอดมัดจำ</button>
+                                                <button type="submit" class="btn btn-warning rounded-pill px-4 fw-bold shadow-sm text-dark" onclick="return confirm('ยืนยันบันทึกรับเงิน?\nยอดนี้จะถูกส่งไปให้บัญชีตรวจสอบความถูกต้อง')">บันทึกยอดเงิน</button>
                                             </div>
                                         </form>
                                     </div>
@@ -634,7 +701,7 @@
                             {% endif %}
 
                             {% empty %}
-                            <tr><td colspan="6" class="text-center py-5"><div class="text-muted"><i class="fas fa-folder-open fa-3x mb-3 opacity-25"></i><br>ยังไม่มีเอกสารใบเสนอราคาในระบบ</div></td></tr>
+                            <tr><td colspan="7" class="text-center py-5"><div class="text-muted"><i class="fas fa-folder-open fa-3x mb-3 opacity-25"></i><br>ยังไม่มีเอกสารใบเสนอราคาในระบบ</div></td></tr>
                             {% endfor %}
                         </tbody>
                     </table>
@@ -747,13 +814,13 @@
         $('#reportrange').daterangepicker({
             startDate: start,
             endDate: end,
-            linkedCalendars: false, 
+            linkedCalendars: false,
             ranges: {
                'วันนี้': [moment(), moment()],
                'เมื่อวาน': [moment().subtract(1, 'days'), moment().subtract(1, 'days')],
                'ช่วง 7 วันก่อนหน้า': [moment().subtract(6, 'days'), moment()],
                'ช่วง 30 วันก่อนหน้า': [moment().subtract(29, 'days'), moment()],
-               'ช่วง 3 เดือนก่อนหน้า': [moment().subtract(3, 'months'), moment()], 
+               'ช่วง 3 เดือนก่อนหน้า': [moment().subtract(3, 'months'), moment()],
                'เดือนนี้': [moment().startOf('month'), moment().endOf('month')],
                '1 เดือนก่อนหน้า': [moment().subtract(1, 'month').startOf('month'), moment().subtract(1, 'month').endOf('month')]
             },

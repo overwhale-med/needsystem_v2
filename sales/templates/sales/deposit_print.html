@@ -3,7 +3,7 @@
 <html lang="th">
 <head>
     <meta charset="UTF-8">
-    <title>ใบรับเงินมัดจำ {{ qt.code }}</title>
+    <title>ใบรับเงินมัดจำ {{ rvd_code }}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -102,15 +102,15 @@
                     <div class="doc-title text-info">ใบรับเงินมัดจำ</div>
                     <div class="doc-subtitle">DEPOSIT RECEIPT</div>
                     <div class="doc-no-group mt-3">
-                        <!-- 🌟 [UPDATED] เปลี่ยนเป็นเลขที่ใบรับเงินมัดจำ (RVD) 🌟 -->
+                        <!-- 🌟 [FIXED] ดึงเลขที่ใบรับเงิน (RVD) เฉพาะงวดที่กดมาแสดง 🌟 -->
                         <div class="doc-no-label">เลขที่เอกสาร / RECEIPT NO.</div>
-                        <div class="doc-no-value">{{ qt.deposit_code|default:qt.code }}</div>
+                        <div class="doc-no-value">{{ rvd_code }}</div>
                     </div>
                 </div>
             </div>
             <div class="customer-divider"></div>
             <div class="row">
-                <!-- ฝั่งซ้าย (ลูกค้า) เหมือนเดิม -->
+                <!-- ฝั่งซ้าย (ลูกค้า) -->
                 <div class="col-7 pe-4 border-end border-secondary">
                     <div class="info-group-label"><i class="fas fa-address-book me-1"></i> ลูกค้า / CUSTOMER</div>
                     <div class="customer-name">{{ qt.customer_name|default:"ลูกค้าทั่วไป" }}</div>
@@ -124,9 +124,9 @@
                 <div class="col-5 ps-4">
                     <div class="info-group-label">ข้อมูลอ้างอิง / REFERENCE</div>
                     <table class="ref-table">
-                        <!-- 🌟 [UPDATED] ย้ายเลขอ้างอิงใบเสนอราคา (QT) มาไว้ตรงนี้ 🌟 -->
                         <tr><td class="ref-label">อ้างอิงใบเสนอราคา:</td><td class="ref-value">{{ qt.code }}</td></tr>
-                        <tr><td class="ref-label">วันที่รับมัดจำ:</td><td class="ref-value text-info">{{ qt.deposit_date|date:"d/m/Y" }}</td></tr>
+                        <!-- 🌟 [FIXED] ดึงวันที่รับเงินของงวดที่กดมาแสดง 🌟 -->
+                        <tr><td class="ref-label">วันที่รับมัดจำ:</td><td class="ref-value text-info">{{ rvd_date|date:"d/m/Y" }}</td></tr>
                         <tr><td class="ref-label">พนักงานขาย:</td><td class="ref-value">{{ qt.employee.first_name|default:"-" }}</td></tr>
                     </table>
                 </div>
@@ -165,12 +165,14 @@
                     <div class="stamp-paid">รับมัดจำแล้ว</div>
                 {% endif %}
 
-                <div class="py-2 px-3 mb-3 bg-light border text-center fw-bold text-info rounded" style="font-size: 14px;">( <span id="baht-text">...</span> )</div>
+                <!-- 🌟 ดึงคำอ่านภาษาไทยของยอดมัดจำงวดนี้มาแสดง 🌟 -->
+                <div class="py-2 px-3 mb-3 bg-light border text-center fw-bold text-info rounded" style="font-size: 14px;">( {{ deposit_amount_text }} )</div>
                 <div class="payment-box mb-3">
                     <div class="fw-bold mb-1" style="font-size: 12px; text-transform: uppercase;">รายละเอียดมัดจำ (Deposit Details):</div>
                     <div class="ps-2 border-start border-3 border-info">
-                        ช่องทาง: {{ qt.deposit_method }} <br>
-                        วันที่รับยอด: {{ qt.deposit_date|date:"d/m/Y" }}
+                        <!-- 🌟 [FIXED] ดึงช่องทางรับเงินเฉพาะงวดนี้มาแสดง 🌟 -->
+                        ช่องทาง: {{ rvd_method }} <br>
+                        วันที่รับยอด: {{ rvd_date|date:"d/m/Y" }}
                     </div>
                 </div>
             </div>
@@ -188,9 +190,9 @@
                         <td class="total-value" style="border-top: 1px solid #000; padding-top: 10px;">{{ qt.grand_total|floatformat:2|intcomma }}</td>
                     </tr>
 
-                    <tr class="grand-total-row">
-                        <td class="total-label text-info" style="border-top: 1px dashed #000; padding-top: 10px;">ยอดชำระมัดจำแล้ว</td>
-                        <td class="total-value text-info" style="border-top: 1px dashed #000; padding-top: 10px;">{{ qt.deposit_amount|floatformat:2|intcomma }}</td>
+                    <tr>
+                        <td class="total-label text-info" style="border-top: 1px dashed #000; padding-top: 10px; font-size: 14px; font-weight: 700;">ยอดชำระมัดจำงวดนี้</td>
+                        <td class="total-value text-info" style="border-top: 1px dashed #000; padding-top: 10px; font-size: 16px; font-weight: 700;">{{ deposit_amount|floatformat:2|intcomma }}</td>
                     </tr>
                     <tr>
                         <td class="total-label text-danger" style="padding-top: 5px;">ยอดคงค้างชำระ</td>
@@ -211,49 +213,10 @@
                     <div class="sig-line"></div>
                     <div class="sig-role">ผู้รับเงิน / ผู้มีอำนาจลงนาม</div>
                     <div class="sig-name">({{ company.name_th }})</div>
-                    <div class="sig-date">วันที่ {{ qt.deposit_date|date:"d/m/Y" }}</div>
+                    <div class="sig-date">วันที่ {{ rvd_date|date:"d/m/Y" }}</div>
                 </div>
             </div>
         </div>
     </div>
-
-    <script>
-        document.addEventListener("DOMContentLoaded", function() {
-            const num = {{ qt.deposit_amount }};
-            document.getElementById('baht-text').innerText = ThaiBaht(num);
-        });
-        function ThaiBaht(number) {
-            const num = parseFloat(number).toFixed(2);
-            if (parseFloat(num) === 0) return "ศูนย์บาทถ้วน";
-            const bahtText = ["ศูนย์", "หนึ่ง", "สอง", "สาม", "สี่", "ห้า", "หก", "เจ็ด", "แปด", "เก้า"];
-            const unitText = ["", "สิบ", "ร้อย", "พัน", "หมื่น", "แสน", "ล้าน"];
-            let [integer, fraction] = num.split(".");
-            let text = "";
-            for (let i = 0; i < integer.length; i++) {
-                let digit = parseInt(integer.charAt(i));
-                let unit = unitText[(integer.length - 1 - i) % 7];
-                if (digit !== 0) {
-                    if (i === integer.length - 1 && digit === 1 && integer.length > 1) text += "เอ็ด";
-                    else if (i === integer.length - 2 && digit === 2) text += "ยี่";
-                    else if (i === integer.length - 2 && digit === 1) text += "";
-                    else text += bahtText[digit];
-                    text += unit;
-                }
-            }
-            text += "บาท";
-            if (parseInt(fraction) === 0) text += "ถ้วน";
-            else {
-                if (fraction.length === 2) {
-                    let d1 = parseInt(fraction.charAt(0)), d2 = parseInt(fraction.charAt(1));
-                    if (d1 !== 0) { if (d1 === 1) text += ""; else if (d1 === 2) text += "ยี่";
-                    else text += bahtText[d1]; text += "สิบ"; }
-                    if (d2 !== 0) { if (d2 === 1 && d1 !== 0) text += "เอ็ด";
-                    else text += bahtText[d2]; }
-                    text += "สตางค์";
-                }
-            }
-            return text;
-        }
-    </script>
 </body>
 </html>

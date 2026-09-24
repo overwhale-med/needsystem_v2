@@ -26,7 +26,10 @@ def accounting_dashboard(request):
     total_expense = expenses.aggregate(Sum('amount'))['amount__sum'] or 0
     net_balance = total_income - total_expense
 
-    pending_deposits_quotation = Quotation.objects.filter(is_deposit_paid=True, is_deposit_verified=False).count()
+    # 🌟 [FIXED] อัปเดตตัวนับเลขให้ไปนับจากสลิปมัดจำ (RVD) ที่ยังไม่ได้ตรวจ
+    from sales.models import QuotationDeposit
+    pending_deposits_quotation = QuotationDeposit.objects.filter(is_verified=False).count()
+
     pending_deposits_solar = SolarQuotation.objects.filter(is_deposit_paid=True, is_deposit_verified=False).count()
     pending_deposits = pending_deposits_quotation + pending_deposits_solar
 
@@ -88,15 +91,19 @@ def verification_hub(request, task_type):
     context = {'task_type': task_type}
 
     if task_type == 'deposits':
-        # ดึงมัดจำทั้ง 2 ระบบมารวมกันในหน้าตรวจสอบของบัญชี
-        q_list = list(Quotation.objects.filter(is_deposit_paid=True, is_deposit_verified=False))
+        # 🌟 [FIXED] ดึงข้อมูลสลิปมัดจำ (RVD) ที่ยังไม่ได้ตรวจมาแสดงแทน (สำหรับน็อคดาวน์)
+        from sales.models import QuotationDeposit
+        rvd_list = list(QuotationDeposit.objects.filter(is_verified=False))
         solar_list = list(SolarQuotation.objects.filter(is_deposit_paid=True, is_deposit_verified=False))
 
         # เพิ่มป้ายกำกับแยกระบบให้บัญชีเห็นชัดเจน
-        for item in q_list: item.system_type = 'quotation'
+        for item in rvd_list: item.system_type = 'quotation_rvd'
         for item in solar_list: item.system_type = 'solar'
 
-        context['items'] = sorted(q_list + solar_list, key=lambda x: x.date, reverse=True)
+        # สร้าง List รวม โดยดึงเวลาสร้างสลิป (created_at) มาเทียบกับวันในใบเสนอราคา
+        combined_list = rvd_list + solar_list
+        context['items'] = sorted(combined_list, key=lambda x: getattr(x, 'created_at', timezone.now()), reverse=True)
+
         context['title'] = 'ตรวจสอบรับเงินมัดจำฝ่ายขาย (น็อคดาวน์ & โซล่าเซลล์)'
         context['icon'] = 'fa-hand-holding-usd text-success'
 
@@ -172,11 +179,21 @@ def approve_transaction(request, task_type, item_id):
                 Income.objects.create(title=f"รับมัดจำใบเสนอราคาโซล่า #{qt.code}", amount=qt.deposit_amount, date=timezone.now().date(), note="อนุมัติโดยฝ่ายบัญชี")
                 messages.success(request, f"✅ ยืนยันรับมัดจำโซล่า {qt.code} พร้อมสร้างโควตาเบิก 2% สำเร็จ!")
             else:
-                qt = get_object_or_404(Quotation, id=item_id)
-                qt.is_deposit_verified = True
-                qt.save()
-                Income.objects.create(title=f"รับมัดจำใบเสนอราคา #{qt.code}", amount=qt.deposit_amount, date=timezone.now().date(), note="อนุมัติโดยฝ่ายบัญชี")
-                messages.success(request, f"✅ ยืนยันรับมัดจำ {qt.code} เข้าสู่ระบบบัญชีเรียบร้อย")
+                # 🌟 [FIXED] อนุมัติสลิป RVD ทีละใบสำหรับน็อคดาวน์
+                from sales.models import QuotationDeposit
+                dep = get_object_or_404(QuotationDeposit, id=item_id)
+                dep.is_verified = True
+                dep.save()
+
+                # ไปเช็คว่าถ้าสลิปทุกใบใน Quotation นี้ตรวจหมดแล้ว ให้ปรับแม่เป็นตรวจแล้วด้วย
+                qt = dep.quotation
+                unverified_count = qt.deposits.filter(is_verified=False).count()
+                if unverified_count == 0:
+                    qt.is_deposit_verified = True
+                    qt.save()
+
+                Income.objects.create(title=f"รับมัดจำ RVD #{dep.code} (อ้างอิง: {qt.code})", amount=dep.amount, date=timezone.now().date(), note="อนุมัติโดยฝ่ายบัญชี")
+                messages.success(request, f"✅ ยืนยันรับมัดจำ {dep.code} เข้าสู่ระบบบัญชีเรียบร้อย")
 
         elif task_type == 'invoices':
             doc_type = request.POST.get('doc_type', '').strip().lower()

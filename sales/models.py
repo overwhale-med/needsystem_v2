@@ -388,6 +388,13 @@ class CommissionTicket(models.Model):
 # 💰 ระบบจัดการใบรับเงินมัดจำ (Separated Deposit Model)
 # ==========================================
 class QuotationDeposit(models.Model):
+    # 🌟 [NEW] เพิ่มชุดตัวเลือก (Choices) ให้ฐานข้อมูลรู้จักช่องทางการชำระเงิน
+    PAYMENT_CHOICES = [
+        ('CASH', 'เงินสด'),
+        ('TRANSFER', 'โอนเงิน'),
+        ('CHECK', 'เช็คธนาคาร')
+    ]
+
     code = models.CharField(max_length=20, unique=True, verbose_name="เลขที่ใบรับมัดจำ (RVD)")
 
     # 🌟 เชื่อมโยงกลับไปที่ Quotation แบบ 1-to-Many (1 ใบเสนอราคา มีสลิปมัดจำได้หลายใบ)
@@ -395,7 +402,10 @@ class QuotationDeposit(models.Model):
 
     amount = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="ยอดมัดจำที่รับ")
     deposit_date = models.DateField(default=timezone.now, verbose_name="วันที่รับมัดจำ")
-    payment_method = models.CharField(max_length=50, blank=True, null=True, verbose_name="ช่องทางรับมัดจำ")
+
+    # 🌟 [FIXED] ใส่ choices=PAYMENT_CHOICES เข้าไปในฟิลด์นี้ เพื่อให้รองรับคำสั่ง get_payment_method_display()
+    payment_method = models.CharField(max_length=50, choices=PAYMENT_CHOICES, blank=True, null=True, verbose_name="ช่องทางรับมัดจำ")
+
     deposit_slip = models.ImageField(upload_to='deposit_slips_v2/%Y/%m/', null=True, blank=True, verbose_name="สลิปมัดจำ")
 
     is_verified = models.BooleanField(default=False, verbose_name="บัญชีตรวจสอบมัดจำแล้ว")

@@ -431,7 +431,10 @@ def record_deposit(request, qt_id):
 
             # ลบฟิลด์มัดจำเก่าทิ้ง เพื่อบังคับให้ระบบใหม่ดึงจากตารางใหม่ 100%
             qt.deposit_code = None
-            qt.deposit_amount = Decimal('0.00')
+
+            # 🌟 [FIXED] ห้ามเซ็ตเป็น 0 ครับ! ให้มันบวกยอดมัดจำรวมไว้ที่ฟิลด์นี้ด้วย เพื่อใช้คำนวณ balance_due
+            current_deposit = qt.deposit_amount if qt.deposit_amount else Decimal('0.00')
+            qt.deposit_amount = current_deposit + amount
             qt.save()
 
             messages.success(request, f"💰 บันทึกรับมัดจำ {amount:,.2f} บาท และสร้างใบเสร็จ {new_deposit.code} เรียบร้อยแล้ว")
@@ -1336,14 +1339,44 @@ def print_deposit_contract(request, qt_id):
     company = CompanyInfo.objects.first()
 
     grand_total = qt.grand_total if qt.grand_total else Decimal('0.00')
-    deposit_amount = qt.deposit_amount if qt.deposit_amount else Decimal('0.00')
-    balance_due = grand_total - deposit_amount
+    balance_due = qt.balance_due if hasattr(qt, 'balance_due') else (grand_total - (qt.deposit_amount or Decimal('0.00')))
+
+    # 🌟 [FIXED] ตรวจสอบว่ามีระบุรหัส RVD มาใน URL ไหม (?rvd=123)
+    rvd_id = request.GET.get('rvd')
+    specific_deposit = None
+
+    if rvd_id:
+        try:
+            # ถ้ามีรหัส RVD ให้ดึงข้อมูลเฉพาะงวดนั้นมาพิมพ์
+            specific_deposit = QuotationDeposit.objects.get(pk=rvd_id, quotation=qt)
+            deposit_amount = specific_deposit.amount
+            rvd_code = specific_deposit.code
+            rvd_date = specific_deposit.deposit_date
+            rvd_method = specific_deposit.get_payment_method_display()
+        except QuotationDeposit.DoesNotExist:
+            deposit_amount = qt.deposit_amount if qt.deposit_amount else Decimal('0.00')
+            rvd_code = f"QT-{qt.code.split('-')[-1]}" # Fallback
+            rvd_date = qt.deposit_date
+            rvd_method = "ไม่ระบุ"
+    else:
+        # ถ้าไม่มีรหัส RVD (เช่นกดพิมพ์งวดแรก) ให้พยายามดึงสลิปใบแรกสุดมาโชว์
+        first_dep = qt.quotationdeposit_set.first()
+        if first_dep:
+            specific_deposit = first_dep
+            deposit_amount = first_dep.amount
+            rvd_code = first_dep.code
+            rvd_date = first_dep.deposit_date
+            rvd_method = first_dep.get_payment_method_display()
+        else:
+            deposit_amount = qt.deposit_amount if qt.deposit_amount else Decimal('0.00')
+            rvd_code = f"QT-{qt.code.split('-')[-1]}" # Fallback
+            rvd_date = qt.deposit_date
+            rvd_method = "ไม่ระบุ"
 
     grand_total_text = get_thai_baht_text(grand_total)
     deposit_amount_text = get_thai_baht_text(deposit_amount)
     balance_due_text = get_thai_baht_text(balance_due)
 
-    # 🌟 [NEW] ดึงวันที่จัดส่งจากใบสั่งผลิตที่เชื่อมโยงอยู่ (ถ้ามี)
     job = qt.production_orders.first()
     delivery_date = job.delivery_date if job else None
 
@@ -1351,10 +1384,14 @@ def print_deposit_contract(request, qt_id):
         'qt': qt,
         'company': company,
         'grand_total_text': grand_total_text,
-        'deposit_amount_text': deposit_amount_text,
+        'deposit_amount': deposit_amount,          # ส่งยอดงวดนี้ไป
+        'deposit_amount_text': deposit_amount_text,# ส่งคำอ่านยอดงวดนี้ไป
         'balance_due': balance_due,
         'balance_due_text': balance_due_text,
-        'delivery_date': delivery_date, # 🌟 ส่งวันที่ไปให้หน้ากระดาษ
+        'delivery_date': delivery_date,
+        'rvd_code': rvd_code,                      # ส่งรหัสใบเสร็จ (RVD) ไปแสดง
+        'rvd_date': rvd_date,                      # ส่งวันที่รับมัดจำไปแสดง
+        'rvd_method': rvd_method                   # ส่งช่องทางรับเงินไปแสดง
     })
 
 @login_required
@@ -2041,7 +2078,7 @@ def customer_sign_deposit(request, token):
     })
 
 # ==========================================
-# 🖨️ ฟังก์ชันพิมพ์ใบเสร็จรับเงินมัดจำ (ที่หายไป)
+# 🖨️ ฟังก์ชันพิมพ์ใบเสร็จรับเงินมัดจำ (RVD)
 # ==========================================
 @login_required
 def deposit_print(request, qt_id):
@@ -2053,9 +2090,55 @@ def deposit_print(request, qt_id):
     upsale_total = sum(u.quantity * u.unit_price for u in qt.upsales.all())
     item_total = main_total + upsale_total
 
-    balance_due = qt.grand_total - qt.deposit_amount
+    grand_total = qt.grand_total if qt.grand_total else Decimal('0.00')
+    balance_due = qt.balance_due if hasattr(qt, 'balance_due') else (grand_total - (qt.deposit_amount or Decimal('0.00')))
+
+    # 🌟 ดึงข้อมูล RVD ตามรหัสงวดที่กดมาจากหน้าตาราง
+    rvd_id = request.GET.get('rvd')
+
+    if rvd_id:
+        try:
+            specific_deposit = QuotationDeposit.objects.get(pk=rvd_id, quotation=qt)
+            deposit_amount = specific_deposit.amount
+            rvd_code = specific_deposit.code
+            rvd_date = specific_deposit.deposit_date
+            # ใช้ get_payment_method_display() ได้แล้วเพราะเราเพิ่ม Choices ใน Models ไปเมื่อกี้ครับ!
+            rvd_method = specific_deposit.get_payment_method_display()
+        except QuotationDeposit.DoesNotExist:
+            deposit_amount = qt.deposit_amount if qt.deposit_amount else Decimal('0.00')
+            rvd_code = f"QT-{qt.code.split('-')[-1]}"
+            rvd_date = qt.deposit_date
+            rvd_method = "ไม่ระบุ"
+    else:
+        first_dep = qt.deposits.first()
+        if first_dep:
+            deposit_amount = first_dep.amount
+            rvd_code = first_dep.code
+            rvd_date = first_dep.deposit_date
+            rvd_method = first_dep.get_payment_method_display()
+        else:
+            deposit_amount = qt.deposit_amount if qt.deposit_amount else Decimal('0.00')
+            rvd_code = f"QT-{qt.code.split('-')[-1]}"
+            rvd_date = qt.deposit_date
+            rvd_method = "ไม่ระบุ"
+
+    # ใช้ฟังก์ชันแปลงตัวเลขเป็นคำอ่านภาษาไทย
+    grand_total_text = get_thai_baht_text(grand_total)
+    deposit_amount_text = get_thai_baht_text(deposit_amount)
+    balance_due_text = get_thai_baht_text(balance_due)
+
     return render(request, 'sales/deposit_print.html', {
-        'qt': qt, 'company': company, 'item_total': item_total, 'balance_due': balance_due
+        'qt': qt,
+        'company': company,
+        'item_total': item_total,
+        'balance_due': balance_due,
+        'balance_due_text': balance_due_text,
+        'grand_total_text': grand_total_text,
+        'deposit_amount': deposit_amount,
+        'deposit_amount_text': deposit_amount_text,
+        'rvd_code': rvd_code,
+        'rvd_date': rvd_date,
+        'rvd_method': rvd_method
     })
 
 # ==========================================

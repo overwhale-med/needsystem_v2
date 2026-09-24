@@ -111,7 +111,15 @@
                                         <span class="badge bg-warning text-dark" style="font-size: 0.65rem;">โซล่าเซลล์</span>
                                     {% endif %}
                                 </div>
-                                <div class="text-muted small mb-1" style="font-size: 0.75rem;"><i class="far fa-clock me-1"></i>{% if item.total_amount %}{{ item.created_at|date:"d/m/Y H:i" }}{% else %}{{ item.date|date:"d/m/Y" }}{% endif %}</div>
+                                <div class="text-muted small mb-1" style="font-size: 0.75rem;"><i class="far fa-clock me-1"></i>
+                                    {% if item.system_type == 'quotation_rvd' %}
+                                        {{ item.deposit_date|date:"d/m/Y" }}
+                                    {% elif item.total_amount %}
+                                        {{ item.created_at|date:"d/m/Y H:i" }}
+                                    {% else %}
+                                        {{ item.date|date:"d/m/Y" }}
+                                    {% endif %}
+                                </div>
 
                                 <!-- ข้อมูล QT และ Job สำหรับระบบน็อคดาวน์ -->
                                 {% if task_type == 'invoices' and item.system_type != 'solar_invoice' %}
@@ -130,8 +138,13 @@
 
                             <td>
                                 <div class="fw-bold text-dark text-truncate" style="max-width: 200px;">
-                                    {% if task_type == 'po_payments' or task_type == 'solar_po_payments' %}{{ item.supplier.name|default:"ไม่ระบุร้านค้า" }}
-                                    {% else %}{% if item.customer %}{{ item.customer.name }}{% else %}{{ item.customer_name|default:"ลูกค้าทั่วไป (Walk-in)" }}{% endif %}{% endif %}
+                                    {% if task_type == 'po_payments' or task_type == 'solar_po_payments' %}
+                                        {{ item.supplier.name|default:"ไม่ระบุร้านค้า" }}
+                                    {% elif item.system_type == 'quotation_rvd' %}
+                                        {% if item.quotation.customer %}{{ item.quotation.customer.name }}{% else %}{{ item.quotation.customer_name|default:"ลูกค้าทั่วไป (Walk-in)" }}{% endif %}
+                                    {% else %}
+                                        {% if item.customer %}{{ item.customer.name }}{% else %}{{ item.customer_name|default:"ลูกค้าทั่วไป (Walk-in)" }}{% endif %}
+                                    {% endif %}
                                 </div>
                             </td>
 
@@ -274,9 +287,9 @@
                                             {% if item.system_type == 'solar' %}
                                                 ฿ {{ item.deposit_amount|floatformat:2|intcomma }}
 
-                                            <!-- 🌟 2. กรณี: บ้านน็อคดาวน์ (เช็คว่ามีประวัติในตารางลูก deposits หรือไม่) 🌟 -->
-                                            {% elif item.system_type == 'quotation' and item.deposits.exists %}
-                                                ฿ {{ item.deposits.last.amount|floatformat:2|intcomma }}
+                                            <!-- 🌟 2. กรณี: บ้านน็อคดาวน์ (สลิป RVD ย่อย) 🌟 -->
+                                            {% elif item.system_type == 'quotation_rvd' %}
+                                                ฿ {{ item.amount|floatformat:2|intcomma }}
 
                                             <!-- 🌟 3. กรณี: บ้านน็อคดาวน์ (บิลเก่า ที่ยังใช้ระบบเดิม) 🌟 -->
                                             {% else %}
@@ -306,21 +319,19 @@
                                                     <img src="{{ item.deposit_slip.url }}" class="slip-thumbnail border shadow-sm" loading="lazy" data-bs-toggle="modal" data-bs-target="#slipModal" onclick="document.getElementById('slipImageFull').src='{{ item.deposit_slip.url }}'" title="คลิกเพื่อดูหลักฐาน">
                                                 {% endif %}
 
-                                            <!-- 🌟 2. กรณี: บ้านน็อคดาวน์ (ดึงจากตารางลูก deposits ตัวล่าสุด) 🌟 -->
-                                            {% elif item.system_type == 'quotation' and item.deposits.exists %}
-                                                {% with dep=item.deposits.last %}
-                                                    {% if dep.payment_method == 'TRANSFER' %}
-                                                        <span class="badge bg-info bg-opacity-10 text-info border border-info rounded-pill"><i class="fas fa-mobile-alt me-1"></i> โอนเงิน</span>
-                                                    {% elif dep.payment_method == 'CASH' %}
-                                                        <span class="badge bg-success bg-opacity-10 text-success border border-success rounded-pill"><i class="fas fa-money-bill-wave me-1"></i> เงินสด</span>
-                                                    {% elif dep.payment_method == 'CHECK' %}
-                                                        <span class="badge bg-warning bg-opacity-10 text-warning border border-warning rounded-pill"><i class="fas fa-money-check me-1"></i> เช็คธนาคาร</span>
-                                                    {% endif %}
+                                            <!-- 🌟 2. กรณี: บ้านน็อคดาวน์ (ดึงจากสลิป RVD ย่อยโดยตรง) 🌟 -->
+                                            {% elif item.system_type == 'quotation_rvd' %}
+                                                {% if item.payment_method == 'TRANSFER' %}
+                                                    <span class="badge bg-info bg-opacity-10 text-info border border-info rounded-pill"><i class="fas fa-mobile-alt me-1"></i> โอนเงิน</span>
+                                                {% elif item.payment_method == 'CASH' %}
+                                                    <span class="badge bg-success bg-opacity-10 text-success border border-success rounded-pill"><i class="fas fa-money-bill-wave me-1"></i> เงินสด</span>
+                                                {% elif item.payment_method == 'CHECK' %}
+                                                    <span class="badge bg-warning bg-opacity-10 text-warning border border-warning rounded-pill"><i class="fas fa-money-check me-1"></i> เช็คธนาคาร</span>
+                                                {% endif %}
 
-                                                    {% if dep.deposit_slip %}
-                                                        <img src="{{ dep.deposit_slip.url }}" class="slip-thumbnail border shadow-sm" loading="lazy" data-bs-toggle="modal" data-bs-target="#slipModal" onclick="document.getElementById('slipImageFull').src='{{ dep.deposit_slip.url }}'" title="คลิกเพื่อดูหลักฐาน">
-                                                    {% endif %}
-                                                {% endwith %}
+                                                {% if item.deposit_slip %}
+                                                    <img src="{{ item.deposit_slip.url }}" class="slip-thumbnail border shadow-sm" loading="lazy" data-bs-toggle="modal" data-bs-target="#slipModal" onclick="document.getElementById('slipImageFull').src='{{ item.deposit_slip.url }}'" title="คลิกเพื่อดูหลักฐาน">
+                                                {% endif %}
 
                                             <!-- 🌟 3. กรณี: บ้านน็อคดาวน์ (บิลเก่า ใช้ระบบเดิม) 🌟 -->
                                             {% else %}
