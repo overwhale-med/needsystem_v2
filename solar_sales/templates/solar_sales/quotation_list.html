@@ -13,6 +13,23 @@
     body { background-color: #f4f7fa; font-family: 'Sarabun', sans-serif; }
     .flatpickr-input { background-color: #fff !important; cursor: pointer; font-size: 0.85rem; }
 
+    /* 🌟 สไตล์รูปสลิปย่อส่วน 🌟 */
+    .slip-thumbnail {
+        width: 35px;
+        height: 35px;
+        object-fit: cover;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        border: 1px solid #dee2e6;
+    }
+    .slip-thumbnail:hover {
+        transform: scale(1.5);
+        box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        z-index: 10;
+        position: relative;
+    }
+
     /* 🌟 สไตล์การ์ดและตารางแบบพรีเมียม 🌟 */
     .premium-card { border: none; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.03); background: #fff; overflow: visible !important; }
 
@@ -147,10 +164,11 @@
                     <table class="table table-hover align-middle mb-0 border-0">
                         <thead class="text-secondary small text-uppercase" style="background-color: #f8f9fc; border-bottom: 2px solid #eef2f7;">
                             <tr>
-                                <th class="ps-4 py-3 border-0" style="width: 20%;">เลขที่เอกสาร / วันที่</th>
-                                <th class="py-3 border-0" style="width: 20%;">ลูกค้า / สาขาพนักงาน</th>
+                                <th class="ps-4 py-3 border-0" style="width: 18%;">เลขที่เอกสาร / วันที่</th>
+                                <th class="py-3 border-0" style="width: 15%;">ลูกค้า / สาขาพนักงาน</th>
                                 <!-- 🌟 [NEW] เพิ่มหัวข้อคอลัมน์ยอดมัดจำ 🌟 -->
-                                <th class="py-3 border-0 text-center" style="width: 15%;">ยอดมัดจำ / หลักฐาน</th>
+                                <th class="py-3 border-0 text-center" style="width: 11%;">ยอดรับเงินมัดจำ</th>
+                                <th class="py-3 border-0 text-center" style="width: 11%;">ชำระตามงวด</th>
                                 <th class="py-3 border-0 text-end" style="width: 15%;">ยอดสุทธิ (บาท)</th>
                                 <th class="py-3 border-0 text-center" style="width: 15%;">สถานะ</th>
                                 <th class="pe-4 py-3 border-0 text-center" style="width: 15%;">จัดการ</th>
@@ -176,37 +194,180 @@
                                     </div>
                                 </td>
 
-                                <!-- 🌟 [NEW] ช่องแสดงข้อมูลยอดมัดจำและปุ่มคลิกดูสลิป 🌟 -->
-                                <td class="text-center">
+                                <!-- 🌟 1. คอลัมน์ยอดรับเงินมัดจำ (ก้อนแรกสุดเท่านั้น) 🌟 -->
+                                <td class="text-center py-3 border-start">
                                     {% if qt.is_deposit_paid and qt.deposit_amount > 0 %}
-                                        <div class="fw-bold text-success" style="font-size: 0.85rem;">฿{{ qt.deposit_amount|floatformat:2|intcomma }}</div>
-                                        <div class="d-flex align-items-center justify-content-center gap-1 mt-1">
-                                            {% if qt.deposit_method == 'TRANSFER' %}
-                                                <i class="fas fa-mobile-alt text-info" title="โอนเงิน"></i>
-                                            {% elif qt.deposit_method == 'CASH' %}
-                                                <i class="fas fa-money-bill-wave text-success" title="เงินสด"></i>
-                                            {% elif qt.deposit_method == 'CHECK' %}
-                                                <i class="fas fa-money-check text-warning" title="เช็ค"></i>
-                                            {% endif %}
+                                        <div class="fw-bold text-success" style="font-size: 0.85rem;">฿ {{ qt.deposit_amount|floatformat:2|intcomma }}</div>
+                                        <div class="mt-1">
+                                            <a href="{% url 'solar_deposit_print' qt.id %}" target="_blank" class="badge bg-white text-secondary border shadow-sm text-decoration-none hover-scale">
+                                                <i class="fas fa-print me-1"></i>{{ qt.deposit_code|default:"-" }}
+                                            </a>
+                                        </div>
+                                        <div class="d-flex align-items-center justify-content-center gap-1 mt-2">
+                                            {% if qt.deposit_method == 'TRANSFER' %}<i class="fas fa-mobile-alt text-info" title="โอนเงิน"></i>
+                                            {% elif qt.deposit_method == 'CASH' %}<i class="fas fa-money-bill-wave text-success" title="เงินสด"></i>
+                                            {% elif qt.deposit_method == 'CHECK' %}<i class="fas fa-money-check text-warning" title="เช็ค"></i>{% endif %}
 
-                                            <!-- 🌟 [FIXED] โชว์รูปสลิปจำลองแบบ Thumbnail 🌟 -->
                                             {% if qt.deposit_slip %}
-                                                <img src="{{ qt.deposit_slip.url }}" class="ms-2 border shadow-sm" style="width: 25px; height: 25px; object-fit: cover; border-radius: 4px; cursor: pointer; transition: transform 0.2s;" data-bs-toggle="modal" data-bs-target="#depositSlipModal{{ qt.id }}" title="คลิกเพื่อดูสลิปมัดจำ" onmouseover="this.style.transform='scale(1.2)'" onmouseout="this.style.transform='scale(1)'">
+                                                <img src="{{ qt.deposit_slip.url }}" class="slip-thumbnail mx-1" data-bs-toggle="modal" data-bs-target="#slipModal" onclick="document.getElementById('slipImageFull').src='{{ qt.deposit_slip.url }}'">
                                             {% endif %}
                                         </div>
+                                        {% if qt.is_deposit_verified %}
+                                            <span class="badge bg-success bg-opacity-10 text-success border border-success mt-2"><i class="fas fa-check-circle me-1"></i>รับเงินล่วงหน้า</span>
+                                        {% else %}
+                                            <span class="badge bg-warning text-dark border mt-2"><i class="fas fa-hourglass-half me-1"></i>รอตรวจสอบมัดจำ</span>
+                                        {% endif %}
                                     {% else %}
                                         <span class="text-muted small">-</span>
                                     {% endif %}
                                 </td>
-                                <td class="text-end">
-                                    <div class="fw-bold fs-6 text-dark">฿{{ qt.grand_total|floatformat:2|intcomma }}</div>
 
-                                    {% if qt.status != 'CANCELLED' %}
-                                        {% if qt.balance_due > 0 and qt.is_deposit_paid %}
-                                            <div class="small fw-bold mt-1 text-danger">ค้างชำระ: ฿{{ qt.balance_due|floatformat:2|intcomma }}</div>
-                                        {% elif qt.balance_due == 0 and qt.is_deposit_paid %}
-                                            <div class="small fw-bold mt-1 text-success"><i class="fas fa-check-circle me-1"></i>ชำระครบแล้ว</div>
+                                <!-- 🌟 2. คอลัมน์ชำระตามงวด (ก้อนที่ 2 เป็นต้นไป) 🌟 -->
+                                <td class="text-center py-3 border-start">
+                                    {% if qt.is_deposit_paid %}
+                                        <!-- 🌟 [FIXED] เรียกใช้ property สมองกลที่กรองสลิปก้อนแรกออกไปแล้ว 🌟 -->
+                                        {% with installments=qt.active_installments %}
+                                            {% if installments %}
+                                                <div class="mb-2 pb-2 border-bottom">
+
+                                                    <!-- ยอดรวมเฉพาะค่างวด (สีเขียว) -->
+                                                    <div class="fw-bold text-success mb-2" style="font-size: 0.85rem;" id="sum_installments_{{ qt.id }}"></div>
+
+                                                    <script>
+                                                        document.addEventListener('DOMContentLoaded', function() {
+                                                            let totalInstallment = 0;
+                                                            {% for dep in installments %}
+                                                                totalInstallment += parseFloat("{{ dep.amount }}");
+                                                            {% endfor %}
+                                                            document.getElementById('sum_installments_{{ qt.id }}').innerText = '฿ ' + totalInstallment.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                                                        });
+                                                    </script>
+
+                                                    <span class="badge bg-secondary bg-opacity-10 text-secondary border rounded-pill px-2 py-1 mb-2 d-inline-block shadow-sm" style="font-size: 0.7rem;">
+                                                        <i class="fas fa-list me-1"></i> มี {{ installments|length }} รายการ
+                                                    </span>
+                                                    <button class="btn btn-sm btn-outline-info text-dark rounded-pill fw-bold shadow-sm w-100" data-bs-toggle="modal" data-bs-target="#installmentModal{{ qt.id }}">
+                                                        <i class="fas fa-search me-1"></i> เปิดดูรายการ
+                                                    </button>
+                                                </div>
+
+                                                <!-- Modal สำหรับแสดงประวัติชำระตามงวด -->
+                                                <div class="modal fade" id="installmentModal{{ qt.id }}" tabindex="-1" aria-hidden="true">
+                                                    <div class="modal-dialog modal-dialog-centered modal-sm">
+                                                        <div class="modal-content border-0 rounded-4 shadow-lg">
+                                                            <div class="modal-header bg-light border-0">
+                                                                <h6 class="modal-title fw-bold text-dark"><i class="fas fa-history text-info me-2"></i>ประวัติชำระตามงวด</h6>
+                                                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                            </div>
+                                                            <div class="modal-body p-3 text-center bg-white" style="max-height: 60vh; overflow-y: auto;">
+                                                                <div class="text-muted small mb-3">อ้างอิงเอกสาร: <strong>{{ qt.code }}</strong></div>
+
+                                                                {% for dep in installments %}
+                                                                    <div class="mb-3 pb-3 {% if not forloop.last %}border-bottom{% endif %} bg-light rounded-3 p-2 border">
+                                                                        <div class="fw-bold text-success" style="font-size: 0.95rem;">฿ {{ dep.amount|floatformat:2|intcomma }}</div>
+                                                                        <div class="mt-1">
+                                                                            <a href="{% url 'solar_deposit_print' qt.id %}?rvd={{ dep.id }}" target="_blank" class="badge bg-white text-secondary border shadow-sm text-decoration-none hover-scale">
+                                                                                <i class="fas fa-print me-1"></i>{{ dep.code }}
+                                                                            </a>
+                                                                        </div>
+                                                                        <div class="d-flex align-items-center justify-content-center gap-1 mt-2">
+                                                                            {% if dep.payment_method == 'TRANSFER' %}<i class="fas fa-mobile-alt text-info" title="โอนเงิน"></i>
+                                                                            {% elif dep.payment_method == 'CASH' %}<i class="fas fa-money-bill-wave text-success" title="เงินสด"></i>
+                                                                            {% elif dep.payment_method == 'CHECK' %}<i class="fas fa-money-check text-warning" title="เช็ค"></i>{% endif %}
+
+                                                                            {% if dep.deposit_slip %}
+                                                                                <img src="{{ dep.deposit_slip.url }}" class="slip-thumbnail mx-1" data-bs-toggle="modal" data-bs-target="#slipModal" data-bs-dismiss="modal" onclick="document.getElementById('slipImageFull').src='{{ dep.deposit_slip.url }}'">
+                                                                            {% endif %}
+                                                                        </div>
+                                                                        {% if dep.is_verified %}
+                                                                            <span class="badge bg-success bg-opacity-10 text-success border border-success mt-2"><i class="fas fa-check-circle me-1"></i>ตรวจแล้ว</span>
+                                                                        {% else %}
+                                                                            <span class="badge bg-warning text-dark border mt-2"><i class="fas fa-hourglass-half me-1"></i>รอตรวจ</span>
+                                                                        {% endif %}
+                                                                    </div>
+                                                                {% endfor %}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            {% else %}
+                                                <div class="mb-2 pb-2 border-bottom">
+                                                    <span class="text-muted small">-</span>
+                                                </div>
+                                            {% endif %}
+                                        {% endwith %}
+
+                                        <!-- ปุ่ม "+ เพิ่มค่างวด" สำหรับจ่ายก้อนต่อๆ ไป -->
+                                        {% if qt.balance_due > 0 and qt.status != 'CANCELLED' and qt.status != 'CONVERTED' %}
+                                            <div>
+                                                <button class="btn btn-sm btn-outline-warning text-dark rounded-pill fw-bold shadow-sm w-100" data-bs-toggle="modal" data-bs-target="#depositModal{{ qt.id }}">
+                                                    <i class="fas fa-plus me-1"></i> เพิ่มค่างวด
+                                                </button>
+                                            </div>
                                         {% endif %}
+                                    {% else %}
+                                        <span class="text-muted small">-</span>
+                                    {% endif %}
+                                </td>
+
+                                <td class="text-end py-3">
+                                    <!-- ยอดสุทธิตามใบเสนอราคา -->
+                                    <h6 class="fw-bold mb-1 {% if qt.status == 'CANCELLED' %}text-decoration-line-through text-muted{% else %}text-dark{% endif %}" style="letter-spacing: 0.5px;" title="ยอดสุทธิตามใบเสนอราคา">
+                                        ฿ {{ qt.grand_total|floatformat:2|intcomma }}
+                                    </h6>
+
+                                    <!-- ยอดรวมที่รับเงินมาแล้ว (คำนวณผ่าน Script เพื่อรวมสลิปทุกใบ) -->
+                                    {% if qt.is_deposit_paid and qt.status != 'CANCELLED' %}
+                                        <div class="text-success fw-bold mt-1" style="font-size: 0.75rem;" title="รับเงินมาแล้วทั้งหมด (ก้อนแรก + ค่างวด)" id="total_paid_{{ qt.id }}">
+                                            <i class="fas fa-hand-holding-usd me-1"></i>รับแล้ว: ฿ {{ qt.deposit_amount|floatformat:2|intcomma }} <!-- ค่าเริ่มต้นสำหรับบิลเก่า -->
+                                        </div>
+
+                                        <script>
+                                            document.addEventListener('DOMContentLoaded', function() {
+                                                let totalPaid = 0;
+                                                // บวกยอดจากตารางลูกทั้งหมด
+                                                {% for d in qt.solar_deposits.all %}
+                                                    totalPaid += parseFloat("{{ d.amount }}");
+                                                {% endfor %}
+
+                                                // ถ้ายอดตารางลูกเป็น 0 แสดงว่าเป็นบิลเก่า ให้ใช้ค่า deposit_amount เดิม
+                                                if(totalPaid === 0) {
+                                                    totalPaid = parseFloat("{{ qt.deposit_amount }}");
+                                                }
+
+                                                if(totalPaid > 0) {
+                                                    document.getElementById('total_paid_{{ qt.id }}').innerHTML = '<i class="fas fa-hand-holding-usd me-1"></i>รับแล้ว: ฿ ' + totalPaid.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                                                }
+                                            });
+                                        </script>
+                                    {% endif %}
+
+                                    <!-- ยอดคงค้างชำระ (สีแดง) หรือ สถานะชำระครบ -->
+                                    {% if qt.status == 'CONVERTED' %}
+                                        <div class="text-success fw-bold mt-1" style="font-size: 0.75rem;"><i class="fas fa-check-circle me-1"></i>ชำระครบแล้ว</div>
+                                    {% elif qt.balance_due > 0 and qt.status != 'CANCELLED' and qt.status != 'DRAFT' %}
+                                        <div class="text-danger fw-bold mt-1" style="font-size: 0.75rem;" title="ยอดที่ต้องเรียกเก็บเพิ่ม" id="balance_due_{{ qt.id }}">
+                                            ค้างชำระ: ฿ {{ qt.balance_due|floatformat:2|intcomma }}
+                                        </div>
+
+                                        <script>
+                                            document.addEventListener('DOMContentLoaded', function() {
+                                                let grandTotal = parseFloat("{{ qt.grand_total }}");
+                                                let totalPaid = 0;
+                                                {% for d in qt.solar_deposits.all %}
+                                                    totalPaid += parseFloat("{{ d.amount }}");
+                                                {% endfor %}
+                                                if(totalPaid === 0) totalPaid = parseFloat("{{ qt.deposit_amount }}");
+
+                                                let newBalance = grandTotal - totalPaid;
+                                                if(newBalance > 0) {
+                                                    document.getElementById('balance_due_{{ qt.id }}').innerText = 'ค้างชำระ: ฿ ' + newBalance.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                                                } else {
+                                                    document.getElementById('balance_due_{{ qt.id }}').className = 'text-success fw-bold mt-1';
+                                                    document.getElementById('balance_due_{{ qt.id }}').innerHTML = '<i class="fas fa-check-circle me-1"></i>ชำระครบแล้ว';
+                                                }
+                                            });
+                                        </script>
                                     {% endif %}
                                 </td>
 
@@ -242,7 +403,7 @@
                                             </a>
                                         {% endif %}
 
-                                        <!-- ปุ่ม Action ด่วน (รับมัดจำ / ส่งงาน / เปิดบิล) -->
+                                        <!-- ปุ่ม Action ด่วน (รับมัดจำ / ส่งงาน / เปิดบิล / เติมเต็มช่องว่าง) -->
                                         {% if qt.status == 'APPROVED' and not qt.is_deposit_paid %}
                                             <button class="btn btn-sm btn-warning rounded-pill px-3 fw-bold text-dark shadow-sm btn-primary-action" data-bs-toggle="modal" data-bs-target="#depositModal{{ qt.id }}">
                                                 <i class="fas fa-hand-holding-usd me-1"></i> รับมัดจำ
@@ -253,11 +414,22 @@
                                             <a href="{% url 'solar_quotation_send_to_center' qt.id %}" class="btn btn-sm btn-gold rounded-pill px-3 fw-bold shadow-sm btn-primary-action" onclick="return confirm('ยืนยันส่งมอบงานนี้เข้า Center?');">
                                                 <i class="fas fa-paper-plane me-1"></i> ส่งงาน
                                             </a>
+                                        {% elif qt.status == 'PROCESSING' %}
+                                            <button class="btn btn-sm btn-secondary rounded-pill px-3 fw-bold shadow-sm" disabled style="opacity: 0.65; cursor: default;">
+                                                <i class="fas fa-tools me-1"></i> กำลังติดตั้ง...
+                                            </button>
                                         {% elif qt.status == 'READY' %}
-                                            <!-- 🌟 [NEW] ปุ่มสีม่วง "เปิดบิลขาย" 🌟 -->
                                             <a href="{% url 'solar_quotation_create_invoice' qt.id %}" class="btn btn-sm rounded-pill px-3 fw-bold shadow-sm btn-primary-action" style="background-color: #6f42c1; color: white;" onclick="return confirm('ยืนยันเปิดบิลขาย (Invoice) สำหรับ {{ qt.code }} ใช่หรือไม่?');">
                                                 <i class="fas fa-file-invoice-dollar me-1"></i> เปิดบิลขาย
                                             </a>
+                                        {% elif qt.status == 'CONVERTED' %}
+                                            <button class="btn btn-sm btn-light border rounded-pill px-3 fw-bold shadow-sm text-muted" disabled style="opacity: 0.7; cursor: default;">
+                                                <i class="fas fa-check-double me-1 text-success"></i> เสร็จสมบูรณ์
+                                            </button>
+                                        {% elif qt.status == 'CANCELLED' %}
+                                            <button class="btn btn-sm btn-light border rounded-pill px-3 fw-bold shadow-sm text-muted" disabled style="opacity: 0.7; cursor: default;">
+                                                <i class="fas fa-ban me-1 text-danger"></i> ยกเลิกแล้ว
+                                            </button>
                                         {% endif %}
 
                                         <!-- เมนูสามจุด Dropdown -->
@@ -293,7 +465,7 @@
                             </tr>
 
                             <!-- 🌟 Modal สำหรับบันทึกรับมัดจำ 🌟 -->
-                            {% if qt.status == 'APPROVED' and not qt.is_deposit_paid %}
+                            {% if qt.balance_due > 0 and qt.status != 'CANCELLED' and qt.status != 'CONVERTED' %}
                             <div class="modal fade" id="depositModal{{ qt.id }}" tabindex="-1">
                                 <div class="modal-dialog modal-dialog-centered">
                                     <div class="modal-content border-0 rounded-4 shadow-lg text-start">
@@ -338,22 +510,6 @@
                                 </div>
                             </div>
                             {% endif %}
-                            <!-- 🌟 Modal สำหรับกดดูรูปสลิปมัดจำขยายใหญ่ 🌟 -->
-                            {% if qt.deposit_slip %}
-                            <div class="modal fade" id="depositSlipModal{{ qt.id }}" tabindex="-1" aria-hidden="true">
-                                <div class="modal-dialog modal-dialog-centered modal-lg">
-                                    <div class="modal-content bg-transparent border-0 shadow-none">
-                                        <div class="modal-header border-0 pb-0 justify-content-end">
-                                            <button type="button" class="btn-close fs-5" data-bs-dismiss="modal" aria-label="Close" style="filter: invert(1) grayscale(100%) brightness(200%);"></button>
-                                        </div>
-                                        <div class="modal-body text-center p-0 mt-2">
-                                            <img src="{{ qt.deposit_slip.url }}" class="img-fluid rounded-4 shadow-lg" style="max-height: 85vh; object-fit: contain; border: 3px solid rgba(255,255,255,0.2);">
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            {% endif %}
-
                             {% empty %}
                             <tr>
                                 <td colspan="5" class="text-center py-5 text-muted">
@@ -381,6 +537,20 @@
                     </nav>
                 </div>
                 {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 🌟 Modal กลาง สำหรับแสดงรูปสลิปขยายใหญ่ (ต้องอยู่นอก Loop) 🌟 -->
+<div class="modal fade" id="slipModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content bg-transparent border-0">
+            <div class="modal-header border-0 pb-0 justify-content-end">
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close" style="filter: invert(1);"></button>
+            </div>
+            <div class="modal-body text-center pt-0">
+                <img id="slipImageFull" src="" class="img-fluid rounded-3 shadow-lg" style="max-height: 80vh; object-fit: contain;">
             </div>
         </div>
     </div>

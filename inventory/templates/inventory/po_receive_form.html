@@ -107,4 +107,58 @@
         </div>
     </form>
 </div>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    const fileInput = document.querySelector('input[name="slip_image"]');
+    if (!fileInput) return;
+
+    fileInput.addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        // ถ้าไฟล์ไม่ใช่รูปภาพ ให้ผ่านไปเลย
+        if (!file.type.match(/image.*/)) return;
+
+        const reader = new FileReader();
+        reader.onload = function(event) {
+            const img = new Image();
+            img.onload = function() {
+                const canvas = document.createElement('canvas');
+                let width = img.width;
+                let height = img.height;
+
+                // กำหนดขนาดความกว้างสูงสุดไม่เกิน 1200 พิกเซล (ใหญ่พอสำหรับอ่านบิลและประหยัดพื้นที่)
+                const MAX_WIDTH = 1200;
+                if (width > MAX_WIDTH) {
+                    height = Math.round((height * MAX_WIDTH) / width);
+                    width = MAX_WIDTH;
+                }
+
+                canvas.width = width;
+                canvas.height = height;
+
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+
+                // แปลงไฟล์ภาพเป็น JPEG ความคมชัด 80% (ขนาดไฟล์จะลดลงฮวบเหลือไม่กี่ KB)
+                canvas.toBlob(function(blob) {
+                    const compressedFile = new File([blob], file.name, {
+                        type: 'image/jpeg',
+                        lastModified: Date.now()
+                    });
+
+                    // แทนที่ไฟล์เดิมในฟอร์มด้วยไฟล์ที่ย่อขนาดแล้ว
+                    const dataTransfer = new DataTransfer();
+                    dataTransfer.items.add(compressedFile);
+                    fileInput.files = dataTransfer.files;
+
+                    console.log("⚡ บีบอัดรูปภาพสำเร็จ! ขนาดใหม่:", (compressedFile.size / 1024).toFixed(2), "KB");
+                }, 'image/jpeg', 0.8);
+            };
+            img.src = event.target.result;
+        };
+        reader.readAsDataURL(file);
+    });
+});
+</script>
 {% endblock %}

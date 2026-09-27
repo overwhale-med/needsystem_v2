@@ -487,3 +487,35 @@ class JobOtherExpense(models.Model):
             seq = int(last.code.split('-')[-1]) + 1 if last else 1
             self.code = f"{prefix}-{seq:04d}"
         super().save(*args, **kwargs)
+
+# ==========================================
+# 🌟 [NEW] ตาราง: ใบรับสินค้าสำเร็จรูป (จาก QC PASS) 🌟
+# ==========================================
+class QCReceiptDoc(models.Model):
+    doc_no = models.CharField(max_length=50, unique=True, blank=True, verbose_name="เลขที่ใบรับสินค้า (FG)")
+    production_order = models.OneToOneField(ProductionOrder, on_delete=models.CASCADE, related_name='qc_receipt', verbose_name="อ้างอิงใบสั่งผลิต")
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, verbose_name="สินค้าสำเร็จรูป")
+    quantity = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="จำนวนรับเข้า")
+    created_by = models.ForeignKey('auth.User', on_delete=models.SET_NULL, null=True, verbose_name="ผู้ทำรายการ (QC)")
+    created_at = models.DateTimeField(default=timezone.now, verbose_name="เวลาที่รับเข้า")
+
+    class Meta:
+        verbose_name = "ใบรับสินค้าสำเร็จรูป (QC)"
+        verbose_name_plural = "ใบรับสินค้าสำเร็จรูป (QC)"
+
+    def __str__(self):
+        return self.doc_no
+
+    def save(self, *args, **kwargs):
+        if not self.doc_no:
+            today = datetime.date.today()
+            thai_year = (today.year + 543) % 100
+            year_month = f"{thai_year:02d}{today.strftime('%m')}"
+            prefix = f"GR-FG-{year_month}-"
+            last_doc = QCReceiptDoc.objects.filter(doc_no__startswith=prefix).order_by('doc_no').last()
+            if last_doc:
+                try: seq = int(last_doc.doc_no.split('-')[-1]) + 1
+                except: seq = 1
+            else: seq = 1
+            self.doc_no = f"{prefix}{seq:03d}"
+        super().save(*args, **kwargs)

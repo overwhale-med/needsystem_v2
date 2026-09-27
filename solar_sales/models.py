@@ -72,11 +72,14 @@ class SolarQuotation(models.Model):
         return self.grand_total - self.deposit_amount
 
     def save(self, *args, **kwargs):
-        # 🌟 [NEW] สร้าง Token อัตโนมัติเมื่อกดบันทึก 🌟
         if not self.signature_token:
             self.signature_token = secrets.token_urlsafe(32)
         if not self.deposit_signature_token:
             self.deposit_signature_token = secrets.token_urlsafe(32)
+
+        # 🌟 [FIXED] ระบบ Auto-Sync: ถ้าบัญชีตรวจผ่าน ให้สลิปค่างวดทุกใบผ่านด้วยอัตโนมัติ
+        if self.pk and self.is_deposit_verified:
+            self.solar_deposits.filter(is_verified=False).update(is_verified=True)
 
         if not self.code:
             now = timezone.now()
@@ -91,6 +94,11 @@ class SolarQuotation(models.Model):
 
         super().save(*args, **kwargs)
 
+    @property
+    def active_installments(self):
+        # 🌟 [FIXED] กรองสลิปค่างวดทั้งหมด โดยตัดสลิปก้อนแรกสุดออกอย่างแม่นยำ
+        return self.solar_deposits.exclude(code=self.deposit_code)
+
 class SolarQuotationItem(models.Model):
     quotation = models.ForeignKey(SolarQuotation, related_name='items', on_delete=models.CASCADE)
     product = models.ForeignKey(SolarProduct, on_delete=models.SET_NULL, null=True, blank=True)
@@ -100,6 +108,47 @@ class SolarQuotationItem(models.Model):
     quantity = models.IntegerField(default=1)
     unit_price = models.DecimalField(max_digits=10, decimal_places=2)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
+
+# ==========================================
+# 💰 ระบบจัดการใบรับเงินมัดจำ โซล่าเซลล์ (Separated Deposit Model)
+# ==========================================
+class SolarQuotationDeposit(models.Model):
+    PAYMENT_CHOICES = [
+        ('CASH', 'เงินสด'),
+        ('TRANSFER', 'โอนเงิน'),
+        ('CHECK', 'เช็คธนาคาร')
+    ]
+
+    code = models.CharField(max_length=20, unique=True, verbose_name="เลขที่ใบรับมัดจำโซล่า (RVD-SOL)")
+
+    # 🌟 เชื่อมโยงกลับไปที่ SolarQuotation แบบ 1-to-Many
+    # ใช้ related_name='solar_deposits' เพื่อไม่ให้ซ้ำกับของระบบน็อคดาวน์
+    quotation = models.ForeignKey('SolarQuotation', on_delete=models.CASCADE, related_name='solar_deposits', verbose_name="อ้างอิงใบเสนอราคาโซล่า")
+
+    amount = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="ยอดมัดจำที่รับ")
+    deposit_date = models.DateField(default=timezone.now, verbose_name="วันที่รับมัดจำ")
+    payment_method = models.CharField(max_length=50, choices=PAYMENT_CHOICES, blank=True, null=True, verbose_name="ช่องทางรับมัดจำ")
+    deposit_slip = models.ImageField(upload_to='solar_deposit_slips_v2/%Y/%m/', null=True, blank=True, verbose_name="สลิปมัดจำ")
+
+    is_verified = models.BooleanField(default=False, verbose_name="บัญชีตรวจสอบมัดจำแล้ว")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        # ฟังก์ชันย่อขนาดรูปสลิปอัตโนมัติ
+        if self.deposit_slip:
+            try:
+                from PIL import Image
+                img = Image.open(self.deposit_slip.path)
+                if img.height > 800 or img.width > 800:
+                    output_size = (800, 800)
+                    img.thumbnail(output_size)
+                    img.save(self.deposit_slip.path, quality=85, optimize=True)
+            except Exception:
+                pass
+
+    def __str__(self):
+        return str(self.code)
 
 class SolarInvoice(models.Model):
     # 🌟 [FIXED] เพิ่มสถานะ 'PENDING_VERIFY' เข้าไปในตัวเลือก

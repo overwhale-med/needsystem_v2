@@ -3,7 +3,8 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.db import models, transaction
-from django.db.models import Q
+from django.db.models import Sum, Q, F, Subquery, OuterRef, IntegerField, Case, When
+from django.db.models.functions import Coalesce
 from django.utils.dateparse import parse_date
 from django.http import JsonResponse
 from django.urls import reverse
@@ -19,6 +20,8 @@ from .models import (
 from .forms import StockInForm, StockOutForm, ProductForm, ProductSupplierFormSet
 from master_data.models import CompanyInfo
 from purchasing.models import PurchaseOrder, PurchaseOrderItem, OverseasPO, OverseasPOItem
+# 🌟 [NEW] นำเข้าโมเดล QCReceiptDoc จากแอปผลิต
+from manufacturing.models import QCReceiptDoc, ProductionOrder
 from django.core.paginator import Paginator
 
 # ==========================================
@@ -46,13 +49,95 @@ def inventory_dashboard(request):
 def product_list(request):
     p_type = request.GET.get('type', 'FG')
     search_query = request.GET.get('q', '')
-    products = Product.objects.filter(is_active=True, product_type=p_type).order_by('code')
+    rm_category_id = request.GET.get('rm_category', '')
+    stock_status = request.GET.get('stock_status', '')
+    stock_column = request.GET.get('stock_column', '')
+
+    # 🌟 1. ดึงยอด "รอจัดส่ง" (Pending Delivery)
+    # หมายถึง: สินค้าที่มี JOB คลุม + มีใบเสนอราคา + เปิดบิลแล้ว (มี Invoice) + Invoice สถานะชำระแล้ว (PAID) + แต่ช่างยังไม่กดส่งมอบสำเร็จ (สถานะไม่ใช่ COMPLETED หรือ DISPATCH)
+    pending_delivery_subquery = ProductionOrder.objects.filter(
+        product=OuterRef('pk'),
+        is_qc_passed=True,
+        quotation_ref__invoice__isnull=False,  # เปิดบิลแล้ว
+        quotation_ref__invoice__status='PAID', # ชำระเงินครบแล้ว
+    ).exclude(
+        delivery_status__name__in=['ส่งมอบสำเร็จ', 'ลูกค้าเซ็นรับแล้ว', 'จัดส่งเรียบร้อย'] # ยังไม่ส่ง
+    ).values('product').annotate(
+        total_delivery=Sum('quantity')
+    ).values('total_delivery')
+
+    # 🌟 2. ดึงยอด "รอเปิดบิล" (Pending Invoice)
+    # หมายถึง: สินค้าที่มี JOB คลุม + มีใบเสนอราคา + รับมัดจำแล้ว + แต่เซลส์ยังไม่ได้กดเปิดบิล (Invoice ว่างเปล่า)
+    pending_invoice_subquery = ProductionOrder.objects.filter(
+        product=OuterRef('pk'),
+        is_qc_passed=True,
+        quotation_ref__is_deposit_paid=True,
+        quotation_ref__status='APPROVED',
+        quotation_ref__invoice__isnull=True    # ยังไม่เปิดบิล
+    ).values('product').annotate(
+        total_pending=Sum('quantity')
+    ).values('total_pending')
+
+    # 🌟 [FIXED] อัปเดตสมการหลัก (Annotate) เข้าไปใน Products
+    products = Product.objects.filter(is_active=True, product_type=p_type).annotate(
+        # คำนวณค่าย่อย
+        base_pending_inv=Coalesce(Subquery(pending_invoice_subquery, output_field=IntegerField()), 0),
+        base_pending_del=Coalesce(Subquery(pending_delivery_subquery, output_field=IntegerField()), 0),
+    ).annotate(
+        # คอลัมน์ 1: "รอจัดส่ง"
+        pending_delivery_qty=Case(
+            When(code__contains='-JOB', then=F('base_pending_del')),
+            default=0,
+            output_field=IntegerField()
+        ),
+        # คอลัมน์ 2: "รอเปิดบิล" (เฉพาะสินค้ามี -JOB ที่ยอดรอส่งเป็น 0)
+        pending_invoice_qty=Case(
+            When(code__contains='-JOB', base_pending_del=0, then=F('base_pending_inv')),
+            default=0,
+            output_field=IntegerField()
+        )
+    ).annotate(
+        # คอลัมน์ 3: "พร้อมขาย" (ถ้าเป็น -JOB และมียอดในรอเปิดบิล/รอส่งแล้ว ให้พร้อมขายเป็น 0, ถ้าเป็น -JOB ลอยๆ ที่ไม่มีใบเสนอราคา ให้เอาสต็อกมาโชว์พร้อมขาย)
+        available_qty=Case(
+            When(code__contains='-JOB', pending_invoice_qty__gt=0, then=0),
+            When(code__contains='-JOB', pending_delivery_qty__gt=0, then=0),
+            default=F('stock_qty'),
+            output_field=IntegerField()
+        )
+    ).annotate(
+        # คอลัมน์ 4: "สินค้าในลาน" (ยอด Physical Stock จริงๆ ที่ยังไม่ถูกตัด GI ออกไป)
+        physical_yard_qty=F('stock_qty')
+    ).order_by('code')
+
+    # 1. กรองด้วยข้อความ และ แผนก
     if search_query:
         products = products.filter(Q(code__icontains=search_query) | Q(name__icontains=search_query) | Q(category__name__icontains=search_query))
+    if rm_category_id:
+        products = products.filter(rm_category_id=rm_category_id)
+
+    # 2. กรองด้วยสถานะสินค้า
+    if stock_status == 'in_stock':
+        products = products.filter(stock_qty__gt=0)
+    elif stock_status == 'out_of_stock':
+        products = products.filter(stock_qty__lte=0)
+
     paginator = Paginator(products, 15)
     page_obj = paginator.get_page(request.GET.get('page'))
+    # ... (โค้ดส่วนที่เหลือด้านล่างปล่อยไว้เหมือนเดิมครับ) ...
     title = '📦 คลังสินค้าสำเร็จรูป (FG)' if p_type == 'FG' else '🧱 คลังวัตถุดิบ (RM)'
-    return render(request, 'inventory/product_list.html', {'page_obj': page_obj, 'p_type': p_type, 'title': title, 'search_query': search_query})
+
+    rm_categories = RawMaterialCategory.objects.all().order_by('name') if p_type == 'RM' else None
+
+    return render(request, 'inventory/product_list.html', {
+        'page_obj': page_obj,
+        'p_type': p_type,
+        'title': title,
+        'search_query': search_query,
+        'rm_categories': rm_categories,
+        'selected_rm_cat': rm_category_id,
+        'stock_status': stock_status,
+        'stock_column': stock_column # 🌟 ส่งค่ากลับไปให้หน้าจอจำค่าที่เลือกไว้
+    })
 
 @login_required
 def document_list_in(request): return document_list_base(request, doc_type='GR', title='ประวัติใบรับสินค้า/วัตถุดิบ (Stock In)')
@@ -65,12 +150,33 @@ def document_list_base(request, doc_type, title):
     product_type = request.GET.get('product_type', '')
     date_start = request.GET.get('start', '')
     date_end = request.GET.get('end', '')
+
+    # 1. ดึงข้อมูลใบรับ/เบิก ปกติ (InventoryDoc)
     docs = InventoryDoc.objects.filter(doc_type=doc_type).order_by('-doc_no')
     if product_type: docs = docs.filter(movements__product__product_type=product_type).distinct()
     if date_start: docs = docs.filter(created_at__date__gte=parse_date(date_start))
     if date_end: docs = docs.filter(created_at__date__lte=parse_date(date_end))
     if search_query: docs = docs.filter(Q(doc_no__icontains=search_query) | Q(reference__icontains=search_query) | Q(created_by__first_name__icontains=search_query))
-    return render(request, 'inventory/document_list.html', {'docs': docs, 'title': title, 'doc_type': doc_type, 'search_query': search_query, 'product_type': product_type, 'date_start': date_start, 'date_end': date_end})
+
+    # 🌟 [NEW] 2. ถ้าเป็นหน้าใบรับของ (GR) ให้ดึงข้อมูลใบรับจาก QC ผลิต (QCReceiptDoc) มาด้วย
+    qc_docs = []
+    if doc_type == 'GR':
+        qc_qs = QCReceiptDoc.objects.all().order_by('-doc_no')
+        if date_start: qc_qs = qc_qs.filter(created_at__date__gte=parse_date(date_start))
+        if date_end: qc_qs = qc_qs.filter(created_at__date__lte=parse_date(date_end))
+        if search_query: qc_qs = qc_qs.filter(Q(doc_no__icontains=search_query) | Q(production_order__code__icontains=search_query) | Q(product__name__icontains=search_query))
+        qc_docs = qc_qs
+
+    return render(request, 'inventory/document_list.html', {
+        'docs': docs,
+        'qc_docs': qc_docs, # 🌟 ส่งข้อมูล QC ไปหน้าจอ
+        'title': title,
+        'doc_type': doc_type,
+        'search_query': search_query,
+        'product_type': product_type,
+        'date_start': date_start,
+        'date_end': date_end
+    })
 
 # ==========================================
 # 2. CRUD Products
@@ -319,7 +425,6 @@ def po_receive_process(request, po_id):
                 items_to_receive.append({'item_obj': item, 'receive_qty': receive_qty})
 
         if not has_error and items_to_receive:
-            # 🌟 [FIXED] รับไฟล์รูปภาพจากหน้าฟอร์มมาบันทึกด้วย
             slip_file = request.FILES.get('slip_image')
 
             doc = InventoryDoc.objects.create(
@@ -328,7 +433,7 @@ def po_receive_process(request, po_id):
                 reference=reference_doc,
                 description=note,
                 created_by=request.user,
-                slip_image=slip_file # 🌟 บันทึกรูป
+                slip_image=slip_file
             )
             for data in items_to_receive:
                 item = data['item_obj']
@@ -342,11 +447,45 @@ def po_receive_process(request, po_id):
             for item in po.items.all():
                 if Decimal(str(item.received_qty)) > 0: any_received = True
                 if Decimal(str(item.received_qty)) < Decimal(str(item.quantity)): all_completed = False
-            if all_completed: po.receipt_status = 'COMPLETED'
-            elif any_received: po.receipt_status = 'PARTIAL'
+
+            if all_completed:
+                po.receipt_status = 'COMPLETED'
+            elif any_received:
+                po.receipt_status = 'PARTIAL'
             po.save()
-            messages.success(request, f"✅ รับสินค้าจาก PO: {po.code} สำเร็จ!")
+
+            # 🌟 [NEW] สมองกลอัปเดตสถานะ JOB อัตโนมัติเมื่อรับของเข้าคลัง (Trigger) 🌟
+            if po.ppo_ref:
+                try:
+                    from purchasing.models import PurchasePreparation
+                    from manufacturing.models import ProductionOrder, BOM
+
+                    ppo = PurchasePreparation.objects.get(code=po.ppo_ref)
+                    related_jobs = ppo.production_orders.filter(status='WAITING_MATERIALS')
+
+                    # เช็ค JOB แต่ละตัวว่าของในคลังพอเบิกหรือยัง
+                    for job in related_jobs:
+                        is_ready = True
+                        bom = BOM.objects.filter(product=job.product).first()
+                        if bom:
+                            for bom_item in bom.items.all():
+                                req_qty = Decimal(str(bom_item.quantity))
+                                stock = Decimal(str(bom_item.raw_material.stock_qty or 0))
+                                if stock < req_qty:
+                                    is_ready = False
+                                    break # ขาดชิ้นเดียวก็ถือว่ายังไม่พร้อม
+
+                        # ถ้าของครบทุกรายการ ให้เด้งสถานะ JOB ไปให้คลังเบิกของได้เลย!
+                        if is_ready:
+                            job.status = 'WAITING_INVENTORY'
+                            job.save()
+
+                except Exception as e:
+                    print(f"เกิดข้อผิดพลาดในการอัปเดตสถานะ JOB: {e}")
+
+            messages.success(request, f"✅ รับสินค้าจาก PO: {po.code} สำเร็จ! และระบบได้อัปเดตสถานะให้แผนกคลังสินค้าทราบแล้ว")
             return redirect('print_document', doc_no=doc.doc_no)
+
     return render(request, 'inventory/po_receive_form.html', {'po': po})
 
 # ==========================================
@@ -402,20 +541,30 @@ def product_stock_card(request, pk):
     running_balance = Decimal('0.00')
 
     for mov in movements:
-        if mov.movement_type == 'IN':
+        # 🌟 [FIXED] จัดกลุ่มประเภทการรับเข้าและเบิกออกให้ครอบคลุม
+        is_in = mov.movement_type in ['IN', 'RETURN']
+        is_out = mov.movement_type in ['OUT', 'DISPATCH', 'RESERVE']
+
+        if is_in:
             running_balance += mov.quantity
-        elif mov.movement_type == 'OUT':
+        elif is_out:
             running_balance -= mov.quantity
+
+        # 🌟 [FIXED] ดึงข้อมูลมาแสดงให้ครบ แม้จะไม่มี InventoryDoc (doc=None)
+        doc_no_display = mov.doc.doc_no if mov.doc else (mov.reference_doc or '-')
+        doc_type_display = mov.doc.get_doc_type_display() if mov.doc and hasattr(mov.doc, 'get_doc_type_display') else mov.get_movement_type_display()
+
+        # ถ้าระบุ Note ไว้ที่ตัว Movement โดยตรง ให้ใช้ Note ถ้าไม่มีให้ไปดึง Description จาก Doc
+        desc_display = mov.note if mov.note else (mov.doc.description if mov.doc else '-')
 
         # สร้างพจนานุกรมเก็บประวัติแต่ละบรรทัด
         history.append({
             'date': mov.created_at,
-            'doc_no': mov.doc.doc_no if mov.doc else '-',
-            'doc_type': mov.doc.get_doc_type_display() if mov.doc and hasattr(mov.doc, 'get_doc_type_display') else mov.movement_type,
-            'reference': mov.doc.reference if mov.doc else '-',
-            'description': mov.doc.description if mov.doc else '-',
-            'in_qty': mov.quantity if mov.movement_type == 'IN' else None,
-            'out_qty': mov.quantity if mov.movement_type == 'OUT' else None,
+            'doc_no': doc_no_display,
+            'doc_type': doc_type_display,
+            'description': desc_display,
+            'in_qty': mov.quantity if is_in else None,
+            'out_qty': mov.quantity if is_out else None,
             'balance': running_balance,
             'user': mov.created_by.first_name if mov.created_by else 'System'
         })
@@ -423,10 +572,53 @@ def product_stock_card(request, pk):
     # สลับเอาข้อมูลล่าสุด (ปัจจุบัน) ขึ้นด้านบนสุดของตาราง
     history.reverse()
 
+    # 🌟 [FIXED] อัปเดต Physical Stock (ยอดในลาน) ให้ตรงกับสต็อกการ์ด
+    if product.stock_qty != running_balance:
+        product.stock_qty = running_balance
+        product.save()
+
     paginator = Paginator(history, 20)
     page_obj = paginator.get_page(request.GET.get('page'))
 
     return render(request, 'inventory/stock_card.html', {
         'product': product,
         'page_obj': page_obj
+    })
+
+# ==========================================
+# 🌟 [NEW] ระบบพิมพ์ใบตรวจนับสต็อก (Stock Count Sheet) 🌟
+# ==========================================
+@login_required
+def print_stock_count_sheet(request):
+    p_type = request.GET.get('type', 'FG')
+    search_query = request.GET.get('q', '')
+    rm_category_id = request.GET.get('rm_category', '')
+    stock_status = request.GET.get('stock_status', '')
+
+    products = Product.objects.filter(is_active=True, product_type=p_type).order_by('code')
+
+    if search_query:
+        products = products.filter(Q(code__icontains=search_query) | Q(name__icontains=search_query) | Q(category__name__icontains=search_query))
+    if rm_category_id:
+        products = products.filter(rm_category_id=rm_category_id)
+    if stock_status == 'in_stock':
+        products = products.filter(stock_qty__gt=0)
+    elif stock_status == 'out_of_stock':
+        products = products.filter(stock_qty__lte=0)
+
+    # ดึงชื่อแผนกมาแสดงที่หัวกระดาษ (ถ้ามีการเลือก)
+    category_name = "ทั้งหมด"
+    if rm_category_id:
+        try: category_name = RawMaterialCategory.objects.get(id=rm_category_id).name
+        except: pass
+
+    company = CompanyInfo.objects.first()
+    title = 'คลังสินค้าสำเร็จรูป (FG)' if p_type == 'FG' else 'คลังวัตถุดิบ (RM)'
+
+    return render(request, 'inventory/stock_count_print.html', {
+        'products': products,
+        'title': title,
+        'p_type': p_type,
+        'category_name': category_name,
+        'company': company
     })

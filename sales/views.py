@@ -763,12 +763,14 @@ def convert_quote_to_invoice(request, qt_id):
     qt.status = 'CONVERTED'
     qt.save()
 
+    # 🌟 [DELETED] นำระบบตัดสต็อก RESERVE ตรงนี้ออกไปแล้ว เพื่อโอนอำนาจให้ Virtual Column ในหน้า Inventory จัดการแทน
+
     for job in qt.production_orders.all():
         if not job.is_closed:
             job.is_closed = True
             job.save()
 
-    messages.success(request, f"✅ เปิดใบขายสินค้า {new_code} เรียบร้อย (ยอดคงค้างชำระ: {balance:,.2f} บาท) และอัปเดตปิดจ๊อบให้โรงงานแล้ว!")
+    messages.success(request, f"✅ เปิดใบขายสินค้า {new_code} เรียบร้อย (ยอดคงค้างชำระ: {balance:,.2f} บาท)")
     return redirect('invoice_list')
 
 @login_required
@@ -838,6 +840,17 @@ def pos_checkout(request):
                     order=order, product=product, product_name=product.name,
                     quantity=item['qty'], price=item['price'],
                     total_price=float(item['qty']) * float(item['price'])
+                )
+
+                # 🌟 [UPDATE] ใช้ระบบสต็อกการ์ด (RESERVE) แทนการลบเลขตรงๆ เพื่อให้มีประวัติในคลัง
+                StockMovement.objects.create(
+                    doc=None,
+                    product=product,
+                    quantity=Decimal(str(item['qty'])),
+                    movement_type='RESERVE',
+                    reference_doc=order_code,
+                    note=f"ขายหน้าร้าน (POS) บิลเลขที่ {order_code}",
+                    created_by=request.user
                 )
                 product.stock_qty -= int(item['qty'])
                 product.save()

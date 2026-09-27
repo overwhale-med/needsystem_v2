@@ -95,119 +95,157 @@
         </div>
     </div>
 
-    <div class="card border-0 shadow-sm rounded-4 overflow-hidden border-top border-4 {% if doc_type == 'GR' %}border-success{% else %}border-warning{% endif %}">
-        <div class="table-responsive">
-            <table class="table table-hover align-middle mb-0">
-                <thead class="bg-light text-secondary">
-                    <tr>
-                        <th class="ps-4">เลขที่เอกสาร</th>
-                        <th>วันที่</th>
-                        <th>เลขที่ใบสั่งซื้อ (PO)</th>
-                        <th>ชื่อร้านค้า</th>
-                        <!-- 🌟 เพิ่มคอลัมน์รูปใบส่งของ และ หมายเหตุ 🌟 -->
-                        <th class="text-center">รูปใบส่งของ/รับของ</th>
-                        <th class="text-center">จำนวนรวม</th>
-                        <th>ผู้ทำรายการ</th>
-                        <th class="text-center">หมายเหตุ</th>
-                        <th class="text-end pe-4">จัดการ</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for doc in docs %}
-                    <tr>
-                        <td class="ps-4">
-                            <a href="{% url 'print_document' doc.doc_no %}" target="_blank" class="fw-bold text-decoration-none text-dark">
-                                {{ doc.doc_no }}
-                            </a>
-                            {% with first_item=doc.movements.first %}
-                                {% if first_item.product.product_type == 'RM' %}
-                                    <span class="badge bg-secondary ms-1" style="font-size: 0.65rem;">RM</span>
-                                {% else %}
-                                    <span class="badge bg-primary ms-1" style="font-size: 0.65rem;">FG</span>
-                                {% endif %}
-                            {% endwith %}
-                        </td>
-                        <td>
-                            <div class="fw-bold text-dark">{{ doc.created_at|date:"d/m/Y" }}</div>
-                            <small class="text-muted">{{ doc.created_at|date:"H:i" }} น.</small>
-                        </td>
-                        <td>
-                            {% if doc.po_reference %}
-                                <div class="mb-1">
-                                    <a href="{% url 'po_print' doc.po_reference.id %}" target="_blank" class="fw-bold text-primary font-monospace text-decoration-none hover-scale d-inline-block">
-                                        <i class="fas fa-shopping-cart me-1"></i> {{ doc.po_reference.code }}
-                                    </a>
-                                </div>
-                            {% endif %}
-                            <!-- 🌟 ซ่อนขีดกลาง (อ้างอิงอื่นๆ) ออกไปแล้วครับ 🌟 -->
-                        </td>
-                        <td>
-                            {% if doc.po_reference.supplier %}
-                                <div class="small fw-bold text-dark"><i class="fas fa-store text-muted me-1"></i> {{ doc.po_reference.supplier.name|truncatechars:20 }}</div>
-                            {% else %}
-                                <div class="small text-muted">- ไม่ระบุร้านค้า -</div>
-                            {% endif %}
-                        </td>
+    <!-- 🌟 [NEW] เมนูสลับแท็บ (โชว์เฉพาะหน้า Stock In) 🌟 -->
+    {% if doc_type == 'GR' %}
+    <ul class="nav nav-tabs fw-bold mb-3 border-bottom-0 gap-2" id="receiptTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active rounded-pill px-4 border" id="po-tab" data-bs-toggle="tab" data-bs-target="#po-receipt" type="button" role="tab" style="color: #6c757d; background-color: #fff;">
+                <i class="fas fa-truck-loading me-1"></i> รับวัตถุดิบ (จากสั่งซื้อ/PO)
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link rounded-pill px-4 border" id="qc-tab" data-bs-toggle="tab" data-bs-target="#qc-receipt" type="button" role="tab" style="color: #6c757d; background-color: #fff;">
+                <i class="fas fa-check-double me-1"></i> รับสินค้าสำเร็จรูป (จากผลิต/QC)
+            </button>
+        </li>
+    </ul>
+    <style>
+        .nav-tabs .nav-link.active { background-color: #198754 !important; color: white !important; border-color: #198754 !important; box-shadow: 0 4px 10px rgba(25,135,84,0.3); }
+    </style>
+    {% endif %}
 
-                        <!-- 🌟 โชว์รูปใบส่งของ (ถ้ามี) 🌟 -->
-                        <td class="text-center">
-                            {% if doc.slip_image %}
-                                <a href="{{ doc.slip_image.url }}" target="_blank" class="badge bg-success bg-opacity-10 text-success border border-success rounded-pill px-3 py-2 text-decoration-none hover-scale">
-                                    <i class="fas fa-image me-1"></i> ดูรูปภาพ
-                                </a>
-                            {% else %}
-                                <span class="text-muted small">-</span>
-                            {% endif %}
-                        </td>
-
-                        <td class="text-center">
-                            <span class="badge bg-light text-dark border rounded-pill px-3">
-                                {{ doc.movements.count }} รายการ
-                            </span>
-                        </td>
-                        <td>
-                            <div class="d-flex align-items-center">
-                                <i class="fas fa-user-circle text-muted me-2"></i>
-                                <span class="small fw-bold">
-                                    {% if doc.created_by.first_name %}
-                                        {{ doc.created_by.first_name }} {{ doc.created_by.last_name }}
+    <div class="tab-content" id="receiptTabsContent">
+        <!-- 🌟 แท็บ 1: ตารางประวัติเดิม (PO / Manual) 🌟 -->
+        <div class="tab-pane fade show active" id="po-receipt" role="tabpanel">
+            <div class="card border-0 shadow-sm rounded-4 overflow-hidden border-top border-4 {% if doc_type == 'GR' %}border-success{% else %}border-warning{% endif %}">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="bg-light text-secondary">
+                            <tr>
+                                <th class="ps-4">เลขที่เอกสาร</th>
+                                <th>วันที่</th>
+                                <th>อ้างอิงเอกสาร (PO/อื่นๆ)</th>
+                                <th>ชื่อร้านค้า</th>
+                                <th class="text-center">รูปใบส่งของ</th>
+                                <th class="text-center">จำนวนรวม</th>
+                                <th>ผู้ทำรายการ</th>
+                                <th class="text-center">หมายเหตุ</th>
+                                <th class="text-end pe-4">จัดการ</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for doc in docs %}
+                            <tr>
+                                <td class="ps-4">
+                                    <a href="{% url 'print_document' doc.doc_no %}" target="_blank" class="fw-bold text-decoration-none text-dark">{{ doc.doc_no }}</a>
+                                </td>
+                                <td>
+                                    <div class="fw-bold text-dark">{{ doc.created_at|date:"d/m/Y" }}</div>
+                                    <small class="text-muted">{{ doc.created_at|date:"H:i" }} น.</small>
+                                </td>
+                                <td>
+                                    {% if doc.po_reference %}
+                                        <a href="{% url 'po_print' doc.po_reference.id %}" target="_blank" class="fw-bold text-primary text-decoration-none hover-scale"><i class="fas fa-shopping-cart me-1"></i> {{ doc.po_reference.code }}</a>
                                     {% else %}
-                                        {{ doc.created_by.username }}
+                                        <span class="text-muted">{{ doc.reference|default:"-" }}</span>
                                     {% endif %}
-                                </span>
-                            </div>
-                        </td>
-
-                        <!-- 🌟 ปุ่มดูหมายเหตุแบบ Tooltip/Popover 🌟 -->
-                        <td class="text-center">
-                            {% if doc.description %}
-                                <!-- ใช้ data-bs-toggle="popover" ให้คลิกแล้วมีกล่องข้อความเด้งขึ้นมา -->
-                                <button type="button" class="btn btn-sm btn-warning text-dark rounded-circle shadow-sm"
-                                        data-bs-toggle="popover" data-bs-placement="left" data-bs-content="{{ doc.description }}" title="หมายเหตุเพิ่มเติม">
-                                    <i class="fas fa-comment-alt"></i>
-                                </button>
-                            {% else %}
-                                <span class="text-muted opacity-25">-</span>
-                            {% endif %}
-                        </td>
-
-                        <td class="text-end pe-4">
-                            <a href="{% url 'print_document' doc.doc_no %}" target="_blank" class="btn btn-sm btn-outline-secondary rounded-pill px-3">
-                                <i class="fas fa-print me-1"></i> พิมพ์
-                            </a>
-                        </td>
-                    </tr>
-                    {% empty %}
-                    <tr>
-                        <td colspan="9" class="text-center py-5 text-muted">
-                            <i class="fas fa-folder-open fa-3x mb-3 text-light"></i><br>
-                            ไม่พบเอกสารในช่วงเวลาที่เลือก
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+                                </td>
+                                <td>
+                                    {% if doc.po_reference and doc.po_reference.supplier %}
+                                        <div class="small fw-bold text-dark"><i class="fas fa-store text-muted me-1"></i> {{ doc.po_reference.supplier.name|truncatechars:20 }}</div>
+                                    {% else %}
+                                        <div class="small text-muted">- ไม่ระบุร้านค้า -</div>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center">
+                                    {% if doc.slip_image %}
+                                        <a href="{{ doc.slip_image.url }}" target="_blank" class="badge bg-success bg-opacity-10 text-success border border-success rounded-pill px-3 py-2 text-decoration-none hover-scale"><i class="fas fa-image me-1"></i> ดูรูปภาพ</a>
+                                    {% else %}
+                                        <span class="text-muted small">-</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center"><span class="badge bg-light text-dark border rounded-pill px-3">{{ doc.movements.count }} รายการ</span></td>
+                                <td>
+                                    <span class="small fw-bold"><i class="fas fa-user-circle text-muted me-1"></i> {{ doc.created_by.first_name|default:doc.created_by.username }}</span>
+                                </td>
+                                <td class="text-center">
+                                    {% if doc.description %}
+                                        <button type="button" class="btn btn-sm btn-warning text-dark rounded-circle shadow-sm" data-bs-toggle="popover" data-bs-placement="left" data-bs-content="{{ doc.description }}" title="หมายเหตุ"><i class="fas fa-comment-alt"></i></button>
+                                    {% else %}
+                                        <span class="text-muted opacity-25">-</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end pe-4">
+                                    <a href="{% url 'print_document' doc.doc_no %}" target="_blank" class="btn btn-sm btn-outline-secondary rounded-pill px-3"><i class="fas fa-print me-1"></i> พิมพ์</a>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="9" class="text-center py-5 text-muted"><i class="fas fa-folder-open fa-3x mb-3 text-light"></i><br>ไม่พบเอกสารในช่วงเวลาที่เลือก</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
+
+        <!-- 🌟 แท็บ 2: ตารางประวัติ QC PASS 🌟 -->
+        {% if doc_type == 'GR' %}
+        <div class="tab-pane fade" id="qc-receipt" role="tabpanel">
+            <div class="card border-0 shadow-sm rounded-4 overflow-hidden border-top border-4 border-primary">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="bg-light text-secondary">
+                            <tr>
+                                <th class="ps-4">เลขที่เอกสารรับเข้า</th>
+                                <th>วันที่ตรวจรับ</th>
+                                <th>เลขที่ใบสั่งผลิต (JOB)</th>
+                                <th>รหัส / ชื่อสินค้า</th>
+                                <th class="text-center">จำนวนรับเข้า</th>
+                                <th>ผู้ตรวจ QC</th>
+                                <th class="text-center">หมายเหตุ</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for qc in qc_docs %}
+                            <tr>
+                                <td class="ps-4"><span class="fw-bold text-dark">{{ qc.doc_no }}</span> <span class="badge bg-primary ms-1" style="font-size: 0.65rem;">FG</span></td>
+                                <td>
+                                    <div class="fw-bold text-dark">{{ qc.created_at|date:"d/m/Y" }}</div>
+                                    <small class="text-muted">{{ qc.created_at|date:"H:i" }} น.</small>
+                                </td>
+                                <td>
+                                    <a href="{% url 'production_detail' qc.production_order.id %}" target="_blank" class="fw-bold text-info text-decoration-none hover-scale"><i class="fas fa-tools me-1"></i> {{ qc.production_order.code }}</a>
+                                </td>
+                                <td>
+                                    <div class="fw-bold text-dark">{{ qc.product.code }}</div>
+                                    <div class="small text-muted">{{ qc.product.name|truncatechars:30 }}</div>
+                                </td>
+                                <td class="text-center">
+                                    <span class="badge bg-success bg-opacity-10 text-success border border-success rounded-pill px-3 py-1 fs-6">{{ qc.quantity|floatformat:0 }} ชิ้น</span>
+                                </td>
+                                <td>
+                                    <span class="small fw-bold"><i class="fas fa-user-check text-success me-1"></i> {{ qc.created_by.first_name|default:qc.created_by.username }}</span>
+                                </td>
+                                <td class="text-center">
+                                    <!-- 🌟 ดึงข้อมูลหมายเหตุมาจากรายการ StockMovement ล่าสุดที่ผูกกับรหัสบิลนี้ 🌟 -->
+                                    {% with mov=qc.product.stockmovement_set.last %}
+                                        {% if mov and mov.note %}
+                                            <button type="button" class="btn btn-sm btn-warning text-dark rounded-circle shadow-sm" data-bs-toggle="popover" data-bs-placement="left" data-bs-content="{{ mov.note }}" title="หมายเหตุ"><i class="fas fa-comment-alt"></i></button>
+                                        {% else %}
+                                            <span class="text-muted opacity-25">-</span>
+                                        {% endif %}
+                                    {% endwith %}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="7" class="text-center py-5 text-muted"><i class="fas fa-clipboard-check fa-3x mb-3 text-light"></i><br>ยังไม่มีประวัติการรับสินค้าจากฝ่ายผลิต</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endif %}
     </div>
 </div>
 
@@ -224,12 +262,36 @@
     });
 </script>
 <script>
-    // สั่งให้ Popover ทำงานเมื่อโหลดหน้าเว็บเสร็จ
     document.addEventListener("DOMContentLoaded", function() {
+        // 1. เปิดใช้งาน Popover ทั้งหมดในหน้าเว็บ
         var popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'))
         var popoverList = popoverTriggerList.map(function (popoverTriggerEl) {
           return new bootstrap.Popover(popoverTriggerEl)
-        })
+        });
+
+        // 🌟 2. [FIXED] สคริปต์แก้บั๊กกล่องข้อความทะลุ 🌟
+        // ตรวจจับการกดสลับแท็บ ถ้ากดปุ๊บ ให้ซ่อนกล่อง Popover ทุกใบที่เปิดค้างอยู่ทันที
+        var tabEls = document.querySelectorAll('button[data-bs-toggle="tab"]')
+        tabEls.forEach(function(tabEl) {
+            tabEl.addEventListener('show.bs.tab', function (event) {
+                var popovers = document.querySelectorAll('.popover.show');
+                popovers.forEach(function(popover) {
+                    var bsPopover = bootstrap.Popover.getInstance(document.querySelector('[aria-describedby="' + popover.id + '"]'));
+                    if (bsPopover) {
+                        bsPopover.hide();
+                    }
+                });
+            })
+        });
+
+        // ปิดกล่อง Popover อัตโนมัติเมื่อคลิกพื้นที่ว่างบนหน้าจอ
+        $('body').on('click', function (e) {
+            $('[data-bs-toggle="popover"]').each(function () {
+                if (!$(this).is(e.target) && $(this).has(e.target).length === 0 && $('.popover').has(e.target).length === 0) {
+                    $(this).popover('hide');
+                }
+            });
+        });
     });
 </script>
 {% endblock %}

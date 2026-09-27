@@ -86,8 +86,8 @@
                     <a href="{% url 'sales_dashboard' %}" class="btn btn-light border shadow-sm rounded-pill px-4 fw-bold text-muted d-flex align-items-center">
                         <i class="fas fa-arrow-left me-2"></i> Dashboard
                     </a>
-                    <a href="{% url 'quotation_create' %}" class="btn btn-primary shadow-sm rounded-pill px-4 fw-bold d-flex align-items-center">
-                        <i class="fas fa-plus me-2"></i> สร้างใบเสนอราคาใหม่
+                    <a href="{% url 'quotation_create' %}" class="btn btn-primary shadow-sm rounded-pill px-4 fw-bold d-flex align-items-center" onclick="disableCreateBtn(this);">
+                        <span id="createBtnText"><i class="fas fa-plus me-2"></i> สร้างใบเสนอราคา</span>
                     </a>
                 </div>
             </div>
@@ -381,8 +381,6 @@
                                     </div>
                                 </td>
 
-                                <!-- 🌟 [FIXED] อัปเดตชื่อตัวแปรให้ตรงกับ related_name='deposits' ใน Models 🌟 -->
-
                                 <!-- 🌟 1. คอลัมน์ยอดมัดจำ (ก้อนแรกเท่านั้น) 🌟 -->
                                 <td class="text-center py-3">
                                     {% if qt.is_deposit_paid %}
@@ -391,7 +389,7 @@
                                             <!-- ดึงเฉพาะก้อนแรกสุด (first) มาแสดง -->
                                             {% with first_dep=qt.deposits.first %}
                                                 <div class="mb-2 pb-1">
-                                                    <div class="fw-bold text-success" style="font-size: 0.85rem;">฿{{ first_dep.amount|floatformat:2|intcomma }}</div>
+                                                    <div class="fw-bold text-success" style="font-size: 0.85rem;">฿ {{ first_dep.amount|floatformat:2|intcomma }}</div>
 
                                                     <div class="mt-1">
                                                         <a href="{% url 'deposit_print' qt.id %}?rvd={{ first_dep.id }}" target="_blank" class="badge bg-light text-secondary border border-secondary shadow-sm text-decoration-none hover-scale">
@@ -434,6 +432,21 @@
                                         {% with installments=qt.deposits.all|slice:"1:" %}
                                             {% if installments %}
                                                 <div class="mb-2 pb-2 border-bottom">
+
+                                                    <!-- 🌟 [NEW] ยอดรวมเฉพาะค่างวด (สีเขียว) 🌟 -->
+                                                    <div class="fw-bold text-success mb-2" style="font-size: 0.85rem;" id="sum_installments_{{ qt.id }}"></div>
+
+                                                    <!-- 🧠 สคริปต์คำนวณยอดรวมค่างวดอัตโนมัติ -->
+                                                    <script>
+                                                        document.addEventListener('DOMContentLoaded', function() {
+                                                            let totalInstallment = 0;
+                                                            {% for dep in installments %}
+                                                                totalInstallment += parseFloat("{{ dep.amount }}");
+                                                            {% endfor %}
+                                                            document.getElementById('sum_installments_{{ qt.id }}').innerText = '฿ ' + totalInstallment.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                                                        });
+                                                    </script>
+
                                                     <span class="badge bg-secondary bg-opacity-10 text-secondary border rounded-pill px-2 py-1 mb-2 d-inline-block shadow-sm" style="font-size: 0.7rem;">
                                                         <i class="fas fa-list me-1"></i> มี {{ installments|length }} รายการ
                                                     </span>
@@ -455,7 +468,7 @@
 
                                                                 {% for dep in installments %}
                                                                     <div class="mb-3 pb-3 {% if not forloop.last %}border-bottom{% endif %} bg-light rounded-3 p-2 border">
-                                                                        <div class="fw-bold text-success" style="font-size: 0.95rem;">฿{{ dep.amount|floatformat:2|intcomma }}</div>
+                                                                        <div class="fw-bold text-success" style="font-size: 0.95rem;">฿ {{ dep.amount|floatformat:2|intcomma }}</div>
                                                                         <div class="mt-1">
                                                                             <a href="{% url 'deposit_print' qt.id %}?rvd={{ dep.id }}" target="_blank" class="badge bg-white text-secondary border shadow-sm text-decoration-none hover-scale">
                                                                                 <i class="fas fa-print me-1"></i>{{ dep.code }}
@@ -467,7 +480,6 @@
                                                                             {% elif dep.payment_method == 'CHECK' %}<i class="fas fa-money-check text-warning" title="เช็ค"></i>{% endif %}
 
                                                                             {% if dep.deposit_slip %}
-                                                                                <!-- data-bs-dismiss="modal" ป้องกันบัคหน้าจอดำค้างซ้อนกันเวลาดูรูปสลิปใหญ่ -->
                                                                                 <img src="{{ dep.deposit_slip.url }}" class="slip-thumbnail mx-1" data-bs-toggle="modal" data-bs-target="#slipModal" data-bs-dismiss="modal" onclick="document.getElementById('slipImageFull').src='{{ dep.deposit_slip.url }}'">
                                                                             {% endif %}
                                                                         </div>
@@ -503,14 +515,34 @@
                                 </td>
 
                                 <td class="text-end py-3">
-                                    <h6 class="fw-bold mb-1 {% if qt.status == 'CANCELLED' %}text-decoration-line-through text-muted{% else %}text-dark{% endif %}" style="letter-spacing: 0.5px;">
-                                        ฿{{ qt.grand_total|floatformat:2|intcomma }}
+                                    <!-- 1. ยอดสุทธิตามใบเสนอราคา -->
+                                    <h6 class="fw-bold mb-1 {% if qt.status == 'CANCELLED' %}text-decoration-line-through text-muted{% else %}text-dark{% endif %}" style="letter-spacing: 0.5px;" title="ยอดสุทธิตามใบเสนอราคา">
+                                        ฿ {{ qt.grand_total|floatformat:2|intcomma }}
                                     </h6>
 
+                                    <!-- 2. ยอดรับเงินมาแล้วทั้งหมด (สีเขียว) -->
+                                    {% if qt.deposit_amount > 0 and qt.status != 'CANCELLED' %}
+                                        <div class="text-success fw-bold mt-1" style="font-size: 0.75rem;" title="รับเงินมาแล้วทั้งหมด (ก้อนแรก + ค่างวด)">
+                                            <i class="fas fa-hand-holding-usd me-1"></i>ชำระมัดจำแล้ว: ฿ {{ qt.deposit_amount|floatformat:2|intcomma }}
+                                        </div>
+                                    {% endif %}
+
+                                    <!-- 🌟 3. [FIXED] อัปเดตสถานะและเพิ่มลิงก์ทะลุมิติ 🌟 -->
                                     {% if qt.status == 'CONVERTED' %}
-                                        <div class="text-success fw-bold" style="font-size: 0.75rem;"><i class="fas fa-check-circle me-1"></i>ชำระครบแล้ว</div>
+                                        {% if qt.invoice and qt.invoice.status == 'PAID' %}
+                                            <!-- กรณี 1: เปิดบิลแล้ว และบัญชีลงรับเงินครบแล้ว -->
+                                            <div class="text-success fw-bold mt-1" style="font-size: 0.75rem;"><i class="fas fa-check-double me-1"></i>ชำระครบทุกงวดแล้ว</div>
+                                        {% else %}
+                                            <!-- กรณี 2: เปิดบิลแล้ว แต่ยังค้างเงินอยู่ (คลิกเพื่อกระโดดไปหน้า Invoice List) -->
+                                            <a href="{% url 'invoice_list' %}?q={{ qt.invoice.code }}" class="text-danger fw-bold mt-1 text-decoration-none d-block hover-scale" style="font-size: 0.75rem;" title="คลิกเพื่อไปหน้าบันทึกรับเงิน">
+                                                <i class="fas fa-exclamation-circle me-1"></i>ชำระยอดค้าง: ฿ {{ qt.balance_due|floatformat:2|intcomma }}
+                                            </a>
+                                        {% endif %}
                                     {% elif qt.balance_due > 0 and qt.status != 'CANCELLED' and qt.status != 'DRAFT' %}
-                                        <div class="text-danger fw-bold" style="font-size: 0.75rem;">ค้างชำระ: ฿{{ qt.balance_due|floatformat:2|intcomma }}</div>
+                                        <!-- กรณี 3: ยังไม่เปิดบิล โชว์ยอดค้างชำระปกติ -->
+                                        <div class="text-danger fw-bold mt-1" style="font-size: 0.75rem;" title="ยอดที่ต้องเรียกเก็บเพิ่ม">
+                                            ค้างชำระ: ฿ {{ qt.balance_due|floatformat:2|intcomma }}
+                                        </div>
                                     {% endif %}
                                 </td>
 
@@ -845,5 +877,21 @@
 
         cb(start, end);
     });
+</script>
+<!-- 🌟 [NEW] สคริปต์ป้องกันการกดสร้างเอกสารเบิ้ล 🌟 -->
+<script>
+    function disableCreateBtn(btn) {
+        // เช็คว่าปุ่มถูกกดไปแล้วหรือยัง (ป้องกันกดรัว)
+        if (btn.classList.contains('disabled')) {
+            return false;
+        }
+
+        // ล็อคปุ่มและเปลี่ยนข้อความ
+        btn.classList.add('disabled');
+        document.getElementById('createBtnText').innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> กำลังสร้างเอกสาร...';
+
+        // ปล่อยให้ลิงก์ทำงานต่อไป
+        return true;
+    }
 </script>
 {% endblock %}

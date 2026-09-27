@@ -498,39 +498,51 @@ def solar_record_deposit(request, qt_id):
 
         method = request.POST.get('deposit_method', 'TRANSFER')
         date_str = request.POST.get('deposit_date')
+        slip = request.FILES.get('deposit_slip')
 
         if amount > 0:
-            qt.deposit_amount = amount
-            qt.deposit_method = method
+            # แปลงวันที่
             if date_str:
-                # ลองแปลงวันที่จากรูปแบบที่ได้รับจาก Flatpickr
-                try:
-                    qt.deposit_date = datetime.datetime.strptime(date_str, '%Y-%m-%d').date()
-                except ValueError:
-                    qt.deposit_date = timezone.now().date()
-            else:
-                qt.deposit_date = timezone.now().date()
+                try: dep_date = datetime.datetime.strptime(date_str, '%Y-%m-%d').date()
+                except ValueError: dep_date = timezone.now().date()
+            else: dep_date = timezone.now().date()
 
+            # 🌟 [NEW] สร้างรหัส RVD-SOL (งวด)
+            tz_bkk = pytz.timezone('Asia/Bangkok')
+            now_bkk = timezone.now().astimezone(tz_bkk)
+            thai_year = (now_bkk.year + 543) % 100
+            prefix = f"RVD-SOL-{thai_year:02d}{now_bkk.strftime('%m')}"
+
+            from .models import SolarQuotationDeposit
+            last_deposit = SolarQuotationDeposit.objects.filter(code__startswith=prefix).order_by('code').last()
+            seq = int(last_deposit.code.split('-')[-1]) + 1 if last_deposit else 1
+            new_rvd_code = f"{prefix}-{seq:03d}"
+
+            # 🌟 [NEW] สร้างเรคคอร์ดใหม่ลงตารางลูก (SolarQuotationDeposit) ทันที
+            SolarQuotationDeposit.objects.create(
+                code=new_rvd_code,
+                quotation=qt,
+                amount=amount,
+                deposit_date=dep_date,
+                payment_method=method,
+                deposit_slip=slip
+            )
+
+            # อัปเดตสถานะใบเสนอราคาแม่
             qt.is_deposit_paid = True
+            qt.is_deposit_verified = False # 🌟 [FIXED] เพิ่มบรรทัดนี้: สั่งดึงบิลกลับไปขึ้นแจ้งเตือนที่หน้าบัญชีอีกครั้ง
 
-            # 🌟 [NEW] สมองกลสร้างรหัส RVD-SOL ให้โดยอัตโนมัติ (เหมือนระบบบ้านน็อคดาวน์) 🌟
-            if not getattr(qt, 'deposit_code', None):
-                tz_bkk = pytz.timezone('Asia/Bangkok')
-                now_bkk = timezone.now().astimezone(tz_bkk)
-                thai_year = (now_bkk.year + 543) % 100
-                prefix = f"RVD-SOL-{thai_year:02d}{now_bkk.strftime('%m')}"
+            if qt.deposit_amount == 0:
+                qt.deposit_amount = amount
+                qt.deposit_code = new_rvd_code
+                qt.deposit_method = method
+                qt.deposit_date = dep_date
+                if slip: qt.deposit_slip = slip
 
-                # หาเลขรันล่าสุดของเดือนนี้ในตารางใบเสนอราคาโซล่า
-                last_deposit = SolarQuotation.objects.filter(deposit_code__startswith=prefix).order_by('deposit_code').last()
-                seq = int(last_deposit.deposit_code.split('-')[-1]) + 1 if last_deposit else 1
-                qt.deposit_code = f"{prefix}-{seq:03d}"
-
-            if 'deposit_slip' in request.FILES:
-                qt.deposit_slip = request.FILES['deposit_slip']
             qt.save()
-            messages.success(request, f"💰 บันทึกรับมัดจำ {amount:,.2f} บาท และสร้างใบเสร็จ {qt.deposit_code} สำหรับใบเสนอราคา {qt.code} เรียบร้อยแล้ว")
+            messages.success(request, f"💰 บันทึกรับค่างวด {amount:,.2f} บาท และสร้างใบเสร็จ {new_rvd_code} สำหรับ {qt.code} เรียบร้อยแล้ว")
         else:
-            messages.error(request, "❌ จำนวนเงินมัดจำต้องมากกว่า 0")
+            messages.error(request, "❌ จำนวนเงินต้องมากกว่า 0")
 
     return redirect('solar_quotation_list')
 
@@ -946,8 +958,92 @@ def solar_customer_sign_deposit(request, token):
 def solar_deposit_print(request, qt_id):
     qt = get_object_or_404(SolarQuotation, pk=qt_id)
     company = CompanyInfo.objects.first()
-    balance_due = qt.grand_total - qt.deposit_amount
-    return render(request, 'solar_sales/deposit_print.html', {'qt': qt, 'company': company, 'balance_due': balance_due})
+
+    # 🌟 [NEW] ดึงข้อมูล RVD ตามรหัสงวดที่กดมาจากหน้าตาราง 🌟
+    rvd_id = request.GET.get('rvd')
+    from .models import SolarQuotationDeposit
+
+    if rvd_id:
+        try:
+            specific_deposit = SolarQuotationDeposit.objects.get(pk=rvd_id, quotation=qt)
+            deposit_amount = specific_deposit.amount
+            rvd_code = specific_deposit.code
+            rvd_date = specific_deposit.deposit_date
+            rvd_method = specific_deposit.get_payment_method_display()
+        except SolarQuotationDeposit.DoesNotExist:
+            deposit_amount = qt.deposit_amount if qt.deposit_amount else Decimal('0.00')
+            rvd_code = qt.deposit_code if qt.deposit_code else f"QT-SOL-{qt.code.split('-')[-1]}"
+            rvd_date = qt.deposit_date
+            rvd_method = "ไม่ระบุ"
+    else:
+        # ถ้าไม่ได้ส่ง rvd มา ให้พยายามดึงก้อนแรกสุด
+        first_dep = qt.solar_deposits.first()
+        if first_dep:
+            deposit_amount = first_dep.amount
+            rvd_code = first_dep.code
+            rvd_date = first_dep.deposit_date
+            rvd_method = first_dep.get_payment_method_display()
+        else:
+            deposit_amount = qt.deposit_amount if qt.deposit_amount else Decimal('0.00')
+            rvd_code = qt.deposit_code if qt.deposit_code else f"QT-SOL-{qt.code.split('-')[-1]}"
+            rvd_date = qt.deposit_date
+            rvd_method = "ไม่ระบุ"
+
+    # คำนวณยอดคงเหลือ
+    grand_total = qt.grand_total if qt.grand_total else Decimal('0.00')
+
+    # 🌟 ยอดรวมที่จ่ายมาแล้วทั้งหมด 🌟
+    total_paid_all = qt.solar_deposits.aggregate(Sum('amount'))['amount__sum'] or Decimal('0.00')
+    if total_paid_all == 0 and qt.deposit_amount > 0:
+        total_paid_all = qt.deposit_amount # สำหรับบิลเก่า
+
+    balance_due = grand_total - total_paid_all
+
+    # 🌟 ฟังก์ชันแปลงตัวเลขเป็นคำอ่านภาษาไทย
+    def get_thai_baht_text(number):
+        if number == 0: return "ศูนย์บาทถ้วน"
+        import math
+        number = round(float(number), 2)
+        baht = math.floor(number)
+        satang = int(round((number - baht) * 100))
+        def read_num(n):
+            if n == 0: return ""
+            numbers = ["", "หนึ่ง", "สอง", "สาม", "สี่", "ห้า", "หก", "เจ็ด", "แปด", "เก้า"]
+            positions = ["", "สิบ", "ร้อย", "พัน", "หมื่น", "แสน", "ล้าน"]
+            s = str(n)
+            length = len(s)
+            res = ""
+            for i, digit in enumerate(s):
+                val = int(digit)
+                pos = length - i - 1
+                if val == 0: continue
+                if pos == 0 and val == 1 and length > 1: res += "เอ็ด"
+                elif pos == 1 and val == 1: res += "สิบ"
+                elif pos == 1 and val == 2: res += "ยี่สิบ"
+                else: res += numbers[val] + positions[pos]
+            return res
+        res = ""
+        if baht > 0: res += read_num(baht) + "บาท"
+        if satang > 0: res += read_num(satang) + "สตางค์"
+        else: res += "ถ้วน"
+        return res
+
+    grand_total_text = get_thai_baht_text(grand_total)
+    deposit_amount_text = get_thai_baht_text(deposit_amount)
+    balance_due_text = get_thai_baht_text(balance_due)
+
+    return render(request, 'solar_sales/deposit_print.html', {
+        'qt': qt,
+        'company': company,
+        'balance_due': balance_due,
+        'balance_due_text': balance_due_text,
+        'grand_total_text': grand_total_text,
+        'deposit_amount': deposit_amount,
+        'deposit_amount_text': deposit_amount_text,
+        'rvd_code': rvd_code,
+        'rvd_date': rvd_date,
+        'rvd_method': rvd_method
+    })
 
 # ==========================================
 # 👷‍♂️ 4. ระบบสำรวจหน้างานและเบิกจ่าย (Solar Survey & Expense)

@@ -1,6 +1,6 @@
 {% extends 'core/base.html' %}
 {% load static %}
-{% load humanize %} 
+{% load humanize %}
 
 {% block content %}
 <div class="container py-4">
@@ -14,11 +14,11 @@
 
     <div class="card shadow-sm border-0 rounded-4 mb-4" style="background-color: #f0f7ff; border-left: 5px solid #0d6efd !important;">
         <div class="card-body p-4">
-            <form method="POST">
+            <form method="POST" id="ppoForm" onsubmit="return disableCalcBtn();">
                 {% csrf_token %}
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <h6 class="fw-bold text-dark mb-0"><i class="fas fa-tasks text-primary me-2"></i>รายการใบสั่งผลิต (JOB) ที่ค้างสั่งของ</h6>
-                    <button type="submit" class="btn btn-primary fw-bold shadow-sm rounded-pill px-4">
+                    <button type="submit" id="calcBtn" class="btn btn-primary fw-bold shadow-sm rounded-pill px-4">
                         <i class="fas fa-calculator me-2"></i> กดรวมยอดและคำนวณวัตถุดิบ
                     </button>
                 </div>
@@ -70,7 +70,7 @@
             <h6 class="fw-bold mb-0 text-dark">
                 <i class="fas fa-store text-warning me-2"></i>ร้านค้า: <span class="text-primary">{{ data.name }}</span>
             </h6>
-            <button type="button" class="btn btn-sm btn-success rounded-pill px-3 shadow-sm fw-bold" 
+            <button type="button" class="btn btn-sm btn-success rounded-pill px-3 shadow-sm fw-bold"
                     onclick="transferToPO('{{ sup_id }}', '{{ ppo_code }}', '{{ data.items|escapejs }}')">
                 <i class="fas fa-paper-plane me-1"></i> ส่งไปทำใบ PO ร้านนี้
             </button>
@@ -80,19 +80,23 @@
                 <thead class="bg-light small text-secondary">
                     <tr>
                         <th class="ps-4">วัตถุดิบ</th>
-                        <th class="text-center">จำนวนรวมที่ต้องใช้</th>
+                        <th class="text-center">ต้องใช้ทั้งหมด</th>
+                        <th class="text-center text-success">มีในคลัง</th>
+                        <th class="text-center text-danger">ต้องสั่งซื้อ (หักลบแล้ว)</th>
                         <th class="text-end">ราคา/หน่วย</th>
                         <th class="text-end pe-4">รวมเป็นเงิน</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for item in data.items %}
-                    <tr>
+                    <tr {% if item.qty <= 0 %}class="bg-light opacity-50"{% endif %}>
                         <td class="ps-4">
                             <div class="fw-bold text-dark">{{ item.product_name }}</div>
                             <small class="text-muted">{{ item.product_code }}</small>
                         </td>
-                        <td class="text-center fw-bold">{{ item.qty|floatformat:"-2"|intcomma }}</td>
+                        <td class="text-center fw-bold">{{ item.total_needed|floatformat:"-2"|intcomma }}</td>
+                        <td class="text-center fw-bold text-success">{{ item.in_stock|floatformat:"-2"|intcomma }}</td>
+                        <td class="text-center fw-bold text-danger fs-6">{{ item.qty|floatformat:"-2"|intcomma }}</td>
                         <td class="text-end">{{ item.cost|floatformat:"2"|intcomma }}</td>
                         <td class="text-end pe-4 fw-bold text-primary">{{ item.total|floatformat:"2"|intcomma }}</td>
                     </tr>
@@ -110,7 +114,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // สคริปต์สำหรับปุ่ม "เลือกทั้งหมด" (Check All)
     const selectAllCheckbox = document.getElementById('selectAll');
     const jobCheckboxes = document.querySelectorAll('.job-checkbox');
-    
+
     if(selectAllCheckbox) {
         selectAllCheckbox.addEventListener('change', function() {
             jobCheckboxes.forEach(cb => cb.checked = this.checked);
@@ -127,9 +131,26 @@ function transferToPO(supplierId, ppoRef, itemsData) {
         total: item.total
     }));
     const itemsJson = encodeURIComponent(JSON.stringify(cleanItems));
-    
+
     // วาร์ปไปยังหน้าสร้าง PO ใหม่ พร้อมหอบของที่รวมยอดแล้วไปวางใส่ฟอร์ม
     window.location.href = `/purchasing/po/create/?ppo_ref=${ppoRef}&supplier_id=${supplierId}&items_data=${itemsJson}`;
+}
+// 🌟 [แก้ไข 2]: สคริปต์ล็อคปุ่มป้องกัน Double Submit 🌟
+function disableCalcBtn() {
+    // เช็คว่าผู้ใช้ติ๊กเลือก JOB หรือยัง
+    const checkedJobs = document.querySelectorAll('.job-checkbox:checked').length;
+
+    if (checkedJobs === 0) {
+        // ถ้าไม่ได้ติ๊กเลย แจ้งเตือนและไม่ต้องล็อคปุ่ม
+        alert("กรุณาเลือกใบสั่งผลิตอย่างน้อย 1 รายการครับ");
+        return false;
+    }
+
+    // ล็อคปุ่มและเปลี่ยนข้อความแสดงการโหลด
+    var btn = document.getElementById('calcBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> กำลังรวมยอดวัตถุดิบ...';
+    return true; // อนุญาตให้ Form โหลดทำงานต่อ
 }
 </script>
 {% endblock %}

@@ -40,11 +40,17 @@ class Product(models.Model):
 
     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="หมวดหมู่สินค้า")
     rm_category = models.ForeignKey(RawMaterialCategory, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="หมวดหมู่วัตถุดิบ (แผนก)")
-    sub_category = models.ForeignKey(SubCategory, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="หมวดหมู่ย่อย") # 🌟 เพิ่มแล้ว
+    sub_category = models.ForeignKey(SubCategory, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="หมวดหมู่ย่อย")
 
     cost_price = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="ราคาทุน")
     sell_price = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="ราคาขาย")
-    stock_qty = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name="จำนวนคงเหลือ")
+
+    # 🌟 [UPDATE] กระเป๋าที่ 1: ยอดพร้อมขาย (เซลส์เห็น / ตัดเมื่อเปิดบิล)
+    stock_qty = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name="ยอดพร้อมขาย (Available)")
+
+    # 🌟 [NEW] กระเป๋าที่ 2: ยอดจริงหน้าลาน (ผลิต, ขนส่งเห็น / ตัดเมื่อรถออก)
+    physical_qty = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name="ยอดจริงหน้าลาน (Physical)")
+
     min_level = models.DecimalField(max_digits=12, decimal_places=2, default=5, verbose_name="จุดสั่งซื้อ (Low Stock)")
 
     supplier = models.ForeignKey(Supplier, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="ซัพพลายเออร์หลัก (Legacy)")
@@ -115,7 +121,7 @@ class InventoryDoc(models.Model):
 
     # 🌟 [FIXED] เพิ่มฟังก์ชันแสดงชื่อเอกสารและ Meta ที่ตกหล่นกลับมาแล้ว 🌟
     def __str__(self): return f"{self.doc_no} ({self.get_doc_type_display()})"
-    
+
     class Meta:
         verbose_name = "3. เอกสารคลังสินค้า"
         verbose_name_plural = "3. เอกสารคลังสินค้า (Docs)"
@@ -126,21 +132,40 @@ class InventoryDoc(models.Model):
 class StockMovement(models.Model):
     doc = models.ForeignKey(InventoryDoc, on_delete=models.CASCADE, related_name='movements', verbose_name="เลขที่เอกสาร", null=True, blank=True)
     product = models.ForeignKey(Product, on_delete=models.CASCADE, verbose_name="สินค้า")
-
-    # 🌟 [UPDATE] ปลดล็อคให้รองรับทศนิยม 2 ตำแหน่ง 🌟
     quantity = models.DecimalField(max_digits=12, decimal_places=2, verbose_name="จำนวน")
 
-    movement_type = models.CharField(max_length=10, choices=[('IN', 'เข้า'), ('OUT', 'ออก')], verbose_name="ประเภท")
+    # 🌟 [UPDATE] เพิ่มประเภทการเคลื่อนไหวแบบใหม่
+    MOVEMENT_CHOICES = [
+        ('IN', 'เข้า (รับเข้าคลัง)'),
+        ('OUT', 'ออก (เบิก/ปรับปรุง)'),
+        ('RESERVE', 'จอง (ตัดยอดพร้อมขาย)'),     # เปิดบิลขาย
+        ('DISPATCH', 'ส่งมอบ (ตัดยอดหน้าลาน)')    # ขนส่งปล่อยรถ
+    ]
+    movement_type = models.CharField(max_length=15, choices=MOVEMENT_CHOICES, verbose_name="ประเภท")
+
     reference_doc = models.CharField(max_length=50, blank=True, verbose_name="อ้างอิงเดิม (Legacy)")
     note = models.TextField(blank=True, verbose_name="หมายเหตุ")
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, verbose_name="ผู้ทำรายการ")
     created_at = models.DateTimeField(default=timezone.now, verbose_name="เวลาบันทึก")
 
     def save(self, *args, **kwargs):
+        is_new = self.pk is None  # ป้องกันการบวกลบซ้ำหากมีการกด Edit ประวัติ
         super().save(*args, **kwargs)
-        if self.movement_type == 'IN': self.product.stock_qty += self.quantity
-        elif self.movement_type == 'OUT': self.product.stock_qty -= self.quantity
-        self.product.save()
+
+        if is_new:
+            # 🌟 [NEW LOGIC] แยกระบบตัดสต็อกเป็น 2 มิติ
+            if self.movement_type == 'IN':
+                self.product.stock_qty += self.quantity
+                self.product.physical_qty += self.quantity
+            elif self.movement_type == 'OUT':
+                self.product.stock_qty -= self.quantity
+                self.product.physical_qty -= self.quantity
+            elif self.movement_type == 'RESERVE':
+                self.product.stock_qty -= self.quantity  # ตัดแค่ยอดพร้อมขาย
+            elif self.movement_type == 'DISPATCH':
+                self.product.physical_qty -= self.quantity # ตัดแค่ยอดหน้าลาน
+
+            self.product.save()
 
     def __str__(self): return f"{self.product.name} ({self.movement_type} : {self.quantity})"
     class Meta:

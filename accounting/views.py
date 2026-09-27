@@ -8,7 +8,7 @@ from .models import Income, Expense
 
 from sales.models import POSOrder, Invoice, Quotation
 # 🌟 [FIXED] เพิ่มการ Import SolarInvoice เข้ามาเพื่อให้ระบบรู้จัก 🌟
-from solar_sales.models import SolarQuotation, SolarInvoice
+from solar_sales.models import SolarQuotation, SolarInvoice, SolarQuotationDeposit
 from purchasing.models import PurchaseOrder
 from solar_purchasing.models import SolarPurchaseOrder
 from manufacturing.models import LogisticsClaim, BlueprintClaim
@@ -30,7 +30,7 @@ def accounting_dashboard(request):
     from sales.models import QuotationDeposit
     pending_deposits_quotation = QuotationDeposit.objects.filter(is_verified=False).count()
 
-    pending_deposits_solar = SolarQuotation.objects.filter(is_deposit_paid=True, is_deposit_verified=False).count()
+    pending_deposits_solar = SolarQuotationDeposit.objects.filter(is_verified=False).count()
     pending_deposits = pending_deposits_quotation + pending_deposits_solar
 
     pending_sales = (
@@ -94,7 +94,7 @@ def verification_hub(request, task_type):
         # 🌟 [FIXED] ดึงข้อมูลสลิปมัดจำ (RVD) ที่ยังไม่ได้ตรวจมาแสดงแทน (สำหรับน็อคดาวน์)
         from sales.models import QuotationDeposit
         rvd_list = list(QuotationDeposit.objects.filter(is_verified=False))
-        solar_list = list(SolarQuotation.objects.filter(is_deposit_paid=True, is_deposit_verified=False))
+        solar_list = list(SolarQuotationDeposit.objects.filter(is_verified=False))
 
         # เพิ่มป้ายกำกับแยกระบบให้บัญชีเห็นชัดเจน
         for item in rvd_list: item.system_type = 'quotation_rvd'
@@ -160,24 +160,31 @@ def approve_transaction(request, task_type, item_id):
             doc_system = request.POST.get('doc_system', '').strip()
 
             if doc_system == 'solar':
-                qt = get_object_or_404(SolarQuotation, id=item_id)
-                qt.is_deposit_verified = True
-                qt.save()
+                dep = get_object_or_404(SolarQuotationDeposit, id=item_id)
+                dep.is_verified = True
+                dep.save()
 
-                # 🌟 [NEW] ระบบอัตโนมัติ: สร้างใบคุมสิทธิ์ 2% ส่งไปที่ศูนย์ตั้งเบิกโซล่าเซลล์
-                from solar_sales.models import SolarCommissionTicket
-                from decimal import Decimal
-                base_amount = qt.subtotal - qt.discount + qt.survey_fee
-                comm_amount = base_amount * Decimal('0.02')
+                # อัปเดตตรวจสอบตัวแม่ ถ้ายอดค้างตรวจหมดแล้ว
+                qt = dep.quotation
+                unverified_count = qt.solar_deposits.filter(is_verified=False).count()
+                if unverified_count == 0:
+                    qt.is_deposit_verified = True
+                    qt.save()
 
-                SolarCommissionTicket.objects.get_or_create(
-                    ticket_type='2%',
-                    quotation_ref=qt,
-                    defaults={'base_amount': base_amount, 'commission_amount': comm_amount}
-                )
+                    # 🌟 [NEW] ระบบอัตโนมัติ: สร้างใบคุมสิทธิ์ 2% ส่งไปที่ศูนย์ตั้งเบิกโซล่าเซลล์
+                    from solar_sales.models import SolarCommissionTicket
+                    from decimal import Decimal
+                    base_amount = qt.subtotal - qt.discount + qt.survey_fee
+                    comm_amount = base_amount * Decimal('0.02')
 
-                Income.objects.create(title=f"รับมัดจำใบเสนอราคาโซล่า #{qt.code}", amount=qt.deposit_amount, date=timezone.now().date(), note="อนุมัติโดยฝ่ายบัญชี")
-                messages.success(request, f"✅ ยืนยันรับมัดจำโซล่า {qt.code} พร้อมสร้างโควตาเบิก 2% สำเร็จ!")
+                    SolarCommissionTicket.objects.get_or_create(
+                        ticket_type='2%',
+                        quotation_ref=qt,
+                        defaults={'base_amount': base_amount, 'commission_amount': comm_amount}
+                    )
+
+                Income.objects.create(title=f"รับมัดจำ RVD โซล่า #{dep.code} (อ้างอิง: {qt.code})", amount=dep.amount, date=timezone.now().date(), note="อนุมัติโดยฝ่ายบัญชี")
+                messages.success(request, f"✅ ยืนยันรับมัดจำโซล่า {dep.code} เข้าสู่ระบบบัญชีเรียบร้อย")
             else:
                 # 🌟 [FIXED] อนุมัติสลิป RVD ทีละใบสำหรับน็อคดาวน์
                 from sales.models import QuotationDeposit

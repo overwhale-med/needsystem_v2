@@ -17,7 +17,7 @@
                 </div>
 
                 <div class="card-body p-4">
-                    <form method="post" autocomplete="off">
+                    <form method="post" autocomplete="off" id="quotationForm" onsubmit="return disableSubmitBtn();">
                         {% csrf_token %}
 
                         <input type="hidden" name="customer_id" id="id_customer_id_hidden">
@@ -92,7 +92,7 @@
 
                         <div class="d-flex justify-content-between pt-3 border-top">
                             <a href="{% url 'quotation_list' %}" class="btn btn-light text-muted fw-bold rounded-pill px-4">ยกเลิก</a>
-                            <button type="submit" class="btn btn-success px-5 py-2 shadow fw-bold rounded-pill">
+                            <button type="submit" id="submitBtn" class="btn btn-success px-5 py-2 shadow fw-bold rounded-pill">
                                 <i class="fas fa-save me-2"></i> บันทึกและไปต่อ <i class="fas fa-arrow-right ms-2"></i>
                             </button>
                         </div>
@@ -121,10 +121,10 @@
             var $results = $('#search_results');
             var $btn = $('#btn_search');
             if (!query) { alert("กรุณาพิมพ์คำค้นหาก่อนครับ"); return; }
-            
+
             $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> กำลังหา...');
             $results.html('').show();
-            
+
             $.ajax({
                 url: "{% url 'api_search_customer' %}",
                 data: { 'q': query },
@@ -135,11 +135,11 @@
                             // ✅ ตรวจสอบว่ามีค่าไหม ถ้าไม่มีให้เป็นค่าว่าง (กัน undefined)
                             var tax = cus.tax_id ? cus.tax_id : '';
                             var phone = cus.phone ? cus.phone : '';
-                            
+
                             var item = `<a href="#" class="list-group-item list-group-item-action p-3 customer-item"
                                         data-id="${cus.id}"
                                         data-name="${cus.name}"
-                                        data-tax="${tax}" 
+                                        data-tax="${tax}"
                                         data-phone="${phone}"
                                         data-address="${cus.address}">
                                         <div class="d-flex w-100 justify-content-between">
@@ -150,13 +150,13 @@
                                         </a>`;
                             $results.append(item);
                         });
-                    } else { 
+                    } else {
                         $results.append('<div class="list-group-item text-center text-muted py-3">ไม่พบข้อมูลลูกค้า</div>');
                     }
                 },
-                error: function() { 
+                error: function() {
                     $btn.prop('disabled', false).html('ค้นหา');
-                    alert('เกิดข้อผิดพลาดในการเชื่อมต่อ'); 
+                    alert('เกิดข้อผิดพลาดในการเชื่อมต่อ');
                 }
             });
         }
@@ -183,4 +183,19 @@
     .datepicker { background-color: #fff !important; cursor: pointer; }
     .is-invalid { border-color: #dc3545 !important; background-image: none !important; }
 </style>
+<!-- 🌟 [NEW] สคริปต์ป้องกันการกด Submit ฟอร์มเบิ้ล 🌟 -->
+<script>
+    function disableSubmitBtn() {
+        var btn = document.getElementById('submitBtn');
+        var form = document.getElementById('quotationForm');
+
+        // ถ้าฟอร์มกรอกครบและผ่าน Validate ของเบราว์เซอร์แล้ว
+        if (form.checkValidity()) {
+            btn.disabled = true; // ล็อคปุ่ม
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> กำลังบันทึก...'; // เปลี่ยนข้อความ
+            return true; // ยอมให้ส่งฟอร์ม
+        }
+        return false; // ถ้ากรอกไม่ครบ ไม่ให้ส่งและไม่ล็อคปุ่ม
+    }
+</script>
 {% endblock %}

@@ -107,10 +107,17 @@ def po_list(request):
     start_date = request.GET.get('start_date')
     end_date = request.GET.get('end_date')
 
+    # 🌟 [แก้ไข]: กำหนด Timezone เป็นเวลาประเทศไทย (Bangkok)
+    import pytz
+    tz_bkk = pytz.timezone('Asia/Bangkok')
+    today_bkk = timezone.now().astimezone(tz_bkk).date()
+
     if not start_date or start_date == 'None':
-        start_date = (timezone.now().date() - datetime.timedelta(days=6)).strftime('%Y-%m-%d')
+        # ย้อนหลัง 6 วันจากวันปัจจุบันในไทย
+        start_date = (today_bkk - datetime.timedelta(days=6)).strftime('%Y-%m-%d')
     if not end_date or end_date == 'None':
-        end_date = timezone.now().date().strftime('%Y-%m-%d')
+        # ใช้วันปัจจุบันในไทยเป็นค่า Default
+        end_date = today_bkk.strftime('%Y-%m-%d')
 
     pos = pos.filter(date__gte=start_date, date__lte=end_date)
 
@@ -428,6 +435,44 @@ def ppo_detail(request, pk):
         'all_suppliers': all_suppliers,
         'created_pos': created_pos,
         'is_fully_ordered': is_fully_ordered # 🌟 ส่งตัวแปรนี้ไปหน้าจอ
+    })
+
+@login_required
+def print_ppo_document(request, ppo_id):
+    if not can_view_and_pay(request.user): return redirect('dashboard')
+
+    ppo = get_object_or_404(PurchasePreparation, pk=ppo_id)
+    company = CompanyInfo.objects.first()
+
+    # 🌟 รวบรวมข้อมูลวัตถุดิบทั้งหมดที่ต้องใช้ใน PPO นี้ เพื่อนำไปพิมพ์ 🌟
+    material_reqs = {}
+    for job in ppo.production_orders.all():
+        bom = BOM.objects.filter(product=job.product).first()
+        if bom:
+            for item in bom.items.all():
+                mat_id = item.raw_material.id
+                if mat_id not in material_reqs:
+                    material_reqs[mat_id] = {
+                        'product': item.raw_material,
+                        'needed': Decimal('0'),
+                        'cost': item.raw_material.cost_price or Decimal('0'),
+                        'total': Decimal('0')
+                    }
+                material_reqs[mat_id]['needed'] += Decimal(str(item.quantity))
+                material_reqs[mat_id]['total'] = material_reqs[mat_id]['needed'] * material_reqs[mat_id]['cost']
+
+    materials_list = []
+    grand_total = Decimal('0')
+
+    for mat_id, data in material_reqs.items():
+        materials_list.append(data)
+        grand_total += data['total']
+
+    return render(request, 'purchasing/ppo_print.html', {
+        'ppo': ppo,
+        'company': company,
+        'materials_list': materials_list,
+        'grand_total': grand_total
     })
 
 @login_required

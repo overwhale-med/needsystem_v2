@@ -8,6 +8,9 @@
 <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.min.js"></script>
 <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css" />
 
+<!-- 🌟 [NEW] นำเข้า Flatpickr สำหรับปฏิทินเดี่ยว 🌟 -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+
 <style>
     /* สไตล์สีปุ่มและป้ายสถานะ (จอปกติ) */
     .btn-light-hover:hover { background-color: #e9ecef; }
@@ -32,6 +35,9 @@
 
     /* ซ่อน input แบบเดิมเพื่อส่งค่า */
     .hidden-date { display: none; }
+    
+    /* สไตล์สำหรับ Flatpickr */
+    .flatpickr-input { background-color: #f8f9fa !important; cursor: pointer; font-size: 0.85rem; }
 
     /* 🌟 สไตล์เฉพาะตอนสั่งพิมพ์ (Audit-Ready Print Report) 🌟 */
     @media print {
@@ -474,7 +480,8 @@
 
                                                 <div class="mb-3">
                                                     <label class="form-label fw-bold text-muted">วันที่รับเงิน</label>
-                                                    <input type="date" name="payment_date" class="form-control bg-light" value="{% now 'Y-m-d' %}" required>
+                                                    <!-- 🌟 [FIXED] อัปเดตช่องวันที่ให้ใช้ Flatpickr แทน Date Picker ของระบบ 🌟 -->
+                                                    <input type="text" name="payment_date" class="form-control bg-light datepicker" value="{% now 'Y-m-d' %}" required>
                                                 </div>
 
                                                 <div class="mb-3">
@@ -561,6 +568,9 @@
     </div>
 </div>
 
+<!-- 🌟 [NEW] นำเข้า Flatpickr 🌟 -->
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+
 <!-- 🌟 สคริปต์ Date Range Picker 🌟 -->
 <script type="text/javascript">
 $(function() {
@@ -634,6 +644,14 @@ $(function() {
         parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
         input.value = parts.join('.');
     }
+    
+    // 🌟 [NEW] ปลุกการทำงานของ Flatpickr สำหรับปฏิทินเดี่ยว 🌟
+    flatpickr(".datepicker", { 
+        dateFormat: "Y-m-d", 
+        altInput: true, 
+        altFormat: "d/m/Y", 
+        allowInput: true 
+    });
 });
 </script>
 {% endblock %}

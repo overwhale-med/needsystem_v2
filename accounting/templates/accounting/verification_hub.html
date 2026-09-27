@@ -112,7 +112,7 @@
                                     {% endif %}
                                 </div>
                                 <div class="text-muted small mb-1" style="font-size: 0.75rem;"><i class="far fa-clock me-1"></i>
-                                    {% if item.system_type == 'quotation_rvd' %}
+                                    {% if item.system_type == 'quotation_rvd' or item.system_type == 'solar' %}
                                         {{ item.deposit_date|date:"d/m/Y" }}
                                     {% elif item.total_amount %}
                                         {{ item.created_at|date:"d/m/Y H:i" }}
@@ -140,7 +140,7 @@
                                 <div class="fw-bold text-dark text-truncate" style="max-width: 200px;">
                                     {% if task_type == 'po_payments' or task_type == 'solar_po_payments' %}
                                         {{ item.supplier.name|default:"ไม่ระบุร้านค้า" }}
-                                    {% elif item.system_type == 'quotation_rvd' %}
+                                    {% elif item.system_type == 'quotation_rvd' or item.system_type == 'solar' %}
                                         {% if item.quotation.customer %}{{ item.quotation.customer.name }}{% else %}{{ item.quotation.customer_name|default:"ลูกค้าทั่วไป (Walk-in)" }}{% endif %}
                                     {% else %}
                                         {% if item.customer %}{{ item.customer.name }}{% else %}{{ item.customer_name|default:"ลูกค้าทั่วไป (Walk-in)" }}{% endif %}
@@ -283,9 +283,9 @@
                                     <span class="fw-bold text-primary fs-6">
                                         {% if task_type == 'deposits' %}
 
-                                            <!-- 🌟 1. กรณี: โซล่าเซลล์ (ใช้ระบบเดิม เก็บในตัวมันเอง) 🌟 -->
+                                            <!-- 🌟 1. กรณี: โซล่าเซลล์ (ใช้ตารางลูกใหม่) 🌟 -->
                                             {% if item.system_type == 'solar' %}
-                                                ฿ {{ item.deposit_amount|floatformat:2|intcomma }}
+                                                ฿ {{ item.amount|floatformat:2|intcomma }}
 
                                             <!-- 🌟 2. กรณี: บ้านน็อคดาวน์ (สลิป RVD ย่อย) 🌟 -->
                                             {% elif item.system_type == 'quotation_rvd' %}
@@ -305,13 +305,13 @@
                                     <div class="d-flex align-items-center justify-content-center gap-2">
                                         {% if task_type == 'deposits' %}
 
-                                            <!-- 🌟 1. กรณี: โซล่าเซลล์ (ใช้ระบบเดิม) 🌟 -->
+                                            <!-- 🌟 1. กรณี: โซล่าเซลล์ (ใช้ระบบใหม่) 🌟 -->
                                             {% if item.system_type == 'solar' %}
-                                                {% if item.deposit_method == 'TRANSFER' %}
+                                                {% if item.payment_method == 'TRANSFER' %}
                                                     <span class="badge bg-info bg-opacity-10 text-info border border-info rounded-pill"><i class="fas fa-mobile-alt me-1"></i> โอนเงิน</span>
-                                                {% elif item.deposit_method == 'CASH' %}
+                                                {% elif item.payment_method == 'CASH' %}
                                                     <span class="badge bg-success bg-opacity-10 text-success border border-success rounded-pill"><i class="fas fa-money-bill-wave me-1"></i> เงินสด</span>
-                                                {% elif item.deposit_method == 'CHECK' %}
+                                                {% elif item.payment_method == 'CHECK' %}
                                                     <span class="badge bg-warning bg-opacity-10 text-warning border border-warning rounded-pill"><i class="fas fa-money-check me-1"></i> เช็คธนาคาร</span>
                                                 {% endif %}
 

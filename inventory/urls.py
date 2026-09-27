@@ -17,6 +17,7 @@ urlpatterns = [
     path('product/<int:pk>/stock-card/', views.product_stock_card, name='product_stock_card'),
     path('print-barcode/<int:product_id>/', views.print_barcode, name='print_barcode'),
     path('print-doc/<str:doc_no>/', views.print_document, name='print_document'),
+    path('print-stock-count/', views.print_stock_count_sheet, name='print_stock_count_sheet'),
 
     path('ajax/add-category/', views.ajax_add_category, name='ajax_add_category'),
     path('ajax/add-supplier/', views.ajax_add_supplier, name='ajax_add_supplier'),

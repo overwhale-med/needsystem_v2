@@ -12,6 +12,7 @@ urlpatterns = [
     path('po/payment/<int:po_id>/', views.po_payment, name='po_payment'),
     path('ppo/list/', views.ppo_list, name='ppo_list'),
     path('ppo/<int:pk>/', views.ppo_detail, name='ppo_detail'),
+    path('ppo/<int:ppo_id>/print/', views.print_ppo_document, name='print_ppo_document'),
 
     path('suppliers/', views.supplier_list, name='supplier_list'),
     path('suppliers/<int:pk>/', views.supplier_detail, name='supplier_detail'),
