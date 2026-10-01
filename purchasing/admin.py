@@ -54,10 +54,12 @@ class PurchaseOrderAdmin(admin.ModelAdmin):
     
     print_button.short_description = 'พิมพ์เอกสาร'
 
+# 🌟 [UPDATE] จัดการการแสดงผลของ PV-KD ให้ดูง่ายขึ้น
 @admin.register(PurchaseOrderPayment)
 class PurchaseOrderPaymentAdmin(admin.ModelAdmin):
-    list_display = ('po', 'amount', 'payment_date', 'payment_method')
-    search_fields = ('po__code',)
+    list_display = ('pv_code', 'po', 'amount', 'payment_date', 'payment_method')
+    search_fields = ('pv_code', 'po__code')
+    list_filter = ('payment_date', 'payment_method')
 
 @admin.register(PurchasePreparation)
 class PurchasePreparationAdmin(admin.ModelAdmin):

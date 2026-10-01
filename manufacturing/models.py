@@ -214,6 +214,7 @@ class ProductionOrder(models.Model):
 
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='NEW_JOB', verbose_name="สถานะระบบ")
     is_materials_ordered = models.BooleanField(default=False, verbose_name="สั่งซื้อวัตถุดิบแล้ว")
+    ppo_ref = models.CharField(max_length=20, blank=True, null=True, verbose_name="เลขที่ใบ PPO ที่ผูกไว้") # 🌟 [NEW] เพิ่มช่องเก็บรหัส PPO
 
     blueprint_approved_by = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, blank=True, related_name='approved_blueprints', verbose_name="ผู้อนุมัติแบบแปลน")
     blueprint_approved_at = models.DateTimeField(null=True, blank=True, verbose_name="เวลาที่อนุมัติแบบแปลน")
@@ -258,9 +259,14 @@ class ProductionOrder(models.Model):
 
     @property
     def progress_percentage(self):
-        total_depts = ProductionStatus.objects.count()
-        if total_depts == 0: return 0
-        return int((self.completed_departments.count() / total_depts) * 100)
+        # 🌟 ฟังก์ชันนี้ถูกปรับมาเพื่อคำนวณ "ความคืบหน้างานช่าง" โดยเฉพาะ 🌟
+        # หากมีการเพิ่ม/ลดแผนกในตาราง ProductionStatus ระบบจะปรับเปอร์เซ็นต์ให้สอดคล้องกันอัตโนมัติ
+        total_departments = ProductionStatus.objects.count()
+        if total_departments == 0:
+            return 0
+
+        completed_departments = self.completed_departments.count()
+        return int((completed_departments / total_departments) * 100)
 
     @property
     def days_remaining(self):

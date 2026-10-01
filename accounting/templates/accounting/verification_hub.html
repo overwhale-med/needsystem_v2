@@ -355,7 +355,11 @@
                             {% endif %}
 
                             <td class="text-center">
-                                <span class="status-badge"><i class="fas fa-hourglass-half"></i> รอตรวจสอบ/ทำจ่าย</span>
+                                {% if task_type == 'deposits' or task_type == 'invoices' %}
+                                    <span class="status-badge"><i class="fas fa-search-dollar"></i> รอตรวจสอบการรับเงิน</span>
+                                {% else %}
+                                    <span class="status-badge"><i class="fas fa-hourglass-half"></i> รอตรวจสอบการจ่ายเงิน</span>
+                                {% endif %}
                             </td>
 
                             <td class="text-center pe-4">

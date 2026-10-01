@@ -763,14 +763,40 @@ def convert_quote_to_invoice(request, qt_id):
     qt.status = 'CONVERTED'
     qt.save()
 
-    # 🌟 [DELETED] นำระบบตัดสต็อก RESERVE ตรงนี้ออกไปแล้ว เพื่อโอนอำนาจให้ Virtual Column ในหน้า Inventory จัดการแทน
-
     for job in qt.production_orders.all():
         if not job.is_closed:
             job.is_closed = True
             job.save()
 
-    messages.success(request, f"✅ เปิดใบขายสินค้า {new_code} เรียบร้อย (ยอดคงค้างชำระ: {balance:,.2f} บาท)")
+        # 🌟 [NEW] ย้ายจุดตัดสต็อกมาไว้ตอนเปิดบิล
+        search_keyword = f"{job.code}"
+        job_product = Product.objects.filter(code__icontains=search_keyword).first()
+
+        if not job_product:
+            job_product = job.product
+
+        already_dispatched = StockMovement.objects.filter(
+            product=job_product,
+            movement_type='DISPATCH',
+            reference_doc=new_code
+        ).exists()
+
+        if not already_dispatched:
+            StockMovement.objects.create(
+                doc=None,
+                product=job_product,
+                quantity=Decimal(str(job.quantity)),
+                movement_type='DISPATCH',
+                reference_doc=new_code,
+                note=f"เบิกออก (เปิดบิล) อ้างอิงใบแจ้งหนี้: {new_code}",
+                created_by=request.user
+            )
+
+            # 🌟 [FIXED] เพิ่ม 2 บรรทัดนี้ เพื่อหักตัวเลขสต็อกคงเหลือในระบบจริงๆ 🌟
+            job_product.stock_qty -= Decimal(str(job.quantity))
+            job_product.save()
+
+    messages.success(request, f"✅ เปิดใบขายสินค้า {new_code} เรียบร้อย และตัดสต็อกสินค้าแล้ว (ยอดคงค้างชำระ: {balance:,.2f} บาท)")
     return redirect('invoice_list')
 
 @login_required
@@ -1586,8 +1612,7 @@ def confirm_payment(request, doc_type, doc_id):
                                 base_amount=base_amount,
                                 commission_amount=comm_amount
                             )
-
-                messages.success(request, f"✅ ยืนยันรับชำระเงินครบ 100% เอกสาร {obj.code} ปิดการขายเรียบร้อยแล้ว! (ระบบสร้างตั๋วคอมมิชชัน 3% ให้พนักงานขายแล้ว)")
+                messages.success(request, f"✅ ยืนยันรับชำระเงินครบ 100% เอกสาร {obj.code} ปิดการขายเรียบร้อยแล้ว!")
             else:
                 obj.status = 'UNPAID'
                 obj.save()
@@ -2165,28 +2190,55 @@ def commission_board(request):
 
     current_emp = getattr(request.user, 'employee', None)
 
-    # 1. ดึงตั๋ว 2% (เบิกจากมัดจำ) ที่เป็นของพนักงานคนนี้
-    tickets_2 = CommissionTicket.objects.filter(
-        ticket_type='2%',
-        status='AVAILABLE',
-        quotation_ref__employee=current_emp
-    ).order_by('-created_at')
+    # 🌟 1. กำหนดสิทธิ์ Super View (ตรวจสอบว่าเป็น Admin หรือ Manager หรือไม่)
+    is_manager_view = False
+    if request.user.is_superuser:
+        is_manager_view = True
+    elif current_emp:
+        rank = current_emp.business_rank.lower() if current_emp.business_rank else ""
+        dept_name = getattr(current_emp.department, 'name', '')
+        pos_title = getattr(current_emp.position, 'title', '').lower()
+        # เช็คเงื่อนไขตำแหน่งผู้จัดการ หรืออยู่แผนกบริหาร
+        if rank in ['manager', 'director'] or 'manager' in pos_title or 'บริหาร' in dept_name:
+            is_manager_view = True
 
-    # 2. ดึงตั๋ว 3% (เบิกจากปิดบิล) ที่เป็นของพนักงานคนนี้
-    # เช็คจากพนักงานที่เป็นเจ้าของใบเสนอราคาต้นทาง เพื่อป้องกันกรณีแอดมินเป็นคนกดเปิดบิลให้
-    tickets_3 = CommissionTicket.objects.filter(
-        ticket_type='3%',
-        status='AVAILABLE',
-        invoice_ref__quotation_ref__employee=current_emp
-    ).order_by('-created_at')
+    # 🌟 2. ดึงข้อมูลตั๋วตามสิทธิ์
+    if is_manager_view:
+        # โหมดผู้จัดการ: เห็นตั๋วของ "ทุกคน" ที่พร้อมเบิก
+        tickets_2 = CommissionTicket.objects.filter(
+            ticket_type='2%',
+            status='AVAILABLE'
+        ).select_related('quotation_ref', 'quotation_ref__employee').order_by('-created_at')
 
-    # 3. ดึงประวัติการขอเบิก
-    claims = CommissionClaim.objects.filter(requester=current_emp).order_by('-created_at')
+        tickets_3 = CommissionTicket.objects.filter(
+            ticket_type='3%',
+            status='AVAILABLE'
+        ).select_related('invoice_ref', 'invoice_ref__quotation_ref', 'invoice_ref__quotation_ref__employee').order_by('-created_at')
+
+        # ประวัติใบขอเบิกของทุกคน
+        claims = CommissionClaim.objects.all().select_related('requester').order_by('-created_at')
+    else:
+        # โหมดพนักงานขาย: เห็นเฉพาะตั๋วของ "ตัวเอง"
+        tickets_2 = CommissionTicket.objects.filter(
+            ticket_type='2%',
+            status='AVAILABLE',
+            quotation_ref__employee=current_emp
+        ).order_by('-created_at')
+
+        tickets_3 = CommissionTicket.objects.filter(
+            ticket_type='3%',
+            status='AVAILABLE',
+            invoice_ref__quotation_ref__employee=current_emp
+        ).order_by('-created_at')
+
+        # ประวัติใบขอเบิกเฉพาะของตัวเอง
+        claims = CommissionClaim.objects.filter(requester=current_emp).order_by('-created_at')
 
     return render(request, 'sales/commission_board.html', {
         'tickets_2': tickets_2,
         'tickets_3': tickets_3,
-        'claims': claims
+        'claims': claims,
+        'is_manager_view': is_manager_view, # 🌟 ส่งตัวแปรนี้ไปสั่งงานหน้าเว็บ
     })
 
 @login_required

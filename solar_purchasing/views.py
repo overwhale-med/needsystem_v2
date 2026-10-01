@@ -375,33 +375,79 @@ def solar_po_receive(request, po_id):
     return render(request, 'solar_purchasing/solar_po_receive.html', {'po': po})
 
 # ==========================================
-# 💸 ระบบบันทึกการชำระเงิน (Payment Tracking)
+# 💸 ระบบบันทึกการชำระเงิน (Payment Tracking) โซล่าเซลล์
 # ==========================================
 @login_required
 def solar_po_payment(request, po_id):
-    # เช็คสิทธิ์ (ใช้สิทธิ์ฝ่ายจัดซื้อหรือบัญชีก็ได้ แล้วแต่นโยบายบริษัทครับ ในที่นี้เจนี่ให้สิทธิ์จัดซื้อ/ผู้จัดการก่อน)
-    if not is_purchasing_staff(request.user):
+    # เช็คสิทธิ์ (ให้จัดซื้อ บัญชี หรือผู้บริหาร เข้าถึงได้)
+    if not (is_purchasing_staff(request.user) or request.user.is_superuser):
         messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์เข้าถึงระบบชำระเงิน")
         return redirect('solar_po_list')
 
     po = get_object_or_404(SolarPurchaseOrder, id=po_id)
 
+    # ดึงข้อมูลประวัติการจ่ายเงินของบิลใบนี้ (และยอดค้างชำระ)
+    from .models import SolarPurchaseOrderPayment
+    payments = po.payments.all().order_by('-created_at')
+    total_paid = sum(p.amount for p in payments)
+    balance = float(po.total_amount) - float(total_paid)
+
     if request.method == 'POST':
-        # รับค่าสถานะที่ส่งมาจากหน้าเว็บ
-        new_payment_status = request.POST.get('payment_status')
+        # 1. รับค่าตัวเลขยอดเงิน (แกะคอมม่าออกเผื่อยูเซอร์พิมพ์มา)
+        amount_str = request.POST.get('amount', '0').replace(',', '')
+        try: amount = float(amount_str)
+        except ValueError: amount = 0
 
-        # ตรวจสอบว่าส่งค่ามาถูกต้องตามตัวเลือกในโมเดลหรือไม่
-        if new_payment_status in ['PENDING', 'DEPOSIT', 'PAID']:
-            po.payment_status = new_payment_status
+        # 2. ถ้ายอดเงินมากกว่า 0 และไม่เกินยอดที่ต้องจ่าย
+        if amount > 0 and amount <= balance:
+
+            # สร้างประวัติการทำจ่าย PV ใบใหม่ลงระบบ
+            payment_record = SolarPurchaseOrderPayment(
+                po=po,
+                payment_date=request.POST.get('payment_date', timezone.now().date()),
+                amount=amount,
+                payment_method=request.POST.get('payment_method', 'โอนเงินผ่านธนาคาร'),
+                note=request.POST.get('note', '')
+            )
+
+            # ถ้ามีรูปสลิปแนบมาด้วย
+            if 'slip_image' in request.FILES:
+                 payment_record.slip_image = request.FILES['slip_image']
+
+            payment_record.save()
+
+            # 3. ตรวจสอบสถานะการจ่ายเงินภาพรวมของ PO ใบนี้
+            new_total_paid = float(total_paid) + float(amount)
+            if new_total_paid >= float(po.total_amount):
+                po.payment_status = 'PAID'
+            else:
+                po.payment_status = 'DEPOSIT'
             po.save()
-            messages.success(request, f"💸 อัปเดตสถานะการชำระเงินสำหรับ {po.code} เรียบร้อยแล้ว")
+
+            # 4. 🌟 [AUTOMATION] วิ่งไปจดบัญชีรายจ่าย ให้อัตโนมัติ! 🌟
+            from accounting.models import Expense
+            Expense.objects.create(
+                title=f"ทำจ่ายใบสั่งซื้อโซล่า #{po.code} (PV: {payment_record.pv_code})",
+                amount=amount,
+                date=payment_record.payment_date,
+                note=f"จ่ายให้ร้าน {po.supplier.name if po.supplier else po.supplier_name_free_text} - {payment_record.note}"
+            )
+
+            messages.success(request, f"✅ บันทึกทำจ่ายเงินโซล่าเซลล์ {amount:,.2f} บาท สำเร็จ! ออก PV เลขที่ {payment_record.pv_code} และลงบัญชีเรียบร้อย")
+
+            # เด้งไปยังหน้ารวมของบัญชี เพื่อให้ฝ่ายบัญชีตรวจรับ (หน้าเดียวกับฝั่งบ้าน)
+            return redirect('accounting_verification_hub', task_type='solar_po_payments')
         else:
-            messages.error(request, "❌ สถานะการชำระเงินไม่ถูกต้อง")
+            messages.error(request, "❌ จำนวนเงินไม่ถูกต้อง หรือยอดเกินที่ค้างชำระ")
+            return redirect('solar_po_list')
 
-        return redirect('solar_po_list')
-
-    # ถ้าเปิดมาแบบ GET ให้แสดงหน้าต่าง (เราจะใช้ Modal หน้าเดิม ดังนั้นจุดนี้อาจไม่ได้ใช้ แต่เขียนเผื่อไว้ครับ)
-    return redirect('solar_po_list')
+    # ส่วนนี้ใช้เปิดหน้า HTML โชว์ยอด
+    return render(request, 'solar_purchasing/solar_po_payment.html', {
+        'po': po,
+        'payments': payments,
+        'total_paid': total_paid,
+        'balance': balance
+    })
 
 # 🌟 [NEW] ฟังก์ชันสำหรับให้จัดซื้อกดยกเลิกใบ PPO ที่สโตร์ส่งมาผิด
 @login_required

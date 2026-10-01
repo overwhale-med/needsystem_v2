@@ -1,0 +1,164 @@
+{% extends 'core/base.html' %}
+{% load crispy_forms_tags %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-10 col-lg-8">
+            <div class="card border-0 shadow-lg rounded-4 overflow-hidden">
+                <div class="card-header bg-primary text-white py-3">
+                    <h5 class="mb-0 fw-bold"><i class="fas fa-box-open me-2"></i>{{ title }}</h5>
+                </div>
+                <div class="card-body p-4 p-md-5">
+                    <form method="post" enctype="multipart/form-data">
+                        {% csrf_token %}
+
+                        <div class="d-none">
+                            {{ formset.management_form }}
+                            {% for inline_form in formset %}
+                                {{ inline_form|crispy }}
+                            {% endfor %}
+                        </div>
+
+                        <!-- แถวที่ 1: รหัส, หมวดหมู่, หน่วยนับ -->
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-4">{{ form.code|as_crispy_field }}</div>
+                            <div class="col-md-4">
+                                <label class="form-label">เลือกรุ่นสินค้า</label>
+                                <div class="input-group">
+                                    {{ form.category }}
+                                    <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#categoryModal">+</button>
+                                </div>
+                            </div>
+                            <div class="col-md-4">{{ form.unit|as_crispy_field }}</div>
+                        </div>
+
+                        <!-- แถวที่ 2: ชื่อสินค้า -->
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-12">{{ form.name|as_crispy_field }}</div>
+                        </div>
+
+                        <!-- แถวที่ 3: ราคาและจุดสั่งซื้อ -->
+                        <div class="row g-3 mb-3 mt-3 p-3 bg-light rounded-3 border">
+                            <div class="col-md-4">{{ form.cost_price|as_crispy_field }}</div>
+                            <div class="col-md-4">{{ form.sell_price|as_crispy_field }}</div>
+                            <div class="col-md-4">{{ form.min_level|as_crispy_field }}</div>
+                        </div>
+
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-6">{{ form.image|as_crispy_field }}</div>
+                            <div class="col-md-6">{{ form.standard_blueprint|as_crispy_field }}</div>
+                        </div>
+                        <div class="mb-4">{{ form.is_active|as_crispy_field }}</div>
+
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary btn-lg fw-bold rounded-pill shadow-sm"><i class="fas fa-save me-2"></i> บันทึกข้อมูล</button>
+                            <a href="{% url 'product_list' %}?type=FG" class="btn btn-outline-secondary btn-lg fw-bold rounded-pill shadow-sm"><i class="fas fa-times me-2"></i> ยกเลิก</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal สำหรับเพิ่มหมวดหมู่สินค้า -->
+<div class="modal fade" id="categoryModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <div class="modal-header border-bottom-0">
+                <h5 class="modal-title fw-bold text-primary">เพิ่มหมวดหมู่สินค้า</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="text" id="newCategoryName" class="form-control form-control-lg" placeholder="ชื่อหมวดหมู่สินค้า...">
+            </div>
+            <div class="modal-footer border-top-0">
+                <button type="button" id="btnSaveCategory" class="btn btn-primary rounded-pill px-4">บันทึก</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        
+        // 🌟 [NEW] ฟังก์ชันจัดการตัวเลข (ลูกน้ำ + ทศนิยม 2 ตำแหน่ง) 🌟
+        function formatCurrency(input) {
+            let val = input.value.replace(/,/g, '');
+            if (val && !isNaN(val)) {
+                input.value = parseFloat(val).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            }
+        }
+
+        const priceInputs = document.querySelectorAll('#id_cost_price, #id_sell_price');
+        
+        priceInputs.forEach(function(input) {
+            // โหลดหน้ามาให้จัดรูปแบบทันที
+            formatCurrency(input);
+
+            // ตอนคลิก ให้ถอดลูกน้ำออกและคลุมดำให้แก้ตัวเลขง่ายๆ
+            input.addEventListener('focus', function() {
+                this.value = this.value.replace(/,/g, '');
+                this.select();
+            });
+
+            // พิมพ์เสร็จคลิกออก ให้ใส่ลูกน้ำกลับ
+            input.addEventListener('blur', function() {
+                formatCurrency(this);
+            });
+        });
+
+        // จัดการ Focus ให้ช่องตัวเลขอื่นๆ (เช่น จุดสั่งซื้อ)
+        document.querySelectorAll('input[type="number"], .number-input').forEach(function(input) {
+            if (input.id !== 'id_cost_price' && input.id !== 'id_sell_price') {
+                input.addEventListener('focus', function() { this.select(); });
+            }
+        });
+
+        // สคริปต์บันทึกหมวดหมู่สินค้า (คงเดิม)
+        const nameInput = document.getElementById('newCategoryName');
+        const btnSaveCategory = document.getElementById('btnSaveCategory');
+
+        nameInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                btnSaveCategory.click();
+            }
+        });
+
+        btnSaveCategory.addEventListener('click', function() {
+            const name = nameInput.value.trim();
+
+            if(!name) {
+                alert('กรุณากรอกชื่อหมวดหมู่');
+                return;
+            }
+
+            fetch('{% url "ajax_add_category" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                },
+                body: JSON.stringify({name: name})
+            })
+            .then(res => res.json())
+            .then(data => {
+                if(data.success) {
+                    const select = document.getElementById('id_category');
+                    select.add(new Option(data.name, data.id, true, true));
+                    bootstrap.Modal.getInstance(document.getElementById('categoryModal')).hide();
+                    nameInput.value = ''; 
+                } else {
+                    alert('เกิดข้อผิดพลาด: ' + (data.error || 'ไม่สามารถบันทึกได้'));
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                alert('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้');
+            });
+        });
+    });
+</script>
+{% endblock %}

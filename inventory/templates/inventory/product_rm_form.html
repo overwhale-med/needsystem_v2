@@ -1,0 +1,235 @@
+{% extends 'core/base.html' %}
+{% load crispy_forms_tags %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-10 col-lg-8">
+            <div class="card border-0 shadow-lg rounded-4 overflow-hidden">
+                <div class="card-header bg-primary text-white py-3">
+                    <h5 class="mb-0 fw-bold"><i class="fas fa-cubes me-2"></i>{{ title }}</h5>
+                </div>
+                <div class="card-body p-4 p-md-5">
+                    <form method="post" enctype="multipart/form-data">
+                        {% csrf_token %}
+
+                        <div class="d-none">
+                            {{ formset.management_form }}
+                            {% for inline_form in formset %}
+                                {{ inline_form|crispy }}
+                            {% endfor %}
+                        </div>
+
+                        <!-- แถวที่ 1: รหัส, เลือกแผนกวัตถุดิบ, หน่วยนับ -->
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-4">{{ form.code|as_crispy_field }}</div>
+                            <div class="col-md-4">
+                                <label class="form-label">เลือกแผนกวัตถุดิบ</label>
+                                <div class="input-group">
+                                    {{ form.rm_category }}
+                                    <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#rmCategoryModal">+</button>
+                                </div>
+                            </div>
+                            <div class="col-md-4">{{ form.unit|as_crispy_field }}</div>
+                        </div>
+
+                        <!-- แถวที่ 2: ชื่อวัตถุดิบ -->
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-12">{{ form.name|as_crispy_field }}</div>
+                        </div>
+
+                        <!-- แถวที่ 3: ร้านค้า -->
+                        <div class="row g-3 mb-4">
+                             <div class="col-md-12">
+                                <label class="form-label text-primary fw-bold">ร้านค้า/ผู้จำหน่าย</label>
+                                <div class="input-group">
+                                    {{ form.supplier }}
+                                    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#supplierModal">
+                                        <i class="fas fa-plus me-1"></i> เพิ่มร้านค้าใหม่
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- แถวที่ 4: ราคาทุน & จุดสั่งซื้อ -->
+                        <div class="row g-3 mb-3 mt-3 p-3 bg-light rounded-3 border">
+                            <div class="col-md-6">{{ form.cost_price|as_crispy_field }}</div>
+                            <div class="col-md-6">{{ form.min_level|as_crispy_field }}</div>
+                        </div>
+
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-12">{{ form.image|as_crispy_field }}</div>
+                        </div>
+                        <div class="mb-4">{{ form.is_active|as_crispy_field }}</div>
+
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary btn-lg fw-bold rounded-pill shadow-sm"><i class="fas fa-save me-2"></i> บันทึกข้อมูล</button>
+                            <a href="{% url 'product_list' %}?type=RM" class="btn btn-outline-secondary btn-lg fw-bold rounded-pill shadow-sm"><i class="fas fa-times me-2"></i> ยกเลิก</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal แผนกวัตถุดิบ -->
+<div class="modal fade" id="rmCategoryModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <div class="modal-header border-bottom-0"><h5 class="modal-title fw-bold text-primary">เพิ่มแผนกวัตถุดิบ</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body"><input type="text" id="newRmCategoryName" class="form-control form-control-lg" placeholder="ชื่อแผนก..."></div>
+            <div class="modal-footer border-top-0"><button type="button" id="btnSaveRmCategory" class="btn btn-primary rounded-pill px-4">บันทึก</button></div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal ร้านค้า -->
+<div class="modal fade" id="supplierModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <div class="modal-header border-bottom-0 bg-light rounded-top"><h5 class="modal-title fw-bold text-primary"><i class="fas fa-store me-2"></i>เพิ่มร้านค้าใหม่</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <div class="row g-3">
+                    <div class="col-md-6"><label class="small fw-bold">ชื่อบริษัท/ร้านค้า*</label><input type="text" id="newSupplierName" class="form-control" placeholder="ระบุชื่อร้านค้า"></div>
+                    <div class="col-md-6"><label class="small fw-bold">เลขประจำตัวผู้เสียภาษี</label><input type="text" id="newSupplierTax" class="form-control" placeholder="Tax ID 13 หลัก"></div>
+                    <div class="col-md-6"><label class="small fw-bold">ชื่อผู้ติดต่อ</label><input type="text" id="newSupplierContact" class="form-control" placeholder="ชื่อพนักงานขาย/ผู้ประสานงาน"></div>
+                    <div class="col-md-6"><label class="small fw-bold">เบอร์โทรศัพท์</label><input type="text" id="newSupplierPhone" class="form-control" placeholder="เช่น 081-XXXXXXX"></div>
+                    <div class="col-md-6"><label class="small fw-bold">อีเมล</label><input type="email" id="newSupplierEmail" class="form-control" placeholder="ตัวอย่าง sales@company.com"></div>
+                    <div class="col-md-6"><label class="small fw-bold">เครดิตเทอม (วัน)</label><input type="number" id="newSupplierCredit" class="form-control" placeholder="0" value="0"></div>
+                    <div class="col-md-12"><label class="small fw-bold">ที่อยู่ร้านค้า</label><textarea id="newSupplierAddress" class="form-control" rows="2" placeholder="ระบุที่อยู่จัดส่งเอกสาร"></textarea></div>
+                </div>
+            </div>
+            <div class="modal-footer border-top-0"><button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">ยกเลิก</button><button type="button" id="btnSaveSupplier" class="btn btn-primary rounded-pill px-4 shadow-sm fw-bold">บันทึกข้อมูลร้านค้า</button></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        
+        // 🌟 [NEW] ฟังก์ชันจัดการตัวเลข (ลูกน้ำ + ทศนิยม 2 ตำแหน่ง) 🌟
+        function formatCurrency(input) {
+            let val = input.value.replace(/,/g, '');
+            if (val && !isNaN(val)) {
+                input.value = parseFloat(val).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            }
+        }
+
+        const priceInputs = document.querySelectorAll('#id_cost_price');
+        
+        priceInputs.forEach(function(input) {
+            // โหลดหน้ามาให้จัดรูปแบบทันที
+            formatCurrency(input);
+
+            // ตอนคลิก ให้ถอดลูกน้ำออกและคลุมดำให้แก้ตัวเลขง่ายๆ
+            input.addEventListener('focus', function() {
+                this.value = this.value.replace(/,/g, '');
+                this.select();
+            });
+
+            // พิมพ์เสร็จคลิกออก ให้ใส่ลูกน้ำกลับ
+            input.addEventListener('blur', function() {
+                formatCurrency(this);
+            });
+        });
+
+        // จัดการ Focus ให้ช่องตัวเลขอื่นๆ
+        document.querySelectorAll('input[type="number"], .number-input').forEach(function(input) {
+            if (input.id !== 'id_cost_price') {
+                input.addEventListener('focus', function() { this.select(); });
+            }
+        });
+
+        // ฟังก์ชันล้างค่า Supplier Modal (คงเดิม)
+        function clearSupplierModal() {
+            document.getElementById('newSupplierName').value = '';
+            document.getElementById('newSupplierTax').value = '';
+            document.getElementById('newSupplierContact').value = '';
+            document.getElementById('newSupplierPhone').value = '';
+            document.getElementById('newSupplierEmail').value = '';
+            document.getElementById('newSupplierCredit').value = '0';
+            document.getElementById('newSupplierAddress').value = '';
+        }
+
+        // จัดการแผนกวัตถุดิบ (คงเดิม)
+        const rmCategoryInput = document.getElementById('newRmCategoryName');
+        const btnSaveRmCategory = document.getElementById('btnSaveRmCategory');
+
+        rmCategoryInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') { e.preventDefault(); btnSaveRmCategory.click(); }
+        });
+
+        btnSaveRmCategory.addEventListener('click', function() {
+            const name = rmCategoryInput.value.trim();
+            if(!name) { alert('กรุณากรอกชื่อแผนกวัตถุดิบ'); return; }
+
+            fetch('{% url "ajax_add_rm_category" %}', { 
+                method: 'POST', 
+                headers: { 
+                    'Content-Type': 'application/json', 
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value 
+                }, 
+                body: JSON.stringify({name: name}) 
+            })
+            .then(res => res.json())
+            .then(data => {
+                if(data.success) {
+                    const select = document.getElementById('id_rm_category');
+                    select.add(new Option(data.name, data.id, true, true));
+                    bootstrap.Modal.getInstance(document.getElementById('rmCategoryModal')).hide();
+                    rmCategoryInput.value = ''; 
+                } else {
+                    alert('เกิดข้อผิดพลาด: ' + (data.error || 'ไม่สามารถบันทึกได้'));
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                alert('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้');
+            });
+        });
+
+        // จัดการร้านค้า (คงเดิม)
+        document.getElementById('btnSaveSupplier').addEventListener('click', function() {
+            const supplierData = {
+                name: document.getElementById('newSupplierName').value.trim(), 
+                tax_id: document.getElementById('newSupplierTax').value.trim(),
+                contact_name: document.getElementById('newSupplierContact').value.trim(), 
+                phone: document.getElementById('newSupplierPhone').value.trim(),
+                email: document.getElementById('newSupplierEmail').value.trim(), 
+                credit_term: document.getElementById('newSupplierCredit').value,
+                address: document.getElementById('newSupplierAddress').value.trim()
+            };
+
+            if(!supplierData.name) { 
+                alert('กรุณากรอกชื่อร้านค้า'); 
+                return; 
+            }
+
+            fetch('{% url "ajax_add_supplier" %}', { 
+                method: 'POST', 
+                headers: { 
+                    'Content-Type': 'application/json', 
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value 
+                }, 
+                body: JSON.stringify(supplierData) 
+            })
+            .then(res => res.json())
+            .then(data => {
+                if(data.success) {
+                    const select = document.getElementById('id_supplier');
+                    select.add(new Option(data.name, data.id, true, true));
+                    bootstrap.Modal.getInstance(document.getElementById('supplierModal')).hide();
+                    clearSupplierModal(); 
+                } else {
+                    alert('เกิดข้อผิดพลาด: ' + (data.error || 'ไม่สามารถบันทึกได้'));
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                alert('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้');
+            });
+        });
+    });
+</script>
+{% endblock %}

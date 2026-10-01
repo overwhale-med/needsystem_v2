@@ -199,8 +199,25 @@ def approve_transaction(request, task_type, item_id):
                     qt.is_deposit_verified = True
                     qt.save()
 
+                    # 🌟 [NEW] ระบบอัตโนมัติ: สร้างใบคุมสิทธิ์ 2% ส่งไปที่ศูนย์ตั้งเบิกน็อคดาวน์
+                    from sales.models import CommissionTicket
+                    from decimal import Decimal
+                    if qt.employee and qt.deposit_amount > 0:
+                        # เช็คป้องกันการสร้างตั๋วซ้ำ (1 Job = 1 สิทธิ์ 2%)
+                        if not CommissionTicket.objects.filter(quotation_ref=qt, ticket_type='2%').exists():
+                            # 🧮 สูตรใหม่: คิดเฉพาะจาก "ยอดรับเงินมัดจำรวม" หัก 10%
+                            base_amount = qt.deposit_amount - (qt.deposit_amount * Decimal('0.10'))
+                            comm_amount = base_amount * Decimal('0.02') # คูณ 2%
+
+                            CommissionTicket.objects.create(
+                                ticket_type='2%',
+                                quotation_ref=qt,
+                                base_amount=base_amount,
+                                commission_amount=comm_amount
+                            )
+
                 Income.objects.create(title=f"รับมัดจำ RVD #{dep.code} (อ้างอิง: {qt.code})", amount=dep.amount, date=timezone.now().date(), note="อนุมัติโดยฝ่ายบัญชี")
-                messages.success(request, f"✅ ยืนยันรับมัดจำ {dep.code} เข้าสู่ระบบบัญชีเรียบร้อย")
+                messages.success(request, f"✅ ยืนยันรับมัดจำ {dep.code} เข้าระบบบัญชี และอัปเดตสิทธิ์คอมมิชชัน 2% เรียบร้อยแล้ว")
 
         elif task_type == 'invoices':
             doc_type = request.POST.get('doc_type', '').strip().lower()
@@ -257,13 +274,36 @@ def approve_transaction(request, task_type, item_id):
                 inv.status = 'PAID'
                 inv.save()
 
+                # 🌟 [NEW] ระบบอัตโนมัติ: สร้างใบคุมสิทธิ์ 3% ส่งไปที่ศูนย์ตั้งเบิกน็อคดาวน์
+                if doc_type != 'pos' and getattr(inv, 'quotation_ref', None):
+                    from sales.models import CommissionTicket
+                    from decimal import Decimal
+                    qt = inv.quotation_ref
+
+                    # 🧮 ดึงยอดที่เหลือจากการมัดจำ (Grand Total - Deposit) เพื่อเป็นฐานในการคิด 3%
+                    remaining_amount = inv.grand_total - inv.deposit_amount
+
+                    if qt.employee and remaining_amount > 0:
+                        # เช็คป้องกันการสร้างตั๋วซ้ำ (1 Job = 1 สิทธิ์ 3%)
+                        if not CommissionTicket.objects.filter(invoice_ref=inv, ticket_type='3%').exists():
+                            # 🧮 สูตรใหม่: นำก้อน "ยอดชำระที่เหลือ" มาหัก 10%
+                            base_amount = remaining_amount - (remaining_amount * Decimal('0.10'))
+                            comm_amount = base_amount * Decimal('0.03') # คูณ 3%
+
+                            CommissionTicket.objects.create(
+                                ticket_type='3%',
+                                invoice_ref=inv,
+                                base_amount=base_amount,
+                                commission_amount=comm_amount
+                            )
+
                 Income.objects.create(
                     title=f"รับชำระบิลขาย #{inv.code}",
                     amount=amount,
                     date=timezone.now().date(),
                     note="ชำระเต็มจำนวน"
                 )
-                messages.success(request, f"✅ ยืนยันรับชำระ {inv.code} เข้าสู่ระบบบัญชีเรียบร้อย")
+                messages.success(request, f"✅ ยืนยันรับชำระ {inv.code} เข้าระบบบัญชี และอัปเดตสิทธิ์คอมมิชชัน 3% เรียบร้อยแล้ว")
 
         elif task_type == 'po_payments':
             po = get_object_or_404(PurchaseOrder, id=item_id)

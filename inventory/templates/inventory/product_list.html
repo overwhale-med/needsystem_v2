@@ -2,20 +2,19 @@
 {% load humanize %}
 {% load mathfilters %} {% block content %}
 <style>
-    .product-zoom-img {
-        width: 40px;
-        height: 40px;
+    /* 🌟 เปลี่ยนเป็นสไตล์สำหรับรูปย่อ (Thumbnail) ที่คลิกได้ 🌟 */
+    .product-thumbnail {
+        width: 45px;
+        height: 45px;
         object-fit: cover;
         border-radius: 6px;
-        transition: transform 0.3s ease, box-shadow 0.3s ease;
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         cursor: pointer;
+        border: 1px solid #dee2e6;
+        transition: opacity 0.2s ease;
     }
-    .product-zoom-img:hover {
-        transform: scale(3.5);
-        box-shadow: 0 10px 25px rgba(0,0,0,0.3);
-        z-index: 1050;
-        position: relative;
+    .product-thumbnail:hover {
+        opacity: 0.7; /* เวลาเอาเมาส์ชี้ รูปจะสว่างขึ้นเล็กน้อยให้รู้ว่าคลิกได้ */
     }
 </style>
 
@@ -61,6 +60,16 @@
                         </option>
                     {% endfor %}
                 </select>
+                <!-- 🌟 [NEW] เพิ่ม Dropdown สำหรับหมวดหมู่สินค้า FG -->
+                {% elif p_type == 'FG' %}
+                <select name="fg_category" class="form-select border rounded-pill" style="max-width: 250px;">
+                    <option value="">-- ทุกหมวดหมู่สินค้า --</option>
+                    {% for cat in fg_categories %}
+                        <option value="{{ cat.id }}" {% if selected_fg_cat == cat.id|stringformat:"s" %}selected{% endif %}>
+                            {{ cat.name }}
+                        </option>
+                    {% endfor %}
+                </select>
                 {% endif %}
 
                 <!-- 🌟 Dropdown สถานะสินค้าเดิม -->
@@ -82,7 +91,8 @@
                 <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold">ค้นหา</button>
 
                 <!-- 🌟 ปุ่มล้างตัวกรอง -->
-                {% if search_query or selected_rm_cat or stock_status or stock_column %}
+                <!-- 🌟 [UPDATE] ปุ่มล้างตัวกรอง -->
+                {% if search_query or selected_rm_cat or selected_fg_cat or stock_status or stock_column %}
                     <a href="{% url 'product_list' %}?type={{ p_type }}" class="btn btn-outline-secondary rounded-pill px-4 fw-bold shadow-sm" title="ล้างค่าการค้นหาทั้งหมด">
                         <i class="fas fa-sync-alt me-1"></i> ล้างตัวกรอง
                     </a>
@@ -130,7 +140,8 @@
 
                         <td class="text-center">
                             {% if p.image %}
-                                <img src="{{ p.image.url }}" class="product-zoom-img" alt="{{ p.code }}">
+                                <!-- 🌟 [NEW] เพิ่มคำสั่ง data-bs-toggle="modal" เพื่อเรียกป๊อปอัป 🌟 -->
+                                <img src="{{ p.image.url }}" class="product-thumbnail" alt="{{ p.code }}" title="คลิกเพื่อดูรูปขยาย" data-bs-toggle="modal" data-bs-target="#imageModal-{{ p.id }}">
                             {% else %}
                                 <span class="text-muted small">-</span>
                             {% endif %}
@@ -138,7 +149,14 @@
 
                         <td>
                             <div class="fw-bold">{{ p.name }}</div>
-                            <small class="text-muted"><i class="fas fa-tags me-1"></i>{{ p.category.name|default:"ไม่ได้ระบุหมวดหมู่" }}</small>
+
+                            <!-- 🌟 [FIXED] ซ่อนคำว่า 'ไม่ได้ระบุหมวดหมู่' สำหรับหน้า RM -->
+                            {% if p.category %}
+                                <small class="text-muted"><i class="fas fa-tags me-1"></i>{{ p.category.name }}</small>
+                            {% elif p_type == 'FG' %}
+                                <small class="text-muted"><i class="fas fa-tags me-1"></i>ไม่ได้ระบุหมวดหมู่</small>
+                            {% endif %}
+
                             {% if p.rm_category %}
                                 <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary-subtle ms-1" style="font-size: 0.65rem;">
                                     <i class="fas fa-layer-group me-1"></i>{{ p.rm_category.name }}
@@ -226,13 +244,13 @@
             <nav>
                 <ul class="pagination pagination-sm shadow-sm mb-0">
                     {% if page_obj.has_previous %}
-                    <li class="page-item"><a class="page-link border-0 text-muted" href="?type={{ p_type }}&page={{ page_obj.previous_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}{% if selected_rm_cat %}&rm_category={{ selected_rm_cat }}{% endif %}{% if stock_status %}&stock_status={{ stock_status }}{% endif %}{% if stock_column %}&stock_column={{ stock_column }}{% endif %}"><i class="fas fa-chevron-left"></i></a></li>
+                    <li class="page-item"><a class="page-link border-0 text-muted" href="?type={{ p_type }}&page={{ page_obj.previous_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}{% if selected_rm_cat %}&rm_category={{ selected_rm_cat }}{% endif %}{% if selected_fg_cat %}&fg_category={{ selected_fg_cat }}{% endif %}{% if stock_status %}&stock_status={{ stock_status }}{% endif %}{% if stock_column %}&stock_column={{ stock_column }}{% endif %}"><i class="fas fa-chevron-left"></i></a></li>
                     {% endif %}
 
                     <li class="page-item disabled"><span class="page-link border-0 text-dark fw-bold px-3">หน้า {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span></li>
 
                     {% if page_obj.has_next %}
-                    <li class="page-item"><a class="page-link border-0 text-muted" href="?type={{ p_type }}&page={{ page_obj.next_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}{% if selected_rm_cat %}&rm_category={{ selected_rm_cat }}{% endif %}{% if stock_status %}&stock_status={{ stock_status }}{% endif %}{% if stock_column %}&stock_column={{ stock_column }}{% endif %}"><i class="fas fa-chevron-right"></i></a></li>
+                    <li class="page-item"><a class="page-link border-0 text-muted" href="?type={{ p_type }}&page={{ page_obj.next_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}{% if selected_rm_cat %}&rm_category={{ selected_rm_cat }}{% endif %}{% if selected_fg_cat %}&fg_category={{ selected_fg_cat }}{% endif %}{% if stock_status %}&stock_status={{ stock_status }}{% endif %}{% if stock_column %}&stock_column={{ stock_column }}{% endif %}"><i class="fas fa-chevron-right"></i></a></li>
                     {% endif %}
                 </ul>
             </nav>
@@ -240,4 +258,22 @@
         {% endif %}
     </div>
 </div>
+<!-- 🌟 [NEW] ชุดโค้ด Modal สำหรับแสดงรูปภาพขนาดใหญ่ 🌟 -->
+{% for p in page_obj %}
+    {% if p.image %}
+    <div class="modal fade" id="imageModal-{{ p.id }}" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content bg-transparent border-0 shadow-none">
+                <div class="modal-header border-0 justify-content-end p-0 mb-2">
+                    <button type="button" class="btn-close btn-close-white fs-5" data-bs-dismiss="modal" aria-label="Close" style="filter: invert(1) grayscale(100%) brightness(200%);"></button>
+                </div>
+                <div class="modal-body text-center p-0">
+                    <!-- รูปจะแสดงขนาดใหญ่และคงสัดส่วนเดิมไว้ด้วย object-fit: contain -->
+                    <img src="{{ p.image.url }}" class="img-fluid rounded-3 shadow-lg" style="max-height: 85vh; object-fit: contain; background-color: rgba(255,255,255,0.9);">
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+{% endfor %}
 {% endblock %}

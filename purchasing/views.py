@@ -75,7 +75,7 @@ def purchasing_dashboard(request):
     recent_pos = pos.order_by('-created_at')[:10]
     is_approver = check_is_approver(request.user)
 
-    pending_ppo_count = ProductionOrder.objects.filter(status='WAITING_MATERIALS', is_materials_ordered=False).count()
+    pending_ppo_count = ProductionOrder.objects.filter(status='WAITING_MATERIALS', is_materials_ordered=False, ppo_ref__isnull=True).count() # 🌟 [UPDATE]
 
     # 🌟 [FIXED] นำ PPO ของโซล่าออกไป เพราะเราจะไปใช้ในแอปใหม่แล้ว
 
@@ -291,14 +291,13 @@ def ppo_list(request):
 
         mat_needed = {}
         for job in ppo.production_orders.all():
-            bom = BOM.objects.filter(product=job.product).first()
-            if bom:
-                for item in bom.items.all():
-                    mat_id = item.raw_material.id
-                    if mat_id not in mat_needed: mat_needed[mat_id] = Decimal(0)
-                    mat_needed[mat_id] += Decimal(str(item.quantity))
-                    total_amount += Decimal(str(item.quantity)) * Decimal(str(item.raw_material.cost_price))
-                    total_needed_qty += Decimal(str(item.quantity))
+            # 🌟 [FIXED] ดึงจากวัสดุใน JOB ตรงๆ
+            for item in job.materials.all():
+                mat_id = item.raw_material.id
+                if mat_id not in mat_needed: mat_needed[mat_id] = Decimal(0)
+                mat_needed[mat_id] += Decimal(str(item.quantity))
+                total_amount += Decimal(str(item.quantity)) * Decimal(str(item.raw_material.cost_price))
+                total_needed_qty += Decimal(str(item.quantity))
 
         ordered_qty = Decimal(0)
         created_pos = PurchaseOrder.objects.filter(ppo_ref=ppo.code).exclude(status='CANCELLED')
@@ -324,7 +323,7 @@ def ppo_list(request):
 
     # 🌟 [NEW] นับคิวงาน (JOB) ที่รอสร้างใบเตรียม PPO
     from manufacturing.models import ProductionOrder
-    pending_ppo_count = ProductionOrder.objects.filter(status='WAITING_MATERIALS', is_materials_ordered=False).count()
+    pending_ppo_count = ProductionOrder.objects.filter(status='WAITING_MATERIALS', is_materials_ordered=False, ppo_ref__isnull=True).count() # 🌟 [UPDATE]
 
     return render(request, 'purchasing/ppo_list.html', {
         'ppos': ppos,
@@ -382,12 +381,11 @@ def ppo_detail(request, pk):
 
     material_reqs = {}
     for job in ppo.production_orders.all():
-        bom = BOM.objects.filter(product=job.product).first()
-        if bom:
-            for item in bom.items.all():
-                mat_id = item.raw_material.id
-                if mat_id not in material_reqs: material_reqs[mat_id] = {'product': item.raw_material, 'needed': Decimal(0), 'ordered': Decimal(0)}
-                material_reqs[mat_id]['needed'] += Decimal(str(item.quantity))
+        # 🌟 [FIXED] ดึงจากวัสดุใน JOB ตรงๆ
+        for item in job.materials.all():
+            mat_id = item.raw_material.id
+            if mat_id not in material_reqs: material_reqs[mat_id] = {'product': item.raw_material, 'needed': Decimal(0), 'ordered': Decimal(0)}
+            material_reqs[mat_id]['needed'] += Decimal(str(item.quantity))
 
     created_pos = PurchaseOrder.objects.filter(ppo_ref=ppo.code).exclude(status='CANCELLED')
     for po in created_pos:
@@ -447,19 +445,18 @@ def print_ppo_document(request, ppo_id):
     # 🌟 รวบรวมข้อมูลวัตถุดิบทั้งหมดที่ต้องใช้ใน PPO นี้ เพื่อนำไปพิมพ์ 🌟
     material_reqs = {}
     for job in ppo.production_orders.all():
-        bom = BOM.objects.filter(product=job.product).first()
-        if bom:
-            for item in bom.items.all():
-                mat_id = item.raw_material.id
-                if mat_id not in material_reqs:
-                    material_reqs[mat_id] = {
-                        'product': item.raw_material,
-                        'needed': Decimal('0'),
-                        'cost': item.raw_material.cost_price or Decimal('0'),
-                        'total': Decimal('0')
-                    }
-                material_reqs[mat_id]['needed'] += Decimal(str(item.quantity))
-                material_reqs[mat_id]['total'] = material_reqs[mat_id]['needed'] * material_reqs[mat_id]['cost']
+        # 🌟 [FIXED] ดึงจากวัสดุใน JOB ตรงๆ
+        for item in job.materials.all():
+            mat_id = item.raw_material.id
+            if mat_id not in material_reqs:
+                material_reqs[mat_id] = {
+                    'product': item.raw_material,
+                    'needed': Decimal('0'),
+                    'cost': item.raw_material.cost_price or Decimal('0'),
+                    'total': Decimal('0')
+                }
+            material_reqs[mat_id]['needed'] += Decimal(str(item.quantity))
+            material_reqs[mat_id]['total'] = material_reqs[mat_id]['needed'] * material_reqs[mat_id]['cost']
 
     materials_list = []
     grand_total = Decimal('0')

@@ -12,8 +12,8 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
-from django.db.models import Q, Sum, Count, Max, F, FloatField
-from django.db.models.functions import TruncDate, TruncMonth
+from django.db.models import Q, Sum, Count, Max, F, FloatField, DecimalField, ExpressionWrapper
+from django.db.models.functions import TruncDate, TruncMonth, Coalesce
 from django.core.paginator import Paginator
 from django.utils.dateparse import parse_date
 from django.utils import timezone
@@ -454,10 +454,12 @@ def start_production(request, pk):
 
 @login_required
 def ppo_prepare(request):
-    available_jobs = ProductionOrder.objects.filter(status='WAITING_MATERIALS', is_materials_ordered=False).order_by('code')
+    # กรองไม่ให้ดึง JOB ที่มี ppo_ref แล้วมาแสดงซ้ำ
+    available_jobs = ProductionOrder.objects.filter(status='WAITING_MATERIALS', is_materials_ordered=False, ppo_ref__isnull=True).order_by('code')
     ppo_code = ""
     materials_by_supplier = {}
     selected_job_ids = []
+
     if request.method == 'POST':
         selected_job_ids = request.POST.getlist('job_ids')
         if selected_job_ids:
@@ -469,59 +471,56 @@ def ppo_prepare(request):
             virtual_stock_used = {}
 
             for job in jobs:
-                # (โค้ดลูปคำนวณวัตถุดิบเดิม...)
-                bom = BOM.objects.filter(product=job.product).first()
-                if bom:
-                    for item in bom.items.all():
-                        total_needed = Decimal(str(item.quantity))
-                        mat_id = item.raw_material.id
+                # 🌟 [FIXED] เปลี่ยนให้ระบบดึงวัตถุดิบจากใบ JOB จริงๆ แทนการเช็ค BOM ดั้งเดิม 🌟
+                for item in job.materials.all():
+                    total_needed = Decimal(str(item.quantity))
+                    mat_id = item.raw_material.id
 
-                        # คำนวณสต๊อกคงเหลือ และสต๊อกที่โดนจอง (หักออกไปแล้วในลูปก่อนหน้า)
-                        actual_stock = max(Decimal('0'), item.raw_material.stock_qty or Decimal('0'))
-                        used_stock = virtual_stock_used.get(mat_id, Decimal('0'))
-                        available_stock = max(Decimal('0'), actual_stock - used_stock)
+                    # คำนวณสต๊อกคงเหลือ
+                    actual_stock = max(Decimal('0'), item.raw_material.stock_qty or Decimal('0'))
+                    used_stock = virtual_stock_used.get(mat_id, Decimal('0'))
+                    available_stock = max(Decimal('0'), actual_stock - used_stock)
 
-                        # 🌟 ลอจิกหักลบสต๊อก (Net Requirement) 🌟
-                        if available_stock >= total_needed:
-                            # สต๊อกมีพอ ไม่ต้องสั่งซื้อเพิ่ม
-                            to_order_qty = Decimal('0')
-                            virtual_stock_used[mat_id] = used_stock + total_needed
-                        else:
-                            # สต๊อกไม่พอ สั่งซื้อเฉพาะส่วนที่ขาด
-                            to_order_qty = total_needed - available_stock
-                            virtual_stock_used[mat_id] = used_stock + available_stock # ใช้สต๊อกจนหมดเกลี้ยงแล้ว
+                    # ลอจิกหักลบสต๊อก
+                    if available_stock >= total_needed:
+                        to_order_qty = Decimal('0')
+                        virtual_stock_used[mat_id] = used_stock + total_needed
+                    else:
+                        to_order_qty = total_needed - available_stock
+                        virtual_stock_used[mat_id] = used_stock + available_stock
 
-                        supplier = item.raw_material.supplier
-                        sup_id = supplier.id if supplier else "none"
-                        sup_name = supplier.name if supplier else "ไม่ได้ระบุร้านค้า"
+                    supplier = item.raw_material.supplier
+                    sup_id = supplier.id if supplier else "none"
+                    sup_name = supplier.name if supplier else "ไม่ได้ระบุร้านค้า"
 
-                        if sup_id not in materials_by_supplier: materials_by_supplier[sup_id] = {'name': sup_name, 'items': {}}
+                    if sup_id not in materials_by_supplier:
+                        materials_by_supplier[sup_id] = {'name': sup_name, 'items': {}}
 
-                        if mat_id not in materials_by_supplier[sup_id]['items']:
-                            materials_by_supplier[sup_id]['items'][mat_id] = {
-                                'product_id': item.raw_material.id,
-                                'product_name': item.raw_material.name,
-                                'product_code': item.raw_material.code,
-                                'total_needed': Decimal('0'),  # ยอดรวมทั้งหมดที่ต้องใช้
-                                'in_stock': actual_stock,      # ยอดในคลัง
-                                'qty': Decimal('0'),           # 🌟 ยอดที่ต้องสั่งซื้อจริง (To Order)
-                                'cost': item.raw_material.cost_price or Decimal('0'),
-                                'total': Decimal('0')
-                            }
+                    if mat_id not in materials_by_supplier[sup_id]['items']:
+                        materials_by_supplier[sup_id]['items'][mat_id] = {
+                            'product_id': item.raw_material.id,
+                            'product_name': item.raw_material.name,
+                            'product_code': item.raw_material.code,
+                            'total_needed': Decimal('0'),
+                            'in_stock': actual_stock,
+                            'qty': Decimal('0'),
+                            'cost': item.raw_material.cost_price or Decimal('0'),
+                            'total': Decimal('0')
+                        }
 
-                        # อัปเดตตัวเลข
-                        materials_by_supplier[sup_id]['items'][mat_id]['total_needed'] += total_needed
-                        materials_by_supplier[sup_id]['items'][mat_id]['qty'] += to_order_qty
-                        materials_by_supplier[sup_id]['items'][mat_id]['total'] = materials_by_supplier[sup_id]['items'][mat_id]['qty'] * materials_by_supplier[sup_id]['items'][mat_id]['cost']
+                    materials_by_supplier[sup_id]['items'][mat_id]['total_needed'] += total_needed
+                    materials_by_supplier[sup_id]['items'][mat_id]['qty'] += to_order_qty
+                    materials_by_supplier[sup_id]['items'][mat_id]['total'] = materials_by_supplier[sup_id]['items'][mat_id]['qty'] * materials_by_supplier[sup_id]['items'][mat_id]['cost']
 
-                        jobs.update(is_materials_ordered=True)
+            # อัปเดตสถานะให้ JOB ทุกใบที่เลือก
+            jobs.update(is_materials_ordered=True, ppo_ref=ppo_code)
 
-            # 🌟 [FIXED] คลีนข้อมูล และกรองเอาเฉพาะอันที่ต้องสั่งซื้อ (>0) ส่งไปทำ PO 🌟
+            # คลีนข้อมูล และกรองเอาเฉพาะอันที่ต้องสั่งซื้อ (>0) ส่งไปทำ PO
             suppliers_to_remove = []
             for sup_id in materials_by_supplier:
                 items_list = []
                 for v in materials_by_supplier[sup_id]['items'].values():
-                    if float(v['qty']) > 0:  # 🌟 กรองเฉพาะรายการที่ยอดสั่งซื้อมากกว่า 0 เท่านั้น
+                    if float(v['qty']) > 0:
                         v['total_needed'] = float(v['total_needed'])
                         v['in_stock'] = float(v['in_stock'])
                         v['qty'] = float(v['qty'])
@@ -532,15 +531,32 @@ def ppo_prepare(request):
                 if items_list:
                     materials_by_supplier[sup_id]['items'] = items_list
                 else:
-                    # 🌟 ถ้าร้านค้านี้ของครบหมดแล้ว (ไม่มียอดต้องสั่งซื้อเลย) ให้จดจำไว้เพื่อลบการ์ดทิ้ง
                     suppliers_to_remove.append(sup_id)
 
-            # 🌟 ลบการ์ดร้านค้าที่ไม่มียอดสั่งซื้อออกจากหน้าจอ
             for sup_id in suppliers_to_remove:
                 del materials_by_supplier[sup_id]
+
+            # 🌟 [NEW] เพิ่มส่วนนี้: เก็บข้อมูลไว้ใน Session ชั่วคราว เพื่อส่งไปแสดงหน้าถัดไป 🌟
+            request.session['ppo_code'] = ppo_code
+            request.session['materials_by_supplier'] = materials_by_supplier
+
+            messages.success(request, f"สร้างใบเตรียมการสั่งซื้อสำเร็จ! เลขที่เอกสาร PPO มัดรวม: {ppo_code}")
+
+            # 🌟 [CRITICAL FIX] บังคับ Redirect กลับหน้าเดิม (หรือหน้ารายละเอียด PPO) เพื่อล้างสถานะ POST 🌟
+            return redirect('ppo_prepare') # จะรีไดเรกต์กลับมาหน้าตัวเองแบบโหลดใหม่หมดจด
+
         else:
             messages.warning(request, "⚠️ กรุณาติ๊กเลือกอย่างน้อย 1 ใบสั่งผลิต (JOB) เพื่อคำนวณวัตถุดิบ")
-    return render(request, 'manufacturing/ppo_prepare.html', {'available_jobs': available_jobs, 'ppo_code': ppo_code, 'materials_by_supplier': materials_by_supplier, 'selected_job_ids': [int(i) for i in selected_job_ids]})
+
+    # 🌟 [NEW] ดึงข้อมูลที่เพิ่งทำเสร็จออกมาโชว์ให้ชื่นใจ 🌟
+    display_ppo_code = request.session.pop('ppo_code', '')
+    display_materials = request.session.pop('materials_by_supplier', {})
+
+    return render(request, 'manufacturing/ppo_prepare.html', {
+        'available_jobs': available_jobs,
+        'ppo_code': display_ppo_code,
+        'materials_by_supplier': display_materials,
+    })
 
 @login_required
 @transaction.atomic
@@ -1207,6 +1223,7 @@ def process_qc(request, pk):
             alloc_name = f"{order.product.name} [{order.code}]"
             if order.customer_name: alloc_name += f" (ลค. {order.customer_name})"
 
+            # 🌟 [FIXED] เพิ่มฟังก์ชันคัดลอกรูปภาพจากรหัสแม่ ไปใส่รหัสลูก
             allocated_product, created = Product.objects.get_or_create(
                 code=alloc_code,
                 defaults={
@@ -1214,12 +1231,20 @@ def process_qc(request, pk):
                     'product_type': 'FG', 'sell_price': order.product.sell_price,
                     'cost_price': order.product.cost_price, 'min_level': 0,
                     'stock_qty': 0, 'is_active': True,
+                    'image': order.product.image if order.product.image else None, # 👈 คำสั่งโคลนรูปภาพ
                 }
             )
 
+            # 🌟 [NEW] เพิ่มเลขใบเสนอราคาต่อท้าย Note
+            ref_doc_text = ""
+            if order.quotation_ref:
+                ref_doc_text = f" อ้างอิงใบเสนอราคา: {order.quotation_ref.code}"
+
+            note_text = f"รับสินค้าจากฝ่ายผลิต {order.code} (ผ่าน QC){ref_doc_text}"
+
             # 🌟 [FIXED] แยกตะกร้ารับเข้าเป็นของฝ่ายผลิตโดยเฉพาะ (GR-FG)
             qc_doc = QCReceiptDoc.objects.create(production_order=order, product=allocated_product, quantity=Decimal(str(order.quantity)), created_by=request.user)
-            StockMovement.objects.create(doc=None, reference_doc=qc_doc.doc_no, note=f"รับสินค้าจากฝ่ายผลิต {order.code} (ผ่าน QC)", product=allocated_product, quantity=Decimal(str(order.quantity)), movement_type='IN', created_by=request.user)
+            StockMovement.objects.create(doc=None, reference_doc=qc_doc.doc_no, note=note_text, product=allocated_product, quantity=Decimal(str(order.quantity)), movement_type='IN', created_by=request.user)
 
             order.status = 'COMPLETED'
             order.finish_date = timezone.now().date()
@@ -1587,47 +1612,8 @@ def process_logistics(request, pk):
                             order.proof_of_delivery = request.FILES['proof_of_delivery']
 
                         order.delivery_status_id = delivery_status_id
-
-                        # 🌟 [FIXED] ระบบตัดสต๊อกอัตโนมัติแบบฉลาด (ไม่สนใจว่าอัปรูปตอนไหน) 🌟
-                        if order.product:
-                            # 1. หารหัสสินค้าตัวลูก (-JOB) ที่ถูกสร้างตอนรับเข้าคลัง (QC) แบบ "ยืดหยุ่น"
-                            search_keyword = f"{order.code}" # หาเฉพาะคำว่า JOB6909016
-
-                            # ค้นหาสินค้าที่มีคำว่า JOB6909016 อยู่ในรหัส (code)
-                            job_product = Product.objects.filter(code__icontains=search_keyword).first()
-
-                            if not job_product:
-                                # เผื่อกรณีเป็นงานเก่าจริงๆ ที่ไม่มีรหัส -JOB ในระบบ ให้ใช้ตัวแม่แทน
-                                job_product = order.product
-
-                            # 2. เช็คว่าเคยมีการตัดสต็อกแบบ DISPATCH ของสินค้านี้ไปแล้วหรือยัง
-                            already_dispatched = StockMovement.objects.filter(
-                                product=job_product,
-                                movement_type='DISPATCH',
-                                doc__reference=f"ส่งมอบ {order.code}"
-                            ).exists()
-
-                            if not already_dispatched:
-                                # หาเอกสารใบเบิกเดิมที่อาจจะเคยสร้างผิดไว้ (ถ้ามี) จะได้ไม่รกฐานข้อมูล
-                                doc_out = InventoryDoc.objects.filter(reference=f"ส่งมอบ {order.code}", doc_type='GI').first()
-                                if not doc_out:
-                                    doc_out = InventoryDoc.objects.create(
-                                        doc_type='GI',
-                                        reference=f"ส่งมอบ {order.code}",
-                                        description=f"ตัดสต๊อกหน้าลานส่งมอบ {job_product.name} ให้ลูกค้า {order.customer_name or 'ทั่วไป'}",
-                                        created_by=request.user
-                                    )
-
-                                StockMovement.objects.create(
-                                    doc=doc_out,
-                                    product=job_product,  # 🌟 สั่งตัดสต๊อกจากรหัสที่หาเจอ 🌟
-                                    quantity=Decimal(str(order.quantity)),
-                                    movement_type='DISPATCH',
-                                    created_by=request.user
-                                )
-                                messages.success(request, "📦 อัปเดตสถานะการส่งมอบ และตัดยอดสินค้าออกจากลานสำเร็จ!")
-                            else:
-                                messages.success(request, "📦 อัปเดตสถานะการส่งมอบสำเร็จ (สินค้าเคยถูกตัดยอดไปแล้ว)")
+                        # 🌟 [DELETED] นำระบบตัดสต็อกหน้าลานตรงนี้ออกไปแล้ว ตามคำขอของคุณปอนด์
+                        messages.success(request, "📦 อัปเดตสถานะการส่งมอบสำเร็จ!")
                     else:
                         messages.error(request, "❌ กรุณาแนบรูปภาพใบส่งมอบสินค้า (ที่มีลายเซ็นลูกค้า) ก่อนปิดงาน!")
                         return redirect('logistics_board')
