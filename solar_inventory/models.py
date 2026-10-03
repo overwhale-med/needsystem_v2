@@ -2,6 +2,10 @@ from django.db import models
 from django.utils import timezone
 import datetime
 
+# 🌟 [NEW] เพิ่มเครื่องมือสำหรับเชื่อมโยงผู้ใช้ และบีบอัดรูปภาพ
+from django.contrib.auth.models import User
+from PIL import Image
+
 class SolarProductCategory(models.Model):
     name = models.CharField(max_length=100, unique=True, verbose_name="หมวดหมู่แพ็กเกจ/สินค้า (FG)")
     def __str__(self): return self.name
@@ -15,6 +19,10 @@ class SolarRawMaterialCategory(models.Model):
 class SolarProduct(models.Model):
     PRODUCT_TYPES = [('FG', 'แพ็กเกจโซล่า (ขาย)'), ('RM', 'วัตถุดิบ/อุปกรณ์ (เบิก/ซื้อ)')]
     product_type = models.CharField(max_length=2, choices=PRODUCT_TYPES, default='FG', verbose_name="ประเภทสินค้า")
+
+    # 🌟 [NEW] เพิ่มช่องเก็บรูปภาพสินค้า (อัปโหลดไปที่โฟลเดอร์ solar_products)
+    image = models.ImageField(upload_to='solar_products/', null=True, blank=True, verbose_name="รูปภาพสินค้า")
+
     code = models.CharField(max_length=50, unique=True, blank=True, verbose_name="รหัสสินค้า (SKU)")
     name = models.CharField(max_length=200, verbose_name="ชื่อสินค้า/แพ็กเกจ")
     unit = models.CharField(max_length=50, blank=True, null=True, verbose_name="หน่วยนับ")
@@ -29,12 +37,10 @@ class SolarProduct(models.Model):
 
     def __str__(self): return f"{self.code} - {self.name}"
 
-    # 🌟 [NEW] เพิ่ม Property สำหรับคำนวณมูลค่าคงเหลือ 🌟
     @property
     def total_value(self):
         return self.stock_qty * self.cost_price
 
-    # 🌟 [NEW] คำนวณต้นทุนวัตถุดิบรวมจากสูตรมาตรฐาน (BOM)
     @property
     def total_bom_cost(self):
         if self.product_type == 'FG':
@@ -43,19 +49,16 @@ class SolarProduct(models.Model):
             return total
         return self.cost_price
 
-    # 🌟 [NEW] คำนวณกำไรขั้นต้น (Gross Profit)
     @property
     def gross_profit(self):
         return self.sell_price - self.total_bom_cost
 
-    # 🌟 [NEW] คำนวณเปอร์เซ็นต์กำไรขั้นต้น (Gross Margin)
     @property
     def gross_margin_percent(self):
         if self.sell_price > 0:
             return (self.gross_profit / self.sell_price) * 100
         return 0
 
-    # 🌟 [FIXED] เติมโค้ดในฟังก์ชัน save กลับคืนมาให้ครบ
     def save(self, *args, **kwargs):
         if not self.code:
             today = datetime.date.today()
@@ -65,9 +68,72 @@ class SolarProduct(models.Model):
             last_product = SolarProduct.objects.filter(code__startswith=prefix).order_by('code').last()
             new_running = int(last_product.code.split('-')[-1]) + 1 if last_product else 1
             self.code = f"{prefix}{new_running:03d}"
+
         super().save(*args, **kwargs)
 
+        # 🌟 [NEW] ระบบบีบอัดรูปภาพสินค้าให้มีขนาดเล็กลง เพื่อประหยัดพื้นที่เซิร์ฟเวอร์
+        if self.image:
+            try:
+                img = Image.open(self.image.path)
+                if img.height > 800 or img.width > 800:
+                    img.thumbnail((800, 800))
+                    img.save(self.image.path, quality=85, optimize=True)
+            except Exception: pass
+
+# ==========================================
+# 🌟 [NEW] หัวเอกสารคลังสินค้าโซล่า (Inventory Document)
+# ==========================================
+class SolarInventoryDoc(models.Model):
+    DOC_TYPES = [('GR', 'ใบรับสินค้า (Goods Receipt)'), ('GI', 'ใบเบิกสินค้า (Goods Issue)')]
+    doc_no = models.CharField(max_length=50, unique=True, blank=True, verbose_name="เลขที่เอกสาร")
+    doc_type = models.CharField(max_length=2, choices=DOC_TYPES, verbose_name="ประเภทเอกสาร")
+    reference = models.CharField(max_length=100, blank=True, verbose_name="อ้างอิงอื่นๆ (เช่น ใบส่งของ, PO)")
+
+    # ช่องเก็บรูปภาพใบส่งของ พร้อมบีบอัดอัตโนมัติ
+    slip_image = models.ImageField(upload_to='solar_receipts/%Y/%m/', null=True, blank=True, verbose_name="รูปใบส่งของ/รับของ")
+
+    description = models.TextField(blank=True, verbose_name="หมายเหตุ")
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, verbose_name="ผู้ทำรายการ")
+    created_at = models.DateTimeField(default=timezone.now, verbose_name="วันที่เอกสาร")
+
+    def save(self, *args, **kwargs):
+        # ระบบสมองกลสร้างเลขเอกสารอัตโนมัติ (เช่น GR-SOL-6910-001)
+        if not self.doc_no:
+            today = datetime.date.today()
+            thai_year = (today.year + 543) % 100
+            year_month = f"{thai_year:02d}{today.strftime('%m')}"
+            prefix = f"{self.doc_type}-SOL-{year_month}-"
+            last_doc = SolarInventoryDoc.objects.filter(doc_no__startswith=prefix).order_by('doc_no').last()
+
+            if last_doc:
+                try: running_number = int(last_doc.doc_no.split('-')[-1]) + 1
+                except ValueError: running_number = 1
+            else:
+                running_number = 1
+
+            self.doc_no = f"{prefix}{running_number:03d}"
+        super().save(*args, **kwargs)
+
+        # บีบอัดรูปภาพถ้าขนาดใหญ่เกินไป
+        if self.slip_image:
+            try:
+                img = Image.open(self.slip_image.path)
+                if img.height > 800 or img.width > 800:
+                    img.thumbnail((800, 800))
+                    img.save(self.slip_image.path, quality=85, optimize=True)
+            except Exception: pass
+
+    def __str__(self):
+        return f"{self.doc_no} ({self.get_doc_type_display()})"
+
+    class Meta:
+        verbose_name = "เอกสารคลังโซล่าเซลล์"
+        verbose_name_plural = "เอกสารคลังโซล่าเซลล์ (Docs)"
+
 class SolarStockMovement(models.Model):
+    # 🌟 [NEW] เพิ่มการเชื่อมโยงกับหัวเอกสาร (ยอมให้ว่างได้ เพื่อไม่ให้ประวัติเก่าพัง)
+    doc = models.ForeignKey(SolarInventoryDoc, on_delete=models.CASCADE, related_name='movements', verbose_name="เลขที่เอกสาร", null=True, blank=True)
+
     product = models.ForeignKey(SolarProduct, on_delete=models.CASCADE, verbose_name="สินค้าโซล่า")
     quantity = models.DecimalField(max_digits=12, decimal_places=2, verbose_name="จำนวน")
     movement_type = models.CharField(max_length=10, choices=[('IN', 'เข้า'), ('OUT', 'ออก')], verbose_name="ประเภท")

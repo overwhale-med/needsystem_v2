@@ -1,0 +1,79 @@
+{% extends 'core/base.html' %}
+{% load humanize %}
+
+{% block content %}
+<div class="container-fluid py-4 px-4">
+    <!-- 🌟 ส่วนหัว (Header) 🌟 -->
+    <div class="d-flex flex-wrap justify-content-between align-items-end mb-4 gap-3">
+        <div>
+            <h3 class="fw-bold text-dark mb-1"><i class="fas fa-box text-primary me-2"></i>จัดการแพ็กเกจหลัก (FG)</h3>
+            <p class="text-muted mb-0">รายการสินค้าพร้อมขาย และแพ็กเกจระบบโซล่าเซลล์</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{% url 'solar_product_create' %}?type=FG" class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm">
+                <i class="fas fa-plus-circle me-1"></i> เพิ่มแพ็กเกจ (FG)
+            </a>
+            <a href="{% url 'solar_inventory_list' %}" class="btn btn-outline-secondary rounded-pill px-4 fw-bold shadow-sm">
+                <i class="fas fa-arrow-left me-1"></i> กลับ Dashboard
+            </a>
+        </div>
+    </div>
+
+    <!-- 🌟 ตารางข้อมูลแพ็กเกจ (FG Table) 🌟 -->
+    <div class="card border-0 shadow-sm rounded-4 overflow-hidden border-top border-4 border-primary bg-white">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="bg-light text-secondary small text-uppercase">
+                    <tr>
+                        <th class="ps-4 py-3">รหัส / สถานะ</th>
+                        <th class="py-3">ชื่อแพ็กเกจ (FG)</th>
+                        <th class="py-3">หมวดหมู่</th>
+                        <th class="text-center py-3">กำไรขั้นต้น</th>
+                        <th class="text-end py-3">ราคาขาย</th>
+                        <th class="text-end py-3">ต้นทุนรวม (BOM)</th>
+                        <th class="text-center py-3">คงเหลือ</th>
+                        <th class="text-end py-3">มูลค่าคงเหลือ</th>
+                        <th class="text-center pe-4 py-3">จัดการ</th>
+                    </tr>
+                </thead>
+                <tbody class="border-top-0">
+                    {% for item in fg_products %}
+                    <tr>
+                        <td class="ps-4">
+                            <div class="fw-bold text-dark">{{ item.code|default:"-" }}</div>
+                            {% if item.is_active %}
+                                <span class="badge bg-success bg-opacity-10 text-success border border-success rounded-pill">เปิดใช้งาน</span>
+                            {% else %}
+                                <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary rounded-pill">ปิดใช้งาน</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="fw-bold text-primary">{{ item.name }}</div>
+                        </td>
+                        <td><span class="badge bg-light text-dark border rounded-pill px-3">{{ item.category.name|default:"-" }}</span></td>
+                        <td class="text-center">
+                            <div class="fw-bold text-success">฿{{ item.gross_profit|floatformat:2|intcomma }}</div>
+                            <small class="text-muted">({{ item.gross_margin_percent|floatformat:2 }}%)</small>
+                        </td>
+                        <td class="text-end fw-bold text-dark">฿{{ item.sell_price|floatformat:2|intcomma }}</td>
+                        <td class="text-end text-danger fw-bold">฿{{ item.total_bom_cost|floatformat:2|intcomma }}</td>
+                        <td class="text-center">
+                            <span class="badge {% if item.stock_qty <= 0 %}bg-danger{% else %}bg-primary{% endif %} rounded-pill px-3 fs-6 shadow-sm">
+                                {{ item.stock_qty|floatformat:2 }}
+                            </span>
+                        </td>
+                        <td class="text-end fw-bold text-secondary">฿{{ item.total_value|floatformat:2|intcomma }}</td>
+                        <td class="text-center pe-4">
+                            <a href="{% url 'solar_stock_card' item.id %}" class="btn btn-sm btn-outline-info rounded-pill px-3 shadow-sm"><i class="fas fa-history me-1"></i> ประวัติ</a>
+                            <a href="{% url 'solar_product_edit' item.id %}" class="btn btn-sm btn-outline-secondary rounded-pill px-3 shadow-sm"><i class="fas fa-edit me-1"></i> แก้ไข</a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="9" class="text-center py-5 text-muted">ยังไม่มีรายการแพ็กเกจในระบบ</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

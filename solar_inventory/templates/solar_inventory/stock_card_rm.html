@@ -17,6 +17,17 @@
             <p class="text-muted mb-0">ประวัติความเคลื่อนไหว รับเข้า-เบิกออก ของวัตถุดิบ</p>
         </div>
         <div class="d-flex gap-2">
+            <!-- ปุ่มประวัติรับเข้า (GR) -->
+            <a href="{% url 'solar_document_list_in' %}" class="btn btn-outline-primary rounded-pill px-4 fw-bold shadow-sm">
+                <i class="fas fa-file-download me-1"></i> ประวัติรับเข้า (GR)
+            </a>
+
+            <!-- 🌟 [NEW] เพิ่มปุ่มประวัติเบิกออก (GI) สีแดง -->
+            <a href="{% url 'solar_document_list_out' %}" class="btn btn-outline-danger rounded-pill px-4 fw-bold shadow-sm">
+                <i class="fas fa-file-upload me-1"></i> ประวัติเบิกออก (GI)
+            </a>
+
+            <!-- ปุ่มกลับหน้าคลังสินค้า -->
             <a href="{% url 'solar_inventory_list' %}" class="btn btn-outline-secondary rounded-pill px-4 fw-bold shadow-sm">
                 <i class="fas fa-arrow-left me-1"></i> กลับหน้าคลังสินค้า
             </a>
@@ -62,10 +73,13 @@
                     <thead class="bg-light text-secondary small text-uppercase border-bottom border-2">
                         <tr>
                             <th width="15%" class="ps-4 py-3">วัน/เวลา</th>
-                            <th width="35%" class="py-3">รายละเอียด / อ้างอิง</th>
-                            <th class="text-center py-3 text-success" width="15%">รับเข้า (IN)</th>
-                            <th class="text-center py-3 text-danger" width="15%">เบิกออก (OUT)</th>
-                            <th class="text-end pe-4 py-3 text-primary" width="20%">ยอดคงเหลือ (Balance)</th>
+                            <th width="12%" class="py-3">เลขที่เอกสาร</th>
+                            <th width="25%" class="py-3">รายละเอียด / อ้างอิง</th>
+                            <th class="text-center py-3 text-success" width="10%">รับเข้า (IN)</th>
+                            <th class="text-center py-3 text-danger" width="10%">เบิกออก (OUT)</th>
+                            <th class="text-end py-3 text-primary" width="15%">ยอดคงเหลือ (Balance)</th>
+                            <!-- 🌟 [NEW] เพิ่มหัวคอลัมน์ผู้บันทึกให้ครบ 7 คอลัมน์ -->
+                            <th class="text-center pe-4 py-3" width="13%">ผู้บันทึก</th>
                         </tr>
                     </thead>
                     <tbody class="border-top-0">
@@ -73,31 +87,66 @@
                         <tr>
                             <td class="ps-4 text-muted small">{{ move.created_at|date:"d/m/Y H:i" }}</td>
 
+                            <!-- 🌟 คอลัมน์เลขที่เอกสาร (ปรับสีให้เข้มเหมือนต้นฉบับ แต่กดได้) -->
                             <td>
-                                <!-- รายละเอียด / อ้างอิง -->
-                                <div class="text-dark fw-bold" style="font-size: 0.9rem;">
-                                    {{ move.reference_doc|default:"ไม่มีการระบุอ้างอิง" }}
-                                </div>
+                                {% if move.doc %}
+                                    <a href="{% url 'solar_print_document' move.doc.doc_no %}" target="_blank" class="fw-bold text-decoration-none text-dark" title="คลิกเพื่อพิมพ์เอกสาร">
+                                        {{ move.doc.doc_no }}
+                                    </a>
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
                             </td>
 
-                            <!-- 🌟 คอลัมน์รับเข้า (IN) -->
+                            <!-- 🌟 คอลัมน์รายละเอียด แบ่งเป็น 2 บรรทัดเหมือนต้นฉบับ -->
+                            <td>
+                                <!-- บรรทัดที่ 1: รายละเอียด -->
+                                <div class="text-dark" style="font-size: 0.9rem;">
+                                    {% if move.doc and move.doc.description %}
+                                        {{ move.doc.description }}
+                                    {% else %}
+                                        {{ move.reference_doc|default:"ไม่มีการระบุรายละเอียด" }}
+                                    {% endif %}
+                                </div>
+
+                                <!-- บรรทัดที่ 2: ข้อความอ้างอิง และลิงก์ (ถ้ามี) -->
+                                {% if move.doc and move.doc.reference %}
+                                    <small class="text-muted d-block mt-1">
+                                        <i class="fas fa-link me-1"></i>อ้างอิง: <span class="fw-bold text-primary">{{ move.doc.reference }}</span>
+                                    </small>
+                                {% elif move.reference_doc %}
+                                    <small class="text-muted d-block mt-1">
+                                        <i class="fas fa-link me-1"></i>อ้างอิง: <span class="fw-bold text-primary">{{ move.reference_doc }}</span>
+                                    </small>
+                                {% endif %}
+                            </td>
+
                             <td class="text-center fw-bold text-success fs-6">
                                 {% if move.movement_type == 'IN' %}+{{ move.quantity|floatformat:2 }}{% else %}-{% endif %}
                             </td>
 
-                            <!-- 🌟 คอลัมน์เบิกออก (OUT) -->
                             <td class="text-center fw-bold text-danger fs-6">
                                 {% if move.movement_type == 'OUT' %}-{{ move.quantity|floatformat:2 }}{% else %}-{% endif %}
                             </td>
 
-                            <!-- 🌟 ยอดคงเหลือสะสม (Balance) -->
-                            <td class="text-end pe-4 fw-bold text-primary fs-5 bg-light bg-opacity-50">
+                            <td class="text-end pe-3 fw-bold text-primary fs-5 bg-light bg-opacity-50">
                                 {{ move.current_balance|floatformat:2 }}
+                            </td>
+
+                            <!-- 🌟 [NEW] คอลัมน์แสดงผู้บันทึก (โชว์ไอคอนรูปคน) -->
+                            <td class="text-center pe-4 text-muted small">
+                                <i class="fas fa-user-circle me-1"></i>
+                                {% if move.doc and move.doc.created_by %}
+                                    {{ move.doc.created_by.first_name|default:move.doc.created_by.username }}
+                                {% else %}
+                                    System
+                                {% endif %}
                             </td>
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="5" class="text-center py-5 text-muted">
+                            <!-- 🌟 [UPDATE] เปลี่ยน colspan จาก 6 เป็น 7 เพื่อคลุมทั้งตาราง -->
+                            <td colspan="7" class="text-center py-5 text-muted">
                                 <i class="fas fa-clipboard-list fa-3x mb-3 opacity-25"></i>
                                 <h6 class="fw-bold">ยังไม่มีประวัติความเคลื่อนไหวของสินค้านี้</h6>
                             </td>
