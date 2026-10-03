@@ -1,0 +1,225 @@
+{% extends 'core/base.html' %}
+{% load humanize %}
+
+{% block content %}
+<div class="container-fluid py-4 px-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-end mb-4">
+        <div>
+            <h4 class="fw-bold mb-1 text-dark"><i class="fas fa-history text-primary me-2"></i>ประวัติใบตั้งเบิกคอมมิชชัน (ทั้งหมด)</h4>
+            <p class="text-muted small mb-0">ระบบตรวจสอบประวัติการขอเบิกผลตอบแทน ย้อนหลังแบบละเอียด</p>
+        </div>
+        <div>
+            <a href="{% url 'commission_board' %}" class="btn btn-outline-secondary rounded-pill px-4 shadow-sm fw-bold"><i class="fas fa-arrow-left me-2"></i> กลับศูนย์ตั้งเบิก</a>
+        </div>
+    </div>
+
+    <!-- 🌟 Filter Bar (แถบค้นหา 5 ข้อ) 🌟 -->
+    <div class="card border-0 shadow-sm rounded-4 mb-4">
+        <div class="card-body p-3 bg-light rounded-4">
+            <form method="GET" action="{% url 'commission_history_list' %}" class="row g-2 align-items-center">
+                <!-- 1. เลขที่ใบเบิก -->
+                <div class="col-md-2">
+                    <label class="form-label small fw-bold text-muted mb-1">เลขที่ใบเบิก</label>
+                    <input type="text" name="q" class="form-control form-control-sm shadow-sm" placeholder="เช่น REQ..." value="{{ search_query }}">
+                </div>
+                <!-- 2. ชื่อพนักงาน/สาขา -->
+                <div class="col-md-2">
+                    <label class="form-label small fw-bold text-muted mb-1">พนักงาน / สาขา</label>
+                    <input type="text" name="emp" class="form-control form-control-sm shadow-sm" placeholder="พิมพ์ชื่อเซลส์..." value="{{ emp_search }}">
+                </div>
+                <!-- 3. ประเภทคอมมิชชัน -->
+                <div class="col-md-2">
+                    <label class="form-label small fw-bold text-muted mb-1">ประเภท</label>
+                    <select name="type" class="form-select form-select-sm shadow-sm">
+                        <option value="">-- ทั้งหมด --</option>
+                        <option value="2%" {% if claim_type == '2%' %}selected{% endif %}>โควตา 2%</option>
+                        <option value="3%" {% if claim_type == '3%' %}selected{% endif %}>โควตา 3%</option>
+                    </select>
+                </div>
+                <!-- 🌟 [NEW] 4. สถานะการโอน 🌟 -->
+                <div class="col-md-2">
+                    <label class="form-label small fw-bold text-muted mb-1">สถานะ</label>
+                    <select name="status" class="form-select form-select-sm shadow-sm">
+                        <option value="">-- ทั้งหมด --</option>
+                        <option value="PENDING" {% if claim_status == 'PENDING' %}selected{% endif %}>รอโอนเงิน</option>
+                        <option value="PAID" {% if claim_status == 'PAID' %}selected{% endif %}>โอนแล้ว</option>
+                    </select>
+                </div>
+                <!-- 5. ค้นหาแบบช่วงวันที่ (DateRangePicker) -->
+                <div class="col-md-3">
+                    <label class="form-label small fw-bold text-muted mb-1"><i class="far fa-calendar-alt me-1"></i>ช่วงวันที่ตั้งเบิก</label>
+                    <input type="text" id="dateRangePicker" class="form-control form-control-sm shadow-sm text-center bg-white" readonly style="cursor: pointer;">
+
+                    <!-- Hidden inputs สำหรับส่งค่า YYYY-MM-DD กลับไปให้ views.py -->
+                    <input type="hidden" name="start_date" id="start_date" value="{{ start_date }}">
+                    <input type="hidden" name="end_date" id="end_date" value="{{ end_date }}">
+                </div>
+
+                <!-- 6. ปุ่มค้นหา และ ล้างค่า -->
+                <div class="col-md-auto d-flex align-items-end gap-2">
+                    <button type="submit" class="btn btn-dark rounded-circle shadow-sm" style="width: 36px; height: 36px; padding: 0;" title="ค้นหา">
+                        <i class="fas fa-search"></i>
+                    </button>
+                    <a href="{% url 'commission_history_list' %}" class="btn btn-outline-danger rounded-circle shadow-sm" style="width: 36px; height: 36px; padding: 0; display: flex; align-items: center; justify-content: center;" title="ล้างการค้นหา">
+                        <i class="fas fa-redo"></i>
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 🌟 Data Table (ตารางประวัติเต็มจอ) 🌟 -->
+    <div class="card border-0 shadow-sm rounded-4">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="bg-white border-bottom text-muted small">
+                        <tr>
+                            <th class="ps-4 py-3">วันที่ตั้งเบิก</th>
+                            <th class="py-3">รายละเอียดใบเบิก</th>
+                            <th class="py-3">ผู้ขอเบิก (พนักงาน/สาขา)</th>
+                            <th class="py-3">ช่องทางรับเงิน (บัญชี)</th>
+                            <th class="text-end py-3">ยอดสุทธิ (บาท)</th>
+                            <th class="text-center py-3">สถานะ</th>
+                            <th class="text-center py-3">พิมพ์</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for c in page_obj %}
+                        <tr>
+                            <!-- 1. วันที่ -->
+                            <td class="ps-4">
+                                <div class="fw-bold text-dark"><i class="far fa-calendar-alt text-primary me-2"></i>{{ c.created_at|date:"d/m/Y" }}</div>
+                                <div class="small text-muted ms-4">{{ c.created_at|date:"H:i น." }}</div>
+                            </td>
+
+                            <!-- 2. รายละเอียดใบเบิก -->
+                            <td>
+                                <div class="fw-bold text-dark fs-6">{{ c.code }}</div>
+                                <span class="badge {% if c.claim_type == '2%' %}bg-warning text-dark{% else %}bg-success{% endif %} border mt-1 shadow-sm">โควตา {{ c.claim_type }}</span>
+                            </td>
+
+                            <!-- 3. ผู้ขอเบิก -->
+                            <td>
+                                <div class="fw-bold text-dark"><i class="fas fa-user-tie text-muted me-2"></i>{{ c.requester.first_name|default:"-" }} {{ c.requester.last_name|default:"" }}</div>
+                                <div class="small text-muted mt-1"><i class="fas fa-map-marker-alt me-1 text-danger"></i> {{ c.requester.department.name|default:"ไม่ระบุสาขา" }}</div>
+                            </td>
+
+                            <!-- 4. บัญชี -->
+                            <td>
+                                <div class="fw-bold text-dark"><i class="fas fa-university text-info me-2"></i>{{ c.bank_name|default:"-" }}</div>
+                                <div class="small text-muted mt-1 font-monospace">เลขที่: {{ c.bank_account|default:"-" }}</div>
+                                <div class="small text-muted">ชื่อ: {{ c.account_name|default:"-" }}</div>
+                            </td>
+
+                            <!-- 🌟 5. ยอดเงิน (เคาะวรรคหลัง ฿ 1 ครั้ง) -->
+                            <td class="text-end">
+                                <h5 class="fw-bold text-primary mb-0">฿ {{ c.total_amount|floatformat:2|intcomma }}</h5>
+                            </td>
+
+                            <!-- 🌟 6. สถานะ (ป้ายสถานะ + รูปสลิปย่อส่วนเรียงแนวนอน) -->
+                            <td class="text-center">
+                                {% if c.status == 'PENDING' %}
+                                    <span class="badge bg-warning text-dark rounded-pill px-3 py-2 shadow-sm"><i class="fas fa-hourglass-half me-1"></i> รอโอนเงิน</span>
+                                {% else %}
+                                    <!-- 🌟 จัดกลุ่มด้วย d-flex ให้อยู่บรรทัดเดียวกัน -->
+                                    <div class="d-flex align-items-center justify-content-center gap-2">
+                                        <span class="badge bg-success rounded-pill px-3 py-2 shadow-sm"><i class="fas fa-check-circle me-1"></i> โอนแล้ว</span>
+                                        {% if c.transfer_slip %}
+                                            <a href="{{ c.transfer_slip.url }}" target="_blank" title="คลิกเพื่อขยายสลิป">
+                                                <img src="{{ c.transfer_slip.url }}" alt="Slip" class="img-thumbnail shadow-sm rounded" style="height: 32px; width: auto; cursor: zoom-in; padding: 2px;">
+                                            </a>
+                                        {% endif %}
+                                    </div>
+                                {% endif %}
+                            </td>
+
+                            <!-- 🌟 7. พิมพ์ (แยกคอลัมน์เฉพาะปุ่ม A4) -->
+                            <td class="text-center">
+                                <a href="{% url 'print_commission_claim' c.id %}" target="_blank" class="btn btn-sm btn-outline-primary rounded-pill px-3 fw-bold shadow-sm" style="font-size: 0.75rem;">
+                                    <i class="fas fa-print me-1"></i> พิมพ์ A4
+                                </a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="7" class="text-center py-5 text-muted"><i class="fas fa-folder-open fa-3x mb-3 opacity-25"></i><br>ไม่พบประวัติการตั้งเบิกที่ค้นหา</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- 🌟 Pagination (ระบบแบ่งหน้า) 🌟 -->
+            {% if page_obj.has_other_pages %}
+            <div class="card-footer bg-light border-top py-3 d-flex justify-content-center m-0 rounded-bottom-4">
+                <nav aria-label="Page navigation">
+                    <ul class="pagination pagination-sm mb-0 shadow-sm">
+                        {% if page_obj.has_previous %}
+                            <li class="page-item"><a class="page-link text-primary fw-bold" href="?page=1{% if search_query %}&q={{ search_query }}{% endif %}{% if emp_search %}&emp={{ emp_search }}{% endif %}{% if claim_type %}&type={{ claim_type }}{% endif %}{% if claim_status %}&status={{ claim_status }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}">&laquo; หน้าแรก</a></li>
+                            <li class="page-item"><a class="page-link text-primary" href="?page={{ page_obj.previous_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}{% if emp_search %}&emp={{ emp_search }}{% endif %}{% if claim_type %}&type={{ claim_type }}{% endif %}{% if claim_status %}&status={{ claim_status }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}">ก่อนหน้า</a></li>
+                        {% endif %}
+
+                        <li class="page-item active"><span class="page-link fw-bold border-0">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span></li>
+
+                        {% if page_obj.has_next %}
+                            <li class="page-item"><a class="page-link text-primary" href="?page={{ page_obj.next_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}{% if emp_search %}&emp={{ emp_search }}{% endif %}{% if claim_type %}&type={{ claim_type }}{% endif %}{% if claim_status %}&status={{ claim_status }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}">ถัดไป</a></li>
+                            <li class="page-item"><a class="page-link text-primary fw-bold" href="?page={{ page_obj.paginator.num_pages }}{% if search_query %}&q={{ search_query }}{% endif %}{% if emp_search %}&emp={{ emp_search }}{% endif %}{% if claim_type %}&type={{ claim_type }}{% endif %}{% if claim_status %}&status={{ claim_status }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}">สุดท้าย &raquo;</a></li>
+                        {% endif %}
+                    </ul>
+                </nav>
+            </div>
+            {% endif %}
+
+        </div>
+    </div>
+</div>
+{% endblock %}  <!-- 🌟 [NEW] เพิ่มบรรทัดนี้ เพื่อปิด block content ให้สมบูรณ์ -->
+{% block scripts %}
+<!-- 🌟 [NEW] นำเข้า Library ของปฏิทิน และ jQuery เพื่อให้ DateRangePicker ทำงานได้ 🌟 -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/momentjs/latest/moment.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.min.js"></script>
+<link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css" />
+
+<script>
+$(document).ready(function() {
+    // ดึงค่าวันที่เริ่มต้นจาก Hidden input ที่ Views ส่งมาให้
+    var start = moment($('#start_date').val(), 'YYYY-MM-DD');
+    var end = moment($('#end_date').val(), 'YYYY-MM-DD');
+
+    function cb(start, end) {
+        // แสดงผลบนหน้าจอเป็น dd/mm/yyyy
+        $('#dateRangePicker').val(start.format('DD/MM/YYYY') + ' - ' + end.format('DD/MM/YYYY'));
+        // ส่งค่ากลับไปหาเซิร์ฟเวอร์เป็น YYYY-MM-DD เพื่อป้องกัน Error
+        $('#start_date').val(start.format('YYYY-MM-DD'));
+        $('#end_date').val(end.format('YYYY-MM-DD'));
+    }
+
+    $('#dateRangePicker').daterangepicker({
+        startDate: start,
+        endDate: end,
+        linkedCalendars: false, // 🌟 [NEW] ปิดการเชื่อมโยง ปลดล็อกให้ปฏิทินซ้าย-ขวาเลื่อนแยกกันได้อย่างอิสระ
+        ranges: {
+           'วันนี้': [moment(), moment()],
+           'เมื่อวาน': [moment().subtract(1, 'days'), moment().subtract(1, 'days')],
+           'ช่วง 7 วันก่อนหน้า': [moment().subtract(6, 'days'), moment()],
+           'ช่วง 30 วันก่อนหน้า': [moment().subtract(29, 'days'), moment()],
+           'เดือนนี้': [moment().startOf('month'), moment().endOf('month')],
+           '1 เดือนก่อนหน้า': [moment().subtract(1, 'month').startOf('month'), moment().subtract(1, 'month').endOf('month')]
+        },
+        locale: {
+            format: 'DD/MM/YYYY',
+            applyLabel: "ตกลง",
+            cancelLabel: "ยกเลิก",
+            customRangeLabel: "กำหนดเอง",
+            daysOfWeek: ["อา.", "จ.", "อ.", "พ.", "พฤ.", "ศ.", "ส."],
+            monthNames: ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"],
+            firstDay: 1
+        }
+    }, cb);
+
+    // เรียกใช้ฟังก์ชันตอนโหลดหน้าเว็บครั้งแรกเพื่อตั้งค่า Default 30 วัน
+    cb(start, end);
+});
+</script>
+{% endblock %}

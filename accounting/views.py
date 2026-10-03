@@ -27,7 +27,8 @@ def accounting_dashboard(request):
     net_balance = total_income - total_expense
 
     # 🌟 [FIXED] อัปเดตตัวนับเลขให้ไปนับจากสลิปมัดจำ (RVD) ที่ยังไม่ได้ตรวจ
-    from sales.models import QuotationDeposit
+    from sales.models import QuotationDeposit, CommissionClaim # 🌟 เพิ่ม CommissionClaim
+    from solar_sales.models import SolarCommissionClaim # 🌟 เพิ่ม SolarCommissionClaim
     pending_deposits_quotation = QuotationDeposit.objects.filter(is_verified=False).count()
 
     pending_deposits_solar = SolarQuotationDeposit.objects.filter(is_verified=False).count()
@@ -50,7 +51,12 @@ def accounting_dashboard(request):
     from manufacturing.models import MasterExpenseClaim
     pending_job_expenses = MasterExpenseClaim.objects.filter(status='PENDING').count()
 
-    total_pending_payments = pending_purchases + pending_logistics + pending_blueprints + pending_job_expenses
+    # 🌟 [FIXED] เพิ่มการนับคิวงานทำจ่ายคอมมิชชันของทั้ง 2 แผนก
+    pending_commissions_knockdown = CommissionClaim.objects.filter(status='PENDING').count()
+    pending_commissions_solar = SolarCommissionClaim.objects.filter(status='PENDING').count()
+
+    # 🌟 [FIXED] นำยอดคอมมิชชันมาบวกรวมใน total_pending_payments
+    total_pending_payments = pending_purchases + pending_logistics + pending_blueprints + pending_job_expenses + pending_commissions_knockdown + pending_commissions_solar
 
     recent_incomes = list(Income.objects.all().order_by('-date', '-id')[:5])
     recent_expenses = list(Expense.objects.all().order_by('-date', '-id')[:5])
@@ -67,7 +73,9 @@ def accounting_dashboard(request):
         'pending_purchases_solar': pending_purchases_solar,
         'pending_logistics': pending_logistics,
         'pending_blueprints': pending_blueprints,
-        'pending_job_expenses': pending_job_expenses, # 🌟 เพิ่มตัวแปรนี้
+        'pending_job_expenses': pending_job_expenses,
+        'pending_commissions_knockdown': pending_commissions_knockdown, # 🌟 เพิ่มตัวแปร
+        'pending_commissions_solar': pending_commissions_solar, # 🌟 เพิ่มตัวแปร
         'total_pending_payments': total_pending_payments,
         'recent_transactions': recent_transactions,
     }
@@ -280,14 +288,11 @@ def approve_transaction(request, task_type, item_id):
                     from decimal import Decimal
                     qt = inv.quotation_ref
 
-                    # 🧮 ดึงยอดที่เหลือจากการมัดจำ (Grand Total - Deposit) เพื่อเป็นฐานในการคิด 3%
-                    remaining_amount = inv.grand_total - inv.deposit_amount
-
-                    if qt.employee and remaining_amount > 0:
+                    if qt.employee and inv.grand_total > 0:
                         # เช็คป้องกันการสร้างตั๋วซ้ำ (1 Job = 1 สิทธิ์ 3%)
                         if not CommissionTicket.objects.filter(invoice_ref=inv, ticket_type='3%').exists():
-                            # 🧮 สูตรใหม่: นำก้อน "ยอดชำระที่เหลือ" มาหัก 10%
-                            base_amount = remaining_amount - (remaining_amount * Decimal('0.10'))
+                            # 🧮 สูตรใหม่: กลับมาใช้ยอดสุทธิรวม (Grand Total) เป็นฐานหัก 10%
+                            base_amount = inv.grand_total - (inv.grand_total * Decimal('0.10'))
                             comm_amount = base_amount * Decimal('0.03') # คูณ 3%
 
                             CommissionTicket.objects.create(

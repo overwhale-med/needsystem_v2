@@ -69,7 +69,14 @@
                     {% for order in col1_upcoming %}
                         <div class="card mb-3 shadow-sm border-0 kanban-card border-start border-info border-4" data-bs-toggle="modal" data-bs-target="#updateModal-{{ order.id }}">
                             <div class="card-body p-3">
-                                <span class="badge bg-info text-dark rounded-pill px-3 py-1 mb-2 d-inline-block fs-6 shadow-sm"><i class="fas fa-search me-1"></i> เตรียมของ / รอผลิต</span>
+                                <!-- 🌟 [NEW] แสดงป้ายเตือนถ้ารอวัตถุดิบ หรือรอเบิก -->
+                                {% if order.status == 'WAITING_MATERIALS' %}
+                                    <span class="badge bg-warning text-dark rounded-pill px-3 py-1 mb-2 d-inline-block fs-6 shadow-sm border border-warning"><i class="fas fa-hourglass-half me-1"></i> ⏳ รอวัตถุดิบ</span>
+                                {% elif order.status == 'WAITING_INVENTORY' %}
+                                    <span class="badge bg-success text-white rounded-pill px-3 py-1 mb-2 d-inline-block fs-6 shadow-sm border border-success"><i class="fas fa-box-open me-1"></i> 📦 ของครบ/รอเบิก</span>
+                                {% else %}
+                                    <span class="badge bg-info text-dark rounded-pill px-3 py-1 mb-2 d-inline-block fs-6 shadow-sm"><i class="fas fa-search me-1"></i> เตรียมของ / รอผลิต</span>
+                                {% endif %}
                                 <div class="d-flex align-items-center mb-2 mt-1">
                                     <span class="badge bg-primary fs-6 me-2">{{ order.code }}</span>
                                     <small class="text-muted fw-bold"><i class="far fa-calendar-alt"></i> สั่งผลิต: {{ order.start_date|date:"d/m/Y" }}</small>
@@ -105,6 +112,14 @@
                         <div class="card mb-3 shadow-sm border-0 kanban-card border-start border-primary border-4" data-bs-toggle="modal" data-bs-target="#updateModal-{{ order.id }}">
                             <div class="card-body p-3">
                                 <span class="position-absolute top-0 end-0 badge bg-warning text-dark m-2 shadow-sm rounded-pill fw-bold" style="font-size: 0.7rem;"><i class="far fa-calendar-alt me-1"></i> สัปดาห์: {{ order.display_cohort }}</span>
+
+                                <!-- 🌟 [NEW] ป้ายเตือนรอวัตถุดิบ / รอเบิกของ -->
+                                {% if order.status == 'WAITING_MATERIALS' %}
+                                    <span class="badge bg-warning text-dark rounded-pill px-3 py-1 mb-2 mt-1 d-inline-block fs-6 shadow-sm border border-warning"><i class="fas fa-hourglass-half me-1"></i> ⏳ รอวัตถุดิบ</span>
+                                {% elif order.status == 'WAITING_INVENTORY' %}
+                                    <span class="badge bg-success text-white rounded-pill px-3 py-1 mb-2 mt-1 d-inline-block fs-6 shadow-sm border border-success"><i class="fas fa-box-open me-1"></i> 📦 ของครบ/รอเบิก</span>
+                                {% endif %}
+
                                 <div class="d-flex align-items-center mb-2 mt-1">
                                     <span class="badge bg-primary fs-6 me-2">{{ order.code }}</span>
                                 </div>
@@ -164,6 +179,12 @@
                         <div class="card mb-3 shadow-sm border-0 kanban-card border-start border-danger border-4" data-bs-toggle="modal" data-bs-target="#updateModal-{{ order.id }}">
                             <div class="card-body p-3">
                                 <span class="position-absolute top-0 end-0 badge bg-danger text-white m-2 shadow-sm rounded-pill fw-bold" style="font-size: 0.7rem;"><i class="far fa-calendar-times me-1"></i> ค้างจาก: {{ order.display_cohort }}</span>
+
+                                <!-- 🌟 [NEW] ป้ายเตือนรอวัตถุดิบ -->
+                                {% if order.status == 'WAITING_MATERIALS' %}
+                                    <span class="badge bg-warning text-dark rounded-pill px-3 py-1 mb-2 mt-1 d-inline-block fs-6 shadow-sm border border-warning"><i class="fas fa-hourglass-half me-1"></i> ⏳ รอวัตถุดิบ</span>
+                                {% endif %}
+
                                 <div class="d-flex align-items-center mb-2 mt-1">
                                     <span class="badge bg-primary fs-6 me-2">{{ order.code }}</span>
                                 </div>

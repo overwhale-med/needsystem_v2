@@ -190,77 +190,183 @@
     </tbody>
 </table>
 
+<!-- 🌟 [NEW] นำเข้า Library ปฏิทินและ jQuery 🌟 -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/momentjs/latest/moment.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.min.js"></script>
+<link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css" />
+
+<script>
+    // 🌟 [NEW] เปิดใช้งานปฏิทินแบบเลือกวันเดียว (Single Date Picker)
+    $(document).ready(function() {
+        $('.datepicker-single').daterangepicker({
+            singleDatePicker: true,
+            showDropdowns: true,
+            autoUpdateInput: false, // ป้องกันการใส่วันที่อัตโนมัติถ้าช่องว่าง
+            locale: {
+                format: 'DD/MM/YYYY',
+                applyLabel: "ตกลง",
+                cancelLabel: "ยกเลิก",
+                daysOfWeek: ["อา.", "จ.", "อ.", "พ.", "พฤ.", "ศ.", "ส."],
+                monthNames: ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"],
+            }
+        });
+
+        // เมื่อกด "ตกลง" ในปฏิทิน ให้นำวันที่มาแสดงในช่อง
+        $('.datepicker-single').on('apply.daterangepicker', function(ev, picker) {
+            $(this).val(picker.startDate.format('DD/MM/YYYY'));
+        });
+    });
+</script>
 <script>
     document.addEventListener("DOMContentLoaded", function() {
         const formsetBody = document.getElementById("formset-body");
         const addBtn = document.getElementById("add-item-btn");
         const totalFormsInput = document.getElementById("id_items-TOTAL_FORMS");
         const grandTotalText = document.getElementById("grand-total-text");
+        const form = document.getElementById("poForm");
 
-        // ฟังก์ชันคำนวณราคารวม
+        // ==========================================
+        // 🌟 1. ฟังก์ชันซ่อน/แสดง ช่องพิมพ์ชื่อสินค้าฉุกเฉิน
+        // ==========================================
+        function toggleFreeTextInput(row) {
+            const productSelect = row.querySelector("select[name$='-product']");
+            const freeTextInput = row.querySelector("input[name$='-item_name_free_text']");
+
+            if (productSelect && freeTextInput) {
+                if (productSelect.value !== "") {
+                    // ถ้าเลือกสินค้าจาก Dropdown แล้ว ให้ซ่อนและล้างค่าทิ้ง
+                    freeTextInput.style.display = 'none';
+                    freeTextInput.value = '';
+                } else {
+                    // ถ้าเป็นค่าว่าง (-- เลือกจากคลัง --) ให้แสดงช่องพิมพ์
+                    freeTextInput.style.display = 'block';
+                }
+            }
+        }
+
+        // ==========================================
+        // 🌟 2. ฟังก์ชันแปลงตัวเลขให้มีลูกน้ำ (Format)
+        // ==========================================
+        function formatNumberWithCommas(value) {
+            let val = value.toString().replace(/[^0-9.]/g, '');
+            if (val === '') return '';
+            let parts = val.split('.');
+            parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+            if (parts[1]) { parts[1] = parts[1].substring(0, 2); }
+            return parts.join('.');
+        }
+
+        function unformatNumber(value) {
+            return parseFloat(value.toString().replace(/,/g, '')) || 0;
+        }
+
+        function convertInputsToText(row) {
+            const qtyInput = row.querySelector("input[name$='-quantity']");
+            const costInput = row.querySelector("input[name$='-unit_cost']");
+            if (qtyInput) { qtyInput.type = 'text'; qtyInput.value = formatNumberWithCommas(qtyInput.value); }
+            if (costInput) { costInput.type = 'text'; costInput.value = formatNumberWithCommas(costInput.value); }
+        }
+
+        // 🌟 สั่งทำงานตอนโหลดหน้าเว็บครั้งแรก
+        formsetBody.querySelectorAll(".item-row").forEach(row => {
+            convertInputsToText(row);
+            toggleFreeTextInput(row); // เช็คซ่อน/แสดง ตั้งแต่เริ่มโหลด
+        });
+
+        // ==========================================
+        // 🌟 3. ฟังก์ชันคำนวณราคารวม
+        // ==========================================
         function calculateTotals() {
             let grandTotal = 0;
             const rows = formsetBody.querySelectorAll(".item-row");
 
             rows.forEach(row => {
-                // ข้ามแถวที่ถูกทำเครื่องหมายว่าลบ (กรณี Edit)
                 const deleteInput = row.querySelector("input[type='checkbox'][name$='-DELETE']");
                 if (deleteInput && deleteInput.checked) {
                     row.style.display = 'none';
                     return;
                 }
-
                 const qtyInput = row.querySelector("input[name$='-quantity']");
                 const costInput = row.querySelector("input[name$='-unit_cost']");
                 const totalTd = row.querySelector(".row-total");
 
                 if (qtyInput && costInput && totalTd) {
-                    const qty = parseFloat(qtyInput.value) || 0;
-                    const cost = parseFloat(costInput.value) || 0;
+                    const qty = unformatNumber(qtyInput.value);
+                    const cost = unformatNumber(costInput.value);
                     const lineTotal = qty * cost;
                     totalTd.innerText = lineTotal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
                     grandTotal += lineTotal;
                 }
             });
-
-            grandTotalText.innerText = '฿' + grandTotal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            grandTotalText.innerText = '฿ ' + grandTotal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
         }
 
-        // จับ Event เมื่อมีการพิมพ์หรือเปลี่ยนตัวเลข ให้คำนวณใหม่ทันที
+        // ==========================================
+        // 🌟 4. ดักจับ Event ต่างๆ ในตาราง (พิมพ์เลข, ติ๊กลบ, เปลี่ยน Dropdown)
+        // ==========================================
         formsetBody.addEventListener("input", function(e) {
             if (e.target.tagName === "INPUT" && (e.target.name.includes("quantity") || e.target.name.includes("unit_cost"))) {
+                let cursorPosition = e.target.selectionStart;
+                let originalLength = e.target.value.length;
+                e.target.value = formatNumberWithCommas(e.target.value);
+                let newLength = e.target.value.length;
+                cursorPosition = cursorPosition + (newLength - originalLength);
+                e.target.setSelectionRange(cursorPosition, cursorPosition);
                 calculateTotals();
             }
         });
 
-        // จับ Event เมื่อติ๊กปุ่มลบ (Checkbox ของฟอร์ม Edit)
         formsetBody.addEventListener("change", function(e) {
             if (e.target.tagName === "INPUT" && e.target.name.includes("-DELETE")) {
                 calculateTotals();
             }
+            // 🌟 ดักจับตอนเปลี่ยน Dropdown สินค้า ให้ซ่อน/แสดงช่องพิมพ์ฉุกเฉิน
+            if (e.target.tagName === "SELECT" && e.target.name.includes("-product")) {
+                const row = e.target.closest(".item-row");
+                toggleFreeTextInput(row);
+            }
         });
 
-        // เพิ่มแถวใหม่ (Formset)
-        addBtn.addEventListener("click", function() {
-            const currentFormCount = parseInt(totalFormsInput.value);
-            const templateHtml = document.getElementById("empty-row-template").innerHTML;
-            const newRowHtml = templateHtml.replace(/__prefix__/g, currentFormCount);
+        // ==========================================
+        // 🌟 5. เพิ่มแถวใหม่ (Formset)
+        // ==========================================
+        if (addBtn) {
+            addBtn.addEventListener("click", function() {
+                const currentFormCount = parseInt(totalFormsInput.value);
+                const templateHtml = document.getElementById("empty-row-template").innerHTML;
+                const newRowHtml = templateHtml.replace(/__prefix__/g, currentFormCount);
 
-            formsetBody.insertAdjacentHTML('beforeend', newRowHtml);
-            totalFormsInput.value = currentFormCount + 1;
-            calculateTotals();
-        });
+                formsetBody.insertAdjacentHTML('beforeend', newRowHtml);
 
-        // ลบแถว (สำหรับแถวที่เพิ่งเพิ่มใหม่ ยังไม่มี ID ในฐานข้อมูล)
+                const newRow = formsetBody.lastElementChild;
+                convertInputsToText(newRow);
+                toggleFreeTextInput(newRow); // ซ่อน/แสดง สำหรับแถวที่เพิ่งแทรกมาใหม่
+
+                totalFormsInput.value = currentFormCount + 1;
+                calculateTotals();
+            });
+        }
+
         formsetBody.addEventListener("click", function(e) {
             if (e.target.closest(".remove-row-btn")) {
-                const row = e.target.closest(".item-row");
-                row.remove();
+                e.target.closest(".item-row").remove();
                 calculateTotals();
             }
         });
 
-        // คำนวณครั้งแรกตอนโหลดหน้าเว็บ
+        // ==========================================
+        // 🌟 6. ถอดลูกน้ำออกก่อนส่งข้อมูลไปสมองกล
+        // ==========================================
+        form.addEventListener("submit", function() {
+            formsetBody.querySelectorAll(".item-row").forEach(row => {
+                const qtyInput = row.querySelector("input[name$='-quantity']");
+                const costInput = row.querySelector("input[name$='-unit_cost']");
+                if (qtyInput) { qtyInput.value = unformatNumber(qtyInput.value); }
+                if (costInput) { costInput.value = unformatNumber(costInput.value); }
+            });
+        });
+
         calculateTotals();
     });
 </script>

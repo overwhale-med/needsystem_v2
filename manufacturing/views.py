@@ -1026,7 +1026,8 @@ def production_head_board(request):
     orders = ProductionOrder.objects.select_related(
         'product', 'branch', 'production_team', 'salesperson', 'salesperson__branch', 'quotation_ref'
     ).prefetch_related('completed_departments', 'qc_logs').filter(
-        status__in=['PLANNED', 'IN_PROGRESS', 'REWORK'], is_closed=False
+        # 🌟 [FIXED] เพิ่ม 'WAITING_MATERIALS' และ 'WAITING_INVENTORY' เข้ามาในกระดาน
+        status__in=['WAITING_MATERIALS', 'WAITING_INVENTORY', 'PLANNED', 'IN_PROGRESS', 'REWORK'], is_closed=False
     ).order_by('start_date', '-id')
 
     emp = getattr(request.user, 'employee', None)
@@ -1069,15 +1070,17 @@ def production_head_board(request):
     for order in orders:
         order.display_cohort = format_week_range(order.start_date)
 
-        if order.status == 'PLANNED':
-            col1_upcoming.append(order)
-        elif order.status == 'REWORK':
+        # งานตีกลับจาก QC ให้แยกไปอยู่คอลัมน์ขวาสุดเสมอ
+        if order.status == 'REWORK':
             col4_rework.append(order)
-        elif order.status == 'IN_PROGRESS':
-            if order.start_date < current_monday:
-                col3_overdue.append(order)
+        else:
+            # 🌟 [FIXED] จัดงานลงคอลัมน์ตาม "วันที่เริ่มผลิต" ล้วนๆ ไม่ว่าสถานะจะเป็นอะไร
+            if order.start_date >= next_monday:
+                col1_upcoming.append(order) # งานสัปดาห์หน้า (อนาคต)
+            elif order.start_date >= current_monday:
+                col2_current.append(order)  # งานสัปดาห์นี้ (ปัจจุบัน)
             else:
-                col2_current.append(order)
+                col3_overdue.append(order)  # งานที่เลยกำหนดสัปดาห์ที่แล้ว (อดีต/ค้าง)
 
     branches = MfgBranch.objects.all().order_by('name')
     teams = ProductionTeam.objects.all().order_by('name')

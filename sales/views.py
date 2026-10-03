@@ -1601,14 +1601,17 @@ def confirm_payment(request, doc_type, doc_id):
                     process_commission_logic(sale_amt, obj.employee, obj.code)
 
                     # 🌟 AUTOMATION: สร้างตั๋วคอมมิชชัน 3% (บ้านน็อคดาวน์) 🌟
-                    if obj.quotation_ref and obj.grand_total > 0:
-                        if not CommissionTicket.objects.filter(invoice_ref=obj, ticket_type='3%').exists():
-                            base_amount = obj.grand_total - (obj.grand_total * Decimal('0.10'))
+                    if obj.quotation_ref and obj.quotation_ref.grand_total > 0:
+                        # 🌟 [FIXED] เช็คและผูกตั๋วเข้ากับ Quotation ตรงๆ เหมือนตั๋ว 2%
+                        if not CommissionTicket.objects.filter(quotation_ref=obj.quotation_ref, ticket_type='3%').exists():
+                            # ดึงยอดรวมจาก Quotation มาหักต้นทุน 10%
+                            grand_total = obj.quotation_ref.grand_total
+                            base_amount = grand_total - (grand_total * Decimal('0.10'))
                             comm_amount = base_amount * Decimal('0.03') # คูณ 3%
 
                             CommissionTicket.objects.create(
                                 ticket_type='3%',
-                                invoice_ref=obj,
+                                quotation_ref=obj.quotation_ref, # 🌟 [FIXED] ผูกกับ Quotation
                                 base_amount=base_amount,
                                 commission_amount=comm_amount
                             )
@@ -2198,47 +2201,137 @@ def commission_board(request):
         rank = current_emp.business_rank.lower() if current_emp.business_rank else ""
         dept_name = getattr(current_emp.department, 'name', '')
         pos_title = getattr(current_emp.position, 'title', '').lower()
-        # เช็คเงื่อนไขตำแหน่งผู้จัดการ หรืออยู่แผนกบริหาร
         if rank in ['manager', 'director'] or 'manager' in pos_title or 'บริหาร' in dept_name:
             is_manager_view = True
 
-    # 🌟 2. ดึงข้อมูลตั๋วตามสิทธิ์
+    # 🌟 2. รับค่าคำค้นหาจากหน้าเว็บ
+    search_query = request.GET.get('q', '').strip()
+
+    # 🌟 3. ดึงข้อมูลตั๋วตามสิทธิ์
     if is_manager_view:
-        # โหมดผู้จัดการ: เห็นตั๋วของ "ทุกคน" ที่พร้อมเบิก
-        tickets_2 = CommissionTicket.objects.filter(
-            ticket_type='2%',
-            status='AVAILABLE'
-        ).select_related('quotation_ref', 'quotation_ref__employee').order_by('-created_at')
-
-        tickets_3 = CommissionTicket.objects.filter(
-            ticket_type='3%',
-            status='AVAILABLE'
-        ).select_related('invoice_ref', 'invoice_ref__quotation_ref', 'invoice_ref__quotation_ref__employee').order_by('-created_at')
-
-        # ประวัติใบขอเบิกของทุกคน
-        claims = CommissionClaim.objects.all().select_related('requester').order_by('-created_at')
+        tickets_2 = CommissionTicket.objects.filter(ticket_type='2%', status='AVAILABLE').select_related('quotation_ref', 'quotation_ref__employee').order_by('-created_at')
+        tickets_3 = CommissionTicket.objects.filter(ticket_type='3%', status='AVAILABLE').select_related('quotation_ref', 'quotation_ref__employee').order_by('-created_at')
+        claims_qs = CommissionClaim.objects.all().select_related('requester').order_by('-created_at')
     else:
-        # โหมดพนักงานขาย: เห็นเฉพาะตั๋วของ "ตัวเอง"
-        tickets_2 = CommissionTicket.objects.filter(
-            ticket_type='2%',
-            status='AVAILABLE',
-            quotation_ref__employee=current_emp
-        ).order_by('-created_at')
+        tickets_2 = CommissionTicket.objects.filter(ticket_type='2%', status='AVAILABLE', quotation_ref__employee=current_emp).order_by('-created_at')
+        tickets_3 = CommissionTicket.objects.filter(ticket_type='3%', status='AVAILABLE', quotation_ref__employee=current_emp).order_by('-created_at')
+        claims_qs = CommissionClaim.objects.filter(requester=current_emp).order_by('-created_at')
 
-        tickets_3 = CommissionTicket.objects.filter(
-            ticket_type='3%',
-            status='AVAILABLE',
-            invoice_ref__quotation_ref__employee=current_emp
-        ).order_by('-created_at')
+    # 🌟 4. กรองข้อมูลตามคำค้นหา (Search) 🌟
+    if search_query:
+        claims_qs = claims_qs.filter(
+            Q(code__icontains=search_query) |
+            Q(requester__first_name__icontains=search_query) |
+            Q(bank_name__icontains=search_query)
+        )
 
-        # ประวัติใบขอเบิกเฉพาะของตัวเอง
-        claims = CommissionClaim.objects.filter(requester=current_emp).order_by('-created_at')
+    # 🌟 5. แสดงผลแค่ 10 รายการล่าสุด (ตัด Paginator ออก) 🌟
+    claims_list = claims_qs[:10]
 
     return render(request, 'sales/commission_board.html', {
         'tickets_2': tickets_2,
         'tickets_3': tickets_3,
-        'claims': claims,
-        'is_manager_view': is_manager_view, # 🌟 ส่งตัวแปรนี้ไปสั่งงานหน้าเว็บ
+        'claims': claims_list, # 🌟 ส่งลิสต์ 10 รายการไปแทน
+        'search_query': search_query,
+        'is_manager_view': is_manager_view,
+    })
+
+# ==========================================
+# 📊 [NEW] หน้าประวัติใบตั้งเบิกคอมมิชชัน (แบบเต็มจอ + ค้นหาละเอียด)
+# ==========================================
+@login_required
+def commission_history_list(request):
+    if not is_sales_authorized(request.user):
+        messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์เข้าถึงหน้านี้")
+        return redirect('dashboard')
+
+    current_emp = getattr(request.user, 'employee', None)
+    is_manager_view = False
+    if request.user.is_superuser:
+        is_manager_view = True
+    elif current_emp:
+        rank = current_emp.business_rank.lower() if current_emp.business_rank else ""
+        dept_name = getattr(current_emp.department, 'name', '')
+        pos_title = getattr(current_emp.position, 'title', '').lower()
+        if rank in ['manager', 'director'] or 'manager' in pos_title or 'บริหาร' in dept_name:
+            is_manager_view = True
+
+    # 🌟 รับค่าจากตัวกรอง (Filters) 🌟
+    # 🌟 รับค่าจากตัวกรอง (Filters) 🌟
+    search_query = request.GET.get('q', '').strip()
+    emp_search = request.GET.get('emp', '').strip()
+    claim_type = request.GET.get('type', '')
+    claim_status = request.GET.get('status', '') # 🌟 [NEW] รับค่าสถานะ
+
+    # 🌟 [NEW] ตั้งค่าเริ่มต้นวันที่ 30 วันย้อนหลัง (เวลาไทย) 🌟
+    tz_bkk = pytz.timezone('Asia/Bangkok')
+    today_bkk = timezone.now().astimezone(tz_bkk).date()
+
+    start_date = request.GET.get('start_date')
+    end_date = request.GET.get('end_date')
+
+    # ถ้าไม่มีการเลือกวันที่มา ให้บังคับเป็น 30 วันย้อนหลัง
+    if not start_date or start_date == 'None':
+        start_date = (today_bkk - timedelta(days=29)).strftime('%Y-%m-%d')
+    if not end_date or end_date == 'None':
+        end_date = today_bkk.strftime('%Y-%m-%d')
+
+    # ดึงข้อมูลตามสิทธิ์
+    if is_manager_view:
+        claims_qs = CommissionClaim.objects.all().select_related('requester', 'requester__department').order_by('-created_at')
+    else:
+        claims_qs = CommissionClaim.objects.filter(requester=current_emp).select_related('requester', 'requester__department').order_by('-created_at')
+
+    # 1. กรองเลขที่ใบเบิก
+    if search_query:
+        claims_qs = claims_qs.filter(code__icontains=search_query)
+
+    # 2. กรองชื่อพนักงาน/สาขา
+    if emp_search:
+        claims_qs = claims_qs.filter(
+            Q(requester__first_name__icontains=emp_search) |
+            Q(requester__department__name__icontains=emp_search)
+        )
+
+    # 3. กรองประเภทคอมมิชชัน
+    # 3. กรองประเภทคอมมิชชัน
+    if claim_type:
+        claims_qs = claims_qs.filter(claim_type=claim_type)
+
+    # 🌟 [NEW] 3.5 กรองสถานะการโอนเงิน
+    if claim_status:
+        claims_qs = claims_qs.filter(status=claim_status)
+
+    # 🌟 4. กรองวันที่ (กางเวลา 00:00:00 ถึง 23:59:59 ของโซนเวลาไทย ป้องกันข้อมูลตกหล่น) 🌟
+    try:
+        s_date = parse_date(start_date)
+        e_date = parse_date(end_date)
+        if s_date and e_date:
+            tz_bkk = pytz.timezone('Asia/Bangkok')
+
+            # จับคู่วันที่กับเวลา 00:00:00 และ 23:59:59 แล้วสวมโซนเวลาไทย
+            start_dt = tz_bkk.localize(datetime.datetime.combine(s_date, datetime.time.min))
+            end_dt = tz_bkk.localize(datetime.datetime.combine(e_date, datetime.time.max))
+
+            # ใช้การเทียบเวลาแบบ __gte (>=) และ __lte (<=) แทนแบบ __date เดิม
+            claims_qs = claims_qs.filter(created_at__gte=start_dt, created_at__lte=end_dt)
+    except:
+        pass
+
+    # ระบบแบ่งหน้า (หน้าละ 20 รายการ)
+    paginator = Paginator(claims_qs, 20)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    return render(request, 'sales/commission_history.html', {
+        'page_obj': page_obj,
+        'search_query': search_query,
+        'emp_search': emp_search,
+        'claim_type': claim_type,
+        'claim_status': claim_status, # 🌟 [NEW] ส่งค่าสถานะกลับไปแสดงผล
+        'start_date': start_date,
+        'end_date': end_date,
+        'is_manager_view': is_manager_view,
     })
 
 @login_required
@@ -2294,6 +2387,31 @@ def knockdown_commission_pay(request, claim_id):
         messages.success(request, f"✅ บัญชีทำรายการโอนเงินค่าคอมมิชชันน็อคดาวน์ {claim.code} สำเร็จ!")
 
     return redirect('accounting_verification_hub', task_type='knockdown_commissions')
+
+# ==========================================
+# 🖨️ [NEW] ฟังก์ชันพิมพ์ใบตั้งเบิกคอมมิชชัน (A4)
+# ==========================================
+@login_required
+def print_commission_claim(request, claim_id):
+    # ดึงข้อมูลใบตั้งเบิกหลัก
+    claim = get_object_or_404(CommissionClaim, pk=claim_id)
+
+    # ดึงข้อมูลบริษัทสำหรับหัวกระดาษ
+    from master_data.models import CompanyInfo
+    company = CompanyInfo.objects.first()
+
+    # ดึงตั๋วสิทธิ์ (Tickets) ทั้งหมดที่ถูกมัดรวมอยู่ในใบเบิกนี้
+    tickets = claim.tickets.all()
+
+    # แปลงยอดเงินรวมให้เป็นตัวอักษรภาษาไทยอัตโนมัติ (เช่น สองพันบาทถ้วน)
+    total_amount_text = get_thai_baht_text(claim.total_amount)
+
+    return render(request, 'sales/print_commission_claim.html', {
+        'claim': claim,
+        'company': company,
+        'tickets': tickets,
+        'total_amount_text': total_amount_text
+    })
 
 # ==========================================
 # 🌟 [UPDATED] Master Job Report (ปรับปรุงระบบป้องกันเบิกซ้ำ / แก้ไข / ลบ) 🌟

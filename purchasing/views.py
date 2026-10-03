@@ -173,6 +173,13 @@ def po_create(request):
             po.save()
 
             messages.success(request, f"✅ สร้างใบสั่งซื้อ {po.code} เรียบร้อยแล้ว")
+
+            # 🌟 [NEW] เช็คว่ามีพิกัดขากลับ (next) ส่งมาด้วยไหม ถ้ามีให้เด้งกลับไปที่หน้าเดิมทันที! 🌟
+            next_url = request.POST.get('next')
+            if next_url:
+                return redirect(next_url)
+
+            # (ถ้าไม่มีพิกัดขากลับ ก็ให้ทำงานตามระบบปกติเดิมด้านล่างนี้)
             if ppo_ref:
                 try:
                     ppo_obj = PurchasePreparation.objects.get(code=ppo_ref)

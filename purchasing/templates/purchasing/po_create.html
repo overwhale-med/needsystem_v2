@@ -41,6 +41,9 @@
     <form method="POST" id="po-form">
         {% csrf_token %}
 
+        <!-- 🌟 [NEW] รับพิกัดขากลับที่ส่งมาจากหน้า PPO ซ่อนไว้ในฟอร์ม 🌟 -->
+        <input type="hidden" name="next" value="{{ request.GET.next }}">
+
         <div class="card shadow-sm border-0 rounded-4 mb-4">
             <div class="card-header bg-white py-3 border-bottom">
                 <h6 class="fw-bold mb-0 text-dark"><i class="fas fa-file-invoice me-2"></i>ข้อมูลใบสั่งซื้อ</h6>
@@ -353,6 +356,30 @@
             costInputs.forEach(input => {
                 input.value = input.value.replace(/,/g, '');
             });
+        });
+
+        // --- 🌟 [NEW] 6. ระบบเติมลูกน้ำ (Comma) อัตโนมัติสำหรับช่องต้นทุนต่อหน่วย 🌟 ---
+
+        // 6.1 ใส่ลูกน้ำให้กับข้อมูลเดิมทันทีที่โหลดหน้าเว็บ (สำหรับหน้าแก้ไข PO)
+        document.querySelectorAll('[id$="-unit_cost"]').forEach(input => {
+            if (input.value) {
+                const val = parseFloat(input.value.replace(/,/g, ''));
+                if (!isNaN(val)) {
+                    input.type = 'text'; // บังคับให้เป็น text เพื่อรองรับลูกน้ำ
+                    input.value = val.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                }
+            }
+        });
+
+        // 6.2 ใส่ลูกน้ำอัตโนมัติเมื่อผู้ใช้พิมพ์ตัวเลขเสร็จแล้วคลิกเมาส์ออก (รองรับบรรทัดที่กดเพิ่มใหม่)
+        formsetContainer.addEventListener('change', function(e) {
+            if (e.target.matches('[id$="-unit_cost"]')) {
+                const val = parseFloat(e.target.value.replace(/,/g, ''));
+                if (!isNaN(val)) {
+                    e.target.type = 'text';
+                    e.target.value = val.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                }
+            }
         });
 
         // --- 🌟 ระบบล็อคฟอร์มอัตโนมัติเมื่อเอกสารถูกอนุมัติหรือยกเลิก 🌟 ---

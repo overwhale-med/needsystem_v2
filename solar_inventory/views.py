@@ -237,7 +237,13 @@ def solar_stock_card(request, pk):
     paginator = Paginator(calculated_movements, 20)
     page_obj = paginator.get_page(request.GET.get('page'))
 
-    return render(request, 'solar_inventory/stock_card.html', {
+    # 🌟 [NEW] สวิตช์สลับราง: ตรวจสอบประเภทสินค้าเพื่อเลือกไฟล์หน้าจอให้ถูกต้อง
+    if product.product_type == 'FG':
+        template_name = 'solar_inventory/stock_card_fg.html'
+    else:
+        template_name = 'solar_inventory/stock_card_rm.html'
+
+    return render(request, template_name, {
         'product': product,
         'page_obj': page_obj
     })

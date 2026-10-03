@@ -206,11 +206,32 @@
         <!-- 🌟 ฝั่งขวา: ประวัติใบตั้งเบิกที่รอโอน/โอนแล้ว -->
         <div class="col-lg-5">
             <div class="card border-0 shadow-sm rounded-4">
-                <div class="card-header bg-white py-3 border-bottom d-flex align-items-center">
-                    <h6 class="fw-bold mb-0 text-dark"><i class="fas fa-history text-muted me-2"></i>ประวัติใบตั้งเบิก (Claim Requests)</h6>
+                <div class="card-header bg-white py-3 border-bottom">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h6 class="fw-bold mb-0 text-dark"><i class="fas fa-history text-muted me-2"></i>ประวัติใบตั้งเบิก (Claim Requests)</h6>
+
+                        <!-- 🌟 [NEW] ปุ่มไปหน้าประวัติทั้งหมด (วางไว้ฝั่งขวาของหัวข้อ) 🌟 -->
+                        <a href="{% url 'commission_history_list' %}" class="btn btn-sm btn-outline-primary rounded-pill px-3 fw-bold shadow-sm">
+                            👉 ไปหน้าประวัติทั้งหมด
+                        </a>
+                    </div>
+
+                    <!-- 🌟 ฟอร์มค้นหาประวัติ 🌟 -->
+                    <form method="GET" action="{% url 'commission_board' %}">
+                        <div class="input-group input-group-sm shadow-sm">
+                            <span class="input-group-text bg-light border-end-0"><i class="fas fa-search text-muted"></i></span>
+                            <input type="text" name="q" class="form-control border-start-0 bg-light" placeholder="ค้นหาเลขใบเบิก, ชื่อพนักงาน, ธนาคาร..." value="{{ search_query }}">
+                            <button class="btn btn-primary px-3 fw-bold" type="submit">ค้นหา</button>
+                            {% if search_query %}
+                                <a href="{% url 'commission_board' %}" class="btn btn-outline-secondary px-3"><i class="fas fa-times"></i> ล้าง</a>
+                            {% endif %}
+                        </div>
+                    </form>
                 </div>
+
                 <div class="card-body p-0">
-                    <div class="table-responsive" style="max-height: 500px;">
+                    <!-- 🌟 ลบ max-height ออก เพื่อให้ตารางยืดหดตามข้อมูล 10 รายการพอดี 🌟 -->
+                    <div class="table-responsive">
                         <table class="table table-hover align-middle mb-0">
                             <tbody>
                                 {% for c in claims %}
@@ -230,20 +251,27 @@
                                         </div>
                                     </td>
                                     <td class="text-end pe-4">
-                                        <h5 class="fw-bold text-primary mb-2">฿{{ c.total_amount|floatformat:2|intcomma }}</h5>
+                                        <h5 class="fw-bold text-primary mb-2">฿ {{ c.total_amount|floatformat:2|intcomma }}</h5>
 
                                         {% if c.status == 'PENDING' %}
                                             <span class="badge bg-warning text-dark rounded-pill px-3 shadow-sm mb-2"><i class="fas fa-hourglass-half me-1"></i> รอโอนเงิน</span>
                                         {% else %}
-                                            <span class="badge bg-success rounded-pill px-3 shadow-sm"><i class="fas fa-check-circle me-1"></i> โอนแล้ว</span>
+                                            <span class="badge bg-success rounded-pill px-3 shadow-sm mb-2"><i class="fas fa-check-circle me-1"></i> โอนแล้ว</span>
                                             {% if c.transfer_slip %}
-                                            <div class="mt-2">
-                                                <a href="{{ c.transfer_slip.url }}" target="_blank" class="btn btn-sm btn-outline-secondary rounded-pill px-3 py-1" style="font-size: 0.75rem;">
+                                            <div class="mt-1">
+                                                <a href="{{ c.transfer_slip.url }}" target="_blank" class="btn btn-sm btn-outline-secondary rounded-pill px-3 py-1 w-100" style="font-size: 0.75rem;">
                                                     <i class="fas fa-image me-1"></i> ดูสลิป
                                                 </a>
                                             </div>
                                             {% endif %}
                                         {% endif %}
+
+                                        <!-- ปุ่มพิมพ์ใบเบิก A4 -->
+                                        <div class="mt-2">
+                                            <a href="{% url 'print_commission_claim' c.id %}" target="_blank" class="btn btn-sm btn-outline-primary rounded-pill px-3 py-1 fw-bold w-100" style="font-size: 0.75rem;">
+                                                <i class="fas fa-print me-1"></i> พิมพ์ใบเบิก (A4)
+                                            </a>
+                                        </div>
                                     </td>
                                 </tr>
                                 {% empty %}
@@ -259,12 +287,85 @@
 </div>
 
 <script>
-    // สคริปต์ทำปุ่ม "เลือกทั้งหมด (Check All)"
-    document.getElementById('checkAll2').addEventListener('change', function() {
-        document.querySelectorAll('.chk-2').forEach(chk => chk.checked = this.checked);
-    });
-    document.getElementById('checkAll3').addEventListener('change', function() {
-        document.querySelectorAll('.chk-3').forEach(chk => chk.checked = this.checked);
+    document.addEventListener("DOMContentLoaded", function() {
+        // --- 1. สคริปต์ทำปุ่ม "เลือกทั้งหมด (Check All)" ---
+        const checkAll2 = document.getElementById('checkAll2');
+        if (checkAll2) {
+            checkAll2.addEventListener('change', function() {
+                document.querySelectorAll('.chk-2').forEach(chk => chk.checked = this.checked);
+                validateForm2(); // เช็คความถูกต้องของปุ่มด้วย
+            });
+        }
+
+        const checkAll3 = document.getElementById('checkAll3');
+        if (checkAll3) {
+            checkAll3.addEventListener('change', function() {
+                document.querySelectorAll('.chk-3').forEach(chk => chk.checked = this.checked);
+                validateForm3(); // เช็คความถูกต้องของปุ่มด้วย
+            });
+        }
+
+        // --- 2. ฟังก์ชันตรวจสอบการปลดล็อคปุ่ม โควตา 2% ---
+        const form2 = document.querySelector('#content-2percent form');
+        if (form2) {
+            const btnSubmit2 = form2.querySelector('button[type="submit"]');
+            const checkboxes2 = form2.querySelectorAll('.chk-2');
+            const bankSelect2 = form2.querySelector('select[name="bank_name"]');
+            const bankAcc2 = form2.querySelector('input[name="bank_account"]');
+            const accName2 = form2.querySelector('input[name="account_name"]');
+
+            function validateForm2() {
+                let isChecked = Array.from(checkboxes2).some(chk => chk.checked);
+                let isFilled = bankSelect2.value !== "" && bankAcc2.value.trim() !== "" && accName2.value.trim() !== "";
+
+                // ถ้ายังไม่ได้กรอกหรือยังไม่เลือก ให้ปุ่มเป็นสีเทาและกดไม่ได้
+                if (isChecked && isFilled) {
+                    btnSubmit2.disabled = false;
+                    btnSubmit2.classList.remove('btn-secondary');
+                    btnSubmit2.classList.add('btn-primary');
+                } else {
+                    btnSubmit2.disabled = true;
+                    btnSubmit2.classList.remove('btn-primary');
+                    btnSubmit2.classList.add('btn-secondary');
+                }
+            }
+
+            // สั่งให้ตรวจสอบทุกครั้งที่มีการพิมพ์หรือคลิก
+            form2.addEventListener('change', validateForm2);
+            form2.addEventListener('input', validateForm2);
+            validateForm2(); // ตรวจสอบตั้งแต่ตอนโหลดหน้าเว็บครั้งแรก
+        }
+
+        // --- 3. ฟังก์ชันตรวจสอบการปลดล็อคปุ่ม โควตา 3% ---
+        const form3 = document.querySelector('#content-3percent form');
+        if (form3) {
+            const btnSubmit3 = form3.querySelector('button[type="submit"]');
+            const checkboxes3 = form3.querySelectorAll('.chk-3');
+            const bankSelect3 = form3.querySelector('select[name="bank_name"]');
+            const bankAcc3 = form3.querySelector('input[name="bank_account"]');
+            const accName3 = form3.querySelector('input[name="account_name"]');
+
+            function validateForm3() {
+                let isChecked = Array.from(checkboxes3).some(chk => chk.checked);
+                let isFilled = bankSelect3.value !== "" && bankAcc3.value.trim() !== "" && accName3.value.trim() !== "";
+
+                // ถ้ายังไม่ได้กรอกหรือยังไม่เลือก ให้ปุ่มเป็นสีเทาและกดไม่ได้
+                if (isChecked && isFilled) {
+                    btnSubmit3.disabled = false;
+                    btnSubmit3.classList.remove('btn-secondary');
+                    btnSubmit3.classList.add('btn-success');
+                } else {
+                    btnSubmit3.disabled = true;
+                    btnSubmit3.classList.remove('btn-success');
+                    btnSubmit3.classList.add('btn-secondary');
+                }
+            }
+
+            // สั่งให้ตรวจสอบทุกครั้งที่มีการพิมพ์หรือคลิก
+            form3.addEventListener('change', validateForm3);
+            form3.addEventListener('input', validateForm3);
+            validateForm3(); // ตรวจสอบตั้งแต่ตอนโหลดหน้าเว็บครั้งแรก
+        }
     });
 </script>
 {% endblock %}

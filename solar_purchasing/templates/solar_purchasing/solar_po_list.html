@@ -81,7 +81,9 @@
                         <th class="py-3 border-0 fw-bold">ร้านค้า (Supplier)</th>
                         <th class="py-3 border-0 text-end fw-bold">ยอดรวมสุทธิ (บาท)</th>
                         <th class="py-3 border-0 text-center fw-bold">สถานะเอกสาร</th>
-                        <th class="pe-4 py-3 border-0 text-center fw-bold" style="min-width: 320px;">จัดการ</th>
+                        <th class="py-3 border-0 text-center fw-bold">สถานะจ่ายเงิน</th>
+                        <th class="py-3 border-0 text-center fw-bold">สถานะรับของ</th>
+                        <th class="pe-4 py-3 border-0 text-center fw-bold">จัดการ</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -102,9 +104,11 @@
                                 {% endif %}
                             </div>
                         </td>
-                        <td class="text-end">
-                            <div class="fw-bold text-dark fs-6">฿{{ po.total_amount|floatformat:2|intcomma }}</div>
+                        <!-- 🌟 [UPDATE] จัดชิดขวา (text-end) และเว้นวรรคหลัง ฿ -->
+                        <td class="text-end pe-4">
+                            <div class="fw-bold text-dark fs-6">฿ {{ po.total_amount|floatformat:2|intcomma }}</div>
                         </td>
+                        <!-- 🌟 คอลัมน์ที่ 1: สถานะเอกสารหลัก -->
                         <td class="text-center">
                             {% if po.status == 'DRAFT' %}
                                 <span class="badge bg-warning text-dark rounded-pill px-3 shadow-sm"><i class="fas fa-hourglass-half me-1"></i> รอผู้จัดการอนุมัติ</span>
@@ -113,34 +117,40 @@
                             {% else %}
                                 <span class="badge bg-danger bg-opacity-10 text-danger border rounded-pill px-3 shadow-sm"><i class="fas fa-ban me-1"></i> ยกเลิก</span>
                             {% endif %}
+                        </td>
 
-                            <!-- 🌟 [NEW] เพิ่มป้ายแจ้งสถานะการรับของเข้าคลัง -->
-                            {% if po.receipt_status == 'COMPLETED' %}
-                                <div class="mt-2"><span class="badge bg-info text-white rounded-pill px-2 shadow-sm" style="font-size: 0.75rem;"><i class="fas fa-check-double me-1"></i> รับของครบแล้ว</span></div>
-                            {% elif po.receipt_status == 'PARTIAL' %}
-                                <div class="mt-2"><span class="badge bg-secondary text-white rounded-pill px-2 shadow-sm" style="font-size: 0.75rem;"><i class="fas fa-box-open me-1"></i> รับบางส่วน</span></div>
-                            {% endif %}
-
+                        <!-- 🌟 คอลัมน์ที่ 2: สถานะจ่ายเงิน -->
+                        <td class="text-center">
                             {% if po.payment_status == 'PAID' %}
-                                <div class="mt-1"><span class="badge bg-success bg-opacity-75 text-white rounded-pill px-2 shadow-sm" style="font-size: 0.75rem;"><i class="fas fa-money-bill-wave me-1"></i> จ่ายครบแล้ว</span></div>
+                                <div><span class="badge bg-success text-white rounded-pill px-2 shadow-sm" style="font-size: 0.75rem;"><i class="fas fa-money-bill-wave me-1"></i> จ่ายครบแล้ว</span></div>
                             {% elif po.payment_status == 'DEPOSIT' %}
-                                <div class="mt-1"><span class="badge bg-primary bg-opacity-75 text-white rounded-pill px-2 shadow-sm" style="font-size: 0.75rem;"><i class="fas fa-coins me-1"></i> จ่ายมัดจำแล้ว</span></div>
+                                <div><span class="badge bg-primary text-white rounded-pill px-2 shadow-sm" style="font-size: 0.75rem;"><i class="fas fa-coins me-1"></i> จ่ายมัดจำแล้ว</span></div>
                             {% else %}
-                                <div class="mt-1"><span class="badge bg-light text-secondary border rounded-pill px-2 shadow-sm" style="font-size: 0.75rem;"><i class="fas fa-clock me-1"></i> รอชำระเงิน</span></div>
+                                <div><span class="badge bg-light text-secondary border rounded-pill px-2 shadow-sm" style="font-size: 0.75rem;"><i class="fas fa-clock me-1"></i> รอชำระเงิน</span></div>
                             {% endif %}
                         </td>
+
+                        <!-- 🌟 [NEW] คอลัมน์ที่ 3: สถานะรับของ (ป้ายสถานะ + ปุ่มรับเข้าคลัง) -->
+                        <td class="text-center">
+                            {% if po.receipt_status == 'COMPLETED' %}
+                                <div><span class="badge bg-info text-white rounded-pill px-2 shadow-sm" style="font-size: 0.75rem;"><i class="fas fa-check-double me-1"></i> รับของครบแล้ว</span></div>
+                            {% elif po.receipt_status == 'PARTIAL' %}
+                                <div><span class="badge bg-secondary text-white rounded-pill px-2 shadow-sm mb-1" style="font-size: 0.75rem;"><i class="fas fa-box-open me-1"></i> รับบางส่วน</span></div>
+                            {% endif %}
+
+                            {% if po.status == 'APPROVED' and po.receipt_status != 'COMPLETED' %}
+                                <a href="{% url 'solar_po_receive' po.id %}" class="btn btn-sm btn-info text-white rounded-pill px-3 shadow-sm fw-bold d-flex align-items-center justify-content-center text-nowrap hover-card {% if po.receipt_status == 'PARTIAL' %}mt-1{% endif %}" title="ตรวจรับสินค้าเข้าคลัง" style="width: fit-content; margin: 0 auto;">
+                                    <i class="fas fa-box-open me-1"></i> รับเข้าคลัง
+                                </a>
+                            {% endif %}
+                        </td>
+
+                        <!-- 🌟 คอลัมน์ที่ 4: จัดการ (เปิดดู, พิมพ์, ยกเลิก, อนุมัติ) -->
                         <td class="pe-4 text-center">
                             <div class="d-flex justify-content-center align-items-center gap-2">
                                 <a href="{% url 'solar_po_edit' po.id %}" class="btn btn-sm btn-outline-primary rounded-pill px-3 shadow-sm fw-bold d-flex align-items-center text-nowrap" title="ดูรายละเอียด / แก้ไข">
                                     <i class="fas fa-search me-1"></i> เปิดดู
                                 </a>
-
-                                {% if po.status == 'APPROVED' and po.receipt_status != 'COMPLETED' %}
-                                <!-- 🌟 ปุ่มสำหรับฝ่ายคลังสินค้า กดรับของเข้าสต็อก (จะแสดงเฉพาะบิลที่อนุมัติแล้วและยังรับของไม่ครบ) -->
-                                <a href="{% url 'solar_po_receive' po.id %}" class="btn btn-sm btn-info text-white rounded-pill px-3 shadow-sm fw-bold d-flex align-items-center text-nowrap hover-card" title="ตรวจรับสินค้าเข้าคลัง">
-                                    <i class="fas fa-box-open me-1"></i> รับเข้าคลัง
-                                </a>
-                                {% endif %}
 
                                 {% if is_manager and po.status == 'DRAFT' %}
                                 <form method="POST" action="{% url 'solar_po_approve' po.id %}" style="display:inline;">
@@ -156,7 +166,6 @@
                                         <i class="fas fa-times-circle me-1"></i> ยกเลิก
                                     </button>
                                 </form>
-
                                 {% endif %}
 
                                 <!-- 🌟 ปุ่มพิมพ์ใบสั่งซื้อ -->
@@ -168,7 +177,8 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="5" class="text-center py-5 text-muted">
+                        <!-- 🌟 [UPDATE] ปรับเป็น 7 เพื่อครอบคลุมคอลัมน์สถานะรับของที่เพิ่มขึ้นมา -->
+                        <td colspan="7" class="text-center py-5 text-muted">
                             <i class="fas fa-box-open fa-3x mb-3 opacity-25"></i>
                             <h5 class="fw-bold">ยังไม่มีข้อมูลการสั่งซื้อ</h5>
                             <p class="small">กดปุ่ม "สร้างใบสั่งซื้อด่วน" เพื่อเริ่มต้นระบบจัดซื้อโซล่าเซลล์</p>

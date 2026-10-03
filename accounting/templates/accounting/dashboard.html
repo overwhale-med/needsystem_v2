@@ -7,7 +7,7 @@
     .task-btn:hover { background-color: #fff8e1; border-color: #ffc107; transform: translateX(5px); }
     .modal-task-btn { transition: all 0.2s ease; }
     .modal-task-btn:hover { background-color: #fff !important; border-color: #0d6efd !important; transform: translateY(-2px); box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
-    
+
     /* 🌟 สไตล์เพิ่มเติมสำหรับ Dropdown ให้สวยงาม 🌟 */
     .dropdown-menu-custom { border-radius: 12px; border: none; box-shadow: 0 10px 30px rgba(0,0,0,0.1); padding: 10px; margin-top: 10px !important; }
     .dropdown-item-custom { border-radius: 8px; padding: 10px 15px; font-size: 0.9rem; font-weight: 500; color: #495057; transition: all 0.2s; margin-bottom: 2px; }
@@ -20,17 +20,17 @@
             <h3 class="fw-bold text-dark mb-1"><i class="fas fa-chart-line text-success me-2"></i>ศูนย์บัญชาการฝ่ายบัญชี (Accounting)</h3>
             <p class="text-muted mb-0">ข้อมูลสรุปกระแสเงินสดประจำเดือน {% now "F Y" %}</p>
         </div>
-        
+
         <!-- 🌟 กลุ่มปุ่มควบคุม (ปรับปรุงใหม่เป็น Dropdown) 🌟 -->
         <div class="d-flex align-items-center">
-            
+
             <!-- ปุ่ม Dropdown รวบรวมเมนูควบคุม/ตรวจสอบ -->
             <div class="dropdown me-3">
                 <button class="btn btn-primary text-white shadow-sm rounded-pill px-4 fw-bold dropdown-toggle" type="button" id="controlMenuButton" data-bs-toggle="dropdown" aria-expanded="false">
                     <i class="fas fa-cogs me-1"></i> ควบคุม/ตรวจสอบรายการเบิกจ่าย
                 </button>
                 <ul class="dropdown-menu dropdown-menu-end dropdown-menu-custom" aria-labelledby="controlMenuButton" style="width: 350px;">
-                    
+
                     <!-- 🌟 เมนูใหม่ที่คุณปอนด์ต้องการ 🌟 -->
                     <li>
                         <h6 class="dropdown-header fw-bold text-danger"><i class="fas fa-shopping-cart me-1"></i> หมวดหมู่: จัดซื้อวัตถุดิบ</h6>
@@ -270,7 +270,7 @@
                                 <small class="text-muted">จ่ายค่าผลตอบแทนทีมงานน็อคดาวน์</small>
                             </div>
                         </div>
-                        <span class="badge bg-danger rounded-pill px-3 shadow-sm">รอโอนเงิน</span>
+                        <span class="badge bg-danger rounded-pill">{{ pending_commissions_knockdown }} รายการ</span>
                     </div>
                 </a>
 
@@ -285,7 +285,7 @@
                                 <small class="text-muted">จ่ายค่าผลตอบแทนทีมงานโซล่าเซลล์</small>
                             </div>
                         </div>
-                        <span class="badge bg-danger rounded-pill px-3 shadow-sm">รอโอนเงิน</span>
+                        <span class="badge bg-danger rounded-pill">{{ pending_commissions_solar }} รายการ</span>
                     </div>
                 </a>
 

@@ -1,0 +1,156 @@
+{% extends 'core/base.html' %}
+{% load humanize %}
+
+{% block content %}
+<style>
+    /* 🌟 สไตล์สำหรับการรันเลขลำดับในตารางอัตโนมัติ 🌟 */
+    .auto-number tbody { counter-reset: rowNumber; }
+    .auto-number tbody tr { counter-increment: rowNumber; }
+    .auto-number tbody tr td.row-number::before { content: counter(rowNumber); }
+
+    /* 🌟 สไตล์มาตรฐานสำหรับสั่งพิมพ์ (Print Layout) 🌟 */
+    @media print {
+        /* ซ่อนเมนูและปุ่มที่ไม่จำเป็นตอนปริ้นต์ */
+        .navbar, .sidebar, form, .d-print-none, .btn { display: none !important; }
+        
+        /* ตั้งค่าหน้ากระดาษ A4 */
+        @page { size: A4 portrait; margin: 15mm; }
+        body { background-color: #fff !important; font-size: 11pt !important; color: #000 !important; }
+        .container, .container-fluid { padding: 0 !important; width: 100% !important; max-width: 100% !important; }
+        .main-content { margin-left: 0 !important; padding: 0 !important; }
+
+        /* ปรับกรอบและสีให้เป็นขาวดำทางการ */
+        .card { border: none !important; box-shadow: none !important; border-radius: 0 !important; }
+        .card-body { padding: 0 !important; }
+        .bg-light { background-color: transparent !important; }
+        
+        /* ตารางเส้นดำทึบตามมาตรฐานบัญชี */
+        .table { width: 100% !important; margin-bottom: 20px !important; border-collapse: collapse !important; }
+        .table-bordered th, .table-bordered td { border: 1px solid #000 !important; color: #000 !important; padding: 8px !important; }
+        .table th { background-color: #f2f2f2 !important; -webkit-print-color-adjust: exact; font-weight: bold !important; text-align: center !important; }
+        
+        /* ซ่อนป้าย Badge สีสันบนเว็บ */
+        .badge-print-clean { background: transparent !important; color: #000 !important; padding: 0 !important; border: none !important; font-weight: bold; }
+        .badge-print-clean i { display: none !important; } /* ซ่อนไอคอนตอนปริ้นต์ */
+    }
+</style>
+
+<div class="container py-4">
+    <!-- แถบปุ่มกด (ซ่อนตอนปริ้นต์) -->
+    <div class="d-flex justify-content-between align-items-end mb-4 d-print-none">
+        <div>
+            <h3 class="fw-bold text-dark mb-1"><i class="fas fa-print text-primary me-2"></i>พิมพ์ใบขอเบิกคอมมิชชัน</h3>
+            <p class="text-muted mb-0">เลขที่อ้างอิง: {{ claim.code }} | พิมพ์โดย: {{ request.user.first_name }}</p>
+        </div>
+        <div>
+            <button class="btn btn-primary rounded-pill px-4 shadow-sm fw-bold me-2" onclick="window.print()">
+                <i class="fas fa-print me-2"></i> สั่งพิมพ์ (Print A4)
+            </button>
+            <button class="btn btn-outline-secondary rounded-pill px-4 shadow-sm fw-bold" onclick="window.close()">
+                <i class="fas fa-times me-2"></i> ปิดหน้าต่าง
+            </button>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- 📄 เริ่มหน้ากระดาษ A4 (เอกสารทางการ) -->
+    <!-- ========================================== -->
+    <div class="card shadow border-0 rounded-0 p-3 p-md-5 bg-white mx-auto" style="max-width: 900px; min-height: 1000px;">
+        
+        <!-- 1. หัวกระดาษ (Header) -->
+        <div class="text-center mb-4 border-bottom border-dark pb-3">
+            <h4 class="fw-bold text-dark mb-1">{{ company.name_th|default:"บริษัท นีด ช็อปปิ้ง จำกัด" }}</h4>
+            <h5 class="fw-bold text-dark mb-3">ใบขอเบิกค่าคอมมิชชัน (Commission Claim Form)</h5>
+        </div>
+
+        <!-- 2. ข้อมูลเอกสารและบัญชี (Document & Payment Info) -->
+        <div class="row mb-4 text-dark" style="font-size: 0.95rem;">
+            <div class="col-7">
+                <table class="table-borderless table-sm">
+                    <tr><td class="fw-bold" style="width: 120px;">ผู้ขอเบิก:</td><td>{{ claim.requester.first_name }} {{ claim.requester.last_name }}</td></tr>
+                    <tr><td class="fw-bold">โอนเข้าธนาคาร:</td><td>{{ claim.bank_name|default:"-" }}</td></tr>
+                    <tr><td class="fw-bold">เลขที่บัญชี:</td><td class="font-monospace fw-bold fs-6">{{ claim.bank_account|default:"-" }}</td></tr>
+                    <tr><td class="fw-bold">ชื่อบัญชี:</td><td>{{ claim.account_name|default:"-" }}</td></tr>
+                </table>
+            </div>
+            <div class="col-5">
+                <table class="table-borderless table-sm w-100">
+                    <tr><td class="fw-bold text-end" style="width: 100px;">เลขที่ใบเบิก:</td><td class="fw-bold text-end text-primary fs-5">{{ claim.code }}</td></tr>
+                    <tr><td class="fw-bold text-end">วันที่ทำรายการ:</td><td class="text-end">{{ claim.created_at|date:"d/m/Y H:i"|default:"-" }}</td></tr>
+                    <tr>
+                        <td class="fw-bold text-end align-middle">ประเภทโควตา:</td>
+                        <td class="text-end">
+                            <span class="badge bg-dark bg-opacity-10 text-dark border border-dark badge-print-clean">คอมมิชชัน {{ claim.claim_type }}</span>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+
+        <!-- 3. ตารางแจกแจงรายการ (Tickets Table) -->
+        <table class="table table-bordered border-dark align-middle auto-number mb-0">
+            <thead class="bg-light text-dark">
+                <tr>
+                    <th class="text-center py-2" style="width: 10%;">ลำดับ</th>
+                    <th class="py-2" style="width: 25%;">รหัสสิทธิ์ (Ticket ID)</th>
+                    <th class="py-2" style="width: 40%;">อ้างอิงใบเสนอราคา / ยอดขายสุทธิ</th>
+                    <th class="text-end py-2" style="width: 25%;">จำนวนเงิน (บาท)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for ticket in tickets %}
+                <tr>
+                    <td class="text-center row-number"></td>
+                    <td><span class="fw-bold">{{ ticket.code }}</span></td>
+                    <td>
+                        {% if ticket.ticket_type == '2%' %}
+                            บิล: {{ ticket.quotation_ref.code }}<br>
+                            <small class="text-muted">ฐานคำนวณ: {{ ticket.base_amount|intcomma }} บาท</small>
+                        {% else %}
+                            บิล: {{ ticket.invoice_ref.quotation_ref.code }}<br>
+                            <small class="text-muted">ฐานคำนวณ: {{ ticket.base_amount|intcomma }} บาท</small>
+                        {% endif %}
+                    </td>
+                    <td class="text-end fw-bold">{{ ticket.commission_amount|intcomma }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <!-- สรุปยอดรวม และ ตัวอักษรภาษาไทย -->
+                <tr>
+                    <td colspan="3" class="text-center fw-bold align-middle bg-light border-dark py-3">
+                        ( <span class="text-primary badge-print-clean" style="font-size: 1.1rem;">{{ total_amount_text }}</span> )
+                    </td>
+                    <td class="text-end fw-bold text-dark fs-5 align-middle border-dark py-3 bg-light">
+                        {{ claim.total_amount|intcomma }}
+                    </td>
+                </tr>
+            </tfoot>
+        </table>
+
+        <!-- 4. ส่วนลงนามอนุมัติ (Signature Block) -->
+        <div class="row text-center mt-5 pt-5 text-dark" style="font-size: 0.95rem;">
+            <div class="col-4">
+                <p class="mb-2">..........................................................</p>
+                <p class="mb-1">( {{ claim.requester.first_name }} {{ claim.requester.last_name }} )</p>
+                <p class="fw-bold mb-1">ผู้ขอเบิก (Sales)</p>
+                <p class="text-muted small">วันที่ ....... / ....... / .......</p>
+            </div>
+            <div class="col-4">
+                <p class="mb-2">..........................................................</p>
+                <p class="mb-1">( ........................................................ )</p>
+                <p class="fw-bold mb-1">ผู้ตรวจสอบ (Accounting)</p>
+                <p class="text-muted small">วันที่ ....... / ....... / .......</p>
+            </div>
+            <div class="col-4">
+                <p class="mb-2">..........................................................</p>
+                <p class="mb-1">( ........................................................ )</p>
+                <p class="fw-bold mb-1">ผู้อนุมัติ (Manager)</p>
+                <p class="text-muted small">วันที่ ....... / ....... / .......</p>
+            </div>
+        </div>
+
+    </div>
+    <!-- 📄 จบหน้ากระดาษ -->
+</div>
+{% endblock %}

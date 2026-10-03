@@ -107,7 +107,17 @@
     </div>
     {% endfor %}
     {% endif %}
-</div>
+
+    <!-- 🌟 [NEW] ปุ่มใหม่: ไปหน้าใบเตรียมสั่งซื้อ (วางไว้ล่างสุด) 🌟 -->
+    {% if ppo_code %}
+    <div class="text-end mt-4 mb-2">
+        <a href="{% url 'ppo_list' %}" class="btn btn-outline-secondary rounded-pill px-5 py-2 fw-bold shadow-sm">
+            ไปหน้าใบเตรียมสั่งซื้อ <i class="fas fa-arrow-right ms-2"></i>
+        </a>
+    </div>
+    {% endif %}
+
+</div> <!-- ปิด container py-4 เดิม -->
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
@@ -132,8 +142,11 @@ function transferToPO(supplierId, ppoRef, itemsData) {
     }));
     const itemsJson = encodeURIComponent(JSON.stringify(cleanItems));
 
-    // วาร์ปไปยังหน้าสร้าง PO ใหม่ พร้อมหอบของที่รวมยอดแล้วไปวางใส่ฟอร์ม
-    window.location.href = `/purchasing/po/create/?ppo_ref=${ppoRef}&supplier_id=${supplierId}&items_data=${itemsJson}`;
+    // 🌟 [NEW] แนบพิกัดหน้าปัจจุบันเข้าไปใน URL เพื่อให้ระบบรู้ว่าต้องเด้งกลับมาที่ไหน 🌟
+    const currentUrl = encodeURIComponent(window.location.href);
+
+    // วาร์ปไปยังหน้าสร้าง PO ใหม่ พร้อมหอบของที่รวมยอดแล้วไปวางใส่ฟอร์ม และพกพิกัดขากลับไปด้วย
+    window.location.href = `/purchasing/po/create/?ppo_ref=${ppoRef}&supplier_id=${supplierId}&items_data=${itemsJson}&next=${currentUrl}`;
 }
 // 🌟 [แก้ไข 2]: สคริปต์ล็อคปุ่มป้องกัน Double Submit 🌟
 function disableCalcBtn() {
