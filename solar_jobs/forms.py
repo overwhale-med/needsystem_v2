@@ -1,17 +1,21 @@
 from django import forms
 from django.forms import inlineformset_factory
-from .models import SolarJob, SolarJobMaterial, SolarExpense
+from .models import SolarJob, SolarJobBOM, SolarExpense
 # 🌟 ดึงตารางสินค้ามาเพื่อกรองข้อมูล
-from solar_sales.models import SolarProduct 
+from solar_sales.models import SolarProduct
 
 class SolarJobForm(forms.ModelForm):
+    # 🌟 [FIXED] เพิ่มบรรทัดนี้ เพื่อบังคับให้ตัวแปลภาษาของ Django รองรับวันที่แบบไทย 100%
+    # 🌟 [FIXED] เพิ่ม 'autocomplete': 'off' เพื่อป้องกันประวัติเก่าเด้งบังปฏิทิน 🌟
+    start_date = forms.DateField(input_formats=['%d/%m/%Y', '%Y-%m-%d'], required=False, widget=forms.DateInput(format='%d/%m/%Y', attrs={'class': 'form-control custom-datepicker', 'placeholder': 'dd/mm/yyyy', 'autocomplete': 'off'}))
+    expected_finish_date = forms.DateField(input_formats=['%d/%m/%Y', '%Y-%m-%d'], required=False, widget=forms.DateInput(format='%d/%m/%Y', attrs={'class': 'form-control custom-datepicker', 'placeholder': 'dd/mm/yyyy', 'autocomplete': 'off'}))
+
     class Meta:
         model = SolarJob
         fields = ['technician_team', 'start_date', 'expected_finish_date', 'labor_cost_budget', 'status', 'note']
+        # ... (ส่วน widgets ลบ start_date และ expected_finish_date ทิ้งไปเลย เพราะเราประกาศใหม่ด้านบนแล้วครับ)
         widgets = {
             'technician_team': forms.Select(attrs={'class': 'form-select fw-bold'}),
-            'start_date': forms.DateInput(format='%d/%m/%Y', attrs={'class': 'form-control datepicker', 'placeholder': 'dd/mm/yyyy'}),
-            'expected_finish_date': forms.DateInput(format='%d/%m/%Y', attrs={'class': 'form-control datepicker', 'placeholder': 'dd/mm/yyyy'}),
             'labor_cost_budget': forms.NumberInput(attrs={'class': 'form-control text-end fw-bold text-primary', 'step': '0.01'}),
             'status': forms.Select(attrs={'class': 'form-select fw-bold'}),
             'note': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
@@ -29,26 +33,27 @@ class SolarExpenseForm(forms.ModelForm):
             'receipt_image': forms.FileInput(attrs={'class': 'form-control'}),
         }
 
-# 🌟 สร้างแบบฟอร์มย่อยสำหรับจัดการวัตถุดิบ เพื่อนำไปใช้กับ FormSet
-class SolarJobMaterialForm(forms.ModelForm):
+# 🌟 อัปเดตแบบฟอร์มย่อยเป็น SolarJobBOMForm
+class SolarJobBOMForm(forms.ModelForm):
     class Meta:
-        model = SolarJobMaterial
-        fields = ['product', 'quantity', 'unit_cost']
+        model = SolarJobBOM
+        fields = ['product', 'planned_quantity', 'actual_used_quantity', 'unit_cost']
         widgets = {
             'product': forms.Select(attrs={'class': 'form-select form-select-sm fw-bold'}),
-            'quantity': forms.NumberInput(attrs={'class': 'form-control text-center', 'step': '0.01'}),
+            'planned_quantity': forms.NumberInput(attrs={'class': 'form-control text-center', 'step': '0.01'}),
+            'actual_used_quantity': forms.NumberInput(attrs={'class': 'form-control text-center fw-bold text-primary', 'step': '0.01'}),
             'unit_cost': forms.NumberInput(attrs={'class': 'form-control text-end', 'step': '0.01'}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # 🌟 ล็อคให้เลือกได้เฉพาะสินค้าประเภทวัตถุดิบ (RM) ที่เปิดใช้งานอยู่เท่านั้น
+        # ล็อคให้เลือกได้เฉพาะสินค้าประเภทวัตถุดิบ (RM) ที่เปิดใช้งานอยู่เท่านั้น
         self.fields['product'].queryset = SolarProduct.objects.filter(is_active=True, product_type='RM')
 
-# ฟอร์มสำหรับการเบิกวัตถุดิบแบบเพิ่ม/ลดแถวได้
-SolarMaterialFormSet = inlineformset_factory(
-    SolarJob, SolarJobMaterial,
-    form=SolarJobMaterialForm, # 🌟 เรียกใช้ฟอร์มที่เราสร้างไว้ด้านบน
-    extra=1,
+# 🌟 อัปเดต FormSet เป็น SolarBOMFormSet
+SolarBOMFormSet = inlineformset_factory(
+    SolarJob, SolarJobBOM,
+    form=SolarJobBOMForm,
+    extra=0, # 🌟 [FIXED] เปลี่ยนจาก 1 เป็น 0 เพื่อไม่ให้ระบบแถมแถวว่างเปล่ามากวนใจ
     can_delete=True
 )

@@ -67,6 +67,10 @@ class PurchaseOrderItem(models.Model):
 
 class PurchaseOrderPayment(models.Model):
     po = models.ForeignKey(PurchaseOrder, related_name='payments', on_delete=models.CASCADE)
+
+    # 🌟 [NEW] เพิ่มฟิลด์เก็บเลขที่ใบคุม (Payment Voucher) 🌟
+    pv_code = models.CharField(max_length=20, unique=True, blank=True, null=True, verbose_name="เลขที่ใบคุมจ่าย (PV)")
+
     payment_date = models.DateField(default=timezone.now, verbose_name="วันที่ชำระเงิน")
     amount = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="ยอดชำระ")
     payment_method = models.CharField(max_length=50, default="โอนเงินผ่านธนาคาร", verbose_name="ช่องทางการชำระ")
@@ -80,10 +84,25 @@ class PurchaseOrderPayment(models.Model):
         verbose_name_plural = "ประวัติการชำระเงิน PO"
 
     def __str__(self):
-        return f"{self.po.code} - {self.amount}"
+        return f"{self.pv_code or 'No-PV'} - {self.amount}"
 
     def save(self, *args, **kwargs):
+        # 🌟 [NEW] รันเลขใบคุมอัตโนมัติ PV-KD-YYMM-XXX
+        if not self.pv_code:
+            now = timezone.now()
+            thai_year = (now.year + 543) % 100
+            prefix = f"PV-KD-{thai_year:02d}{now.strftime('%m')}"
+            last_pv = PurchaseOrderPayment.objects.filter(pv_code__startswith=prefix).order_by('pv_code').last()
+            if last_pv and last_pv.pv_code:
+                try: seq = int(last_pv.pv_code.split('-')[-1]) + 1
+                except: seq = 1
+            else:
+                seq = 1
+            self.pv_code = f"{prefix}-{seq:03d}"
+
         super().save(*args, **kwargs)
+
+        # ย่อขนาดรูปภาพ
         if self.slip_image:
             try:
                 img = Image.open(self.slip_image.path)
@@ -153,19 +172,19 @@ class OverseasPO(models.Model):
     ]
 
     supplier = models.ForeignKey(OverseasSupplier, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="ร้านค้าต่างประเทศ")
-    supplier_name = models.CharField(max_length=200, blank=True, null=True, verbose_name="ชื่อร้านค้า (ข้อมูลเดิม)") 
-    
+    supplier_name = models.CharField(max_length=200, blank=True, null=True, verbose_name="ชื่อร้านค้า (ข้อมูลเดิม)")
+
     po_number = models.CharField(max_length=50, blank=True, null=True, unique=True, verbose_name="เลขที่เอกสารเรา (PQ)")
     pi_number = models.CharField(max_length=50, blank=True, null=True, verbose_name="เลขที่ PI (จากโรงงาน)")
-    
+
     po_date = models.DateField(default=timezone.now, verbose_name="วันที่เปิดใบสั่งซื้อ")
     eta_date = models.DateField(null=True, blank=True, verbose_name="วันที่คาดว่าจะได้รับสินค้า")
-    
+
     ship_to_port = models.CharField(max_length=255, blank=True, null=True, verbose_name="สถานที่จัดส่ง (Ship To / Port)")
-    
+
     item_description = models.TextField(blank=True, verbose_name="รายการสินค้าที่สั่ง (Note)")
     total_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name="ยอดสั่งซื้อรวม (THB)")
-    
+
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING', verbose_name="สถานะออเดอร์")
 
     deposit_date = models.DateField(null=True, blank=True, verbose_name="วันที่ชำระมัดจำ")
@@ -193,7 +212,7 @@ class OverseasPO(models.Model):
             now = datetime.datetime.now()
             thai_year = (now.year + 543) % 100
             prefix = f"PQ-{thai_year:02d}{now.strftime('%m')}"
-            
+
             last_po = OverseasPO.objects.filter(po_number__startswith=prefix).order_by('po_number').last()
             if last_po and last_po.po_number:
                 try: seq = int(last_po.po_number.split('-')[-1]) + 1
@@ -208,10 +227,10 @@ class OverseasPO(models.Model):
 # ==========================================
 class OverseasPOItem(models.Model):
     po = models.ForeignKey(OverseasPO, on_delete=models.CASCADE, related_name='overseas_items', verbose_name="ใบสั่งซื้อ")
-    
+
     # 🌟 [NEW] เพิ่มการผูกความสัมพันธ์กับตาราง Product (คลังสินค้า) 🌟
     product = models.ForeignKey(Product, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="อ้างอิงรหัสสินค้า (คลัง)")
-    
+
     image = models.ImageField(upload_to='overseas_items/%Y/%m/', null=True, blank=True, verbose_name="รูปภาพสินค้า")
     description = models.CharField(max_length=255, verbose_name="รายละเอียดสินค้า")
     quantity = models.DecimalField(max_digits=10, decimal_places=2, default=1, verbose_name="จำนวน")
@@ -237,7 +256,7 @@ class OverseasDocument(models.Model):
         ('CI', 'Commercial Invoice (CI)'),
         ('CUSTOMS', 'ใบขนสินค้าขาเข้า'),
     ]
-    
+
     po = models.ForeignKey(OverseasPO, on_delete=models.CASCADE, related_name='documents', verbose_name="ใบสั่งซื้อที่เกี่ยวข้อง")
     doc_type = models.CharField(max_length=20, choices=DOC_TYPES, verbose_name="ประเภทเอกสาร")
     file = models.FileField(upload_to='overseas_docs/%Y/%m/', verbose_name="ไฟล์เอกสาร")

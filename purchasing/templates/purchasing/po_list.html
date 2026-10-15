@@ -131,7 +131,7 @@
                         <th class="py-3 fw-bold text-center">การชำระเงิน</th>
                         <th class="py-3 fw-bold text-center">การจัดส่ง</th>
                         <th class="py-3 fw-bold text-center">รับเข้าคลัง</th>
-                        <th class="pe-4 py-3 fw-bold text-center" style="width: 150px;">จัดการ</th>
+                        <th class="pe-4 py-3 fw-bold text-center" style="width: 180px;">จัดการ</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -183,13 +183,20 @@
                         </td>
 
                         <td class="pe-4 text-center">
-                              <div class="d-flex justify-content-center gap-2">
+                              <div class="d-flex justify-content-center align-items-center gap-2">
 
                                 {% if user.is_superuser or user.groups.all.0.name == 'Purchasing' or user.groups.all.0.name == 'Executive' %}
-                                     <a href="{% url 'po_edit' po.id %}" class="btn btn-sm btn-outline-primary shadow-sm" title="ดูรายละเอียด / แก้ไข / อนุมัติ">
-                                        <i class="fas fa-search"></i>
-                                    </a>
-                                 {% endif %}
+                                    <!-- 🌟 [FIXED] เปลี่ยนสไตล์ปุ่มตรวจสอบ/อนุมัติ ให้เป็นแคปซูลสีฟ้า (btn-info) 🌟 -->
+                                    {% if po.status == 'DRAFT' %}
+                                        <a href="{% url 'po_edit' po.id %}" class="btn btn-info text-white rounded-pill shadow-sm fw-bold px-3 py-1 text-nowrap" style="font-size: 0.75rem;" title="ตรวจสอบและอนุมัติ">
+                                            <i class="fas fa-edit me-1"></i> ตรวจสอบ/อนุมัติ
+                                        </a>
+                                    {% else %}
+                                        <a href="{% url 'po_edit' po.id %}" class="btn btn-sm btn-outline-primary shadow-sm" title="ดูรายละเอียด">
+                                            <i class="fas fa-search"></i>
+                                        </a>
+                                    {% endif %}
+                                {% endif %}
 
                                 {% if po.status == 'APPROVED' %}
                                     {% if user.is_superuser or user.groups.all.0.name == 'Accounting' or user.groups.all.0.name == 'Executive' %}

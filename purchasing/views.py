@@ -25,12 +25,8 @@ from inventory.models import (
     Product, ProductSupplier, SupplierPriceHistory,
     Category, RawMaterialCategory
 )
-# 🌟 [NEW] เพิ่มการนำเข้า ProductionOrder เพื่อใช้นับจำนวนงานรอ PPO 🌟
 from manufacturing.models import BOM, ProductionOrder
 
-# ------------------------------------------
-# 🛡️ ระบบนายทวาร (Gatekeeper) แบ่งสิทธิ์การทำงาน
-# ------------------------------------------
 def can_view_and_pay(user):
     if user.is_superuser: return True
     user_groups = list(user.groups.values_list('name', flat=True))
@@ -60,9 +56,6 @@ def check_is_approver(user):
         if rank in ['manager', 'director', 'executive']: return True
     return False
 
-# ------------------------------------------
-# 🛒 ระบบจัดซื้อ (Purchasing)
-# ------------------------------------------
 @login_required
 def purchasing_dashboard(request):
     if not can_view_and_pay(request.user):
@@ -82,14 +75,15 @@ def purchasing_dashboard(request):
     recent_pos = pos.order_by('-created_at')[:10]
     is_approver = check_is_approver(request.user)
 
-    # 🌟 [NEW] นับจำนวนใบสั่งผลิต (JOB) ที่รอเปิดใบเตรียม (PPO) 🌟
-    pending_ppo_count = ProductionOrder.objects.filter(status='WAITING_MATERIALS', is_materials_ordered=False).count()
+    pending_ppo_count = ProductionOrder.objects.filter(status='WAITING_MATERIALS', is_materials_ordered=False, ppo_ref__isnull=True).count() # 🌟 [UPDATE]
+
+    # 🌟 [FIXED] นำ PPO ของโซล่าออกไป เพราะเราจะไปใช้ในแอปใหม่แล้ว
 
     context = {
         'draft_count': draft_count, 'pending_payment_count': pending_payment_count,
         'pending_payment_amount': actual_pending_amount, 'pending_receipt_count': pending_receipt_count,
         'recent_pos': recent_pos, 'is_approver': is_approver,
-        'pending_ppo_count': pending_ppo_count, # ส่งยอดไปแสดงเป็น Badge แดงๆ
+        'pending_ppo_count': pending_ppo_count,
     }
     return render(request, 'purchasing/purchasing_dashboard.html', context)
 
@@ -110,15 +104,20 @@ def po_list(request):
     if payment_filter:
         pos = pos.filter(payment_status=payment_filter)
 
-    # 🌟 [NEW] ปรับการรับค่าว้นที่ ให้ Default เป็น "ช่วง 7 วันก่อนหน้า" 🌟
     start_date = request.GET.get('start_date')
     end_date = request.GET.get('end_date')
 
-    # ถ้าย้งไม่มีการเลือกวันที่ (โหลดหน้าเว็บครั้งแรก) ให้ตั้งค่าเป็นย้อนหลัง 6 วัน (รวมวันนี้ = 7 วัน)
+    # 🌟 [แก้ไข]: กำหนด Timezone เป็นเวลาประเทศไทย (Bangkok)
+    import pytz
+    tz_bkk = pytz.timezone('Asia/Bangkok')
+    today_bkk = timezone.now().astimezone(tz_bkk).date()
+
     if not start_date or start_date == 'None':
-        start_date = (timezone.now().date() - datetime.timedelta(days=6)).strftime('%Y-%m-%d')
+        # ย้อนหลัง 6 วันจากวันปัจจุบันในไทย
+        start_date = (today_bkk - datetime.timedelta(days=6)).strftime('%Y-%m-%d')
     if not end_date or end_date == 'None':
-        end_date = timezone.now().date().strftime('%Y-%m-%d')
+        # ใช้วันปัจจุบันในไทยเป็นค่า Default
+        end_date = today_bkk.strftime('%Y-%m-%d')
 
     pos = pos.filter(date__gte=start_date, date__lte=end_date)
 
@@ -174,6 +173,13 @@ def po_create(request):
             po.save()
 
             messages.success(request, f"✅ สร้างใบสั่งซื้อ {po.code} เรียบร้อยแล้ว")
+
+            # 🌟 [NEW] เช็คว่ามีพิกัดขากลับ (next) ส่งมาด้วยไหม ถ้ามีให้เด้งกลับไปที่หน้าเดิมทันที! 🌟
+            next_url = request.POST.get('next')
+            if next_url:
+                return redirect(next_url)
+
+            # (ถ้าไม่มีพิกัดขากลับ ก็ให้ทำงานตามระบบปกติเดิมด้านล่างนี้)
             if ppo_ref:
                 try:
                     ppo_obj = PurchasePreparation.objects.get(code=ppo_ref)
@@ -265,7 +271,6 @@ def po_payment(request, po_id):
             else: po.payment_status = 'DEPOSIT'
             po.save()
 
-            # 🌟 [NEW] เชื่อมโยงบัญชี: สร้างบันทึกรายจ่ายอัตโนมัติ ส่งไปแสดงที่ Dashboard บัญชี 🌟
             from accounting.models import Expense
             Expense.objects.create(
                 title=f"ทำจ่ายใบสั่งซื้อ #{po.code} (PV: {payment_record.reference_no})",
@@ -276,7 +281,6 @@ def po_payment(request, po_id):
 
             messages.success(request, f"✅ บันทึกทำจ่ายเงิน {amount:,.2f} บาท พร้อมออก PV สำเร็จ! (ระบบลงบัญชีรายจ่ายให้อัตโนมัติแล้ว)")
 
-            # เมื่อจ่ายสำเร็จ ให้เด้งกลับไปที่หน้าศูนย์บัญชี เพื่อความต่อเนื่องในการทำงานของพนักงานบัญชี
             return redirect('accounting_verification_hub', task_type='po_payments')
         else:
             messages.error(request, "❌ จำนวนเงินไม่ถูกต้อง หรือเกินยอดคงค้าง")
@@ -294,17 +298,22 @@ def ppo_list(request):
 
         mat_needed = {}
         for job in ppo.production_orders.all():
-            bom = BOM.objects.filter(product=job.product).first()
-            if bom:
-                for item in bom.items.all():
-                    mat_id = item.raw_material.id
-                    if mat_id not in mat_needed: mat_needed[mat_id] = Decimal(0)
-                    mat_needed[mat_id] += Decimal(str(item.quantity))
-                    total_amount += Decimal(str(item.quantity)) * Decimal(str(item.raw_material.cost_price))
-                    total_needed_qty += Decimal(str(item.quantity))
+            # 🌟 [FIXED] ดึงจากวัสดุใน JOB ตรงๆ
+            for item in job.materials.all():
+                mat_id = item.raw_material.id
+                if mat_id not in mat_needed: mat_needed[mat_id] = Decimal(0)
+                mat_needed[mat_id] += Decimal(str(item.quantity))
+                total_amount += Decimal(str(item.quantity)) * Decimal(str(item.raw_material.cost_price))
+                total_needed_qty += Decimal(str(item.quantity))
 
         ordered_qty = Decimal(0)
         created_pos = PurchaseOrder.objects.filter(ppo_ref=ppo.code).exclude(status='CANCELLED')
+
+        # 🌟 [NEW] เก็บรายการ PO และ JOB ส่งไปให้ปุ่มในหน้าจอ HTML นำไปสร้างป๊อปอัป
+        ppo.created_pos_list = created_pos
+        ppo.created_pos_count = created_pos.count()
+        ppo.job_count = ppo.production_orders.count()
+
         for po in created_pos:
             for po_item in po.items.all():
                 if po_item.product_id in mat_needed:
@@ -319,7 +328,14 @@ def ppo_list(request):
         elif ppo.progress_percent >= 100: ppo.po_status = 'GREEN'
         else: ppo.po_status = 'ORANGE'
 
-    return render(request, 'purchasing/ppo_list.html', {'ppos': ppos})
+    # 🌟 [NEW] นับคิวงาน (JOB) ที่รอสร้างใบเตรียม PPO
+    from manufacturing.models import ProductionOrder
+    pending_ppo_count = ProductionOrder.objects.filter(status='WAITING_MATERIALS', is_materials_ordered=False, ppo_ref__isnull=True).count() # 🌟 [UPDATE]
+
+    return render(request, 'purchasing/ppo_list.html', {
+        'ppos': ppos,
+        'pending_ppo_count': pending_ppo_count
+    })
 
 @login_required
 def ppo_detail(request, pk):
@@ -372,12 +388,11 @@ def ppo_detail(request, pk):
 
     material_reqs = {}
     for job in ppo.production_orders.all():
-        bom = BOM.objects.filter(product=job.product).first()
-        if bom:
-            for item in bom.items.all():
-                mat_id = item.raw_material.id
-                if mat_id not in material_reqs: material_reqs[mat_id] = {'product': item.raw_material, 'needed': Decimal(0), 'ordered': Decimal(0)}
-                material_reqs[mat_id]['needed'] += Decimal(str(item.quantity))
+        # 🌟 [FIXED] ดึงจากวัสดุใน JOB ตรงๆ
+        for item in job.materials.all():
+            mat_id = item.raw_material.id
+            if mat_id not in material_reqs: material_reqs[mat_id] = {'product': item.raw_material, 'needed': Decimal(0), 'ordered': Decimal(0)}
+            material_reqs[mat_id]['needed'] += Decimal(str(item.quantity))
 
     created_pos = PurchaseOrder.objects.filter(ppo_ref=ppo.code).exclude(status='CANCELLED')
     for po in created_pos:
@@ -389,11 +404,16 @@ def ppo_detail(request, pk):
     grand_total = Decimal(0)
     all_suppliers = list(Supplier.objects.all().values('id', 'name'))
 
+    # 🌟 [NEW] ตัวแปรเก็บยอดคงเหลือรวม เพื่อเช็คว่าสั่งครบหมดทุกชิ้นหรือยัง
+    total_remaining_all = Decimal(0)
+
     for mat_id, data in material_reqs.items():
         mat = data['product']
         needed = float(data['needed'])
         ordered = float(data['ordered'])
         remaining = needed - ordered if needed - ordered > 0 else 0
+
+        total_remaining_all += Decimal(str(remaining)) # บวกยอดที่เหลือเข้ากองกลาง
 
         suppliers = []
         if hasattr(mat, 'multi_suppliers') and mat.multi_suppliers.exists():
@@ -408,8 +428,56 @@ def ppo_detail(request, pk):
         })
         grand_total += Decimal(str(needed)) * Decimal(str(mat.cost_price))
 
+    # 🌟 [NEW] ถ้าค่าค้างสั่งรวมเป็น 0 แปลว่าสั่งของครบ 100% แล้ว
+    is_fully_ordered = (total_remaining_all == 0)
+
     all_suppliers_json = json.dumps(all_suppliers)
-    return render(request, 'purchasing/ppo_detail.html', {'ppo': ppo, 'materials_list': materials_list, 'grand_total': grand_total, 'all_suppliers_json': all_suppliers_json, 'all_suppliers': all_suppliers, 'created_pos': created_pos})
+    return render(request, 'purchasing/ppo_detail.html', {
+        'ppo': ppo,
+        'materials_list': materials_list,
+        'grand_total': grand_total,
+        'all_suppliers_json': all_suppliers_json,
+        'all_suppliers': all_suppliers,
+        'created_pos': created_pos,
+        'is_fully_ordered': is_fully_ordered # 🌟 ส่งตัวแปรนี้ไปหน้าจอ
+    })
+
+@login_required
+def print_ppo_document(request, ppo_id):
+    if not can_view_and_pay(request.user): return redirect('dashboard')
+
+    ppo = get_object_or_404(PurchasePreparation, pk=ppo_id)
+    company = CompanyInfo.objects.first()
+
+    # 🌟 รวบรวมข้อมูลวัตถุดิบทั้งหมดที่ต้องใช้ใน PPO นี้ เพื่อนำไปพิมพ์ 🌟
+    material_reqs = {}
+    for job in ppo.production_orders.all():
+        # 🌟 [FIXED] ดึงจากวัสดุใน JOB ตรงๆ
+        for item in job.materials.all():
+            mat_id = item.raw_material.id
+            if mat_id not in material_reqs:
+                material_reqs[mat_id] = {
+                    'product': item.raw_material,
+                    'needed': Decimal('0'),
+                    'cost': item.raw_material.cost_price or Decimal('0'),
+                    'total': Decimal('0')
+                }
+            material_reqs[mat_id]['needed'] += Decimal(str(item.quantity))
+            material_reqs[mat_id]['total'] = material_reqs[mat_id]['needed'] * material_reqs[mat_id]['cost']
+
+    materials_list = []
+    grand_total = Decimal('0')
+
+    for mat_id, data in material_reqs.items():
+        materials_list.append(data)
+        grand_total += data['total']
+
+    return render(request, 'purchasing/ppo_print.html', {
+        'ppo': ppo,
+        'company': company,
+        'materials_list': materials_list,
+        'grand_total': grand_total
+    })
 
 @login_required
 def po_approve(request, po_id):
@@ -665,10 +733,6 @@ def overseas_supplier_delete(request, pk):
     messages.success(request, "🗑️ ลบข้อมูลร้านค้าต่างประเทศเรียบร้อยแล้ว")
     return redirect('overseas_supplier_list')
 
-
-# ------------------------------------------
-# 🌟 ทำเนียบซัพพลายเออร์ในประเทศ
-# ------------------------------------------
 @login_required
 def supplier_list(request):
     if not can_view_and_pay(request.user): return redirect('dashboard')

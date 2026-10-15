@@ -4,13 +4,19 @@ from django.db.models import Sum
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-# แก้ไขบรรทัด import โมเดล ให้มีโมเดลสำรวจและเบิกจ่ายเพิ่มเข้ามาด้วย
-from .models import SolarQuotation, SolarQuotationItem, SolarInvoice, SolarProduct, SolarProductCategory, SolarRawMaterialCategory, SolarSurveyJob, SolarSurveyItem, SolarExpenseClaim, SolarExpenseSlip
-# แก้ไขบรรทัด import ฟอร์ม ให้มีฟอร์มสำรวจและเบิกจ่ายเพิ่มเข้ามาด้วย
-from .forms import SolarQuotationStep1Form, SolarProductForm, SolarSurveyJobForm, SolarExpenseClaimForm
+
+# 🌟 [FIXED] แก้ไขบรรทัด import โมเดล ให้เหลือเฉพาะของระบบขายและปฏิบัติการ
+from .models import SolarQuotation, SolarQuotationItem, SolarInvoice, SolarSurveyJob, SolarSurveyItem, SolarExpenseClaim, SolarExpenseSlip
+
+# 🌟 [FIXED] แก้ไขบรรทัด import ฟอร์ม ให้เหลือเฉพาะของระบบขายและปฏิบัติการ
+from .forms import SolarQuotationStep1Form, SolarSurveyJobForm, SolarExpenseClaimForm
+
+# 🌟 [FIXED] ดึงโมเดลสินค้าและหมวดหมู่ทั้งหมดมาจากแอป solar_inventory ที่เราแยกใหม่
+from solar_inventory.models import SolarProduct, SolarProductCategory, SolarRawMaterialCategory
+
 from solar_jobs.models import SolarJob
 import openpyxl
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.utils.dateparse import parse_date
 from django.core.paginator import Paginator
 from django.db.models import Q
@@ -30,17 +36,48 @@ from django.utils import timezone
 # ==========================================
 @login_required
 def solar_sales_dashboard(request):
-    total_sales = SolarInvoice.objects.filter(status='PAID').aggregate(Sum('grand_total'))['grand_total__sum'] or 0
-    pending_balance = SolarInvoice.objects.filter(status='UNPAID').aggregate(Sum('balance_amount'))['balance_amount__sum'] or 0
+    # 🌟 [FIXED] คำนวณยอดขายจาก "ใบเสนอราคา" ในเดือนนี้ ที่รับมัดจำแล้ว 🌟
+    tz_bkk = pytz.timezone('Asia/Bangkok')
+    today_bkk = timezone.now().astimezone(tz_bkk)
+
+    total_sales = SolarQuotation.objects.filter(
+        date__year=today_bkk.year,
+        date__month=today_bkk.month,
+        is_deposit_paid=True
+    ).aggregate(Sum('grand_total'))['grand_total__sum'] or 0
+
+    # 🌟 [FIXED] คำนวณการ์ดที่ 2: "งานติดตั้งเสร็จยังไม่ได้เปิดบิล" (READY) 🌟
+    ready_quotations = SolarQuotation.objects.filter(status='READY')
+    pending_invoice_count = ready_quotations.count() # นับจำนวนรายการ
+
+    # รวมยอด Grand Total และยอดมัดจำที่รับมาแล้ว
+    ready_totals = ready_quotations.aggregate(
+        total_grand=Sum('grand_total'),
+        total_deposit=Sum('deposit_amount')
+    )
+    t_grand = ready_totals['total_grand'] or Decimal('0')
+    t_dep = ready_totals['total_deposit'] or Decimal('0')
+
+    # ยอดคงเหลือที่ต้องไปตามเก็บ = ยอดเต็ม - มัดจำ
+    pending_invoice_balance = t_grand - t_dep
+
     draft_qt_count = SolarQuotation.objects.filter(status='DRAFT').count()
-    unpaid_inv_count = SolarInvoice.objects.filter(status='UNPAID').count()
+
+    # 🌟 [FIXED] ลอจิกการ์ดที่ 4: ใบแจ้งหนี้ที่ยังไม่รับเงิน (UNPAID) 🌟
+    unpaid_invoices = SolarInvoice.objects.filter(status='UNPAID')
+    unpaid_inv_count = unpaid_invoices.count() # จำนวนรายการ
+    # รวมยอดเงินค้างชำระ
+    unpaid_inv_balance = unpaid_invoices.aggregate(Sum('balance_amount'))['balance_amount__sum'] or Decimal('0')
+
     recent_invoices = SolarInvoice.objects.all().order_by('-date', '-id')[:5]
 
     context = {
         'total_sales': total_sales,
-        'pending_balance': pending_balance,
+        'pending_invoice_balance': pending_invoice_balance,
+        'pending_invoice_count': pending_invoice_count,
         'draft_qt_count': draft_qt_count,
         'unpaid_inv_count': unpaid_inv_count,
+        'unpaid_inv_balance': unpaid_inv_balance, # 🌟 ส่งค่ายอดเงินที่ยังไม่ได้รับชำระ
         'recent_invoices': recent_invoices,
     }
     return render(request, 'solar_sales/dashboard.html', context)
@@ -105,7 +142,16 @@ def solar_quotation_list(request):
         elif status_filter == 'PENDING_VERIFY':
             quotations = quotations.filter(status='APPROVED', is_deposit_paid=True, is_deposit_verified=False)
         elif status_filter == 'READY':
-            quotations = quotations.filter(status='APPROVED', is_deposit_paid=True, is_deposit_verified=True)
+            quotations = quotations.filter(status='READY')
+        # 🌟 [NEW] เพิ่มตัวกรองพิเศษสำหรับกดดูจากหน้าแดชบอร์ด 🌟
+        elif status_filter == 'MONTHLY_SALES':
+            tz_bkk = pytz.timezone('Asia/Bangkok')
+            today_bkk = timezone.now().astimezone(tz_bkk)
+            quotations = quotations.filter(
+                date__year=today_bkk.year,
+                date__month=today_bkk.month,
+                is_deposit_paid=True
+            )
         else:
             quotations = quotations.filter(status=status_filter)
 
@@ -114,13 +160,27 @@ def solar_quotation_list(request):
         quotations = quotations.filter(Q(code__icontains=search_query) | Q(customer__name__icontains=search_query))
 
     # 4. กรองวันที่
+    import calendar # 🌟 นำเข้าฟังก์ชันปฏิทินเพื่อหาวันสิ้นเดือน
     date_start = request.GET.get('start_date')
     date_end = request.GET.get('end_date')
 
-    if not date_start or date_start == 'None':
-        date_start = (timezone.now().date() - datetime.timedelta(days=29)).strftime('%Y-%m-%d')
-    if not date_end or date_end == 'None':
-        date_end = timezone.now().date().strftime('%Y-%m-%d')
+    # 🌟 [FIXED] ถ้ากดมาจากปุ่มยอดขายเดือนนี้ ให้บังคับวันที่เป็น 1 ถึง สิ้นเดือน 🌟
+    if status_filter == 'MONTHLY_SALES':
+        tz_bkk = pytz.timezone('Asia/Bangkok')
+        today_bkk = timezone.now().astimezone(tz_bkk)
+
+        # หาวันที่ 1 และวันสุดท้ายของเดือน
+        first_day = today_bkk.replace(day=1)
+        last_day = today_bkk.replace(day=calendar.monthrange(today_bkk.year, today_bkk.month)[1])
+
+        date_start = first_day.strftime('%Y-%m-%d')
+        date_end = last_day.strftime('%Y-%m-%d')
+    else:
+        # ถ้าเป็นกรณีปกติที่ไม่ได้ระบุวันที่ ให้ย้อนหลัง 30 วันเหมือนเดิม
+        if not date_start or date_start == 'None':
+            date_start = (timezone.now().date() - datetime.timedelta(days=29)).strftime('%Y-%m-%d')
+        if not date_end or date_end == 'None':
+            date_end = timezone.now().date().strftime('%Y-%m-%d')
 
     if not status_filter:
         quotations = quotations.filter(date__gte=date_start, date__lte=date_end)
@@ -360,19 +420,25 @@ def solar_invoice_list(request):
             Q(quotation_ref__code__icontains=search_query)
         )
 
-    # 4. กรองวันที่ (ค่าเริ่มต้นคือวันที่ปัจจุบันของไทย)
+    # 4. กรองวันที่
     tz_bkk = pytz.timezone('Asia/Bangkok')
     today_bkk = timezone.now().astimezone(tz_bkk).date()
 
     date_start = request.GET.get('start_date')
     date_end = request.GET.get('end_date')
 
-    if not date_start or date_start == 'None':
-        date_start = today_bkk.strftime('%Y-%m-%d')
-    if not date_end or date_end == 'None':
-        date_end = today_bkk.strftime('%Y-%m-%d')
+    # 🌟 [FIXED] ถ้ามีการค้นหาจาก Dashboard (มี status_filter ส่งมา) และไม่ได้เลือกวันที่
+    # ให้ข้ามการกรองวันที่ไปเลย เพื่อโชว์บิลเก่าๆ ที่ค้างอยู่ทั้งหมด
+    if status_filter and (not date_start or date_start == 'None'):
+        pass # ไม่ต้องกรองวันที่ ปล่อยให้แสดงทั้งหมดตามสถานะ
+    else:
+        # แต่ถ้าเข้ามาหน้าแรกปกติ หรือ มีการกดเลือกวันที่เอง ให้กรองตามนั้น
+        if not date_start or date_start == 'None':
+            date_start = today_bkk.strftime('%Y-%m-%d')
+        if not date_end or date_end == 'None':
+            date_end = today_bkk.strftime('%Y-%m-%d')
 
-    invoices = invoices.filter(date__gte=date_start, date__lte=date_end)
+        invoices = invoices.filter(date__gte=date_start, date__lte=date_end)
 
     # ระบบแบ่งหน้า (Pagination)
     paginator = Paginator(invoices, 15)
@@ -420,113 +486,7 @@ def solar_invoice_print(request, inv_id):
         'company': company
     })
 
-# ==========================================
-# 📦 คลังสินค้าโซล่า (Inventory & Excel Import)
-# ==========================================
-@login_required
-def solar_inventory_list(request):
-    fg_products = SolarProduct.objects.filter(product_type='FG').order_by('-is_active', '-created_at')
-    rm_products = SolarProduct.objects.filter(product_type='RM').order_by('-is_active', '-created_at')
-    return render(request, 'solar_sales/inventory_list.html', {
-        'fg_products': fg_products,
-        'rm_products': rm_products
-    })
 
-@login_required
-def solar_product_create(request):
-    default_type = request.GET.get('type', 'FG')
-    page_title = 'เพิ่มวัตถุดิบ/อุปกรณ์เสริม' if default_type == 'RM' else 'เพิ่มสินค้า/แพ็กเกจใหม่'
-
-    if request.method == 'POST':
-        form = SolarProductForm(request.POST)
-        if form.is_valid():
-            prod = form.save()
-            messages.success(request, f"✅ เพิ่มรายการ '{prod.name}' ลงในคลังสินค้าเรียบร้อยแล้ว")
-            return redirect('solar_inventory_list')
-        else:
-            messages.error(request, "❌ กรุณาตรวจสอบความถูกต้องของข้อมูล")
-    else:
-        form = SolarProductForm(initial={'product_type': default_type})
-
-    return render(request, 'solar_sales/product_form.html', {'form': form, 'title': page_title})
-
-@login_required
-def solar_product_edit(request, pk):
-    product = get_object_or_404(SolarProduct, pk=pk)
-    if request.method == 'POST':
-        form = SolarProductForm(request.POST, instance=product)
-        if form.is_valid():
-            form.save()
-            messages.success(request, f"✅ อัปเดตข้อมูล '{product.name}' เรียบร้อยแล้ว")
-            return redirect('solar_inventory_list')
-        else:
-            messages.error(request, "❌ กรุณาตรวจสอบความถูกต้องของข้อมูล")
-    else:
-        form = SolarProductForm(instance=product)
-    return render(request, 'solar_sales/product_form.html', {'form': form, 'product': product, 'title': f'แก้ไข: {product.name}'})
-
-@login_required
-def solar_inventory_download_template(request):
-    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-    response['Content-Disposition'] = 'attachment; filename="inventory_template.xlsx"'
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "Solar Inventory"
-    headers = ['ประเภท (FG หรือ RM)', 'รหัสสินค้า (เว้นว่างได้)', 'หมวดหมู่ (Category)', 'ชื่อสินค้า/แพ็กเกจ', 'หน่วยนับ', 'ราคาทุน', 'ราคาขาย', 'จำนวนคงเหลือ', 'จุดสั่งซื้อ']
-    ws.append(headers)
-    ws.append(['RM', 'RM-001', 'อุปกรณ์สายไฟ', 'สายไฟ DC 4mm (ตัวอย่าง)', 'เมตร', 15, 25, 100, 20])
-    ws.append(['FG', '', 'แพ็กเกจ 5kW', 'แพ็กเกจ 5kW 1 Phase (ตัวอย่าง)', 'ชุด', 100000, 150000, 5, 2])
-    wb.save(response)
-    return response
-
-@login_required
-def solar_inventory_import(request):
-    if request.method == 'POST' and request.FILES.get('excel_file'):
-        excel_file = request.FILES['excel_file']
-        if not excel_file.name.endswith('.xlsx'):
-            messages.error(request, '❌ ไฟล์ไม่ถูกต้อง กรุณาอัปโหลดไฟล์นามสกุล .xlsx เท่านั้น')
-            return redirect('solar_inventory_list')
-
-        try:
-            wb = openpyxl.load_workbook(excel_file, data_only=True)
-            sheet = wb.active
-            count_created, count_updated = 0, 0
-
-            for row in sheet.iter_rows(min_row=2, values_only=True):
-                product_type = str(row[0]).strip().upper() if row[0] else 'RM'
-                code = str(row[1]).strip() if row[1] else None
-                cat_name = str(row[2]).strip() if row[2] else None
-                name = str(row[3]).strip() if row[3] else None
-                unit = str(row[4]).strip() if row[4] else 'ชิ้น'
-                cost_price = float(row[5]) if row[5] else 0.0
-                sell_price = float(row[6]) if row[6] else 0.0
-                stock_qty = float(row[7]) if row[7] else 0.0
-                min_level = float(row[8]) if row[8] else 0.0
-
-                if name and name != 'None':
-                    if product_type not in ['FG', 'RM']: product_type = 'RM'
-                    fg_cat, rm_cat = None, None
-                    if cat_name and cat_name != 'None':
-                        if product_type == 'FG': fg_cat, _ = SolarProductCategory.objects.get_or_create(name=cat_name)
-                        else: rm_cat, _ = SolarRawMaterialCategory.objects.get_or_create(name=cat_name)
-
-                    defaults_data = {
-                        'product_type': product_type, 'name': name, 'category': fg_cat, 'rm_category': rm_cat,
-                        'unit': unit, 'cost_price': cost_price, 'sell_price': sell_price, 'stock_qty': stock_qty,
-                        'min_level': min_level, 'is_active': True
-                    }
-                    if code and code != 'None':
-                        obj, created = SolarProduct.objects.update_or_create(code=code, defaults=defaults_data)
-                        if created: count_created += 1
-                        else: count_updated += 1
-                    else:
-                        SolarProduct.objects.create(**defaults_data)
-                        count_created += 1
-
-            messages.success(request, f'✅ นำเข้าข้อมูลสำเร็จ! สร้างใหม่ {count_created} รายการ, อัปเดต {count_updated} รายการ')
-        except Exception as e:
-            messages.error(request, f'❌ เกิดข้อผิดพลาดในการอ่านไฟล์: {str(e)}')
-    return redirect('solar_inventory_list')
 
 @login_required
 def solar_record_deposit(request, qt_id):
@@ -538,39 +498,51 @@ def solar_record_deposit(request, qt_id):
 
         method = request.POST.get('deposit_method', 'TRANSFER')
         date_str = request.POST.get('deposit_date')
+        slip = request.FILES.get('deposit_slip')
 
         if amount > 0:
-            qt.deposit_amount = amount
-            qt.deposit_method = method
+            # แปลงวันที่
             if date_str:
-                # ลองแปลงวันที่จากรูปแบบที่ได้รับจาก Flatpickr
-                try:
-                    qt.deposit_date = datetime.datetime.strptime(date_str, '%Y-%m-%d').date()
-                except ValueError:
-                    qt.deposit_date = timezone.now().date()
-            else:
-                qt.deposit_date = timezone.now().date()
+                try: dep_date = datetime.datetime.strptime(date_str, '%Y-%m-%d').date()
+                except ValueError: dep_date = timezone.now().date()
+            else: dep_date = timezone.now().date()
 
+            # 🌟 [NEW] สร้างรหัส RVD-SOL (งวด)
+            tz_bkk = pytz.timezone('Asia/Bangkok')
+            now_bkk = timezone.now().astimezone(tz_bkk)
+            thai_year = (now_bkk.year + 543) % 100
+            prefix = f"RVD-SOL-{thai_year:02d}{now_bkk.strftime('%m')}"
+
+            from .models import SolarQuotationDeposit
+            last_deposit = SolarQuotationDeposit.objects.filter(code__startswith=prefix).order_by('code').last()
+            seq = int(last_deposit.code.split('-')[-1]) + 1 if last_deposit else 1
+            new_rvd_code = f"{prefix}-{seq:03d}"
+
+            # 🌟 [NEW] สร้างเรคคอร์ดใหม่ลงตารางลูก (SolarQuotationDeposit) ทันที
+            SolarQuotationDeposit.objects.create(
+                code=new_rvd_code,
+                quotation=qt,
+                amount=amount,
+                deposit_date=dep_date,
+                payment_method=method,
+                deposit_slip=slip
+            )
+
+            # อัปเดตสถานะใบเสนอราคาแม่
             qt.is_deposit_paid = True
+            qt.is_deposit_verified = False # 🌟 [FIXED] เพิ่มบรรทัดนี้: สั่งดึงบิลกลับไปขึ้นแจ้งเตือนที่หน้าบัญชีอีกครั้ง
 
-            # 🌟 [NEW] สมองกลสร้างรหัส RVD-SOL ให้โดยอัตโนมัติ (เหมือนระบบบ้านน็อคดาวน์) 🌟
-            if not getattr(qt, 'deposit_code', None):
-                tz_bkk = pytz.timezone('Asia/Bangkok')
-                now_bkk = timezone.now().astimezone(tz_bkk)
-                thai_year = (now_bkk.year + 543) % 100
-                prefix = f"RVD-SOL-{thai_year:02d}{now_bkk.strftime('%m')}"
+            if qt.deposit_amount == 0:
+                qt.deposit_amount = amount
+                qt.deposit_code = new_rvd_code
+                qt.deposit_method = method
+                qt.deposit_date = dep_date
+                if slip: qt.deposit_slip = slip
 
-                # หาเลขรันล่าสุดของเดือนนี้ในตารางใบเสนอราคาโซล่า
-                last_deposit = SolarQuotation.objects.filter(deposit_code__startswith=prefix).order_by('deposit_code').last()
-                seq = int(last_deposit.deposit_code.split('-')[-1]) + 1 if last_deposit else 1
-                qt.deposit_code = f"{prefix}-{seq:03d}"
-
-            if 'deposit_slip' in request.FILES:
-                qt.deposit_slip = request.FILES['deposit_slip']
             qt.save()
-            messages.success(request, f"💰 บันทึกรับมัดจำ {amount:,.2f} บาท และสร้างใบเสร็จ {qt.deposit_code} สำหรับใบเสนอราคา {qt.code} เรียบร้อยแล้ว")
+            messages.success(request, f"💰 บันทึกรับค่างวด {amount:,.2f} บาท และสร้างใบเสร็จ {new_rvd_code} สำหรับ {qt.code} เรียบร้อยแล้ว")
         else:
-            messages.error(request, "❌ จำนวนเงินมัดจำต้องมากกว่า 0")
+            messages.error(request, "❌ จำนวนเงินต้องมากกว่า 0")
 
     return redirect('solar_quotation_list')
 
@@ -579,7 +551,19 @@ def solar_verify_deposit(request, qt_id):
     qt = get_object_or_404(SolarQuotation, pk=qt_id)
     qt.is_deposit_verified = True
     qt.save()
-    messages.success(request, f"✅ ยืนยันตรวจสอบยอดมัดจำของ {qt.code} เรียบร้อยแล้ว! งานพร้อมส่งเข้า Center")
+
+    # 🌟 [NEW] ระบบอัตโนมัติ: สร้างใบคุมสิทธิ์ 2% ทันทีที่บัญชียืนยันมัดจำ
+    from .models import SolarCommissionTicket
+    base_amount = qt.subtotal - qt.discount + qt.survey_fee # หายอดก่อน VAT
+    comm_amount = base_amount * Decimal('0.02')
+
+    SolarCommissionTicket.objects.get_or_create(
+        ticket_type='2%',
+        quotation_ref=qt,
+        defaults={'base_amount': base_amount, 'commission_amount': comm_amount}
+    )
+
+    messages.success(request, f"✅ ยืนยันตรวจสอบยอดมัดจำของ {qt.code} เรียบร้อยแล้ว! (สร้างใบคุมสิทธิ์ 2% สำเร็จ)")
     return redirect('solar_quotation_list')
 
 # ==========================================
@@ -654,10 +638,11 @@ def solar_quotation_cancel(request, qt_id):
 @login_required
 def solar_deposit_list(request):
     # ดึงใบเสนอราคา Solar ที่มีการจ่ายมัดจำแล้ว
-    quotations = SolarQuotation.objects.filter(is_deposit_paid=True)
+    quotations = SolarQuotation.objects.filter(is_deposit_paid=True).select_related('customer', 'employee', 'employee__department')
 
-    # 🌟 ระบบจำกัดสิทธิ์ (ผู้จัดการ/บัญชี เห็นทั้งหมด, เซลส์เห็นเฉพาะของตัวเอง)
+    # 🌟 ระบบจำกัดสิทธิ์และโหลดข้อมูลสาขา 🌟
     is_manager = False
+    is_supervisor = False
     current_emp = getattr(request.user, 'employee', None)
 
     if request.user.is_superuser:
@@ -666,27 +651,44 @@ def solar_deposit_list(request):
         rank = current_emp.business_rank.lower() if current_emp.business_rank else ""
         if rank in ['manager', 'director'] or 'manager' in getattr(current_emp.position, 'title', '').lower() or 'บัญชี' in getattr(current_emp.department, 'name', ''):
             is_manager = True
+        elif rank == 'supervisor':
+            is_supervisor = True
 
-    if not is_manager and current_emp:
-        quotations = quotations.filter(employee=current_emp)
+    # โหลดรายชื่อสาขา
+    if is_manager:
+        departments = list(Department.objects.filter(Q(name__icontains='ทีม') | Q(name__icontains='สาขา')).order_by('name'))
+    elif is_supervisor and current_emp.department:
+        departments = list(Department.objects.filter(id=current_emp.department.id))
+    else:
+        departments = []
+
+    for d in departments:
+        d.name = d.name.replace('แผนก', '').strip()
 
     # รับค่าการค้นหาจาก URL
     search_query = request.GET.get('q', '')
     status_filter = request.GET.get('status', '')
+    branch_filter = request.GET.get('branch', '')
     start_date_str = request.GET.get('start_date')
     end_date_str = request.GET.get('end_date')
 
-    # กรองคำค้นหา (เลขที่เอกสาร หรือ ชื่อลูกค้า)
+    # 1. กรองสาขา
+    if branch_filter and (is_manager or is_supervisor):
+        quotations = quotations.filter(employee__department_id=branch_filter)
+    elif not is_manager and not is_supervisor and current_emp:
+        quotations = quotations.filter(employee=current_emp)
+
+    # 2. กรองคำค้นหา (เลขที่เอกสาร หรือ ชื่อลูกค้า)
     if search_query:
         quotations = quotations.filter(Q(code__icontains=search_query) | Q(customer__name__icontains=search_query))
 
-    # กรองสถานะ
+    # 3. กรองสถานะ
     if status_filter == 'VERIFIED':
         quotations = quotations.filter(is_deposit_verified=True)
     elif status_filter == 'PENDING':
         quotations = quotations.filter(is_deposit_verified=False)
 
-    # 🌟 กรองวันที่มัดจำ 🌟
+    # 4. กรองวันที่มัดจำ
     if start_date_str and end_date_str:
         try:
             start_date = parse_date(start_date_str)
@@ -694,11 +696,9 @@ def solar_deposit_list(request):
             if start_date and end_date:
                 quotations = quotations.filter(deposit_date__range=[start_date, end_date])
         except Exception:
-            pass # หากวันที่ผิดรูปแบบให้ปล่อยผ่าน
+            pass
 
     # เรียงลำดับและแบ่งหน้า
-    # 🌟 [FIXED] เปลี่ยนให้เรียงลำดับตาม 'เลขใบรับเงินมัดจำ' (deposit_code) เป็นหลัก 🌟
-    # เครื่องหมายลบ (-) ด้านหน้าหมายถึงให้เรียงจากมากไปน้อย (ใบใหม่สุดอยู่บนสุด)
     quotations = quotations.order_by('-deposit_code', '-deposit_date')
     paginator = Paginator(quotations, 15)
     page_obj = paginator.get_page(request.GET.get('page'))
@@ -707,6 +707,10 @@ def solar_deposit_list(request):
         'page_obj': page_obj,
         'search_query': search_query,
         'status_filter': status_filter,
+        'branch_filter': branch_filter,
+        'departments': departments,
+        'is_manager': is_manager,
+        'is_supervisor': is_supervisor,
         'start_date': start_date_str,
         'end_date': end_date_str,
     })
@@ -718,12 +722,64 @@ def solar_invoice_detail(request, inv_id):
         inv.balance_amount = 0
         inv.status = 'PAID'
         inv.save()
-        messages.success(request, f"✅ ยืนยันการรับชำระเงินบิล {inv.code} ปิดยอดเรียบร้อยแล้ว!")
+
+        # 🌟 [NEW] ระบบอัตโนมัติ: สร้างใบคุมสิทธิ์ 13.5% ทันทีที่รับชำระบิลเต็มจำนวน
+        if inv.quotation_ref:
+            from .models import SolarCommissionTicket
+            base_amount = inv.quotation_ref.subtotal - inv.quotation_ref.discount + inv.quotation_ref.survey_fee
+            comm_amount = base_amount * Decimal('0.135')
+
+            SolarCommissionTicket.objects.get_or_create(
+                ticket_type='13.5%',
+                invoice_ref=inv,
+                defaults={'base_amount': base_amount, 'commission_amount': comm_amount}
+            )
+
+        messages.success(request, f"✅ ยืนยันการรับชำระเงินบิล {inv.code} ปิดยอดเรียบร้อยแล้ว! (สร้างใบคุมสิทธิ์ 13.5% สำเร็จ)")
         return redirect('solar_invoice_detail', inv_id=inv.id)
     return render(request, 'solar_sales/invoice_detail.html', {'inv': inv})
 
+# 🌟 [NEW] ฟังก์ชันสำหรับบันทึกรับชำระเงิน (ฝั่งเซลส์/ปฏิบัติการ)
+@login_required
+def solar_invoice_record_payment(request, inv_id):
+    inv = get_object_or_404(SolarInvoice, pk=inv_id)
+
+    if request.method == 'POST':
+        # รับค่าและถอดลูกน้ำออก
+        amount_str = request.POST.get('amount', '0').replace(',', '')
+        try: amount = Decimal(amount_str)
+        except: amount = Decimal('0')
+
+        if amount <= 0:
+            messages.error(request, "❌ ยอดรับชำระต้องมากกว่า 0 บาท")
+            return redirect('solar_invoice_list')
+
+        # บันทึกข้อมูลการชำระเงิน
+        inv.payment_amount = amount
+        inv.payment_method = request.POST.get('payment_method', 'TRANSFER')
+
+        date_str = request.POST.get('payment_date')
+        if date_str:
+            try:
+                inv.payment_date = datetime.datetime.strptime(date_str, '%Y-%m-%d').date()
+            except ValueError:
+                inv.payment_date = timezone.now().date()
+        else:
+            inv.payment_date = timezone.now().date()
+
+        if 'payment_slip' in request.FILES:
+            inv.payment_slip = request.FILES['payment_slip']
+
+        # 🌟 เปลี่ยนสถานะเป็น PENDING_VERIFY
+        inv.status = 'PENDING_VERIFY'
+        inv.save()
+
+        messages.success(request, f"⏳ บันทึกรับชำระยอด {amount:,.2f} บาท ของบิล {inv.code} เรียบร้อยแล้ว (รอแผนกบัญชีตรวจสอบและยืนยัน)")
+
+    return redirect('solar_invoice_list')
+
 # ------------------------------------------
-# 🌟 ฟังก์ชันสำหรับปุ่ม "เปิดบิลขาย" (Invoice Creation) 🌟
+# 🌟 ฟังก์ชันสำหรับปุ่ม "เปิดบิลขาย" (Invoice Creation & Auto-Archive) 🌟
 # ------------------------------------------
 @login_required
 def solar_quotation_create_invoice(request, qt_id):
@@ -738,22 +794,54 @@ def solar_quotation_create_invoice(request, qt_id):
         messages.warning(request, "⚠️ ใบเสนอราคานี้มีการเปิดบิลไปแล้ว")
         return redirect('solar_quotation_list')
 
-    # สร้าง Invoice
+    # 1. สร้าง Invoice
     SolarInvoice.objects.create(
         quotation_ref=qt,
         customer=qt.customer,
         grand_total=qt.grand_total,
         balance_amount=qt.grand_total - qt.deposit_amount,
-        status='UNPAID' if (qt.grand_total - qt.deposit_amount) > 0 else 'PAID'
+
+        # 🌟 [FIXED] ตั้งค่าเริ่มต้นเป็น 'UNPAID' (ค้างชำระ) เพื่อให้วิ่งเข้าการ์ดติดตามหนี้ทันที
+        status='UNPAID'
     )
 
-    # อัปเดตสถานะใบเสนอราคาเป็น เปิดบิลแล้ว
+    # 2. อัปเดตสถานะใบเสนอราคาเป็น เปิดบิลแล้ว (CONVERTED)
     qt.status = 'CONVERTED'
     qt.save()
 
-    messages.success(request, f"🎉 สร้างใบเสร็จรับเงินสำหรับ {qt.code} สำเร็จ! สามารถเพิ่มการรับชำระเงินได้ทันที")
+    # ดึงเลข Invoice ที่เพิ่งสร้างมาใช้งาน
+    new_inv = SolarInvoice.objects.get(quotation_ref=qt)
 
-    # 🌟 [FIXED] เปลี่ยนให้เด้งไปหน้า "รายการใบเสร็จรับเงิน" ทันที 🌟
+    # 🌟 [FIXED] AUTOMATION 4: ตัดสต๊อกขาย (Stock-OUT) ด้วยโมเดล SolarStockMovement 🌟
+    from solar_inventory.models import SolarStockMovement
+    from decimal import Decimal
+
+    # ค้นหาใบสั่งงานของ Center ที่อ้างอิงถึง Quotation นี้
+    related_jobs = SolarJob.objects.filter(quotation_ref=qt, status='COMPLETED')
+    for job in related_jobs:
+
+        # 🌟 4.1 ตรวจสอบว่างานนี้มีแพ็กเกจหลักให้ตัดสต๊อกหรือไม่
+        if job.package_sold:
+            # เช็คจากตัวแปร stock_qty
+            if job.package_sold.stock_qty >= Decimal('1'):
+                # บันทึกประวัติเบิกออก (ขาย) 1 ชุด (ระบบจะนำไปหักสต๊อกให้อัตโนมัติ)
+                SolarStockMovement.objects.create(
+                    product=job.package_sold,
+                    movement_type='OUT',
+                    quantity=Decimal('1'),
+                    reference_doc=new_inv.code
+                )
+            else:
+                # แจ้งเตือนแอดมินเบาๆ หากไม่มีของให้ตัด
+                messages.warning(request, f"⚠️ ระบบไม่สามารถตัดสต๊อก {job.package_sold.code} ได้ เนื่องจากไม่มียอดรับเข้าก่อนหน้านี้")
+
+        # 4.2 เปลี่ยนสถานะเป็น CLOSED เพื่อซ่อนการ์ดจากหน้ากระดาน
+        job.status = 'CLOSED'
+        job.save()
+
+    messages.success(request, f"🎉 สร้างใบแจ้งหนี้สำหรับ {qt.code} และตัดสต๊อกแพ็กเกจสำเร็จ! (บิลถูกส่งให้บัญชีตรวจสอบ)")
+
+    # 🌟 เปลี่ยนให้เด้งไปหน้า "รายการใบแจ้งหนี้" ทันที 🌟
     return redirect('solar_invoice_list')
 
 # ==========================================
@@ -833,7 +921,7 @@ def solar_customer_sign_deposit(request, token):
             s = str(n)
             length = len(s)
             res = ""
-            for i, digit in enumerate(s):
+            for i, enumerate in enumerate(s):
                 val = int(digit)
                 pos = length - i - 1
                 if val == 0: continue
@@ -870,8 +958,92 @@ def solar_customer_sign_deposit(request, token):
 def solar_deposit_print(request, qt_id):
     qt = get_object_or_404(SolarQuotation, pk=qt_id)
     company = CompanyInfo.objects.first()
-    balance_due = qt.grand_total - qt.deposit_amount
-    return render(request, 'solar_sales/deposit_print.html', {'qt': qt, 'company': company, 'balance_due': balance_due})
+
+    # 🌟 [NEW] ดึงข้อมูล RVD ตามรหัสงวดที่กดมาจากหน้าตาราง 🌟
+    rvd_id = request.GET.get('rvd')
+    from .models import SolarQuotationDeposit
+
+    if rvd_id:
+        try:
+            specific_deposit = SolarQuotationDeposit.objects.get(pk=rvd_id, quotation=qt)
+            deposit_amount = specific_deposit.amount
+            rvd_code = specific_deposit.code
+            rvd_date = specific_deposit.deposit_date
+            rvd_method = specific_deposit.get_payment_method_display()
+        except SolarQuotationDeposit.DoesNotExist:
+            deposit_amount = qt.deposit_amount if qt.deposit_amount else Decimal('0.00')
+            rvd_code = qt.deposit_code if qt.deposit_code else f"QT-SOL-{qt.code.split('-')[-1]}"
+            rvd_date = qt.deposit_date
+            rvd_method = "ไม่ระบุ"
+    else:
+        # ถ้าไม่ได้ส่ง rvd มา ให้พยายามดึงก้อนแรกสุด
+        first_dep = qt.solar_deposits.first()
+        if first_dep:
+            deposit_amount = first_dep.amount
+            rvd_code = first_dep.code
+            rvd_date = first_dep.deposit_date
+            rvd_method = first_dep.get_payment_method_display()
+        else:
+            deposit_amount = qt.deposit_amount if qt.deposit_amount else Decimal('0.00')
+            rvd_code = qt.deposit_code if qt.deposit_code else f"QT-SOL-{qt.code.split('-')[-1]}"
+            rvd_date = qt.deposit_date
+            rvd_method = "ไม่ระบุ"
+
+    # คำนวณยอดคงเหลือ
+    grand_total = qt.grand_total if qt.grand_total else Decimal('0.00')
+
+    # 🌟 ยอดรวมที่จ่ายมาแล้วทั้งหมด 🌟
+    total_paid_all = qt.solar_deposits.aggregate(Sum('amount'))['amount__sum'] or Decimal('0.00')
+    if total_paid_all == 0 and qt.deposit_amount > 0:
+        total_paid_all = qt.deposit_amount # สำหรับบิลเก่า
+
+    balance_due = grand_total - total_paid_all
+
+    # 🌟 ฟังก์ชันแปลงตัวเลขเป็นคำอ่านภาษาไทย
+    def get_thai_baht_text(number):
+        if number == 0: return "ศูนย์บาทถ้วน"
+        import math
+        number = round(float(number), 2)
+        baht = math.floor(number)
+        satang = int(round((number - baht) * 100))
+        def read_num(n):
+            if n == 0: return ""
+            numbers = ["", "หนึ่ง", "สอง", "สาม", "สี่", "ห้า", "หก", "เจ็ด", "แปด", "เก้า"]
+            positions = ["", "สิบ", "ร้อย", "พัน", "หมื่น", "แสน", "ล้าน"]
+            s = str(n)
+            length = len(s)
+            res = ""
+            for i, digit in enumerate(s):
+                val = int(digit)
+                pos = length - i - 1
+                if val == 0: continue
+                if pos == 0 and val == 1 and length > 1: res += "เอ็ด"
+                elif pos == 1 and val == 1: res += "สิบ"
+                elif pos == 1 and val == 2: res += "ยี่สิบ"
+                else: res += numbers[val] + positions[pos]
+            return res
+        res = ""
+        if baht > 0: res += read_num(baht) + "บาท"
+        if satang > 0: res += read_num(satang) + "สตางค์"
+        else: res += "ถ้วน"
+        return res
+
+    grand_total_text = get_thai_baht_text(grand_total)
+    deposit_amount_text = get_thai_baht_text(deposit_amount)
+    balance_due_text = get_thai_baht_text(balance_due)
+
+    return render(request, 'solar_sales/deposit_print.html', {
+        'qt': qt,
+        'company': company,
+        'balance_due': balance_due,
+        'balance_due_text': balance_due_text,
+        'grand_total_text': grand_total_text,
+        'deposit_amount': deposit_amount,
+        'deposit_amount_text': deposit_amount_text,
+        'rvd_code': rvd_code,
+        'rvd_date': rvd_date,
+        'rvd_method': rvd_method
+    })
 
 # ==========================================
 # 👷‍♂️ 4. ระบบสำรวจหน้างานและเบิกจ่าย (Solar Survey & Expense)
@@ -1048,3 +1220,105 @@ def solar_expense_print(request, exp_id):
         'company': company,
         'amount_text': amount_text
     })
+
+# ==========================================
+# 💸 5. ระบบกระดานตั้งเบิกผลตอบแทน (Incentive Board)
+# ==========================================
+from .models import SolarCommissionTicket, SolarCommissionClaim
+
+@login_required
+def solar_commission_board(request):
+    # ดึงสิทธิ์ที่ยังไม่ได้เบิกมาโชว์ให้เซลส์เลือก
+    tickets_2 = SolarCommissionTicket.objects.filter(ticket_type='2%', status='AVAILABLE').order_by('created_at')
+    tickets_13 = SolarCommissionTicket.objects.filter(ticket_type='13.5%', status='AVAILABLE').order_by('created_at')
+
+    # ดึงประวัติใบเบิกที่ถูกสร้างแล้วมาแสดง
+    claims = SolarCommissionClaim.objects.all().order_by('-created_at')
+
+    return render(request, 'solar_sales/commission_board.html', {
+        'tickets_2': tickets_2,
+        'tickets_13': tickets_13,
+        'claims': claims
+    })
+
+@login_required
+def solar_commission_create_claim(request, claim_type):
+    if request.method == 'POST':
+        ticket_ids = request.POST.getlist('ticket_ids')
+
+        # 🌟 รับค่า 3 อย่างจากหน้าเว็บ
+        bank_name = request.POST.get('bank_name', '')
+        bank_account = request.POST.get('bank_account', '')
+        account_name = request.POST.get('account_name', '') # 🌟 [NEW] รับค่าชื่อบัญชี
+
+        if not ticket_ids:
+            messages.error(request, "❌ กรุณาเลือกใบคุมสิทธิ์อย่างน้อย 1 ใบก่อนกดตั้งเบิกครับ")
+            return redirect('solar_commission_board')
+
+        tickets = SolarCommissionTicket.objects.filter(id__in=ticket_ids, status='AVAILABLE', ticket_type=claim_type)
+        if tickets.exists():
+            total_amt = sum(t.commission_amount for t in tickets)
+
+            # 🌟 บันทึกข้อมูลลง Database
+            claim = SolarCommissionClaim.objects.create(
+                claim_type=claim_type,
+                requester=getattr(request.user, 'employee', None),
+                total_amount=total_amt,
+                bank_name=bank_name,
+                bank_account=bank_account,
+                account_name=account_name # 🌟 [NEW] บันทึกชื่อบัญชี
+            )
+
+            tickets.update(status='CLAIMING', claim_ref=claim)
+            messages.success(request, f"✅ สร้างใบตั้งเบิก {claim.code} (ประเภท {claim_type}) ยอด {total_amt:,.2f} บาท สำเร็จ! ส่งให้บัญชีแล้ว")
+
+    return redirect('solar_commission_board')
+
+@login_required
+def solar_commission_pay(request, claim_id):
+    claim = get_object_or_404(SolarCommissionClaim, id=claim_id)
+    if request.method == 'POST':
+        if 'transfer_slip' in request.FILES:
+            claim.transfer_slip = request.FILES['transfer_slip']
+            claim.status = 'PAID'
+            claim.paid_at = timezone.now()
+            claim.save()
+
+            # อัปเดตสถานะใบคุมสิทธิ์ย่อยๆ ให้เป็น "จ่ายแล้ว" ถาวร
+            claim.tickets.update(status='PAID')
+
+            messages.success(request, f"💰 บันทึกการโอนเงินและแนบสลิปสำหรับ {claim.code} เสร็จสมบูรณ์แล้ว!")
+        else:
+            messages.error(request, "❌ กรุณาแนบรูปสลิปโอนเงินด้วยครับ")
+
+    return redirect('solar_commission_board')
+
+@login_required
+def solar_commission_print(request, claim_id):
+    claim = get_object_or_404(SolarCommissionClaim, id=claim_id)
+    from master_data.models import CompanyInfo
+    company = CompanyInfo.objects.first()
+
+    return render(request, 'solar_sales/commission_print.html', {
+        'claim': claim,
+        'company': company
+    })
+
+# 🌟 [NEW] ฟังก์ชันสำหรับให้เซลส์แก้ไขข้อมูลบัญชีธนาคาร 🌟
+@login_required
+def solar_commission_edit_bank(request, claim_id):
+    claim = get_object_or_404(SolarCommissionClaim, id=claim_id)
+
+    # ⚠️ ป้องกันความปลอดภัย: ถ้าบัญชีโอนเงินแล้ว ห้ามแก้ไขเด็ดขาด!
+    if claim.status == 'PAID':
+        messages.error(request, "❌ ไม่สามารถแก้ไขได้ เนื่องจากแผนกบัญชีดำเนินการโอนเงินไปแล้ว")
+        return redirect('solar_commission_board')
+
+    if request.method == 'POST':
+        claim.bank_name = request.POST.get('bank_name', '')
+        claim.bank_account = request.POST.get('bank_account', '')
+        claim.account_name = request.POST.get('account_name', '')
+        claim.save()
+        messages.success(request, f"✅ อัปเดตข้อมูลบัญชีรับเงินของใบเบิก {claim.code} เรียบร้อยแล้ว")
+
+    return redirect('solar_commission_board')

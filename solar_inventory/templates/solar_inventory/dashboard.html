@@ -1,0 +1,110 @@
+{% extends 'core/base.html' %}
+{% load humanize %}
+
+{% block content %}
+<style>
+    .hover-scale { transition: transform 0.2s ease-in-out; }
+    .hover-scale:hover { transform: translateY(-5px); }
+</style>
+
+<div class="container-fluid py-4 px-4">
+    <!-- 🌟 ส่วนหัว Dashboard 🌟 -->
+    <div class="d-flex flex-wrap justify-content-between align-items-end mb-4 gap-3">
+        <div>
+            <h3 class="fw-bold text-dark mb-1">
+                <i class="fas fa-solar-panel text-warning me-2"></i> คลังสินค้าโซล่าเซลล์ (Dashboard)
+            </h3>
+            <p class="text-muted mb-0">ระบบสรุปภาพรวมและจัดการฐานข้อมูล แพ็กเกจ (FG) และ อุปกรณ์เสริม (RM)</p>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <a href="{% url 'solar_inventory_download_template' %}" class="btn btn-outline-success rounded-pill px-4 fw-bold shadow-sm">
+                <i class="fas fa-file-excel me-1"></i> นำเข้าด้วย Excel
+            </a>
+            <a href="{% url 'solar_stock_movement_create' %}" class="btn btn-outline-secondary rounded-pill px-4 fw-bold shadow-sm">
+                <i class="fas fa-exchange-alt me-1"></i> รับเข้า / เบิกออก (Manual)
+            </a>
+        </div>
+    </div>
+
+    <!-- 🌟 การ์ดสรุปข้อมูล (KPI Cards) 🌟 -->
+    <div class="row g-4 mb-4">
+        
+        <!-- การ์ดที่ 1: แพ็กเกจหลัก (FG) -->
+        <div class="col-md-6 col-lg-3">
+            <div class="card border-0 shadow-sm rounded-4 h-100 border-bottom border-4 border-primary hover-scale bg-white">
+                <div class="card-body p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div class="bg-primary bg-opacity-10 text-primary rounded-circle p-3 d-flex align-items-center justify-content-center" style="width: 60px; height: 60px;">
+                            <i class="fas fa-box fa-2x"></i>
+                        </div>
+                        <h2 class="fw-bold mb-0 text-dark">{{ fg_count }}</h2>
+                    </div>
+                    <h6 class="text-muted fw-bold mb-1">แพ็กเกจหลัก (FG)</h6>
+                    <h4 class="fw-bold text-primary mb-3">฿{{ total_fg_value|floatformat:2|intcomma }}</h4>
+                    <a href="{% url 'solar_fg_list' %}" class="btn btn-primary rounded-pill w-100 fw-bold shadow-sm">
+                        จัดการแพ็กเกจ (FG) <i class="fas fa-arrow-right ms-1"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- การ์ดที่ 2: อุปกรณ์เสริม (RM) -->
+        <div class="col-md-6 col-lg-3">
+            <div class="card border-0 shadow-sm rounded-4 h-100 border-bottom border-4 border-info hover-scale bg-white">
+                <div class="card-body p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div class="bg-info bg-opacity-10 text-info rounded-circle p-3 d-flex align-items-center justify-content-center" style="width: 60px; height: 60px;">
+                            <i class="fas fa-tools fa-2x"></i>
+                        </div>
+                        <h2 class="fw-bold mb-0 text-dark">{{ rm_count }}</h2>
+                    </div>
+                    <h6 class="text-muted fw-bold mb-1">อุปกรณ์เสริม (RM)</h6>
+                    <h4 class="fw-bold text-info mb-3">฿{{ total_rm_value|floatformat:2|intcomma }}</h4>
+                    <a href="{% url 'solar_rm_list' %}" class="btn btn-info text-white rounded-pill w-100 fw-bold shadow-sm">
+                        จัดการอุปกรณ์ (RM) <i class="fas fa-arrow-right ms-1"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- การ์ดที่ 3: แจ้งเตือนของใกล้หมด (Low Stock) -->
+        <div class="col-md-6 col-lg-3">
+            <div class="card border-0 shadow-sm rounded-4 h-100 border-bottom border-4 border-danger hover-scale bg-white">
+                <div class="card-body p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div class="bg-danger bg-opacity-10 text-danger rounded-circle p-3 d-flex align-items-center justify-content-center" style="width: 60px; height: 60px;">
+                            <i class="fas fa-exclamation-triangle fa-2x"></i>
+                        </div>
+                        <h2 class="fw-bold mb-0 text-danger">{{ low_stock_count }}</h2>
+                    </div>
+                    <h6 class="text-muted fw-bold mb-1">อุปกรณ์ใกล้หมดสต็อก</h6>
+                    <p class="text-muted small mb-3">รายการ RM ที่ต้องสั่งซื้อด่วน</p>
+                    <a href="{% url 'solar_rm_list' %}" class="btn btn-outline-danger rounded-pill w-100 fw-bold shadow-sm">
+                        ตรวจสอบสต็อก <i class="fas fa-search ms-1"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- การ์ดที่ 4: งานรอเบิกของ -->
+        <div class="col-md-6 col-lg-3">
+            <div class="card border-0 shadow-sm rounded-4 h-100 border-bottom border-4 border-warning hover-scale bg-white">
+                <div class="card-body p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div class="bg-warning bg-opacity-10 text-warning rounded-circle p-3 d-flex align-items-center justify-content-center" style="width: 60px; height: 60px;">
+                            <i class="fas fa-clipboard-check fa-2x"></i>
+                        </div>
+                        <h2 class="fw-bold mb-0 text-warning">{{ requisition_count }}</h2>
+                    </div>
+                    <h6 class="text-muted fw-bold mb-1">ใบสั่งงานรอเบิกของ</h6>
+                    <p class="text-muted small mb-3">งานติดตั้งที่รอสโตร์จ่ายของ</p>
+                    <a href="{% url 'store_requisition_list' %}" class="btn btn-warning text-dark rounded-pill w-100 fw-bold shadow-sm">
+                        เปิดรายการขอเบิก <i class="fas fa-arrow-right ms-1"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+{% endblock %}

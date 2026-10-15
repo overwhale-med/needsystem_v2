@@ -1,4 +1,6 @@
 import datetime
+from decimal import Decimal, InvalidOperation
+from solar_inventory.models import SolarStockMovement # ต้อง import เพิ่มเพื่อบันทึกประวัติการเข้าออกคลัง
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
@@ -7,8 +9,11 @@ from django.utils import timezone
 
 from .models import SolarPurchaseOrder, SolarPurchaseOrderItem
 from .forms import SolarPurchaseOrderForm, SolarOrderItemFormSet
-from inventory.models import Product
 from master_data.models import Supplier
+
+# 🌟 [FIXED] นำเข้า SolarProduct และระบบ PPO จากฝั่งโซล่าเซลล์
+from solar_inventory.models import SolarProduct
+from solar_jobs.models import SolarPurchasePreparation, SolarPurchasePreparationItem
 
 # ------------------------------------------
 # 🛡️ ระบบเช็คสิทธิ์ (Gatekeeper)
@@ -54,11 +59,14 @@ def solar_po_list(request):
 
     is_manager = is_purchasing_manager(request.user)
 
+    pending_solar_ppo_count = SolarPurchasePreparation.objects.filter(status='PENDING').count()
+
     context = {
         'pos': pos,
         'search_query': search_query,
         'status_filter': status_filter,
         'is_manager': is_manager,
+        'pending_solar_ppo_count': pending_solar_ppo_count,
     }
     return render(request, 'solar_purchasing/solar_po_list.html', context)
 
@@ -72,14 +80,13 @@ def solar_po_create(request):
 
         if form.is_valid() and formset.is_valid():
             po = form.save(commit=False)
-            po.status = 'DRAFT' # บังคับเป็นร่างเพื่อรอผู้จัดการอนุมัติ
+            po.status = 'DRAFT'
             po.buyer = getattr(request.user, 'employee', None)
             po.save()
 
             formset.instance = po
             formset.save()
 
-            # คำนวณยอดรวมสุทธิ
             total = sum(item.total_cost for item in po.items.all() if item.total_cost)
             po.total_amount = total
             po.save()
@@ -92,15 +99,19 @@ def solar_po_create(request):
         form = SolarPurchaseOrderForm(initial={'date': timezone.now().date()})
         formset = SolarOrderItemFormSet()
 
-    # ส่งลิสต์สินค้าหมวดหมู่โซล่าไปให้หน้าเว็บ
-    solar_products = Product.objects.filter(is_active=True)
+    # 🌟 [NEW] รับพารามิเตอร์ประเภทสินค้าจาก URL (ค่าเริ่มต้นเป็น RM)
+    po_type = request.GET.get('type', 'RM')
+
+    # 🌟 [FIXED] ดึงข้อมูลสินค้าโดยกรองตาม product_type
+    solar_products = SolarProduct.objects.filter(is_active=True, product_type=po_type)
     suppliers = Supplier.objects.all()
 
     return render(request, 'solar_purchasing/solar_po_form.html', {
         'form': form,
         'formset': formset,
         'products': solar_products,
-        'suppliers': suppliers
+        'suppliers': suppliers,
+        'po_type': po_type  # ส่งค่าให้ HTML ใช้แสดงผล
     })
 
 @login_required
@@ -110,7 +121,15 @@ def solar_po_edit(request, po_id):
     po = get_object_or_404(SolarPurchaseOrder, id=po_id)
     is_manager = is_purchasing_manager(request.user)
 
+    # 🌟 [NEW] เช็คว่าเอกสารถูกล็อกหรือไม่ (มีการรับของไปแล้ว)
+    is_readonly = po.receipt_status != 'PENDING'
+
     if request.method == 'POST':
+        # 🛑 [NEW] ถ้าเอกสารถูกล็อก ห้ามเซฟเด็ดขาด!
+        if is_readonly:
+            messages.error(request, "❌ ไม่อนุญาตให้แก้ไขใบสั่งซื้อที่มีการรับสินค้าเข้าคลังแล้ว")
+            return redirect('solar_po_list')
+
         form = SolarPurchaseOrderForm(request.POST, instance=po)
         formset = SolarOrderItemFormSet(request.POST, instance=po)
 
@@ -130,7 +149,10 @@ def solar_po_edit(request, po_id):
         form = SolarPurchaseOrderForm(instance=po)
         formset = SolarOrderItemFormSet(instance=po)
 
-    solar_products = Product.objects.filter(is_active=True)
+    first_item = po.items.first()
+    po_type = first_item.product.product_type if first_item and first_item.product else 'RM'
+
+    solar_products = SolarProduct.objects.filter(is_active=True, product_type=po_type)
     suppliers = Supplier.objects.all()
 
     return render(request, 'solar_purchasing/solar_po_form.html', {
@@ -139,7 +161,9 @@ def solar_po_edit(request, po_id):
         'po': po,
         'is_manager': is_manager,
         'products': solar_products,
-        'suppliers': suppliers
+        'suppliers': suppliers,
+        'po_type': po_type,
+        'is_readonly': is_readonly  # 🌟 [NEW] ส่งค่าตัวแปรนี้ไปบอกหน้าจอ HTML ว่าให้ล็อกฟอร์ม
     })
 
 @login_required
@@ -163,3 +187,292 @@ def solar_po_cancel(request, po_id):
     else:
         messages.error(request, "❌ คุณไม่มีสิทธิ์ยกเลิกเอกสารนี้")
     return redirect('solar_po_list')
+
+@login_required
+def solar_po_print(request, po_id):
+    if not is_purchasing_staff(request.user):
+        return redirect('solar_po_list')
+
+    po = get_object_or_404(SolarPurchaseOrder, id=po_id)
+
+    # 🌟 ดึงข้อมูลบริษัท เพื่อไปทำเป็นหัวกระดาษแบบ Official
+    from master_data.models import CompanyInfo
+    company = CompanyInfo.objects.first()
+
+    return render(request, 'solar_purchasing/solar_po_print.html', {
+        'po': po,
+        'company': company
+    })
+
+# ==========================================
+# ☀️ ระบบใบเตรียมสั่งซื้อโซล่าเซลล์ (Solar PPO)
+# ==========================================
+@login_required
+def solar_ppo_list(request):
+    if not is_purchasing_staff(request.user): return redirect('dashboard')
+    ppos = SolarPurchasePreparation.objects.all().order_by('-id')
+    return render(request, 'solar_purchasing/solar_ppo_list.html', {'ppos': ppos})
+
+@login_required
+def solar_ppo_detail(request, pk):
+    if not is_purchasing_staff(request.user): return redirect('dashboard')
+    ppo = get_object_or_404(SolarPurchasePreparation, pk=pk)
+
+    if request.method == 'POST':
+        item_ids = request.POST.getlist('item_id[]')
+        supplier_ids = request.POST.getlist('supplier_id[]')
+        unit_costs = request.POST.getlist('unit_cost[]')
+        quantities = request.POST.getlist('quantity[]')
+
+        supplier_orders = {}
+        for i in range(len(item_ids)):
+            sup_id = supplier_ids[i]
+            if not sup_id: continue
+            if sup_id not in supplier_orders: supplier_orders[sup_id] = []
+            supplier_orders[sup_id].append({
+                'item_id': item_ids[i],
+                'cost': unit_costs[i],
+                'qty': quantities[i]
+            })
+
+        created_po_codes = []
+        for sup_id, items in supplier_orders.items():
+            supplier = Supplier.objects.filter(id=sup_id).first()
+            if not supplier: continue
+
+            now = datetime.datetime.now()
+            thai_year = (now.year + 543) % 100
+            prefix = f"POS-{thai_year:02d}{now.strftime('%m')}"
+
+            # 🌟 [FIXED] ใช้รหัสของ SolarPurchaseOrder แบบ POS-
+            last_po = SolarPurchaseOrder.objects.filter(code__startswith=prefix).order_by('code').last()
+            if last_po:
+                try: seq = int(last_po.code.split('-')[-1]) + 1
+                except: seq = 1
+            else:
+                seq = 1
+            po_code = f"{prefix}-{seq:03d}"
+
+            po = SolarPurchaseOrder.objects.create(
+                code=po_code,
+                supplier=supplier,
+                buyer=getattr(request.user, 'employee', None),
+                status='DRAFT',
+                total_amount=0,
+                note=f"อ้างอิงจากใบขอซื้อ (PPO): {ppo.code}"
+            )
+
+            total_amount = Decimal('0.00')
+            for item in items:
+                ppo_item = SolarPurchasePreparationItem.objects.get(id=item['item_id'])
+                qty = Decimal(str(item['qty']).replace(',', ''))
+                cost = Decimal(str(item['cost']).replace(',', ''))
+                line_total = qty * cost
+
+                SolarPurchaseOrderItem.objects.create(
+                    po=po, product=ppo_item.product, quantity=qty,
+                    unit_cost=cost, total_cost=line_total
+                )
+                total_amount += line_total
+
+            po.total_amount = total_amount
+            po.save()
+            created_po_codes.append(po.code)
+
+        if created_po_codes:
+            ppo.status = 'ORDERED'
+            ppo.save()
+            messages.success(request, f"✅ สร้างใบสั่งซื้อโซล่า (Solar PO) สำเร็จ: {', '.join(created_po_codes)}")
+        else:
+            messages.warning(request, "⚠️ ไม่มีการสร้างใบสั่งซื้อ กรุณาเลือกร้านค้าและกรอกข้อมูลให้ครบ")
+
+        return redirect('solar_ppo_list')
+
+    suppliers = Supplier.objects.all().order_by('name')
+    return render(request, 'solar_purchasing/solar_ppo_detail.html', {'ppo': ppo, 'suppliers': suppliers})
+
+@login_required
+def solar_po_receive(request, po_id):
+    # เช็คสิทธิ์ว่าใช่พนักงานจัดซื้อ/คลังสินค้าหรือไม่
+    if not is_purchasing_staff(request.user):
+        messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์เข้าถึงระบบรับสินค้า")
+        return redirect('solar_po_list')
+
+    # ดึงข้อมูล PO ใบที่ต้องการรับของ
+    po = get_object_or_404(SolarPurchaseOrder, id=po_id)
+
+    # 🛑 ดักจับ: ต้องเป็น PO ที่อนุมัติแล้ว และยังรับของไม่ครบเท่านั้น
+    if po.status != 'APPROVED' or po.receipt_status == 'COMPLETED':
+        messages.error(request, "❌ ไม่สามารถรับสินค้าสำหรับเอกสารใบนี้ได้ (อาจยังไม่อนุมัติ หรือรับของครบแล้ว)")
+        return redirect('solar_po_list')
+
+    if request.method == 'POST':
+        all_completed = True
+        has_received_any = False
+
+        for item in po.items.all():
+            # ดึงจำนวนที่สโตร์กรอกมาจากหน้าฟอร์มรับของ HTML
+            receive_val = request.POST.get(f'receive_qty_{item.id}')
+
+            if receive_val:
+                try:
+                    qty_to_receive = Decimal(receive_val)
+                    if qty_to_receive > 0:
+                        # 1. อัปเดตยอดรับสะสมใน PO Item
+                        item.received_qty += qty_to_receive
+                        item.save()
+
+                        # 2. บันทึก Stock Movement และบวกยอดสต็อกคงเหลืออัตโนมัติ
+                        if item.product:
+                            SolarStockMovement.objects.create(
+                                product=item.product,
+                                quantity=qty_to_receive,
+                                movement_type='IN',
+                                reference_doc=po.code
+                            )
+                        has_received_any = True
+                except (ValueError, InvalidOperation):
+                    pass # ข้ามไปหากกรอกตัวเลขไม่ถูกต้อง
+
+            # ตรวจสอบว่าหลังจากรับของรอบนี้แล้ว ไอเทมนี้รับครบตามจำนวนสั่งหรือยัง
+            if item.received_qty < item.quantity:
+                all_completed = False
+
+        if has_received_any:
+            # 3. อัปเดตสถานะภาพรวมของ PO
+            po.receipt_status = 'COMPLETED' if all_completed else 'PARTIAL'
+            po.save()
+            messages.success(request, f"📦 บันทึกรับสินค้าเข้าคลังสำหรับ {po.code} เรียบร้อยแล้ว")
+
+            # =========================================================
+            # 🚀 [NEW] AUTOMATION: ปลดล็อกใบสั่งงานโซล่า (Unlocking Solar Job)
+            # =========================================================
+            if po.receipt_status == 'COMPLETED' and po.note:
+                # นำเข้าโมเดลใบเตรียมสั่งซื้อเพื่อวิ่งย้อนกลับไปหางานต้นทาง
+                from solar_jobs.models import SolarPurchasePreparation
+
+                # เช็คว่ามีโค้ด PPO ไหนบ้างที่อยู่ในหมายเหตุของใบสั่งซื้อนี้
+                ppos = SolarPurchasePreparation.objects.all()
+                for ppo in ppos:
+                    if ppo.code in po.note:
+                        job = ppo.job
+                        # ถ้างานต้นทางติดสถานะรอของ หรือสวิตช์รอจัดซื้อเปิดอยู่ ให้ปลดล็อก!
+                        if job:
+                            job.is_waiting_purchase = False # ปิดสวิตช์การรอจัดซื้อ!
+                            if job.status == 'WAITING_PURCHASE':
+                                job.status = 'WAITING_STORE'
+                            job.save()
+                            messages.success(request, f"🚀 ออโต้เมชั่น: สินค้าครบแล้ว! ระบบได้ปลดล็อกใบสั่งงาน {job.code} กลับไปให้สโตร์เตรียมเบิกเรียบร้อย")
+                        break # เจอใบที่ตรงแล้ว หยุดการค้นหาลูปนี้ได้เลย
+            # =========================================================
+
+        else:
+            messages.warning(request, "⚠️ ไม่มียอดรับสินค้าใหม่ถูกบันทึก")
+
+        return redirect('solar_po_list')
+
+    # 🌟 นี่คือบรรทัดที่หายไปครับ ต้องมีบรรทัดนี้เพื่อเปิดหน้าจอ 🌟
+    return render(request, 'solar_purchasing/solar_po_receive.html', {'po': po})
+
+# ==========================================
+# 💸 ระบบบันทึกการชำระเงิน (Payment Tracking) โซล่าเซลล์
+# ==========================================
+@login_required
+def solar_po_payment(request, po_id):
+    # เช็คสิทธิ์ (ให้จัดซื้อ บัญชี หรือผู้บริหาร เข้าถึงได้)
+    if not (is_purchasing_staff(request.user) or request.user.is_superuser):
+        messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์เข้าถึงระบบชำระเงิน")
+        return redirect('solar_po_list')
+
+    po = get_object_or_404(SolarPurchaseOrder, id=po_id)
+
+    # ดึงข้อมูลประวัติการจ่ายเงินของบิลใบนี้ (และยอดค้างชำระ)
+    from .models import SolarPurchaseOrderPayment
+    payments = po.payments.all().order_by('-created_at')
+    total_paid = sum(p.amount for p in payments)
+    balance = float(po.total_amount) - float(total_paid)
+
+    if request.method == 'POST':
+        # 1. รับค่าตัวเลขยอดเงิน (แกะคอมม่าออกเผื่อยูเซอร์พิมพ์มา)
+        amount_str = request.POST.get('amount', '0').replace(',', '')
+        try: amount = float(amount_str)
+        except ValueError: amount = 0
+
+        # 2. ถ้ายอดเงินมากกว่า 0 และไม่เกินยอดที่ต้องจ่าย
+        if amount > 0 and amount <= balance:
+
+            # สร้างประวัติการทำจ่าย PV ใบใหม่ลงระบบ
+            payment_record = SolarPurchaseOrderPayment(
+                po=po,
+                payment_date=request.POST.get('payment_date', timezone.now().date()),
+                amount=amount,
+                payment_method=request.POST.get('payment_method', 'โอนเงินผ่านธนาคาร'),
+                note=request.POST.get('note', '')
+            )
+
+            # ถ้ามีรูปสลิปแนบมาด้วย
+            if 'slip_image' in request.FILES:
+                 payment_record.slip_image = request.FILES['slip_image']
+
+            payment_record.save()
+
+            # 3. ตรวจสอบสถานะการจ่ายเงินภาพรวมของ PO ใบนี้
+            new_total_paid = float(total_paid) + float(amount)
+            if new_total_paid >= float(po.total_amount):
+                po.payment_status = 'PAID'
+            else:
+                po.payment_status = 'DEPOSIT'
+            po.save()
+
+            # 4. 🌟 [AUTOMATION] วิ่งไปจดบัญชีรายจ่าย ให้อัตโนมัติ! 🌟
+            from accounting.models import Expense
+            Expense.objects.create(
+                title=f"ทำจ่ายใบสั่งซื้อโซล่า #{po.code} (PV: {payment_record.pv_code})",
+                amount=amount,
+                date=payment_record.payment_date,
+                note=f"จ่ายให้ร้าน {po.supplier.name if po.supplier else po.supplier_name_free_text} - {payment_record.note}"
+            )
+
+            messages.success(request, f"✅ บันทึกทำจ่ายเงินโซล่าเซลล์ {amount:,.2f} บาท สำเร็จ! ออก PV เลขที่ {payment_record.pv_code} และลงบัญชีเรียบร้อย")
+
+            # เด้งไปยังหน้ารวมของบัญชี เพื่อให้ฝ่ายบัญชีตรวจรับ (หน้าเดียวกับฝั่งบ้าน)
+            return redirect('accounting_verification_hub', task_type='solar_po_payments')
+        else:
+            messages.error(request, "❌ จำนวนเงินไม่ถูกต้อง หรือยอดเกินที่ค้างชำระ")
+            return redirect('solar_po_list')
+
+    # ส่วนนี้ใช้เปิดหน้า HTML โชว์ยอด
+    return render(request, 'solar_purchasing/solar_po_payment.html', {
+        'po': po,
+        'payments': payments,
+        'total_paid': total_paid,
+        'balance': balance
+    })
+
+# 🌟 [NEW] ฟังก์ชันสำหรับให้จัดซื้อกดยกเลิกใบ PPO ที่สโตร์ส่งมาผิด
+@login_required
+def solar_ppo_cancel(request, pk):
+    if not is_purchasing_staff(request.user):
+        return redirect('dashboard')
+
+    ppo = get_object_or_404(SolarPurchasePreparation, pk=pk)
+
+    if request.method == 'POST':
+        # 1. เปลี่ยนสถานะ PPO เป็นยกเลิก
+        ppo.status = 'CANCELLED'
+        ppo.save()
+
+        # 2. 🌟 AUTOMATION: ดึงการ์ดงานติดตั้งกลับไปที่หน้าสโตร์ 🌟
+        if ppo.job:
+            # ปิดสวิตช์รอจัดซื้อ
+            ppo.job.is_waiting_purchase = False
+
+            # ถ้าการ์ดถูกโยนไปอยู่ช่องรอจัดซื้อ ให้ดึงกลับมารอสโตร์เบิกของเหมือนเดิม
+            if ppo.job.status == 'WAITING_PURCHASE':
+                ppo.job.status = 'WAITING_STORE'
+
+            ppo.job.save()
+
+        messages.success(request, f"✅ ยกเลิกใบขอซื้อ (PPO) รหัส {ppo.code} เรียบร้อยแล้ว (ระบบส่งงานกลับไปให้สโตร์ตรวจสอบใหม่แล้ว)")
+
+    return redirect('solar_ppo_list')

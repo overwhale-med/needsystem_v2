@@ -5,277 +5,304 @@
 <head>
     <meta charset="UTF-8">
     <title>{{ doc.doc_no }} - Print</title>
-    
+
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 
     <style>
-        :root {
-            --primary-color: #2c3e50;
-            --accent-color: #c5a059;
-            --border-color: #e9ecef;
+        @page {
+            size: A4;
+            margin: 15mm; /* 🌟 ตั้งค่าระยะขอบมาตรฐาน 1.5 ซม. ทุกด้านสำหรับหน้ากระดาษจริง */
         }
 
-        body { 
+        body {
             font-family: 'Sarabun', sans-serif;
-            background: #525659; 
-            -webkit-print-color-adjust: exact; 
-            print-color-adjust: exact;
+            background: #525659;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            margin: 0;
+            padding: 20px 0;
         }
-        
+
         .page {
             background: white;
-            width: 210mm; 
-            min-height: 297mm; /* A4 */
-            margin: 30px auto;
-            padding: 40px 50px; /* เพิ่มขอบซ้ายขวาให้กว้างขึ้น */
-            position: relative;
-            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            width: 210mm;
+            min-height: 297mm;
+            margin: 0 auto;
+            padding: 12mm 15mm 12mm 15mm; /* 🌟 เพิ่มระยะขอบรอบด้านให้สมดุล */
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
             display: flex;
             flex-direction: column;
-        }
-
-        /* Header Stripe */
-        .brand-stripe {
-            position: absolute;
-            top: 0; left: 0; right: 0;
-            height: 6px;
-            background: linear-gradient(90deg, var(--accent-color) 0%, #e6c884 50%, var(--accent-color) 100%);
+            position: relative;
         }
 
         /* Header Section */
-        .header-section { margin-bottom: 30px; margin-top: 10px; }
-        .company-logo-box img { max-height: 70px; width: auto; }
-        .company-logo-placeholder {
-            width: 70px; height: 70px; 
-            background: var(--primary-color); color: var(--accent-color); 
-            border-radius: 8px; display: flex; 
-            align-items: center; justify-content: center; font-size: 32px;
+        .doc-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            border-bottom: 2px solid #000;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
         }
-        .company-title { font-size: 22px; font-weight: 700; color: var(--primary-color); line-height: 1.2; margin-bottom: 5px; }
-        .company-details { font-size: 13px; color: #636e72; line-height: 1.5; }
 
-        .doc-type-badge { text-align: right; margin-bottom: 10px; }
-        .badge-custom {
-            font-size: 14px; font-weight: 700; 
-            padding: 8px 20px; border-radius: 50px;
-            display: inline-block; letter-spacing: 0.5px;
-            text-transform: uppercase; box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        .company-info {
+            display: flex;
+            align-items: center;
         }
+
+        .company-logo {
+            max-height: 50px;
+            margin-right: 15px;
+        }
+
+        .company-name {
+            font-size: 18pt;
+            font-weight: 700;
+            line-height: 1;
+            margin-bottom: 3px;
+        }
+
+        .company-address {
+            font-size: 10pt;
+            color: #333;
+        }
+
+        .doc-title-box {
+            text-align: right;
+        }
+
+        .doc-title {
+            font-size: 16pt;
+            font-weight: bold;
+            padding: 4px 15px;
+            border-radius: 4px;
+            display: inline-block;
+            margin-bottom: 5px;
+        }
+
         .bg-gr { background-color: #d1e7dd; color: #0f5132; border: 1px solid #badbcc; }
         .bg-gi { background-color: #f8d7da; color: #842029; border: 1px solid #f5c2c7; }
 
-        /* Info Grid */
-        .info-grid {
-            display: grid; grid-template-columns: 1fr 1fr;
-            gap: 20px;
-            background-color: #fcfcfc;
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 25px;
+        /* Document Info Table */
+        .info-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11pt;
+            margin-bottom: 15px;
         }
-        .info-item label {
-            display: block; font-size: 11px; font-weight: 600; 
-            text-transform: uppercase; color: #b2bec3; letter-spacing: 1px; margin-bottom: 4px;
-        }
-        .info-item .value { font-size: 16px; font-weight: 600; color: var(--primary-color); }
-        .info-item .value-large { font-size: 20px; font-weight: 700; color: var(--primary-color); }
 
-        /* Table */
-        .table-container { flex-grow: 1; /* ดันตารางให้ขยายเต็มพื้นที่ว่าง */ }
-        .table-custom { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-        .table-custom th {
-            background-color: var(--primary-color); color: white;
-            font-weight: 500; padding: 12px 10px; font-size: 14px; text-align: left;
+        .info-table td {
+            padding: 4px 8px;
+            border: 1px solid #ddd;
+            vertical-align: middle;
         }
-        .table-custom th:first-child { border-top-left-radius: 6px; }
-        .table-custom th:last-child { border-top-right-radius: 6px; }
-        
-        .table-custom td {
-            padding: 12px 10px; border-bottom: 1px solid var(--border-color);
-            font-size: 14px; color: #2d3436; vertical-align: top;
-        }
-        .table-custom tr:last-child td { border-bottom: none; } /* ลบเส้นแถวสุดท้าย */
 
-        /* Signature Section (Sticky Bottom) */
-        .signature-wrapper {
-            margin-top: auto; /* ดันลงล่างสุด */
-            padding-top: 20px; page-break-inside: avoid;
+        .info-table .bg-label {
+            background-color: #f8f9fa;
+            font-weight: 600;
+            width: 15%;
         }
-        .sign-box { text-align: center; }
-        .sign-title { font-size: 12px; font-weight: 600; color: #636e72; text-transform: uppercase; margin-bottom: 40px; }
-        .sign-line { border-bottom: 1px solid #b2bec3; width: 80%; margin: 0 auto 10px; }
-        .sign-name { font-size: 14px; font-weight: 600; color: var(--primary-color); }
-        .sign-date { font-size: 12px; color: #b2bec3; }
 
-        /* Footer */
-        .page-footer {
-            border-top: 1px solid var(--border-color); padding-top: 15px;
+        /* Items Table */
+        .table-items {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11pt;
+            margin-bottom: 15px;
+        }
+
+        .table-items th {
+            background-color: #e9ecef;
+            border: 1px solid #000;
+            padding: 6px;
+            text-align: center;
+            font-weight: 600;
+        }
+
+        .table-items td {
+            border: 1px solid #000;
+            padding: 4px 8px;
+            vertical-align: top;
+        }
+
+        /* Flex filler to push signature to bottom */
+        .filler {
+            flex-grow: 1;
+        }
+
+        /* Signature Section */
+        .signature-area {
+            display: flex;
+            justify-content: space-between;
+            page-break-inside: avoid;
             margin-top: 30px;
-            font-size: 11px; color: #b2bec3;
-            display: flex; justify-content: space-between;
+            padding-top: 10px;
+            font-size: 11pt;
+        }
+
+        .sign-box {
+            width: 30%;
+            text-align: center;
+        }
+
+        .sign-line {
+            border-bottom: 1px dashed #000;
+            height: 35px;
+            margin-bottom: 5px;
+        }
+
+        .page-footer {
+            margin-top: 15px;
+            padding-top: 5px;
+            border-top: 1px solid #ddd;
+            font-size: 9pt;
+            color: #666;
+            display: flex;
+            justify-content: space-between;
         }
 
         @media print {
-            body { background: white; }
-            .page { width: 100%; margin: 0; padding: 40px 50px; box-shadow: none; border: none; min-height: 100vh; }
+            body {
+                background: white;
+                margin: 0;
+                padding: 0;
+            }
+            .page {
+                width: 100%;
+                min-height: auto;
+                padding: 0; /* 🌟 ลบขอบจำลองออก เพื่อให้ไปใช้ขอบของ @page แทน */
+                margin: 0;
+                box-shadow: none;
+            }
             .no-print { display: none !important; }
         }
     </style>
 </head>
 <body>
 
-    <div class="no-print text-center py-4 fixed-top" style="background: rgba(0,0,0,0.7); backdrop-filter: blur(5px);">
+    <!-- Print Control Buttons -->
+    <div class="no-print text-center py-3 fixed-top" style="background: rgba(0,0,0,0.8); backdrop-filter: blur(5px);">
         <button onclick="window.print()" class="btn btn-warning fw-bold rounded-pill px-4 shadow me-2">
             <i class="fas fa-print me-2"></i> พิมพ์เอกสาร (Print)
         </button>
         <a href="{% url 'po_receive_list' %}" class="btn btn-light rounded-pill px-4 fw-bold">
             <i class="fas fa-list me-1"></i> กลับหน้ารายการ
         </a>
-        <div class="text-white mt-2 small opacity-75">แนะนำตั้งค่า: Margins = None, Background graphics = Checked</div>
+        <div class="text-white mt-1 small opacity-75">แนะนำตั้งค่า: Margins = None, Background graphics = Checked</div>
     </div>
-    <div style="height: 80px;" class="no-print"></div>
+    <div style="height: 70px;" class="no-print"></div>
 
     <div class="page">
-        <div class="brand-stripe"></div>
-
-        <div class="header-section row align-items-start">
-            <div class="col-8 d-flex">
-                <div class="company-logo-box me-3">
-                    {% if company.logo %}
-                        <img src="{{ company.logo.url }}" alt="Logo">
-                    {% else %}
-                        <div class="company-logo-placeholder"><i class="fas fa-cube"></i></div>
-                    {% endif %}
-                </div>
+        <!-- Header -->
+        <div class="doc-header">
+            <div class="company-info">
+                {% if company.logo %}
+                    <img src="{{ company.logo.url }}" alt="Logo" class="company-logo">
+                {% endif %}
                 <div>
-                    <div class="company-title">{{ company.name_th|default:"บริษัทตัวอย่าง จำกัด" }}</div>
-                    <div class="company-details">
+                    <div class="company-name">{{ company.name_th|default:"บริษัทตัวอย่าง จำกัด" }}</div>
+                    <div class="company-address">
                         {{ company.address|default:"-" }}<br>
                         {% if company.tax_id %}เลขประจำตัวผู้เสียภาษี: {{ company.tax_id }} | {% endif %}
-                        <i class="fas fa-phone-alt ms-1"></i> {{ company.phone|default:"-" }}
+                        โทร: {{ company.phone|default:"-" }}
                     </div>
                 </div>
             </div>
-            <div class="col-4">
-                <div class="doc-type-badge">
-                    <span class="badge-custom {% if doc.doc_type == 'GR' %}bg-gr{% else %}bg-gi{% endif %}">
-                        {% if doc.doc_type == 'GR' %}
-                            <i class="fas fa-arrow-down me-1"></i> ใบรับสินค้า (IN)
-                        {% else %}
-                            <i class="fas fa-arrow-up me-1"></i> ใบเบิกสินค้า (OUT)
-                        {% endif %}
-                    </span>
+
+            <div class="doc-title-box">
+                <div class="doc-title {% if doc.doc_type == 'GR' %}bg-gr{% else %}bg-gi{% endif %}">
+                    {% if doc.doc_type == 'GR' %}ใบรับสินค้า (IN){% else %}ใบเบิกสินค้า (OUT){% endif %}
                 </div>
-                <div class="text-end">
-                    <div style="font-size: 11px; color: #b2bec3; font-weight: 600;">ต้นฉบับ (Original)</div>
-                </div>
+                <div style="font-size: 10pt; color: #555;">ต้นฉบับ (Original)</div>
             </div>
         </div>
 
-        <div class="info-grid">
-            <div class="info-item">
-                <label>เลขที่เอกสาร (DOC NO.)</label>
-                <div class="value-large">{{ doc.doc_no }}</div>
-            </div>
-            <div class="info-item text-end">
-                <label>วันที่ (DATE)</label>
-                <div class="value">{{ doc.created_at|date:"d F Y" }}</div>
-                <div style="font-size: 13px; color: #636e72;">{{ doc.created_at|date:"H:i" }} น.</div>
-            </div>
-            
-            <div class="info-item border-top pt-3 mt-1">
-                <label>ผู้ออกเอกสาร (ISSUER)</label>
-                <div class="value" style="font-size: 14px;">{{ doc.created_by.first_name }} {{ doc.created_by.last_name }}</div>
-                
-                <div style="font-size: 12px; color: #636e72; margin-top: 4px;">
+        <!-- Document Info -->
+        <table class="info-table">
+            <tr>
+                <td class="bg-label">เลขที่เอกสาร</td>
+                <td style="width: 35%; font-weight: bold; font-size: 12pt;">{{ doc.doc_no }}</td>
+                <td class="bg-label">วันที่เอกสาร</td>
+                <td style="width: 35%;">{{ doc.created_at|date:"d/m/Y H:i" }} น.</td>
+            </tr>
+            <tr>
+                <td class="bg-label">อ้างอิง (Ref.)</td>
+                <td>
                     {% if doc.po_reference %}
-                        <strong>อ้างอิง (PO Ref.):</strong> <span style="color: var(--primary-color); font-weight: 700;">{{ doc.po_reference.code }}</span>
-                        {% if doc.reference %} <br> <strong>อ้างอิงอื่นๆ:</strong> {{ doc.reference }} {% endif %}
-                    {% elif doc.reference %}
-                        <strong>อ้างอิง:</strong> {{ doc.reference }}
+                        <strong>{{ doc.po_reference.code }}</strong>
+                        {% if doc.reference %}<br>({{ doc.reference }}){% endif %}
                     {% else %}
-                        <strong>อ้างอิง:</strong> -
+                        {{ doc.reference|default:"-" }}
                     {% endif %}
-                </div>
-            </div>
-            
-            <div class="info-item border-top pt-3 mt-1 text-end">
-                <label>หมายเหตุ (NOTE)</label>
-                <div class="value" style="font-size: 14px; font-weight: 400;">{{ doc.description|default:"-" }}</div>
-            </div>
-        </div>
+                </td>
+                <td class="bg-label">ผู้ออกเอกสาร</td>
+                <td>{{ doc.created_by.first_name }} {{ doc.created_by.last_name }}</td>
+            </tr>
+            <tr>
+                <td class="bg-label">หมายเหตุ</td>
+                <td colspan="3">{{ doc.description|default:"-" }}</td>
+            </tr>
+        </table>
 
-        <div class="table-container">
-            <table class="table-custom">
-                <thead>
-                    <tr>
-                        <th class="text-center" width="8%">ลำดับ</th>
-                        <th width="20%">รหัสสินค้า</th>
-                        <th width="40%">รายการสินค้า</th>
-                        <th class="text-center" width="15%">จำนวน</th>
-                        <th class="text-center" width="17%">สถานะ</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for item in doc.movements.all %}
-                    <tr>
-                        <td class="text-center text-muted">{{ forloop.counter }}</td>
-                        <td class="fw-bold text-primary">{{ item.product.code }}</td>
-                        <td>
-                            <div class="fw-bold">{{ item.product.name }}</div>
-                            <div style="font-size: 12px; color: #b2bec3;">{{ item.product.category.name|default:"" }}</div>
-                        </td>
-                        <td class="text-center">
-                            <span class="fw-bold fs-5">{{ item.quantity|intcomma }}</span> 
-                            <span class="text-muted small">ชิ้น</span>
-                        </td>
-                        <td class="text-center">
-                            <i class="fas fa-check-circle text-success small me-1"></i> 
-                            <span class="small text-success fw-bold">Success</span>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                    
-                    {% for i in "12345"|make_list %}
-                    <tr>
-                        <td colspan="5" style="height: 35px; border-bottom: 1px dashed #f1f2f6;"></td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
+        <!-- Items Table -->
+        <table class="table-items">
+            <thead>
+                <tr>
+                    <th style="width: 8%;">ลำดับ</th>
+                    <th style="width: 20%;">รหัสสินค้า</th>
+                    <th style="width: 57%;">รายการสินค้า</th>
+                    <th style="width: 15%;">จำนวน</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in doc.movements.all %}
+                <tr>
+                    <td class="text-center">{{ forloop.counter }}</td>
+                    <td class="fw-bold">{{ item.product.code }}</td>
+                    <td>
+                        <div>{{ item.product.name }}</div>
+                        <div style="font-size: 9pt; color: #666;">{{ item.product.category.name|default:"" }}</div>
+                    </td>
+                    <td class="text-center">
+                        <strong>{{ item.quantity|floatformat:2|intcomma }}</strong>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="4" class="text-center py-4 text-muted">-- ไม่มีรายการสินค้า --</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
 
-        <div class="signature-wrapper">
-            <div class="row">
-                <div class="col-4">
-                    <div class="sign-box">
-                        <div class="sign-title">ผู้จัดทำรายการ</div>
-                        <div class="sign-line"></div>
-                        <div class="sign-name">{{ doc.created_by.first_name }} {{ doc.created_by.last_name }}</div>
-                        <div class="sign-date">วันที่: {{ doc.created_at|date:"d/m/Y" }}</div>
-                    </div>
+        <!-- ตัวยึดพื้นที่ ดันกล่องลายเซ็นไปด้านล่างสุด -->
+        <div class="filler"></div>
+
+        <!-- Signatures -->
+        <div class="signature-area">
+            <div class="sign-box">
+                <div class="sign-line"></div>
+                <div>( .................................................. )</div>
+                <div class="mt-1">ผู้จัดทำรายการ</div>
+                <div class="mt-1">วันที่ _______/_______/_______</div>
+            </div>
+
+            <div class="sign-box">
+                <div class="sign-line"></div>
+                <div>( .................................................. )</div>
+                <div class="mt-1">ผู้ตรวจสอบ</div>
+                <div class="mt-1">วันที่ _______/_______/_______</div>
+            </div>
+
+            <div class="sign-box">
+                <div class="sign-line"></div>
+                <div>( .................................................. )</div>
+                <div class="mt-1">
+                    {% if doc.doc_type == 'GR' %}ผู้รับสินค้า{% else %}ผู้เบิกสินค้า{% endif %}
                 </div>
-                <div class="col-4">
-                    <div class="sign-box">
-                        <div class="sign-title">ผู้ตรวจสอบ</div>
-                        <div class="sign-line"></div>
-                        <div class="sign-name">(........................................)</div>
-                        <div class="sign-date">วันที่: ....../....../..........</div>
-                    </div>
-                </div>
-                <div class="col-4">
-                    <div class="sign-box">
-                        <div class="sign-title">
-                            {% if doc.doc_type == 'GR' %}ผู้รับสินค้า{% else %}ผู้เบิกสินค้า{% endif %}
-                        </div>
-                        <div class="sign-line"></div>
-                        <div class="sign-name">(........................................)</div>
-                        <div class="sign-date">วันที่: ....../....../..........</div>
-                    </div>
-                </div>
+                <div class="mt-1">วันที่ _______/_______/_______</div>
             </div>
         </div>
 
@@ -289,7 +316,7 @@
         window.onload = function() {
             setTimeout(function() {
                 window.print();
-            }, 500); // หน่วงเวลา 0.5 วินาทีเพื่อให้เบราว์เซอร์จัดเรียง CSS ให้สวยงามก่อนสั่งปริ้นท์
+            }, 500);
         };
     </script>
 </body>

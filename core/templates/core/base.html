@@ -15,6 +15,7 @@
         .navbar-custom {
             background-color: #ffffff; box-shadow: 0 4px 12px rgba(0,0,0,0.05);
             padding-top: 15px; padding-bottom: 15px;
+            z-index: 1050; /* 🌟 [NEW] เพิ่มบรรทัดนี้เพื่อให้เมนูลอยอยู่บนสุดเสมอ */
         }
         .navbar-brand {
             font-weight: 800; font-size: 1.5rem;
@@ -81,6 +82,11 @@
                             <li><a class="dropdown-item" href="{% url 'quotation_list' %}"><i class="fas fa-file-invoice me-2 text-secondary"></i> รายการใบเสนอราคา</a></li>
                             <li><a class="dropdown-item" href="{% url 'deposit_list' %}"><i class="fas fa-hand-holding-usd me-2 text-info"></i> รายการใบรับเงินมัดจำ</a></li>
                             <li><a class="dropdown-item" href="{% url 'invoice_list' %}"><i class="fas fa-receipt me-2 text-success"></i> รายการใบขาย (ชำระเต็ม)</a></li>
+
+                            <!-- 🌟 [NEW] เพิ่มเมนู ศูนย์ตั้งเบิกผลตอบแทน ตรงนี้ 🌟 -->
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item fw-bold text-success" href="{% url 'commission_board' %}"><i class="fas fa-hand-holding-usd me-2 text-success"></i> ศูนย์ตั้งเบิกผลตอบแทนบ้านน็อคดาวน์</a></li>
+
                             <li><hr class="dropdown-divider"></li>
                             <li><a class="dropdown-item fw-bold text-dark" href="{% url 'customer_list' %}"><i class="fas fa-users me-2 text-primary"></i> ฐานข้อมูลลูกค้า</a></li>
                         </ul>
@@ -123,6 +129,10 @@
                             {% if request.user.is_superuser or group_name == "Executive" or group_name == "Planner_Team" %}
                             <li><a class="dropdown-item" href="{% url 'planner_board' %}"><i class="fas fa-clipboard-list me-2 text-info"></i> กระดานวางแผนการผลิต</a></li>
                             <li><a class="dropdown-item" href="{% url 'production_list' %}"><i class="fas fa-table me-2 text-secondary"></i> กระดานควบคุมงานผลิต (ดูภาพรวม)</a></li>
+
+                            <!-- 🌟 [NEW] เพิ่มเมนู รายการควบคุมค่าใช้จ่ายตามใบงาน(JOB) ตรงนี้ 🌟 -->
+                            <li><a class="dropdown-item fw-bold text-success" href="{% url 'master_job_report' %}"><i class="fas fa-file-invoice-dollar me-2 text-success"></i> รายการควบคุมค่าใช้จ่ายตามใบงาน(JOB)</a></li>
+
                             <li><hr class="dropdown-divider"></li>
                             {% endif %}
 
@@ -162,7 +172,7 @@
 
                             <li>
                                 <a class="dropdown-item py-2 fw-bold text-secondary" href="{% url 'solar_inventory_list' %}">
-                                    <i class="fas fa-boxes text-gold me-2" style="width: 20px;"></i> คลังสินค้าโซล่า (Inventory)
+                                    <i class="fas fa-boxes text-gold me-2" style="width: 20px;"></i> คลังสินค้าโซล่าเซลล์
                                 </a>
                             </li>
                             <li><hr class="dropdown-divider opacity-25"></li>
@@ -186,12 +196,18 @@
 
                             <li>
                                 <a class="dropdown-item py-2 fw-bold text-secondary" href="{% url 'solar_po_list' %}">
-                                    <i class="fas fa-shopping-cart text-primary me-2" style="width: 20px;"></i> จัดซื้อ (Solar Purchasing)
+                                    <i class="fas fa-shopping-cart text-primary me-2" style="width: 20px;"></i> จัดซื้อโซล่าเซลล์
+                                </a>
+                            </li>
+                            <!-- 🌟 [NEW] เมนู 2 กระดานใหม่ของระบบโซล่าเซลล์ -->
+                            <li>
+                                <a class="dropdown-item py-2 fw-bold text-secondary" href="{% url 'solar_center_dashboard' %}">
+                                    <i class="fas fa-clipboard-list text-success me-2" style="width: 20px;"></i> กระดานวางแผนงานติดตั้ง
                                 </a>
                             </li>
                             <li>
-                                <a class="dropdown-item py-2 fw-bold text-secondary" href="{% url 'solar_center_dashboard' %}">
-                                    <i class="fas fa-network-wired text-success me-2" style="width: 20px;"></i> ปฏิบัติการกลาง (Center)
+                                <a class="dropdown-item py-2 fw-bold text-secondary" href="{% url 'solar_job_overview' %}">
+                                    <i class="fas fa-table text-info me-2" style="width: 20px;"></i> กระดานควบคุมงานติดตั้ง (ภาพรวม)
                                 </a>
                             </li>
                             <li><hr class="dropdown-divider opacity-25"></li>
@@ -204,6 +220,13 @@
                             <li>
                                 <a class="dropdown-item py-2 fw-bold text-secondary" href="{% url 'solar_expense_list' %}">
                                     <i class="fas fa-file-invoice-dollar text-danger me-2" style="width: 20px; text-align: center;"></i> ตั้งเบิกค่าใช้จ่าย (Expenses)
+                                </a>
+                            </li>
+                            <!-- 🌟 [NEW] เมนูเบิกผลตอบแทน Incentive 🌟 -->
+                            <li><hr class="dropdown-divider opacity-25"></li>
+                            <li>
+                                <a class="dropdown-item py-2 fw-bold text-secondary" href="{% url 'solar_commission_board' %}">
+                                    <i class="fas fa-hand-holding-usd text-success me-2" style="width: 20px; text-align: center;"></i> ศูนย์เบิกผลตอบแทนโซล่าเซลล์
                                 </a>
                             </li>
                         </ul>
@@ -266,5 +289,7 @@
             }, 3000);
         });
     </script>
+<!-- 🌟 เปิดช่องสำหรับรับ Script เฉพาะกิจจากหน้าย่อย 🌟 -->
+    {% block scripts %}{% endblock %}
 </body>
 </html>

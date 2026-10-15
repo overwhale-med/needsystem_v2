@@ -28,17 +28,14 @@ urlpatterns = [
     path('invoices/', views.solar_invoice_list, name='solar_invoice_list'),
     path('invoices/<int:inv_id>/', views.solar_invoice_detail, name='solar_invoice_detail'),
     path('invoices/<int:inv_id>/print/', views.solar_invoice_print, name='solar_invoice_print'),
-    path('invoices/<int:inv_id>/record-payment/', views.solar_invoice_detail, name='solar_invoice_record_payment'),
+    # 🌟 [FIXED] เปลี่ยน view ให้ชี้ไปที่ฟังก์ชันรับชำระเงินที่ถูกต้อง 🌟
+    path('invoices/<int:inv_id>/record-payment/', views.solar_invoice_record_payment, name='solar_invoice_record_payment'),
 
-    path('inventory/', views.solar_inventory_list, name='solar_inventory_list'),
-    path('inventory/create/', views.solar_product_create, name='solar_product_create'),
-    path('inventory/edit/<int:pk>/', views.solar_product_edit, name='solar_product_edit'),
-    path('inventory/download-template/', views.solar_inventory_download_template, name='solar_inventory_download_template'),
-    path('inventory/import/', views.solar_inventory_import, name='solar_inventory_import'),
     # เพิ่ม URL นี้สำหรับการเซ็นใบเสนอราคาออนไลน์ของฝั่งโซล่าเซลล์
     path('solar-sales/sign-quotation/<str:token>/', views.solar_customer_sign_quotation, name='solar_customer_sign_quotation'),
     # ในไฟล์ urls.py เพิ่มลิงก์นี้
     path('deposits/<int:qt_id>/print/', views.solar_deposit_print, name='solar_deposit_print'),
+
     # ==========================================
     # 🌟 ระบบสำรวจหน้างานและเบิกจ่ายโซล่าเซลล์
     # ==========================================
@@ -52,4 +49,13 @@ urlpatterns = [
     # หัวหน้า/แอดมิน กดอนุมัติ
     path('expenses/<int:exp_id>/approve/', views.solar_expense_approve, name='solar_expense_approve'),
     path('expenses/<int:exp_id>/print/', views.solar_expense_print, name='solar_expense_print'),
+    # ==========================================
+    # 🌟 ระบบเบิกผลตอบแทนโซล่าเซลล์ (Incentive)
+    # ==========================================
+    path('commissions/', views.solar_commission_board, name='solar_commission_board'),
+    path('commissions/claim/create/<str:claim_type>/', views.solar_commission_create_claim, name='solar_commission_create_claim'),
+    path('commissions/claim/<int:claim_id>/pay/', views.solar_commission_pay, name='solar_commission_pay'),
+    path('commissions/claim/<int:claim_id>/print/', views.solar_commission_print, name='solar_commission_print'),
+    # 🌟 [NEW] เส้นทางสำหรับบันทึกการแก้ไขข้อมูลบัญชี
+    path('commissions/claim/<int:claim_id>/edit-bank/', views.solar_commission_edit_bank, name='solar_commission_edit_bank'),
 ]

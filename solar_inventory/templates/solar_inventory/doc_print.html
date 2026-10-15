@@ -1,0 +1,226 @@
+{% load humanize %}
+{% load static %}
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ doc.doc_no }} - Print (Solar)</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+
+    <style>
+        @page {
+            size: A4;
+            margin: 15mm; 
+        }
+
+        body {
+            font-family: 'Sarabun', sans-serif;
+            background: #525659;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            margin: 0;
+            padding: 20px 0;
+        }
+
+        .page {
+            background: white;
+            width: 210mm;
+            min-height: 297mm;
+            margin: 0 auto;
+            padding: 12mm 15mm 12mm 15mm;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        .doc-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            border-bottom: 2px solid #000;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+        }
+
+        .company-info { display: flex; align-items: center; }
+        .company-logo { max-height: 50px; margin-right: 15px; }
+        .company-name { font-size: 18pt; font-weight: 700; line-height: 1; margin-bottom: 3px; }
+        .company-address { font-size: 10pt; color: #333; }
+        
+        .doc-title-box { text-align: right; }
+        .doc-title {
+            font-size: 16pt; font-weight: bold; padding: 4px 15px;
+            border-radius: 4px; display: inline-block; margin-bottom: 5px;
+        }
+
+        .bg-gr { background-color: #d1e7dd; color: #0f5132; border: 1px solid #badbcc; }
+        .bg-gi { background-color: #f8d7da; color: #842029; border: 1px solid #f5c2c7; }
+
+        .info-table { width: 100%; border-collapse: collapse; font-size: 11pt; margin-bottom: 15px; }
+        .info-table td { padding: 4px 8px; border: 1px solid #ddd; vertical-align: middle; }
+        .info-table .bg-label { background-color: #f8f9fa; font-weight: 600; width: 15%; }
+
+        .table-items { width: 100%; border-collapse: collapse; font-size: 11pt; margin-bottom: 15px; }
+        .table-items th { background-color: #e9ecef; border: 1px solid #000; padding: 6px; text-align: center; font-weight: 600; }
+        .table-items td { border: 1px solid #000; padding: 4px 8px; vertical-align: top; }
+
+        .filler { flex-grow: 1; }
+
+        .signature-area {
+            display: flex; justify-content: space-between; page-break-inside: avoid;
+            margin-top: 30px; padding-top: 10px; font-size: 11pt;
+        }
+        .sign-box { width: 30%; text-align: center; }
+        .sign-line { border-bottom: 1px dashed #000; height: 35px; margin-bottom: 5px; }
+
+        .page-footer {
+            margin-top: 15px; padding-top: 5px; border-top: 1px solid #ddd;
+            font-size: 9pt; color: #666; display: flex; justify-content: space-between;
+        }
+
+        @media print {
+            body { background: white; margin: 0; padding: 0; }
+            .page { width: 100%; min-height: auto; padding: 0; margin: 0; box-shadow: none; }
+            .no-print { display: none !important; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 🌟 [UPDATE] แก้ไขปุ่มย้อนกลับให้กลับไปหน้าระบบโซล่าเซลล์ -->
+    <div class="no-print text-center py-3 fixed-top" style="background: rgba(0,0,0,0.8); backdrop-filter: blur(5px);">
+        <button onclick="window.print()" class="btn btn-warning fw-bold rounded-pill px-4 shadow me-2">
+            <i class="fas fa-print me-2"></i> พิมพ์เอกสาร (Print)
+        </button>
+        <a href="{% url 'solar_document_list_in' %}" class="btn btn-light rounded-pill px-4 fw-bold">
+            <i class="fas fa-list me-1"></i> กลับหน้าประวัติเอกสาร
+        </a>
+        <div class="text-white mt-1 small opacity-75">แนะนำตั้งค่า: Margins = None, Background graphics = Checked</div>
+    </div>
+    <div style="height: 70px;" class="no-print"></div>
+
+    <div class="page">
+        <!-- Header -->
+        <div class="doc-header">
+            <div class="company-info">
+                {% if company and company.logo %}
+                    <img src="{{ company.logo.url }}" alt="Logo" class="company-logo">
+                {% endif %}
+                <div>
+                    <div class="company-name">{{ company.name_th|default:"บริษัทตัวอย่าง จำกัด" }}</div>
+                    <div class="company-address">
+                        {{ company.address|default:"-" }}<br>
+                        {% if company and company.tax_id %}เลขประจำตัวผู้เสียภาษี: {{ company.tax_id }} | {% endif %}
+                        โทร: {{ company.phone|default:"-" }}
+                    </div>
+                </div>
+            </div>
+
+            <div class="doc-title-box">
+                <div class="doc-title {% if doc.doc_type == 'GR' %}bg-gr{% else %}bg-gi{% endif %}">
+                    {% if doc.doc_type == 'GR' %}ใบรับสินค้า (IN){% else %}ใบเบิกสินค้า (OUT){% endif %}
+                </div>
+                <div style="font-size: 10pt; color: #555;">ระบบโซล่าเซลล์</div>
+            </div>
+        </div>
+
+        <!-- Document Info -->
+        <table class="info-table">
+            <tr>
+                <td class="bg-label">เลขที่เอกสาร</td>
+                <td style="width: 35%; font-weight: bold; font-size: 12pt;">{{ doc.doc_no }}</td>
+                <td class="bg-label">วันที่เอกสาร</td>
+                <td style="width: 35%;">{{ doc.created_at|date:"d/m/Y H:i" }} น.</td>
+            </tr>
+            <tr>
+                <td class="bg-label">อ้างอิง (Ref.)</td>
+                <td>{{ doc.reference|default:"-" }}</td>
+                <td class="bg-label">ผู้ทำรายการ</td>
+                <td>{{ doc.created_by.first_name|default:"System" }} {{ doc.created_by.last_name|default:"" }}</td>
+            </tr>
+            <tr>
+                <td class="bg-label">หมายเหตุ</td>
+                <td colspan="3">{{ doc.description|default:"-" }}</td>
+            </tr>
+        </table>
+
+        <!-- Items Table -->
+        <table class="table-items">
+            <thead>
+                <tr>
+                    <th style="width: 8%;">ลำดับ</th>
+                    <th style="width: 20%;">รหัสสินค้า</th>
+                    <th style="width: 57%;">รายการสินค้า</th>
+                    <th style="width: 15%;">จำนวน</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- 🌟 [UPDATE] ดึงข้อมูลการเคลื่อนไหวจากตาราง SolarStockMovement -->
+                {% for item in doc.movements.all %}
+                <tr>
+                    <td class="text-center">{{ forloop.counter }}</td>
+                    <td class="fw-bold">{{ item.product.code }}</td>
+                    <td>
+                        <div>{{ item.product.name }}</div>
+                        <div style="font-size: 9pt; color: #666;">
+                            หมวดหมู่: 
+                            {% if item.product.category %}{{ item.product.category.name }}
+                            {% elif item.product.rm_category %}{{ item.product.rm_category.name }}
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td class="text-center">
+                        <strong>{{ item.quantity|floatformat:2|intcomma }}</strong>
+                        <span style="font-size: 9pt; color: #666;">{{ item.product.unit|default:"" }}</span>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="4" class="text-center py-4 text-muted">-- ไม่มีรายการสินค้า --</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <!-- ตัวยึดพื้นที่ -->
+        <div class="filler"></div>
+
+        <!-- Signatures -->
+        <div class="signature-area">
+            <div class="sign-box">
+                <div class="sign-line"></div>
+                <div>( .................................................. )</div>
+                <div class="mt-1">ผู้จัดทำรายการ</div>
+                <div class="mt-1">วันที่ _______/_______/_______</div>
+            </div>
+
+            <div class="sign-box">
+                <div class="sign-line"></div>
+                <div>( .................................................. )</div>
+                <div class="mt-1">ผู้ตรวจสอบ</div>
+                <div class="mt-1">วันที่ _______/_______/_______</div>
+            </div>
+
+            <div class="sign-box">
+                <div class="sign-line"></div>
+                <div>( .................................................. )</div>
+                <div class="mt-1">
+                    {% if doc.doc_type == 'GR' %}ผู้รับสินค้าเข้าคลัง{% else %}ผู้เบิกสินค้า{% endif %}
+                </div>
+                <div class="mt-1">วันที่ _______/_______/_______</div>
+            </div>
+        </div>
+
+        <div class="page-footer">
+            <div>System Generated by NEED System (Solar Module)</div>
+            <div>Printed on: {% now "d/m/Y H:i" %}</div>
+        </div>
+    </div>
+
+    <!-- ลบ script ปริ้นอัตโนมัติออก เพื่อให้ผู้ใช้ดูก่อนกดปริ้นเอง -->
+</body>
+</html>

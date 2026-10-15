@@ -1,0 +1,153 @@
+{% extends 'core/base.html' %}
+{% load humanize %}
+{% block content %}
+
+<style>
+    .slip-thumbnail {
+        width: 35px; height: 35px; object-fit: cover; border-radius: 6px; cursor: pointer;
+        transition: transform 0.2s ease, box-shadow 0.2s ease; border: 1px solid #dee2e6;
+    }
+    .slip-thumbnail:hover { transform: scale(1.2); box-shadow: 0 5px 15px rgba(0,0,0,0.2); z-index: 10; position: relative; }
+
+    /* สไตล์สำหรับ Tabs สวยๆ */
+    .nav-pills-custom .nav-link {
+        color: #6c757d;
+        font-weight: bold;
+        border-radius: 50px;
+        padding: 8px 24px;
+        transition: all 0.3s ease;
+    }
+    .nav-pills-custom .nav-link.active {
+        background-color: #2c3e50;
+        color: white;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+    }
+</style>
+
+<div class="container-fluid py-4 px-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="fw-bold text-dark mb-1">
+                <i class="fas fa-file-invoice-dollar text-success me-2"></i>รายงานใบคุมการจ่ายค่าวัตถุดิบ (PO Payments)
+            </h4>
+            <p class="text-muted small mb-0">ระบบติดตามการทำจ่ายและต้นทุนแยกตามแผนก</p>
+        </div>
+        <a href="{% url 'accounting_dashboard' %}" class="btn btn-outline-secondary rounded-pill px-4 shadow-sm fw-bold">
+            <i class="fas fa-arrow-left me-2"></i> กลับศูนย์บัญชาการ
+        </a>
+    </div>
+
+    <!-- 🌟 แท็บสลับแผนก (Tabs) 🌟 -->
+    <div class="d-flex justify-content-center mb-4">
+        <ul class="nav nav-pills nav-pills-custom gap-2 bg-white p-2 rounded-pill shadow-sm border">
+            <li class="nav-item">
+                <a class="nav-link {% if tab == 'knockdown' %}active{% endif %}" href="?tab=knockdown">
+                    <i class="fas fa-home me-1"></i> แผนกบ้านน็อคดาวน์
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {% if tab == 'solar' %}active{% endif %}" href="?tab=solar">
+                    <i class="fas fa-solar-panel me-1"></i> แผนกโซล่าเซลล์
+                </a>
+            </li>
+        </ul>
+    </div>
+
+    <div class="card shadow-sm border-0 rounded-4 overflow-hidden">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="text-secondary small text-uppercase" style="background-color: #f8f9fc; border-bottom: 2px solid #eef2f7;">
+                    <tr>
+                        <th class="ps-4 py-3 fw-bold">วันที่จ่าย / เลขที่ใบคุม (PV)</th>
+                        <th class="py-3 fw-bold">อ้างอิงใบสั่งซื้อ (PO)</th>
+                        <th class="py-3 fw-bold">ผู้ขาย (Supplier)</th>
+                        <th class="py-3 fw-bold text-end">ยอดเงิน (บาท)</th>
+                        <th class="py-3 fw-bold text-center">ช่องทาง / สลิปโอนเงิน</th>
+                        <!-- 🌟 เปลี่ยนหัวข้อเป็น พิมพ์ใบสำคัญจ่าย 🌟 -->
+                        <th class="pe-4 py-3 fw-bold text-center">เอกสารอ้างอิง</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for p in payments %}
+                    <tr>
+                        <td class="ps-4 py-3">
+                            <div class="fw-bold text-dark font-monospace" style="font-size: 0.95rem;">{{ p.pv_code|default:"ไม่มีเลข PV" }}</div>
+                            <div class="text-muted small"><i class="far fa-calendar-alt me-1"></i>{{ p.payment_date|date:"d/m/Y" }}</div>
+                        </td>
+                        <td class="py-3">
+                            <!-- 🌟 ทำให้เลข PO คลิกเปิดหน้าพิมพ์ได้ 🌟 -->
+                            {% if tab == 'knockdown' %}
+                                <a href="{% url 'po_print' p.po.id %}" target="_blank" class="fw-bold text-primary font-monospace text-decoration-none">
+                                    {{ p.po.code }} <i class="fas fa-external-link-alt small ms-1 opacity-50"></i>
+                                </a>
+                            {% else %}
+                                <!-- 🌟 [FIXED] ใช้ tag url อ้างอิงชื่อ solar_po_print 🌟 -->
+                                <a href="{% url 'solar_po_print' p.po.id %}" target="_blank" class="fw-bold text-warning text-dark font-monospace text-decoration-none">
+                                    {{ p.po.code }} <i class="fas fa-external-link-alt small ms-1 opacity-50"></i>
+                                </a>
+                            {% endif %}
+                            <br>
+                            <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25 mt-1" style="font-size: 0.65rem;">
+                                {% if tab == 'knockdown' %}น็อคดาวน์{% else %}โซล่าเซลล์{% endif %}
+                            </span>
+                        </td>
+                        <td class="py-3">
+                            <div class="fw-bold text-dark text-truncate" style="max-width: 250px;">
+                                {% if tab == 'knockdown' %}
+                                    {{ p.po.supplier.name|default:"-" }}
+                                {% else %}
+                                    {{ p.po.supplier.name|default:p.po.supplier_name_free_text|default:"-" }}
+                                {% endif %}
+                            </div>
+                        </td>
+                        <td class="py-3 text-end">
+                            <h6 class="fw-bold text-danger mb-0">฿ {{ p.amount|floatformat:2|intcomma }}</h6>
+                        </td>
+                        <td class="py-3 text-center">
+                            <div class="d-flex align-items-center justify-content-center gap-2">
+                                <span class="badge bg-light text-dark border shadow-sm">{{ p.payment_method }}</span>
+                                {% if p.slip_image %}
+                                    <img src="{{ p.slip_image.url }}" class="slip-thumbnail" loading="lazy" data-bs-toggle="modal" data-bs-target="#slipModal" onclick="document.getElementById('slipImageFull').src='{{ p.slip_image.url }}'">
+                                {% else %}
+                                    <span class="text-muted small">-</span>
+                                {% endif %}
+                            </div>
+                        </td>
+                        <!-- 🌟 ปุ่มกดพิมพ์ใบ PV A4 🌟 -->
+                        <td class="pe-4 py-3 text-center">
+                            <a href="{% url 'accounting_print_pv' tab p.id %}" target="_blank" class="btn btn-sm btn-outline-secondary rounded-pill px-3 shadow-sm font-monospace fw-bold">
+                                <i class="fas fa-print me-1"></i> พิมพ์ PV
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center py-5">
+                            <div class="text-muted">
+                                <i class="fas fa-folder-open fa-3x mb-3 opacity-25"></i><br>
+                                ยังไม่มีประวัติการจ่ายเงินสำหรับแผนกนี้
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Modal สำหรับดูรูปสลิปขยายใหญ่ -->
+<div class="modal fade" id="slipModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content bg-transparent border-0">
+            <div class="modal-header border-0 pb-0 justify-content-end">
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close" style="filter: invert(1);"></button>
+            </div>
+            <div class="modal-body text-center pt-0">
+                <img id="slipImageFull" src="" class="img-fluid rounded-3 shadow-lg" style="max-height: 80vh; object-fit: contain;">
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

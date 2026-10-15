@@ -1,0 +1,236 @@
+{% load humanize %}
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <title>ใบเตรียมการสั่งซื้อ (PPO) - {{ ppo.code }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap');
+
+        body {
+            font-family: 'Sarabun', sans-serif;
+            background-color: #525659;
+            margin: 0;
+            padding: 20px 0;
+        }
+
+        .a4-container {
+            width: 210mm;
+            min-height: 297mm;
+            background: white;
+            margin: 0 auto;
+            padding: 15mm 15mm 20mm 15mm;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+            position: relative;
+        }
+
+        .doc-header {
+            border-bottom: 2px solid #000;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+
+        .company-name {
+            font-size: 20pt;
+            font-weight: bold;
+            color: #000;
+        }
+
+        .doc-title {
+            font-size: 18pt;
+            font-weight: bold;
+            text-align: center;
+            margin: 20px 0;
+            background-color: #f0f0f0;
+            padding: 8px;
+            border-radius: 5px;
+        }
+
+        .info-table {
+            width: 100%;
+            margin-bottom: 20px;
+            font-size: 11pt;
+        }
+
+        .info-table td {
+            padding: 4px 8px;
+            vertical-align: top;
+        }
+
+        .table-items {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11pt;
+            margin-bottom: 20px;
+        }
+
+        .table-items th {
+            background-color: #e9ecef;
+            border: 1px solid #000;
+            padding: 8px;
+            text-align: center;
+            font-weight: bold;
+        }
+
+        .table-items td {
+            border: 1px solid #000;
+            padding: 6px 8px;
+        }
+
+        .total-row td {
+            font-weight: bold;
+            background-color: #f8f9fa;
+        }
+
+        .sign-area {
+            margin-top: 50px;
+            width: 100%;
+        }
+
+        .sign-box {
+            width: 30%;
+            text-align: center;
+            font-size: 11pt;
+        }
+
+        .sign-line {
+            border-bottom: 1px dashed #000;
+            margin-bottom: 10px;
+            height: 30px;
+        }
+
+        @media print {
+            body {
+                background: white;
+                margin: 0;
+                padding: 0;
+            }
+            .a4-container {
+                box-shadow: none;
+                width: 100%;
+                min-height: auto;
+                padding: 0;
+            }
+            .no-print {
+                display: none !important;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ปุ่มกดพิมพ์ (ซ่อนตอนปริ้นจริง) -->
+    <div class="text-center mb-4 no-print">
+        <button onclick="window.print()" class="btn btn-primary btn-lg rounded-pill shadow px-5">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" class="bi bi-printer me-2" viewBox="0 0 16 16">
+                <path d="M2.5 8a.5.5 0 1 0 0-1 .5.5 0 0 0 0 1z"/>
+                <path d="M5 1a2 2 0 0 0-2 2v2H2a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h1v1a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-1h1a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-1V3a2 2 0 0 0-2-2H5zM4 3a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2H4V3zm1 5a2 2 0 0 0-2 2v1H2a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v-1a2 2 0 0 0-2-2H5zm7 2v3a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1z"/>
+            </svg>
+            พิมพ์เอกสาร
+        </button>
+        <button onclick="window.close()" class="btn btn-secondary btn-lg rounded-pill shadow px-5 ms-3">
+            ปิดหน้าต่าง
+        </button>
+    </div>
+
+    <div class="a4-container">
+        <!-- ส่วนหัวบริษัท -->
+        <div class="doc-header d-flex justify-content-between align-items-center">
+            <div>
+                <div class="company-name">{{ company.name|default:"บริษัท นีด ช็อปปิ้ง จำกัด" }}</div>
+                <div style="font-size: 10pt; color: #555; max-width: 400px;">
+                    {{ company.address|default:"111/123 ม.3 ต.หนองตำลึง อ.พานทอง จ.ชลบุรี 20160" }}<br>
+                    โทร: {{ company.phone|default:"098-289-4251" }} | เลขประจำตัวผู้เสียภาษี: {{ company.tax_id|default:"0205562002388" }}
+                </div>
+            </div>
+            {% if company.logo %}
+                <img src="{{ company.logo.url }}" alt="Company Logo" style="max-height: 70px;">
+            {% endif %}
+        </div>
+
+        <!-- ชื่อเอกสาร -->
+        <div class="doc-title">
+            ใบสรุปเตรียมการสั่งซื้อ (PPO: Purchase Preparation Order)
+        </div>
+
+        <!-- ข้อมูลเอกสาร -->
+        <table class="info-table">
+            <tr>
+                <td style="width: 15%;"><strong>เลขที่เอกสาร:</strong></td>
+                <td style="width: 35%;">{{ ppo.code }}</td>
+                <td style="width: 15%;"><strong>วันที่สร้าง:</strong></td>
+                <td style="width: 35%;">{{ ppo.created_at|date:"d/m/Y" }}</td>
+            </tr>
+            <tr>
+                <td><strong>ผู้ทำรายการ:</strong></td>
+                <td>{{ ppo.created_by }}</td>
+                <td><strong>ใบสั่งผลิต:</strong></td>
+                <td>{{ ppo.production_orders.count }} ใบ (JOB)</td>
+            </tr>
+            <tr>
+                <td><strong>อ้างอิง JOB:</strong></td>
+                <td colspan="3">
+                    {% for job in ppo.production_orders.all %}
+                        {{ job.code }}{% if not forloop.last %}, {% endif %}
+                    {% endfor %}
+                </td>
+            </tr>
+        </table>
+
+        <!-- ตารางรายการสินค้า -->
+        <table class="table-items">
+            <thead>
+                <tr>
+                    <th style="width: 5%;">ลำดับ</th>
+                    <th style="width: 45%;">รายการวัตถุดิบ (รหัส/ชื่อ)</th>
+                    <th style="width: 15%;">ปริมาณที่ต้องการ</th>
+                    <th style="width: 15%;">ราคาต่อหน่วย</th>
+                    <th style="width: 20%;">รวมเป็นเงิน (ประเมิน)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in materials_list %}
+                <tr>
+                    <td class="text-center">{{ forloop.counter }}</td>
+                    <td>
+                        <strong>{{ item.product.code }}</strong><br>
+                        {{ item.product.name }}
+                    </td>
+                    <td class="text-center">{{ item.needed|floatformat:2|intcomma }}</td>
+                    <td class="text-end">{{ item.cost|floatformat:2|intcomma }}</td>
+                    <td class="text-end">{{ item.total|floatformat:2|intcomma }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="5" class="text-center py-4">-- ไม่พบรายการวัตถุดิบ --</td>
+                </tr>
+                {% endfor %}
+
+                <tr class="total-row">
+                    <td colspan="4" class="text-end pe-3"><strong>มูลค่าประเมินรวมทั้งสิ้น:</strong></td>
+                    <td class="text-end text-danger fs-6">{{ grand_total|floatformat:2|intcomma }}</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- ลายเซ็น -->
+        <div class="d-flex justify-content-between sign-area">
+            <div class="sign-box">
+                <div class="sign-line"></div>
+                <div>( .................................................. )</div>
+                <div class="mt-1">ผู้จัดทำรายการ</div>
+                <div class="mt-1">วันที่ _______/_______/_______</div>
+            </div>
+
+            <div class="sign-box">
+                <div class="sign-line"></div>
+                <div>( .................................................. )</div>
+                <div class="mt-1">ผู้อนุมัติ (ผู้จัดการฝ่ายจัดซื้อ)</div>
+                <div class="mt-1">วันที่ _______/_______/_______</div>
+            </div>
+        </div>
+
+    </div>
+</body>
+</html>

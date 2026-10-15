@@ -1,20 +1,24 @@
 from django.contrib import admin
-from .models import SolarJob, SolarJobMaterial, SolarExpense
+from .models import SubcontractorTeam, SolarJob, SolarJobBOM, SolarExpense
 
-class SolarJobMaterialInline(admin.TabularInline):
-    model = SolarJobMaterial
+@admin.register(SubcontractorTeam)
+class SubcontractorTeamAdmin(admin.ModelAdmin):
+    list_display = ['name', 'leader_name', 'phone', 'is_active']
+    search_fields = ['name', 'leader_name']
+
+class SolarJobBOMInline(admin.TabularInline):
+    model = SolarJobBOM
     extra = 1
 
 @admin.register(SolarJob)
 class SolarJobAdmin(admin.ModelAdmin):
-    list_display = ['code', 'customer', 'package_sold', 'start_date', 'status']
-    list_filter = ['status', 'technician_team']
+    list_display = ['code', 'quotation_ref', 'customer', 'status', 'start_date']
+    list_filter = ['status']
     search_fields = ['code', 'customer__name']
-    readonly_fields = ['code']
-    inlines = [SolarJobMaterialInline]
+    inlines = [SolarJobBOMInline]
 
 @admin.register(SolarExpense)
 class SolarExpenseAdmin(admin.ModelAdmin):
-    list_display = ['job', 'expense_type', 'amount', 'requester', 'status', 'created_at']
+    list_display = ['job', 'expense_type', 'amount', 'status', 'requester']
     list_filter = ['status', 'expense_type']
-    search_fields = ['job__code', 'requester__first_name']
+    search_fields = ['job__code']

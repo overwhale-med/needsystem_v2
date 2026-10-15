@@ -1,13 +1,22 @@
+from decimal import Decimal
+from django.db.models import Q, F, Count, Sum
+from hr.models import Employee
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from django.db.models import Count, Sum
-from .models import SolarJob, SolarExpense, SubcontractorTeam
-from .forms import SolarJobForm, SolarMaterialFormSet, SolarExpenseForm
+from .models import (
+    SolarJob, SolarExpense, SubcontractorTeam, SolarJobBOM,
+    SolarSurveyClaim, SolarInstallClaim, SolarAdvanceLaborClaim, SolarOtherExpense
+)
+from .forms import SolarJobForm, SolarBOMFormSet, SolarExpenseForm
 from master_data.models import Customer
-from solar_sales.models import SolarProduct, SolarQuotation
+from solar_sales.models import SolarProduct, SolarQuotation, SolarInvoice, SolarCommissionTicket
+from solar_inventory.models import SolarStandardBOM
 from django.http import JsonResponse
 import json
+from django.core.paginator import Paginator
+from django.utils import timezone
+import datetime
 
 # ------------------------------------------
 # 🛡️ ระบบเช็คสิทธิ์สำหรับแผนก Center / ปฏิบัติการ
@@ -26,37 +35,128 @@ def center_dashboard(request):
         messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์เข้าถึงระบบ Center (Solar)")
         return redirect('dashboard')
 
-    # 🌟 [FIXED] ใช้ select_related เพื่อดึงข้อมูลเชิงลึกมาไว้ในการ์ดแบบไม่กินสเปคเซิร์ฟเวอร์ 🌟
-    all_jobs = SolarJob.objects.select_related('customer', 'package_sold', 'salesperson', 'quotation_ref', 'technician_team').all().order_by('-created_at')
+    search_q = request.GET.get('q', '').strip()
+    team_id = request.GET.get('team', '')
+    sales_id = request.GET.get('salesperson', '')
+    start_date = request.GET.get('start_date', '')
+    end_date = request.GET.get('end_date', '')
 
-    draft_jobs = all_jobs.filter(status='DRAFT').count()
-    preparing_jobs = all_jobs.filter(status='PREPARING').count()
-    in_progress_jobs = all_jobs.filter(status='IN_PROGRESS').count()
+    jobs = SolarJob.objects.select_related(
+        'customer', 'package_sold', 'salesperson', 'quotation_ref', 'technician_team'
+    ).annotate(
+        pending_req_count=Count('job_boms', filter=Q(job_boms__planned_quantity__gt=F('job_boms__actual_used_quantity')), distinct=True),
+        pending_ppo_count=Count('ppos', filter=Q(ppos__status='PENDING'), distinct=True)
+    ).order_by('-created_at')
+
+    if search_q:
+        jobs = jobs.filter(Q(code__icontains=search_q) | Q(customer__name__icontains=search_q))
+    if team_id:
+        jobs = jobs.filter(technician_team_id=team_id)
+    if sales_id:
+        jobs = jobs.filter(salesperson_id=sales_id)
+    if start_date and end_date:
+        jobs = jobs.filter(created_at__date__gte=start_date, created_at__date__lte=end_date)
+
+    draft_jobs = jobs.filter(status='DRAFT').count()
+    preparing_jobs = jobs.filter(status__in=['PREPARING', 'WAITING_STORE', 'WAITING_PURCHASE']).count()
+    in_progress_jobs = jobs.filter(status='IN_PROGRESS').count()
+
     pending_expenses = SolarExpense.objects.filter(status='PENDING').count()
     from solar_sales.models import SolarExpenseClaim
     approved_expenses = SolarExpenseClaim.objects.filter(status='APPROVED').order_by('created_at')
 
+    teams = SubcontractorTeam.objects.filter(is_active=True)
+    salespersons = Employee.objects.filter(department__name__icontains='ขาย') if hasattr(Employee, 'department') else Employee.objects.all()
+
     context = {
-        'jobs': all_jobs[:30], # โหลดมาแสดง 30 งานล่าสุด
+        'jobs': jobs[:50],
         'draft_jobs': draft_jobs,
         'preparing_jobs': preparing_jobs,
         'in_progress_jobs': in_progress_jobs,
         'pending_expenses': pending_expenses,
-        'approved_expenses': approved_expenses,  # 🌟 [FIX] เติมข้อมูลชุดนี้เข้าไปในห่อ context ครับ 🌟
+        'approved_expenses': approved_expenses,
+        'teams': teams,
+        'salespersons': salespersons,
+        'search_q': search_q,
+        'team_id': team_id,
+        'sales_id': sales_id,
+        'start_date': start_date,
+        'end_date': end_date,
     }
     return render(request, 'solar_jobs/center_dashboard.html', context)
+
+# ------------------------------------------
+# 📊 กระดานควบคุมงานติดตั้ง (Overview Board)
+# ------------------------------------------
+@login_required
+def solar_job_overview(request):
+    if not is_center_staff(request.user):
+        messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์เข้าถึงระบบควบคุมงานติดตั้ง")
+        return redirect('dashboard')
+
+    search_q = request.GET.get('q', '').strip()
+    team_id = request.GET.get('team', '')
+    sales_id = request.GET.get('salesperson', '')
+    status_filter = request.GET.get('status', '')
+    start_date = request.GET.get('start_date', '')
+    end_date = request.GET.get('end_date', '')
+    tab = request.GET.get('tab', 'active')
+
+    base_jobs = SolarJob.objects.select_related(
+        'customer', 'package_sold', 'salesperson', 'quotation_ref', 'technician_team'
+    ).prefetch_related('job_boms').annotate(
+        pending_req_count=Count('job_boms', filter=Q(job_boms__planned_quantity__gt=F('job_boms__actual_used_quantity')), distinct=True),
+        pending_ppo_count=Count('ppos', filter=Q(ppos__status='PENDING'), distinct=True)
+    ).all()
+
+    if search_q:
+        base_jobs = base_jobs.filter(Q(code__icontains=search_q) | Q(customer__name__icontains=search_q))
+    if team_id:
+        base_jobs = base_jobs.filter(technician_team_id=team_id)
+    if sales_id:
+        base_jobs = base_jobs.filter(salesperson_id=sales_id)
+    if status_filter:
+        base_jobs = base_jobs.filter(status=status_filter)
+    if start_date and end_date:
+        base_jobs = base_jobs.filter(created_at__date__gte=start_date, created_at__date__lte=end_date)
+
+    active_count = base_jobs.filter(status__in=['DRAFT', 'PREPARING', 'WAITING_STORE', 'WAITING_PURCHASE', 'IN_PROGRESS']).count()
+    completed_count = base_jobs.filter(status__in=['COMPLETED', 'CLOSED', 'CANCELLED']).count()
+
+    if tab == 'history':
+        jobs = base_jobs.filter(status__in=['COMPLETED', 'CLOSED', 'CANCELLED']).order_by('-created_at')
+    else:
+        jobs = base_jobs.filter(status__in=['DRAFT', 'PREPARING', 'WAITING_STORE', 'WAITING_PURCHASE', 'IN_PROGRESS']).order_by('created_at')
+
+    teams = SubcontractorTeam.objects.filter(is_active=True)
+    salespersons = Employee.objects.filter(department__name__icontains='ขาย') if hasattr(Employee, 'department') else Employee.objects.all()
+
+    context = {
+        'jobs': jobs, 'tab': tab, 'active_count': active_count, 'completed_count': completed_count,
+        'teams': teams, 'salespersons': salespersons, 'search_q': search_q, 'team_id': team_id,
+        'sales_id': sales_id, 'status_filter': status_filter, 'start_date': start_date, 'end_date': end_date,
+    }
+    return render(request, 'solar_jobs/job_overview.html', context)
 
 @login_required
 def solar_job_create(request):
     if not is_center_staff(request.user): return redirect('solar_center_dashboard')
-
     if request.method == 'POST':
         customer_id = request.POST.get('customer_id')
         package_id = request.POST.get('package_id')
         customer = Customer.objects.filter(id=customer_id).first()
         package = SolarProduct.objects.filter(id=package_id).first()
+
         job = SolarJob.objects.create(customer=customer, package_sold=package, status='DRAFT')
-        messages.success(request, f"✅ สร้างใบสั่งงาน {job.code} เรียบร้อยแล้ว ระบบกำลังพาไปหน้าจัดการงาน")
+
+        if package:
+            standard_boms = SolarStandardBOM.objects.filter(package=package)
+            for std_bom in standard_boms:
+                SolarJobBOM.objects.create(
+                    job=job, product=std_bom.raw_material, planned_quantity=std_bom.quantity,
+                    actual_used_quantity=0, unit_cost=std_bom.raw_material.cost_price
+                )
+        messages.success(request, f"✅ สร้างใบสั่งงาน {job.code} พร้อมกางสูตรเบิกของ (BOM) อัตโนมัติเรียบร้อยแล้ว")
         return redirect('solar_job_manage', job_id=job.id)
 
     customers = Customer.objects.all()
@@ -66,47 +166,89 @@ def solar_job_create(request):
 @login_required
 def solar_job_manage(request, job_id):
     if not is_center_staff(request.user): return redirect('solar_center_dashboard')
-
     job = get_object_or_404(SolarJob, id=job_id)
 
     if request.method == 'POST':
-        form = SolarJobForm(request.POST, instance=job)
-        formset = SolarMaterialFormSet(request.POST, instance=job)
+        mutable_post = request.POST.copy()
+        if 'labor_cost_budget' in mutable_post:
+            mutable_post['labor_cost_budget'] = mutable_post['labor_cost_budget'].replace(',', '')
+
+        form = SolarJobForm(mutable_post, instance=job)
+        formset = SolarBOMFormSet(request.POST, instance=job)
 
         if form.is_valid() and formset.is_valid():
-            form.save()
+            saved_job = form.save(commit=False)
+            if saved_job.status == 'DRAFT' and saved_job.technician_team:
+                saved_job.status = 'PREPARING'
+                messages.success(request, "✨ ระบบปรับสถานะเป็น 'เตรียมของ/จัดทีม' อัตโนมัติ")
+
+            saved_job.save()
             formset.save()
-            messages.success(request, f"✅ บันทึกข้อมูลการจัดทีมและเบิกวัตถุดิบของงาน {job.code} เรียบร้อยแล้ว")
-            return redirect('solar_center_dashboard')
+
+            if 'action_fetch_bom' in request.POST:
+                if not saved_job.package_sold:
+                    messages.error(request, "❌ ไม่สามารถดึงสูตรได้! งานนี้ยังไม่ได้ผูกกับแพ็กเกจหลัก")
+                else:
+                    standard_boms = SolarStandardBOM.objects.filter(package=saved_job.package_sold)
+                    if not standard_boms.exists():
+                        messages.warning(request, f"⚠️ ไม่พบสูตรมาตรฐานสำหรับแพ็กเกจ '{saved_job.package_sold.name}'")
+                    else:
+                        added_count = 0
+                        for std_bom in standard_boms:
+                            obj, created = SolarJobBOM.objects.get_or_create(
+                                job=saved_job, product=std_bom.raw_material,
+                                defaults={'planned_quantity': std_bom.quantity, 'actual_used_quantity': 0, 'unit_cost': std_bom.raw_material.cost_price}
+                            )
+                            if created: added_count += 1
+                        if added_count > 0: messages.success(request, f"✅ ดึงสูตร BOM เพิ่ม {added_count} รายการ สำเร็จ!")
+                        else: messages.info(request, "✅ บันทึกข้อมูลสำเร็จ! (วัตถุดิบมีครบแล้ว)")
+                return redirect('solar_job_manage', job_id=saved_job.id)
+
+            if saved_job.status == 'IN_PROGRESS':
+                saved_job.has_unsent_requisition = saved_job.job_boms.filter(planned_quantity__gt=F('actual_used_quantity')).exists()
+                saved_job.save()
+
+            messages.success(request, f"✅ บันทึกข้อมูลงาน {job.code} เรียบร้อยแล้ว")
+            return redirect('solar_job_manage', job_id=job.id)
         else:
             messages.error(request, "❌ กรุณาตรวจสอบข้อมูลให้ครบถ้วน")
     else:
         form = SolarJobForm(instance=job)
+        if job.labor_cost_budget == 0 or job.labor_cost_budget is None:
+            if job.quotation_ref and job.quotation_ref.subtotal:
+                calculated_labor = job.quotation_ref.subtotal * Decimal('0.155')
+                form.initial['labor_cost_budget'] = f"{calculated_labor:,.2f}"
+            else:
+                form.initial['labor_cost_budget'] = None
+        else:
+            form.initial['labor_cost_budget'] = f"{job.labor_cost_budget:,.2f}"
 
-        # 🌟 [FIXED] 1. เคลียร์ค่า 0.00 ออกถ้ายังไม่มีการระบุ เพื่อให้ช่องว่างเปล่า พิมพ์ง่าย
-        if job.labor_cost_budget == 0:
-            form.initial['labor_cost_budget'] = None
-
-        # 🌟 [FIXED] 2. เปลี่ยนชนิดกล่องเป็น Text เพื่อซ่อนลูกศรขึ้น/ลง และบังคับโหมดคีย์บอร์ดตัวเลข
         form.fields['labor_cost_budget'].widget.input_type = 'text'
-        form.fields['labor_cost_budget'].widget.attrs.update({
-            'inputmode': 'decimal',
-            'autocomplete': 'off',
-            'placeholder': '0.00'
-        })
+        form.fields['labor_cost_budget'].widget.attrs.update({'inputmode': 'decimal', 'autocomplete': 'off', 'placeholder': '0.00'})
 
-        formset = SolarMaterialFormSet(instance=job)
+        if job.status in ['WAITING_STORE', 'WAITING_PURCHASE']:
+            incomplete_boms = job.job_boms.none()
+        else:
+            incomplete_boms = job.job_boms.filter(planned_quantity__gt=F('actual_used_quantity'))
+        formset = SolarBOMFormSet(instance=job, queryset=incomplete_boms)
 
     raw_materials = SolarProduct.objects.filter(is_active=True, product_type='RM')
     teams = SubcontractorTeam.objects.filter(is_active=True)
+    has_completed_boms = job.job_boms.filter(actual_used_quantity__gt=0).exists()
+    rm_prices = {str(rm.id): float(rm.cost_price) for rm in raw_materials}
 
     return render(request, 'solar_jobs/job_manage.html', {
-        'job': job,
-        'form': form,
-        'formset': formset,
-        'raw_materials': raw_materials,
-        'teams': teams
+        'job': job, 'form': form, 'formset': formset, 'raw_materials': raw_materials,
+        'teams': teams, 'has_completed_boms': has_completed_boms, 'rm_prices_json': json.dumps(rm_prices)
     })
+
+@login_required
+def solar_job_bom_history(request, job_id):
+    if not is_center_staff(request.user): return redirect('solar_center_dashboard')
+    job = get_object_or_404(SolarJob, id=job_id)
+    completed_boms = job.job_boms.filter(actual_used_quantity__gt=0).order_by('id')
+    grand_total_cost = sum(bom.total_cost for bom in completed_boms)
+    return render(request, 'solar_jobs/job_bom_history.html', {'job': job, 'completed_boms': completed_boms, 'grand_total_cost': grand_total_cost})
 
 # ------------------------------------------
 # 🛠️ ฟังก์ชันจัดการทีมช่างรับเหมา
@@ -120,11 +262,8 @@ def subcontractor_list(request):
 def subcontractor_create(request):
     if request.method == 'POST':
         SubcontractorTeam.objects.create(
-            name=request.POST.get('name'),
-            leader_name=request.POST.get('leader_name'),
-            phone=request.POST.get('phone'),
-            note=request.POST.get('note'),
-            is_active=request.POST.get('is_active') == 'on'
+            name=request.POST.get('name'), leader_name=request.POST.get('leader_name'),
+            phone=request.POST.get('phone'), note=request.POST.get('note'), is_active=request.POST.get('is_active') == 'on'
         )
         messages.success(request, "✅ บันทึกข้อมูลทีมช่างติดตั้งเรียบร้อยแล้ว")
         return redirect('subcontractor_list')
@@ -173,7 +312,7 @@ def expense_create(request):
             exp = form.save(commit=False)
             exp.requester = getattr(request.user, 'employee', None)
             exp.save()
-            messages.success(request, f"✅ ส่งเรื่องตั้งเบิกยอด {exp.amount:,.2f} บาท เรียบร้อยแล้ว (รอฝ่ายบัญชีตรวจสอบ)")
+            messages.success(request, f"✅ ส่งเรื่องตั้งเบิกยอด {exp.amount:,.2f} บาท เรียบร้อยแล้ว")
             return redirect('solar_expense_list')
         else:
             messages.error(request, "❌ กรุณาตรวจสอบข้อมูลให้ครบถ้วน")
@@ -187,7 +326,6 @@ def expense_approve(request, expense_id):
     if not is_accounting_staff(request.user):
         messages.error(request, "❌ เฉพาะพนักงานฝ่ายบัญชีเท่านั้นที่สามารถอนุมัติการจ่ายเงินได้")
         return redirect('solar_expense_list')
-
     expense = get_object_or_404(SolarExpense, id=expense_id)
     if request.method == 'POST':
         action = request.POST.get('action')
@@ -199,7 +337,6 @@ def expense_approve(request, expense_id):
             expense.status = 'REJECTED'
             messages.warning(request, f"⚠️ ปฏิเสธรายการตั้งเบิกของ {expense.requester.first_name if expense.requester else 'พนักงาน'}")
         expense.save()
-
     return redirect('solar_expense_list')
 
 # ------------------------------------------
@@ -212,19 +349,14 @@ def update_job_status(request):
             data = json.loads(request.body)
             job_id = data.get('job_id')
             new_status = str(data.get('new_status', '')).strip().upper()
-
-            # 1. อัปเดตสถานะของใบสั่งงานในกระดาน Center
             job = SolarJob.objects.get(id=job_id)
             job.status = new_status
             job.save()
 
-            # 2. 🌟 AUTOMATION: ยิงตรงเข้าฐานข้อมูลใบเสนอราคา 🌟
             if new_status == 'COMPLETED':
                 if job.quotation_ref_id:
-                    # 🌟 [FIXED] ใช้คำสั่ง update() ยิงตรงเข้าระดับฐานข้อมูล ชัวร์ 100% ทะลุทุกเงื่อนไข
                     SolarQuotation.objects.filter(id=job.quotation_ref_id).update(status='READY')
                 elif job.note and "QT-SOL" in str(job.note):
-                    # กรณีเผื่อสร้างงานแบบไม่ผูก FK ให้ค้นหาจากใน Note
                     for word in str(job.note).split():
                         if "QT-SOL" in word:
                             qt_code = word.strip().replace(',', '').replace(':', '')
@@ -233,23 +365,16 @@ def update_job_status(request):
 
             return JsonResponse({'success': True, 'message': 'อัปเดตเรียบร้อย'})
         except Exception as e:
-            print(f"Error updating job: {str(e)}") # ปริ้นท์ error ลง Console ไว้เช็ค
             return JsonResponse({'success': False, 'error': str(e)})
     return JsonResponse({'success': False, 'error': 'Invalid request'})
 
-# 🌟 [NEW] ฟังก์ชันสำหรับให้แผนก Center/บัญชี จ่ายเงินและแนบสลิปให้ช่าง 🌟
 @login_required
 def center_pay_expense(request, expense_id):
     if not (is_center_staff(request.user) or is_accounting_staff(request.user)):
         messages.error(request, "❌ คุณไม่มีสิทธิ์ทำรายการนี้")
         return redirect('solar_center_dashboard')
-
-    # 🌟 [FIXED] ดึงโมเดล SolarExpenseClaim ของฝั่งช่างโซล่าเซลล์มาใช้
     from solar_sales.models import SolarExpenseClaim
-    from django.utils import timezone
-
     expense = get_object_or_404(SolarExpenseClaim, id=expense_id)
-
     if request.method == 'POST':
         if 'transfer_slip' in request.FILES:
             expense.transfer_slip = request.FILES['transfer_slip']
@@ -259,6 +384,118 @@ def center_pay_expense(request, expense_id):
             messages.success(request, f"✅ บันทึกการโอนเงินและแนบสลิปสำหรับ {expense.code} สำเร็จแล้ว!")
         else:
             messages.error(request, "❌ กรุณาแนบรูปสลิปโอนเงินด้วยครับ")
-
-    # หลังจากอัปเดตเสร็จ ให้เด้งกลับไปที่หน้า Dashboard ของ Center
     return redirect('solar_center_dashboard')
+
+# ------------------------------------------
+# 🚀 ฟังก์ชัน Automation Center
+# ------------------------------------------
+@login_required
+def center_submit_requisition(request, job_id):
+    if not is_center_staff(request.user): return redirect('solar_center_dashboard')
+    job = get_object_or_404(SolarJob, id=job_id)
+    if job.status in ['DRAFT', 'PREPARING']:
+        job.status = 'WAITING_STORE'
+        job.has_unsent_requisition = False
+        job.save()
+        messages.success(request, f"✅ ส่งใบเบิกวัสดุสำหรับงาน {job.code} ไปยังสโตร์เรียบร้อยแล้ว")
+    elif job.status == 'IN_PROGRESS':
+        job.has_unsent_requisition = False
+        job.save()
+        messages.success(request, f"✅ ส่งใบขอเบิกวัสดุเพิ่มเติมให้สโตร์แล้ว")
+    return redirect('solar_job_manage', job_id=job.id)
+
+@login_required
+def center_start_job(request, job_id):
+    if not is_center_staff(request.user): return redirect('solar_center_dashboard')
+    job = get_object_or_404(SolarJob, id=job_id)
+    if job.status == 'WAITING_STORE':
+        job.status = 'IN_PROGRESS'
+        job.save()
+        messages.success(request, f"🚀 เริ่มดำเนินการติดตั้งงาน {job.code} แล้ว!")
+    return redirect('solar_job_manage', job_id=job.id)
+
+@login_required
+def center_complete_job(request, job_id):
+    if not is_center_staff(request.user): return redirect('solar_center_dashboard')
+    job = get_object_or_404(SolarJob, id=job_id)
+    if job.status == 'IN_PROGRESS':
+        job.status = 'COMPLETED'
+        job.actual_finish_date = timezone.now().date()
+        if job.package_sold:
+            from solar_inventory.models import SolarStockMovement
+            SolarStockMovement.objects.create(product=job.package_sold, movement_type='IN', quantity=Decimal('1'), reference_doc=job.code)
+        job.save()
+
+        if job.quotation_ref_id:
+            SolarQuotation.objects.filter(id=job.quotation_ref_id).update(status='READY')
+        elif job.note and "QT-SOL" in str(job.note):
+            for word in str(job.note).split():
+                if "QT-SOL" in word:
+                    qt_code = word.strip().replace(',', '').replace(':', '')
+                    SolarQuotation.objects.filter(code__icontains=qt_code).update(status='READY')
+                    break
+        messages.success(request, f"✅ ปิดจ๊อบงาน {job.code} เรียบร้อย! (แจ้งเตือนแผนกเซลส์อัตโนมัติแล้ว)")
+    return redirect('solar_job_manage', job_id=job.id)
+
+# ==========================================
+# 🌟 [NEW] ฟังก์ชันสำหรับ Master Job Report - แผนกบัญชี (โซล่าเซลล์) 🌟
+# ==========================================
+@login_required
+def solar_master_job_report(request):
+    current_emp = getattr(request.user, 'employee', None)
+    is_authorized = request.user.is_superuser
+    if current_emp:
+        rank = current_emp.business_rank.lower() if current_emp.business_rank else ""
+        dept_name = getattr(current_emp.department, 'name', '')
+        if rank in ['manager', 'director'] or 'บัญชี' in dept_name or 'Accounting' in dept_name:
+            is_authorized = True
+
+    if not is_authorized:
+        messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์เข้าถึงหน้านี้")
+        return redirect('dashboard')
+
+    jobs_query = SolarJob.objects.select_related('quotation_ref', 'customer').prefetch_related(
+        'survey_claims', 'install_claims', 'advance_labor_claims', 'other_expenses',
+    ).order_by('-id')
+
+    search_query = request.GET.get('q', '')
+    if search_query:
+        jobs_query = jobs_query.filter(
+            Q(code__icontains=search_query) |
+            Q(quotation_ref__code__icontains=search_query) |
+            Q(customer__name__icontains=search_query)
+        ).distinct()
+
+    paginator = Paginator(jobs_query, 20)
+    page_obj = paginator.get_page(request.GET.get('page'))
+
+    qt_ids = [job.quotation_ref_id for job in page_obj if job.quotation_ref_id]
+    inv_dict = {}
+    ticket_dict_2 = {}
+    ticket_dict_13_5 = {}
+    
+    invoices = SolarInvoice.objects.filter(quotation_ref_id__in=qt_ids)
+    inv_dict = {inv.quotation_ref_id: inv for inv in invoices}
+    
+    tickets = SolarCommissionTicket.objects.filter(
+        Q(quotation_ref_id__in=qt_ids) | Q(invoice_ref__quotation_ref_id__in=qt_ids)
+    )
+    for t in tickets:
+        if t.ticket_type == '2%' and getattr(t, 'quotation_ref_id', None):
+            ticket_dict_2.setdefault(t.quotation_ref_id, []).append(t)
+        elif t.ticket_type == '13.5%' and getattr(t.invoice_ref, 'quotation_ref_id', None):
+            ticket_dict_13_5.setdefault(t.invoice_ref.quotation_ref_id, []).append(t)
+
+    for job in page_obj:
+        if job.quotation_ref_id:
+            job.matched_invoice = inv_dict.get(job.quotation_ref_id)
+            job.matched_tickets_2 = ticket_dict_2.get(job.quotation_ref_id, [])
+            job.matched_tickets_13_5 = ticket_dict_13_5.get(job.quotation_ref_id, [])
+        else:
+            job.matched_invoice = None
+            job.matched_tickets_2 = []
+            job.matched_tickets_13_5 = []
+
+    return render(request, 'solar_jobs/solar_master_job_report.html', {
+        'page_obj': page_obj, 'search_query': search_query
+    })

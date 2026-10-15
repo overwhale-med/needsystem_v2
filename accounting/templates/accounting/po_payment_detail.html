@@ -1,0 +1,177 @@
+{% extends 'core/base.html' %}
+{% load humanize %}
+{% block content %}
+
+<div class="container-fluid py-4 px-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="fw-bold text-dark mb-1">
+                <i class="fas fa-file-invoice-dollar text-primary me-2"></i>รายละเอียดใบสั่งซื้อและทำจ่าย
+            </h4>
+            <p class="text-muted small mb-0">
+                เอกสารอ้างอิง: <span class="fw-bold text-dark font-monospace">{{ po.code }}</span> |
+                ระบบ: {% if system_type == 'solar' %}<span class="badge bg-warning text-dark">โซล่าเซลล์</span>{% else %}<span class="badge bg-secondary">บ้านน็อคดาวน์</span>{% endif %}
+            </p>
+        </div>
+        <a href="{% if system_type == 'solar' %}{% url 'accounting_verification_hub' 'solar_po_payments' %}{% else %}{% url 'accounting_verification_hub' 'po_payments' %}{% endif %}" class="btn btn-outline-secondary rounded-pill px-4 shadow-sm fw-bold">
+            <i class="fas fa-arrow-left me-2"></i> กลับศูนย์ตรวจสอบ
+        </a>
+    </div>
+
+    <div class="row g-4">
+        <!-- 🌟 ฝั่งซ้าย: รายละเอียดและรายการสินค้า 🌟 -->
+        <div class="col-lg-7">
+            <div class="card border-0 shadow-sm rounded-4 mb-4">
+                <div class="card-body p-4">
+                    <div class="d-flex justify-content-between align-items-start mb-3 border-bottom pb-3">
+                        <div>
+                            <h6 class="text-muted small fw-bold mb-1">ผู้ขาย (Supplier)</h6>
+                            <h5 class="fw-bold text-dark mb-0"><i class="fas fa-store text-info me-2"></i>{{ supplier_name }}</h5>
+                        </div>
+                        <div class="text-end">
+                            <h6 class="text-muted small fw-bold mb-1">วันที่สั่งซื้อ</h6>
+                            <div class="fw-bold text-dark">{{ po.date|date:"d/m/Y" }}</div>
+                        </div>
+                    </div>
+
+                    <h6 class="fw-bold text-dark mb-3"><i class="fas fa-box-open text-warning me-2"></i>รายการสินค้าที่สั่งซื้อ</h6>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0 border">
+                            <thead class="bg-light text-secondary small">
+                                <tr>
+                                    <th class="ps-3 py-2">รายการ</th>
+                                    <th class="text-center py-2">จำนวน</th>
+                                    <th class="text-end py-2">ราคา/หน่วย</th>
+                                    <th class="text-end pe-3 py-2">รวมเป็นเงิน</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in po.items.all %}
+                                <tr>
+                                    <td class="ps-3 fw-bold text-dark" style="font-size: 0.85rem;">
+                                        <!-- 🌟 [FIXED] แยกระบบการดึงชื่อสินค้าเพื่อป้องกัน Error 🌟 -->
+                                        {% if system_type == 'solar' %}
+                                            {{ item.product.name|default:item.item_name_free_text|default:"-" }}
+                                        {% else %}
+                                            {{ item.product.name|default:"-" }}
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-center" style="font-size: 0.85rem;">{{ item.quantity|floatformat:0 }}</td>
+                                    <td class="text-end text-muted" style="font-size: 0.85rem;">{{ item.unit_cost|floatformat:2|intcomma }}</td>
+                                    <td class="text-end pe-3 fw-bold text-primary" style="font-size: 0.85rem;">{{ item.total_cost|floatformat:2|intcomma }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                            <tfoot class="bg-light">
+                                <tr>
+                                    <td colspan="3" class="text-end fw-bold text-dark py-2">ยอดรวมสุทธิ:</td>
+                                    <td class="text-end pe-3 fw-bold text-danger py-2">฿ {{ po.total_amount|floatformat:2|intcomma }}</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ประวัติการจ่ายเงิน (ถ้ามี) -->
+            {% if payments %}
+            <div class="card border-0 shadow-sm rounded-4">
+                <div class="card-header bg-white py-3 border-bottom">
+                    <h6 class="fw-bold mb-0 text-dark"><i class="fas fa-history text-muted me-2"></i>ประวัติการทำจ่าย (Payment Voucher)</h6>
+                </div>
+                <div class="card-body p-0">
+                    <table class="table table-sm table-hover align-middle mb-0">
+                        <thead class="bg-light text-secondary" style="font-size: 0.75rem;">
+                            <tr>
+                                <th class="ps-4 py-2">เลขที่ PV / วันที่</th>
+                                <th class="py-2">ช่องทาง</th>
+                                <th class="text-end pe-4 py-2">ยอดเงิน</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for p in payments %}
+                            <tr>
+                                <td class="ps-4">
+                                    <div class="fw-bold text-dark font-monospace" style="font-size: 0.8rem;">{{ p.pv_code|default:"-" }}</div>
+                                    <div class="text-muted" style="font-size: 0.7rem;">{{ p.payment_date|date:"d/m/Y" }}</div>
+                                </td>
+                                <td style="font-size: 0.8rem;">
+                                    {{ p.payment_method }}
+                                    {% if p.slip_image %}
+                                        <a href="{{ p.slip_image.url }}" target="_blank" class="badge bg-primary ms-1 text-decoration-none">รูปสลิป</a>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end pe-4 fw-bold text-success" style="font-size: 0.85rem;">฿ {{ p.amount|floatformat:2|intcomma }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- 🌟 ฝั่งขวา: ฟอร์มทำจ่ายและแนบสลิป 🌟 -->
+        <div class="col-lg-5">
+            <div class="card border-0 shadow-lg rounded-4 overflow-hidden position-sticky" style="top: 20px;">
+                <div class="card-header border-0 py-3 text-white" style="background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);">
+                    <h5 class="fw-bold mb-0"><i class="fas fa-wallet me-2"></i>บันทึกการจ่ายเงิน (ทำ PV)</h5>
+                </div>
+                <div class="card-body p-4 bg-light">
+
+                    <div class="d-flex justify-content-between align-items-center mb-3 p-3 bg-white rounded-3 border">
+                        <span class="fw-bold text-muted">ยอดคงเหลือที่ต้องชำระ:</span>
+                        <span class="fs-4 fw-bold text-danger">฿ {{ balance|floatformat:2|intcomma }}</span>
+                    </div>
+
+                    {% if balance > 0 %}
+                    <form method="POST" action="{% url 'accounting_po_payment_submit' system_type po.id %}" enctype="multipart/form-data">
+                        {% csrf_token %}
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold text-dark small">ยอดเงินที่ต้องการจ่าย (บาท) <span class="text-danger">*</span></label>
+                            <input type="text" name="amount" class="form-control form-control-lg fw-bold text-primary text-end" value="{{ balance|floatformat:2|intcomma }}" required onkeyup="this.value = this.value.replace(/[^0-9.,]/g, '')">
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold text-dark small">ช่องทางการชำระ <span class="text-danger">*</span></label>
+                            <select name="payment_method" class="form-select">
+                                <option value="โอนเงินผ่านธนาคาร">โอนเงินผ่านธนาคาร</option>
+                                <option value="เงินสด">เงินสด</option>
+                                <option value="เช็คธนาคาร">เช็คธนาคาร</option>
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold text-dark small">เลขอ้างอิง PV ตามระบบ ECACC (ถ้ามี)</label>
+                            <input type="text" name="reference_no" class="form-control" placeholder="เช่น เลขอ้างอิงสลิปโอนเงิน">
+                        </div>
+
+                        <div class="mb-3 p-3 bg-white border border-primary border-opacity-50 rounded-3">
+                            <label class="form-label fw-bold text-primary small"><i class="fas fa-file-upload me-1"></i> อัปโหลดสลิปโอนเงิน <span class="text-danger">*</span></label>
+                            <input type="file" name="slip_image" class="form-control border-primary" accept="image/*" required>
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label fw-bold text-dark small">หมายเหตุ</label>
+                            <textarea name="note" class="form-control" rows="2" placeholder="ระบุหมายเหตุเพิ่มเติม (ถ้ามี)"></textarea>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary btn-lg w-100 rounded-pill fw-bold shadow-sm" onclick="return confirm('ยืนยันความถูกต้อง และออกเลขที่ใบคุม (Payment Voucher) ใช่หรือไม่?');">
+                            <i class="fas fa-check-circle me-2"></i> ยืนยันทำจ่ายและออก PV
+                        </button>
+                    </form>
+                    {% else %}
+                        <div class="alert alert-success text-center fw-bold py-4 mb-0">
+                            <i class="fas fa-check-double fa-2x mb-2 d-block"></i>
+                            ชำระเงินครบถ้วนเรียบร้อยแล้ว
+                        </div>
+                    {% endif %}
+
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

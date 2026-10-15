@@ -6,7 +6,7 @@
     /* 🌟 สไตล์ปุ่มและเอฟเฟกต์สีทองแบบพรีเมียม 🌟 */
     .btn-gold { background: linear-gradient(135deg, #d4af37 0%, #aa8c2c 100%); color: #ffffff !important; border: none; transition: all 0.3s ease; }
     .btn-gold:hover { background: linear-gradient(135deg, #aa8c2c 0%, #8c7324 100%); transform: translateY(-2px); box-shadow: 0 6px 12px rgba(212, 175, 55, 0.3) !important; }
-    
+
     .form-control:focus, .form-select:focus { border-color: #d4af37; box-shadow: 0 0 0 0.25rem rgba(212, 175, 55, 0.25); }
     .table-items th { background-color: #f8f9fa; font-weight: 600; color: #495057; border-bottom: 2px solid #dee2e6; }
 </style>
@@ -14,9 +14,19 @@
 <div class="container-fluid py-4 px-4">
     <div class="d-flex justify-content-between align-items-end mb-4">
         <div>
+            <!-- แทนที่หัวกระดาษบรรทัดที่ 16-19 (ใต้แท็ก h4) -->
             <h4 class="fw-bold mb-1 text-dark">
                 <i class="fas fa-edit text-warning me-2"></i>
-                {% if po %}แก้ไขใบสั่งซื้อ: <span class="text-primary">{{ po.code }}</span>{% else %}สร้างใบสั่งซื้อด่วน (Fast Track PO){% endif %}
+                {% if po %}
+                    แก้ไขใบสั่งซื้อ: <span class="text-primary">{{ po.code }}</span>
+                {% else %}
+                    สร้างใบสั่งซื้อด่วน -
+                    {% if po_type == 'FG' %}
+                        <span class="text-success">หมวดหมู่แพ็กเกจ (FG)</span>
+                    {% else %}
+                        <span class="text-primary">หมวดหมู่วัตถุดิบ (RM)</span>
+                    {% endif %}
+                {% endif %}
             </h4>
             <p class="text-muted small mb-0">ระบบจัดซื้อโซล่าเซลล์ (Solar Purchasing)</p>
         </div>
@@ -25,7 +35,15 @@
 
     <form method="POST" enctype="multipart/form-data" id="poForm">
         {% csrf_token %}
-        
+
+        <!-- 🌟 [NEW] แจ้งเตือน และครอบ Fieldset เพื่อล็อกช่องกรอกข้อมูลทั้งหมด -->
+        {% if is_readonly %}
+        <div class="alert alert-warning shadow-sm border-0 rounded-4 mb-4">
+            <i class="fas fa-lock me-2"></i> <strong>เอกสารถูกล็อก:</strong> ใบสั่งซื้อนี้ถูกตรวจรับสินค้าเข้าคลังแล้ว ระบบระงับการแก้ไขข้อมูลเพื่อป้องกันข้อผิดพลาดของสต็อก
+        </div>
+        {% endif %}
+        <fieldset {% if is_readonly %}disabled{% endif %}>
+
         <div class="row g-4">
             <div class="col-lg-4 col-md-12">
                 <div class="card border-0 shadow-sm rounded-4 bg-white h-100">
@@ -68,10 +86,16 @@
             <div class="col-lg-8 col-md-12">
                 <div class="card border-0 shadow-sm rounded-4 bg-white h-100">
                     <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center border-bottom-0">
-                        <h6 class="fw-bold mb-0 text-dark"><i class="fas fa-boxes me-2 text-success"></i>รายการสั่งซื้อวัตถุดิบ</h6>
+                        <h6 class="fw-bold mb-0 text-dark">
+                            <i class="fas fa-boxes me-2 {% if po_type == 'FG' %}text-success{% else %}text-primary{% endif %}"></i>
+                            รายการสั่งซื้อ{% if po_type == 'FG' %}แพ็กเกจสินค้า (FG){% else %}วัตถุดิบ/อุปกรณ์ (RM){% endif %}
+                        </h6>
+                        <!-- เปลี่ยนบรรทัด 72 เป็น: -->
+                        {% if not is_readonly %}
                         <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3 fw-bold" id="add-item-btn">
                             <i class="fas fa-plus me-1"></i> เพิ่มรายการ
                         </button>
+                        {% endif %}
                     </div>
                     <div class="card-body pt-0">
                         {{ formset.management_form }}
@@ -126,11 +150,20 @@
             </div>
         </div>
 
+        <!-- 🌟 [NEW] ปิด Fieldset -->
+        </fieldset>
+
         <div class="d-flex justify-content-end mt-4 gap-2">
-            <a href="{% url 'solar_po_list' %}" class="btn btn-light rounded-pill px-4 fw-bold shadow-sm text-secondary">ยกเลิก</a>
+            <a href="{% url 'solar_po_list' %}" class="btn btn-light rounded-pill px-4 fw-bold shadow-sm text-secondary">
+                {% if is_readonly %}กลับหน้ารายการ{% else %}ยกเลิก{% endif %}
+            </a>
+
+            <!-- 🌟 [NEW] ซ่อนปุ่มเซฟ ถ้าถูกล็อก -->
+            {% if not is_readonly %}
             <button type="submit" class="btn btn-gold rounded-pill px-5 fw-bold shadow-sm fs-6">
                 <i class="fas fa-save me-2"></i> บันทึกใบสั่งซื้อ
             </button>
+            {% endif %}
         </div>
     </form>
 </div>
@@ -157,77 +190,183 @@
     </tbody>
 </table>
 
+<!-- 🌟 [NEW] นำเข้า Library ปฏิทินและ jQuery 🌟 -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/momentjs/latest/moment.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.min.js"></script>
+<link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css" />
+
+<script>
+    // 🌟 [NEW] เปิดใช้งานปฏิทินแบบเลือกวันเดียว (Single Date Picker)
+    $(document).ready(function() {
+        $('.datepicker-single').daterangepicker({
+            singleDatePicker: true,
+            showDropdowns: true,
+            autoUpdateInput: false, // ป้องกันการใส่วันที่อัตโนมัติถ้าช่องว่าง
+            locale: {
+                format: 'DD/MM/YYYY',
+                applyLabel: "ตกลง",
+                cancelLabel: "ยกเลิก",
+                daysOfWeek: ["อา.", "จ.", "อ.", "พ.", "พฤ.", "ศ.", "ส."],
+                monthNames: ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"],
+            }
+        });
+
+        // เมื่อกด "ตกลง" ในปฏิทิน ให้นำวันที่มาแสดงในช่อง
+        $('.datepicker-single').on('apply.daterangepicker', function(ev, picker) {
+            $(this).val(picker.startDate.format('DD/MM/YYYY'));
+        });
+    });
+</script>
 <script>
     document.addEventListener("DOMContentLoaded", function() {
         const formsetBody = document.getElementById("formset-body");
         const addBtn = document.getElementById("add-item-btn");
         const totalFormsInput = document.getElementById("id_items-TOTAL_FORMS");
         const grandTotalText = document.getElementById("grand-total-text");
+        const form = document.getElementById("poForm");
 
-        // ฟังก์ชันคำนวณราคารวม
+        // ==========================================
+        // 🌟 1. ฟังก์ชันซ่อน/แสดง ช่องพิมพ์ชื่อสินค้าฉุกเฉิน
+        // ==========================================
+        function toggleFreeTextInput(row) {
+            const productSelect = row.querySelector("select[name$='-product']");
+            const freeTextInput = row.querySelector("input[name$='-item_name_free_text']");
+
+            if (productSelect && freeTextInput) {
+                if (productSelect.value !== "") {
+                    // ถ้าเลือกสินค้าจาก Dropdown แล้ว ให้ซ่อนและล้างค่าทิ้ง
+                    freeTextInput.style.display = 'none';
+                    freeTextInput.value = '';
+                } else {
+                    // ถ้าเป็นค่าว่าง (-- เลือกจากคลัง --) ให้แสดงช่องพิมพ์
+                    freeTextInput.style.display = 'block';
+                }
+            }
+        }
+
+        // ==========================================
+        // 🌟 2. ฟังก์ชันแปลงตัวเลขให้มีลูกน้ำ (Format)
+        // ==========================================
+        function formatNumberWithCommas(value) {
+            let val = value.toString().replace(/[^0-9.]/g, '');
+            if (val === '') return '';
+            let parts = val.split('.');
+            parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+            if (parts[1]) { parts[1] = parts[1].substring(0, 2); }
+            return parts.join('.');
+        }
+
+        function unformatNumber(value) {
+            return parseFloat(value.toString().replace(/,/g, '')) || 0;
+        }
+
+        function convertInputsToText(row) {
+            const qtyInput = row.querySelector("input[name$='-quantity']");
+            const costInput = row.querySelector("input[name$='-unit_cost']");
+            if (qtyInput) { qtyInput.type = 'text'; qtyInput.value = formatNumberWithCommas(qtyInput.value); }
+            if (costInput) { costInput.type = 'text'; costInput.value = formatNumberWithCommas(costInput.value); }
+        }
+
+        // 🌟 สั่งทำงานตอนโหลดหน้าเว็บครั้งแรก
+        formsetBody.querySelectorAll(".item-row").forEach(row => {
+            convertInputsToText(row);
+            toggleFreeTextInput(row); // เช็คซ่อน/แสดง ตั้งแต่เริ่มโหลด
+        });
+
+        // ==========================================
+        // 🌟 3. ฟังก์ชันคำนวณราคารวม
+        // ==========================================
         function calculateTotals() {
             let grandTotal = 0;
             const rows = formsetBody.querySelectorAll(".item-row");
-            
+
             rows.forEach(row => {
-                // ข้ามแถวที่ถูกทำเครื่องหมายว่าลบ (กรณี Edit)
                 const deleteInput = row.querySelector("input[type='checkbox'][name$='-DELETE']");
                 if (deleteInput && deleteInput.checked) {
                     row.style.display = 'none';
                     return;
                 }
-
                 const qtyInput = row.querySelector("input[name$='-quantity']");
                 const costInput = row.querySelector("input[name$='-unit_cost']");
                 const totalTd = row.querySelector(".row-total");
 
                 if (qtyInput && costInput && totalTd) {
-                    const qty = parseFloat(qtyInput.value) || 0;
-                    const cost = parseFloat(costInput.value) || 0;
+                    const qty = unformatNumber(qtyInput.value);
+                    const cost = unformatNumber(costInput.value);
                     const lineTotal = qty * cost;
                     totalTd.innerText = lineTotal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
                     grandTotal += lineTotal;
                 }
             });
-
-            grandTotalText.innerText = '฿' + grandTotal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            grandTotalText.innerText = '฿ ' + grandTotal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
         }
 
-        // จับ Event เมื่อมีการพิมพ์หรือเปลี่ยนตัวเลข ให้คำนวณใหม่ทันที
+        // ==========================================
+        // 🌟 4. ดักจับ Event ต่างๆ ในตาราง (พิมพ์เลข, ติ๊กลบ, เปลี่ยน Dropdown)
+        // ==========================================
         formsetBody.addEventListener("input", function(e) {
             if (e.target.tagName === "INPUT" && (e.target.name.includes("quantity") || e.target.name.includes("unit_cost"))) {
+                let cursorPosition = e.target.selectionStart;
+                let originalLength = e.target.value.length;
+                e.target.value = formatNumberWithCommas(e.target.value);
+                let newLength = e.target.value.length;
+                cursorPosition = cursorPosition + (newLength - originalLength);
+                e.target.setSelectionRange(cursorPosition, cursorPosition);
                 calculateTotals();
             }
         });
 
-        // จับ Event เมื่อติ๊กปุ่มลบ (Checkbox ของฟอร์ม Edit)
         formsetBody.addEventListener("change", function(e) {
             if (e.target.tagName === "INPUT" && e.target.name.includes("-DELETE")) {
                 calculateTotals();
             }
+            // 🌟 ดักจับตอนเปลี่ยน Dropdown สินค้า ให้ซ่อน/แสดงช่องพิมพ์ฉุกเฉิน
+            if (e.target.tagName === "SELECT" && e.target.name.includes("-product")) {
+                const row = e.target.closest(".item-row");
+                toggleFreeTextInput(row);
+            }
         });
 
-        // เพิ่มแถวใหม่ (Formset)
-        addBtn.addEventListener("click", function() {
-            const currentFormCount = parseInt(totalFormsInput.value);
-            const templateHtml = document.getElementById("empty-row-template").innerHTML;
-            const newRowHtml = templateHtml.replace(/__prefix__/g, currentFormCount);
-            
-            formsetBody.insertAdjacentHTML('beforeend', newRowHtml);
-            totalFormsInput.value = currentFormCount + 1;
-            calculateTotals();
-        });
+        // ==========================================
+        // 🌟 5. เพิ่มแถวใหม่ (Formset)
+        // ==========================================
+        if (addBtn) {
+            addBtn.addEventListener("click", function() {
+                const currentFormCount = parseInt(totalFormsInput.value);
+                const templateHtml = document.getElementById("empty-row-template").innerHTML;
+                const newRowHtml = templateHtml.replace(/__prefix__/g, currentFormCount);
 
-        // ลบแถว (สำหรับแถวที่เพิ่งเพิ่มใหม่ ยังไม่มี ID ในฐานข้อมูล)
+                formsetBody.insertAdjacentHTML('beforeend', newRowHtml);
+
+                const newRow = formsetBody.lastElementChild;
+                convertInputsToText(newRow);
+                toggleFreeTextInput(newRow); // ซ่อน/แสดง สำหรับแถวที่เพิ่งแทรกมาใหม่
+
+                totalFormsInput.value = currentFormCount + 1;
+                calculateTotals();
+            });
+        }
+
         formsetBody.addEventListener("click", function(e) {
             if (e.target.closest(".remove-row-btn")) {
-                const row = e.target.closest(".item-row");
-                row.remove();
+                e.target.closest(".item-row").remove();
                 calculateTotals();
             }
         });
 
-        // คำนวณครั้งแรกตอนโหลดหน้าเว็บ
+        // ==========================================
+        // 🌟 6. ถอดลูกน้ำออกก่อนส่งข้อมูลไปสมองกล
+        // ==========================================
+        form.addEventListener("submit", function() {
+            formsetBody.querySelectorAll(".item-row").forEach(row => {
+                const qtyInput = row.querySelector("input[name$='-quantity']");
+                const costInput = row.querySelector("input[name$='-unit_cost']");
+                if (qtyInput) { qtyInput.value = unformatNumber(qtyInput.value); }
+                if (costInput) { costInput.value = unformatNumber(costInput.value); }
+            });
+        });
+
         calculateTotals();
     });
 </script>

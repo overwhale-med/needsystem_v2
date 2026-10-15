@@ -1,0 +1,142 @@
+{% extends "core/base.html" %}
+
+{% block content %}
+<style>
+    /* ลูกเล่นปุ่มเปลี่ยนเป็นสีทองเมื่อเอาเมาส์ชี้ */
+    .btn-gold-hover {
+        transition: all 0.3s ease;
+    }
+    .btn-gold-hover:hover {
+        background-color: #FFD700 !important; /* สีทอง */
+        border-color: #FFD700 !important;
+        color: #212529 !important; /* ตัวหนังสือสีเข้มเพื่อให้มองเห็นชัด */
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    
+    /* ปรับแต่งตารางให้ดูสะอาดตา */
+    .table th {
+        background-color: #f8f9fa;
+        color: #495057;
+        font-weight: 600;
+    }
+    .badge-status {
+        font-size: 0.9em;
+        padding: 0.5em 0.75em;
+    }
+</style>
+
+<div class="container-fluid mt-4 mb-5">
+    <div class="card shadow-sm border-0">
+        <div class="card-header bg-white border-bottom pt-4 pb-3">
+            <h4 class="mb-0 text-primary">
+                <i class="fas fa-cubes me-2"></i> ตรวจรับสินค้าเข้าคลัง (Goods Receipt)
+            </h4>
+        </div>
+        
+        <div class="card-body p-4">
+            <!-- ส่วนแสดงข้อมูลทั่วไปของใบสั่งซื้อ -->
+            <div class="row mb-4 bg-light p-3 rounded">
+                <div class="col-md-6">
+                    <table class="table table-borderless table-sm mb-0">
+                        <tr>
+                            <th width="150" class="text-muted">เลขที่ใบสั่งซื้อ:</th>
+                            <td><strong class="text-primary">{{ po.code }}</strong></td>
+                        </tr>
+                        <tr>
+                            <th class="text-muted">ซัพพลายเออร์:</th>
+                            <td>{{ po.supplier.name|default:po.supplier_name_free_text }}</td>
+                        </tr>
+                    </table>
+                </div>
+                <div class="col-md-6">
+                    <table class="table table-borderless table-sm mb-0">
+                        <tr>
+                            <th width="150" class="text-muted">วันที่สั่งซื้อ:</th>
+                            <!-- บังคับฟอร์แมตวันที่เป็น dd/mm/yyyy -->
+                            <td>{{ po.date|date:"d/m/Y" }}</td>
+                        </tr>
+                        <tr>
+                            <th class="text-muted">สถานะรับของ:</th>
+                            <td>
+                                {% if po.receipt_status == 'COMPLETED' %}
+                                    <span class="badge bg-success badge-status rounded-pill">รับของครบถ้วน</span>
+                                {% elif po.receipt_status == 'PARTIAL' %}
+                                    <span class="badge bg-warning text-dark badge-status rounded-pill">รับของบางส่วน</span>
+                                {% else %}
+                                    <span class="badge bg-secondary badge-status rounded-pill">รอรับเข้าคลัง</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+
+            <!-- ฟอร์มกรอกจำนวนรับสินค้า -->
+            <form method="POST">
+                {% csrf_token %}
+                <div class="table-responsive mb-4 border rounded">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead>
+                            <tr class="text-center">
+                                <th width="5%" class="py-3">ลำดับ</th>
+                                <th width="35%" class="py-3 text-start">รายการสินค้า</th>
+                                <th width="15%" class="py-3">จำนวนที่สั่ง</th>
+                                <th width="15%" class="py-3">รับแล้ว</th>
+                                <th width="30%" class="py-3">จำนวนที่รับรอบนี้</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in po.items.all %}
+                            <tr>
+                                <td class="text-center text-muted">{{ forloop.counter }}</td>
+                                <td>
+                                    {% if item.product %}
+                                        <strong>{{ item.product.code }}</strong><br>
+                                        <span class="text-muted">{{ item.product.name }}</span>
+                                    {% else %}
+                                        {{ item.item_name_free_text }}
+                                    {% endif %}
+                                </td>
+                                <td class="text-center text-primary fw-bold">{{ item.quantity|floatformat:2 }}</td>
+                                <td class="text-center text-success fw-bold">{{ item.received_qty|floatformat:2 }}</td>
+                                <td>
+                                    {% if item.received_qty >= item.quantity %}
+                                        <div class="text-center text-success">
+                                            <i class="fas fa-check-circle me-1"></i> รับครบแล้ว
+                                        </div>
+                                    {% else %}
+                                        <div class="input-group">
+                                            <input type="number" 
+                                                   step="0.01" 
+                                                   min="0" 
+                                                   name="receive_qty_{{ item.id }}" 
+                                                   class="form-control text-center bg-light" 
+                                                   placeholder="กรอกยอดรับจริง...">
+                                            <span class="input-group-text text-muted">หน่วย</span>
+                                        </div>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="5" class="text-center text-muted py-4">ไม่พบรายการสินค้าในใบสั่งซื้อนี้</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- ปุ่มควบคุม (ใช้ทรงแคปซูล rounded-pill) -->
+                <div class="d-flex justify-content-between mt-4">
+                    <a href="{% url 'solar_po_list' %}" class="btn btn-outline-secondary rounded-pill px-4">
+                        <i class="fas fa-arrow-left me-2"></i> กลับหน้ารายการ
+                    </a>
+                    <button type="submit" class="btn btn-primary rounded-pill px-5 btn-gold-hover" {% if po.receipt_status == 'COMPLETED' %}disabled{% endif %}>
+                        <i class="fas fa-download me-2"></i> ยืนยันบันทึกรับสินค้า
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

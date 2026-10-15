@@ -1,0 +1,58 @@
+{% extends 'core/base.html' %}
+{% load humanize %}
+
+{% block content %}
+<style>
+    .btn-gold { background: linear-gradient(135deg, #d4af37 0%, #aa8c2c 100%); color: #ffffff !important; border: none; }
+    .btn-gold:hover { background: linear-gradient(135deg, #aa8c2c 0%, #8c7324 100%); transform: translateY(-2px); box-shadow: 0 4px 8px rgba(212, 175, 55, 0.3) !important; }
+    .job-card { border-left: 5px solid #dc3545; transition: transform 0.2s; } /* ใช้สีแดงให้รู้ว่างานด่วน/รอจ่าย */
+    .job-card:hover { transform: translateY(-3px); box-shadow: 0 8px 15px rgba(0,0,0,0.08) !important; }
+</style>
+
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-end mb-4">
+        <div>
+            <h4 class="fw-bold mb-1 text-dark"><i class="fas fa-clipboard-list text-danger me-2"></i>รายการขอเบิกวัสดุจาก Center</h4>
+            <p class="text-muted small mb-0">รายการใบสั่งงานที่รอสโตร์จ่ายของและตัดสต็อก</p>
+        </div>
+        <a href="{% url 'solar_inventory_list' %}" class="btn btn-outline-secondary rounded-pill px-4 fw-bold shadow-sm">
+            <i class="fas fa-arrow-left me-2"></i> กลับหน้าคลังสินค้า
+        </a>
+    </div>
+
+    <div class="row">
+        {% for job in jobs_waiting %}
+        <div class="col-md-6 col-lg-4 mb-4">
+            <div class="card job-card shadow-sm border-0 rounded-4 h-100">
+                <div class="card-body p-4">
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                        <h5 class="fw-bold text-dark mb-0">{{ job.code }}</h5>
+                        <span class="badge bg-danger bg-opacity-10 text-danger border border-danger rounded-pill shadow-sm">
+                            <i class="fas fa-box-open me-1"></i> รอสโตร์จ่ายของ
+                        </span>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <p class="small text-muted mb-1"><i class="fas fa-user-circle me-1"></i> ลูกค้า: <strong class="text-dark">{{ job.customer.name|default:"ไม่ระบุ" }}</strong></p>
+                        <p class="small text-muted mb-1"><i class="far fa-calendar-alt me-1"></i> ส่งขอเบิก: {{ job.created_at|date:"d/m/Y" }}</p>
+                    </div>
+
+                    <!-- 🌟 ปุ่มกดเข้าไปดู Detail ของงานนี้ -->
+                    <a href="{% url 'store_requisition_detail' job.id %}" class="btn btn-outline-danger w-100 rounded-pill fw-bold">
+                        ตรวจสอบรายการวัสดุ <i class="fas fa-arrow-right ms-1"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% empty %}
+        <div class="col-12">
+            <div class="text-center py-5 bg-white rounded-4 shadow-sm border-0">
+                <i class="fas fa-check-circle fs-1 text-success mb-3 d-block"></i>
+                <h5 class="text-muted fw-bold">ไม่มีใบขอเบิกค้างในระบบ</h5>
+                <p class="text-muted small">สโตร์จ่ายของและเคลียร์งานครบหมดแล้วครับ!</p>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
