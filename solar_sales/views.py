@@ -6,7 +6,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 
 # 🌟 [FIXED] แก้ไขบรรทัด import โมเดล ให้เหลือเฉพาะของระบบขายและปฏิบัติการ
-from .models import SolarQuotation, SolarQuotationItem, SolarInvoice, SolarSurveyJob, SolarSurveyItem, SolarExpenseClaim, SolarExpenseSlip
+from .models import SolarQuotation, SolarQuotationItem, SolarInvoice, SolarSurveyJob, SolarSurveyItem, SolarExpenseClaim, SolarExpenseSlip, SolarCustomer
 
 # 🌟 [FIXED] แก้ไขบรรทัด import ฟอร์ม ให้เหลือเฉพาะของระบบขายและปฏิบัติการ
 from .forms import SolarQuotationStep1Form, SolarSurveyJobForm, SolarExpenseClaimForm
@@ -789,19 +789,16 @@ def solar_quotation_create_invoice(request, qt_id):
         messages.error(request, "❌ ไม่สามารถเปิดบิลได้ เอกสารต้องอยู่ในสถานะ 'พร้อมเปิดบิล' เท่านั้น")
         return redirect('solar_quotation_list')
 
-    # เช็คว่ามี Invoice อยู่แล้วหรือไม่ กันเหนียวไม่ให้เปิดบิลซ้ำ
     if hasattr(qt, 'solarinvoice'):
         messages.warning(request, "⚠️ ใบเสนอราคานี้มีการเปิดบิลไปแล้ว")
         return redirect('solar_quotation_list')
 
     # 1. สร้าง Invoice
-    SolarInvoice.objects.create(
+    new_inv = SolarInvoice.objects.create(
         quotation_ref=qt,
         customer=qt.customer,
         grand_total=qt.grand_total,
         balance_amount=qt.grand_total - qt.deposit_amount,
-
-        # 🌟 [FIXED] ตั้งค่าเริ่มต้นเป็น 'UNPAID' (ค้างชำระ) เพื่อให้วิ่งเข้าการ์ดติดตามหนี้ทันที
         status='UNPAID'
     )
 
@@ -809,39 +806,38 @@ def solar_quotation_create_invoice(request, qt_id):
     qt.status = 'CONVERTED'
     qt.save()
 
-    # ดึงเลข Invoice ที่เพิ่งสร้างมาใช้งาน
-    new_inv = SolarInvoice.objects.get(quotation_ref=qt)
-
-    # 🌟 [FIXED] AUTOMATION 4: ตัดสต๊อกขาย (Stock-OUT) ด้วยโมเดล SolarStockMovement 🌟
-    from solar_inventory.models import SolarStockMovement
+    # 🌟 [UPDATE] AUTOMATION: ตัดสต๊อกขาย (Stock-OUT) สร้างบิล GI
+    from solar_inventory.models import SolarStockMovement, SolarInventoryDoc
     from decimal import Decimal
 
-    # ค้นหาใบสั่งงานของ Center ที่อ้างอิงถึง Quotation นี้
     related_jobs = SolarJob.objects.filter(quotation_ref=qt, status='COMPLETED')
     for job in related_jobs:
 
-        # 🌟 4.1 ตรวจสอบว่างานนี้มีแพ็กเกจหลักให้ตัดสต๊อกหรือไม่
+        # ถ่ายเทของออกจากสต็อกเฉพาะเมื่อมีแพ็กเกจ
         if job.package_sold:
-            # เช็คจากตัวแปร stock_qty
-            if job.package_sold.stock_qty >= Decimal('1'):
-                # บันทึกประวัติเบิกออก (ขาย) 1 ชุด (ระบบจะนำไปหักสต๊อกให้อัตโนมัติ)
-                SolarStockMovement.objects.create(
-                    product=job.package_sold,
-                    movement_type='OUT',
-                    quantity=Decimal('1'),
-                    reference_doc=new_inv.code
-                )
-            else:
-                # แจ้งเตือนแอดมินเบาๆ หากไม่มีของให้ตัด
-                messages.warning(request, f"⚠️ ระบบไม่สามารถตัดสต๊อก {job.package_sold.code} ได้ เนื่องจากไม่มียอดรับเข้าก่อนหน้านี้")
 
-        # 4.2 เปลี่ยนสถานะเป็น CLOSED เพื่อซ่อนการ์ดจากหน้ากระดาน
+            # 1. สร้างหัวเอกสารเบิกออก (GI) อัตโนมัติ
+            gi_doc = SolarInventoryDoc.objects.create(
+                doc_type='GI',
+                reference=f"INV: {new_inv.code}",
+                description=f"ตัดจ่ายแพ็กเกจจากการเปิดบิลขาย ({new_inv.code})",
+                created_by=request.user
+            )
+
+            # 2. บันทึกสต็อกการ์ด (เบิกออก -1) พร้อมผูกใบ GI
+            SolarStockMovement.objects.create(
+                doc=gi_doc,
+                product=job.package_sold,
+                movement_type='OUT',
+                quantity=Decimal('1'),
+                reference_doc=new_inv.code
+            )
+
+        # เปลี่ยนสถานะงานเป็น CLOSED (จบงานบริบูรณ์)
         job.status = 'CLOSED'
         job.save()
 
-    messages.success(request, f"🎉 สร้างใบแจ้งหนี้สำหรับ {qt.code} และตัดสต๊อกแพ็กเกจสำเร็จ! (บิลถูกส่งให้บัญชีตรวจสอบ)")
-
-    # 🌟 เปลี่ยนให้เด้งไปหน้า "รายการใบแจ้งหนี้" ทันที 🌟
+    messages.success(request, f"🎉 สร้างใบแจ้งหนี้สำหรับ {qt.code} และตัดสต๊อกแพ็กเกจ (-1) สำเร็จ!")
     return redirect('solar_invoice_list')
 
 # ==========================================
@@ -1322,3 +1318,96 @@ def solar_commission_edit_bank(request, claim_id):
         messages.success(request, f"✅ อัปเดตข้อมูลบัญชีรับเงินของใบเบิก {claim.code} เรียบร้อยแล้ว")
 
     return redirect('solar_commission_board')
+
+# ==========================================
+# 👥 ฟังก์ชันสำหรับจัดการลูกค้าโซล่าเซลล์ (API)
+# ==========================================
+@login_required
+def ajax_add_solar_customer(request):
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            name = data.get('name', '').strip()
+            tax_id = data.get('tax_id', '').strip()
+            phone = data.get('phone', '').strip()
+            email = data.get('email', '').strip()
+            address = data.get('address', '').strip()
+            contact_person = data.get('contact_person', '').strip()
+
+            if not name:
+                return JsonResponse({'success': False, 'error': 'กรุณาระบุชื่อลูกค้า/บริษัท'})
+
+            # บันทึกลงตารางใหม่ SolarCustomer
+            cus = SolarCustomer.objects.create(
+                name=name,
+                tax_id=tax_id,
+                phone=phone,
+                email=email,
+                address=address,
+                contact_person=contact_person
+            )
+            return JsonResponse({'success': True, 'id': cus.id, 'name': f"{cus.code} - {cus.name}"})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
+    return JsonResponse({'success': False, 'error': 'Invalid Request'})
+
+# ==========================================
+# 👥 ระบบจัดการลูกค้า (Solar Customer Management)
+# ==========================================
+from .forms import SolarCustomerForm
+
+@login_required
+def solar_customer_list(request):
+    customers = SolarCustomer.objects.all().order_by('-created_at')
+
+    # ระบบค้นหา
+    search_query = request.GET.get('q', '')
+    if search_query:
+        customers = customers.filter(
+            Q(code__icontains=search_query) |
+            Q(name__icontains=search_query) |
+            Q(phone__icontains=search_query)
+        )
+
+    paginator = Paginator(customers, 20)
+    page_obj = paginator.get_page(request.GET.get('page'))
+
+    return render(request, 'solar_sales/customer_list.html', {
+        'page_obj': page_obj,
+        'search_query': search_query
+    })
+
+@login_required
+def solar_customer_create(request):
+    if request.method == 'POST':
+        form = SolarCustomerForm(request.POST)
+        if form.is_valid():
+            cus = form.save()
+            messages.success(request, f"✅ เพิ่มรายชื่อลูกค้า {cus.name} สำเร็จ!")
+            return redirect('solar_customer_list')
+    else:
+        form = SolarCustomerForm()
+
+    return render(request, 'solar_sales/customer_form.html', {'form': form, 'title': 'เพิ่มลูกค้าใหม่ (โซล่าเซลล์)'})
+
+@login_required
+def solar_customer_edit(request, cus_id):
+    cus = get_object_or_404(SolarCustomer, pk=cus_id)
+    if request.method == 'POST':
+        form = SolarCustomerForm(request.POST, instance=cus)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f"✅ อัปเดตข้อมูลลูกค้า {cus.name} สำเร็จ!")
+            return redirect('solar_customer_list')
+    else:
+        form = SolarCustomerForm(instance=cus)
+
+    return render(request, 'solar_sales/customer_form.html', {'form': form, 'title': 'แก้ไขข้อมูลลูกค้า (โซล่าเซลล์)'})
+
+@login_required
+def solar_customer_delete(request, cus_id):
+    cus = get_object_or_404(SolarCustomer, pk=cus_id)
+    name = cus.name
+    cus.delete()
+    messages.success(request, f"🗑️ ลบข้อมูลลูกค้า {name} ออกจากระบบแล้ว")
+    return redirect('solar_customer_list')

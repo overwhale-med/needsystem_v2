@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ใบจัดเตรียมสินค้า - {{ job.code }}</title>
+    <!-- โหลด Bootstrap & Font -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Sarabun', sans-serif; background-color: #fff; color: #000; font-size: 14px; }
+        .print-container { max-width: 210mm; margin: 0 auto; padding: 20px; }
+        .table-bordered th, .table-bordered td { border-color: #000 !important; }
+        .check-box { width: 25px; height: 25px; border: 1px solid #000; display: inline-block; margin-top: 4px; }
+
+        /* ตั้งค่าซ่อนปุ่มเวลาสั่ง Print */
+        @media print {
+            .no-print { display: none !important; }
+            body { margin: 0; padding: 0; }
+            .print-container { width: 100%; max-width: 100%; padding: 0; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="print-container">
+    <!-- ปุ่มสั่งพิมพ์ (จะโดนซ่อนอัตโนมัติตอนพิมพ์ลงกระดาษ) -->
+    <div class="text-end mb-4 no-print">
+        <button onclick="window.print()" class="btn btn-primary px-4 rounded-pill shadow-sm"><i class="fas fa-print me-2"></i> พิมพ์เอกสาร (Print)</button>
+        <button onclick="window.close()" class="btn btn-secondary px-4 rounded-pill shadow-sm"><i class="fas fa-times me-2"></i> ปิดหน้าต่าง</button>
+    </div>
+
+    <!-- หัวเอกสาร -->
+    <div class="text-center mb-4">
+        <h3 class="fw-bold mb-1">ใบจัดเตรียมสินค้า (Picking List)</h3>
+        <p class="mb-0 text-muted">เอกสารสำหรับแผนกคลังสินค้าเพื่อใช้ในการเตรียมและตรวจสอบวัสดุ</p>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-7">
+            <p class="mb-1"><strong>อ้างอิงใบสั่งงาน (JOB):</strong> <span class="fs-5 fw-bold text-primary">{{ job.code }}</span></p>
+            <p class="mb-1"><strong>ชื่อลูกค้า:</strong> {{ job.customer.name|default:"-" }}</p>
+            <p class="mb-1"><strong>ทีมช่างผู้รับผิดชอบ:</strong> {{ job.technician_team.name|default:"-" }}</p>
+        </div>
+        <div class="col-5 text-end">
+            <p class="mb-1"><strong>วันที่พิมพ์:</strong> {{ print_date|date:"d/m/Y H:i" }} น.</p>
+            <p class="mb-1"><strong>ผู้จัดเตรียม (สโตร์):</strong> .........................................................</p>
+        </div>
+    </div>
+
+    <!-- ตารางรายการวัสดุ -->
+    <table class="table table-bordered mb-4 align-middle">
+        <thead class="text-center bg-light">
+            <tr>
+                <th style="width: 5%;" class="py-2">ลำดับ</th>
+                <th style="width: 15%;" class="py-2">รหัสวัสดุ</th>
+                <th style="width: 45%;" class="py-2">ชื่อรายการ (Description)</th>
+                <th style="width: 15%;" class="py-2">จำนวน</th>
+                <th style="width: 10%;" class="py-2">หน่วยนับ</th>
+                <th style="width: 10%;" class="py-2">ตรวจนับ</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for bom in bom_list %}
+            <tr>
+                <td class="text-center">{{ forloop.counter }}</td>
+                <td class="text-center">{{ bom.product.code }}</td>
+                <td>{{ bom.product.name }}</td>
+                <td class="text-center fw-bold fs-5">{{ bom.qty_to_deduct|floatformat:2 }}</td>
+                <td class="text-center">{{ bom.product.unit|default:"-" }}</td>
+                <td class="text-center"><div class="check-box"></div></td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="6" class="text-center py-5 text-muted">ไม่มีรายการวัสดุที่ต้องจัดเพิ่มเติม</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <!-- ลายเซ็น -->
+    <div class="row mt-5 pt-4 text-center">
+        <div class="col-4">
+            <p>...........................................................</p>
+            <p>(...........................................................)</p>
+            <p>ผู้จัดเตรียมสินค้า (Picker)</p>
+            <p>วันที่ ......../......../........</p>
+        </div>
+        <div class="col-4">
+            <p>...........................................................</p>
+            <p>(...........................................................)</p>
+            <p>ผู้ตรวจสอบ (Checker)</p>
+            <p>วันที่ ......../......../........</p>
+        </div>
+        <div class="col-4">
+            <p>...........................................................</p>
+            <p>(...........................................................)</p>
+            <p>ผู้รับสินค้า (ช่างติดตั้ง)</p>
+            <p>วันที่ ......../......../........</p>
+        </div>
+    </div>
+</div>
+
+<script>
+    // สั่งให้พิมพ์อัตโนมัติเมื่อโหลดหน้าเสร็จ (อำนวยความสะดวกให้สโตร์)
+    window.onload = function() {
+        setTimeout(function() {
+            window.print();
+        }, 500);
+    };
+</script>
+
+</body>
+</html>

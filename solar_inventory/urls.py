@@ -7,7 +7,11 @@ urlpatterns = [
     # 🌟 [NEW] เพิ่มเส้นทางแยกสำหรับหน้า FG และ RM
     path('fg/', views.solar_fg_list, name='solar_fg_list'),
     path('rm/', views.solar_rm_list, name='solar_rm_list'),
-    path('movement/create/', views.solar_stock_movement_create, name='solar_stock_movement_create'),
+    
+    # 🌟 [UPDATE] แยกเส้นทางสำหรับบันทึกรับเข้า (GR) และ เบิกออก (GI) แบบ Manual ให้ขาดจากกัน
+    path('stock-in/create/', views.solar_stock_in_create, name='solar_stock_in_create'),
+    path('stock-out/create/', views.solar_stock_out_create, name='solar_stock_out_create'),
+    
     path('create/', views.solar_product_create, name='solar_product_create'),
     path('edit/<int:pk>/', views.solar_product_edit, name='solar_product_edit'),
     path('stock-card/<int:pk>/', views.solar_stock_card, name='solar_stock_card'),
@@ -18,6 +22,11 @@ urlpatterns = [
 
     # 🌟 หน้าแสดงรายการรอเบิกของ และ API ตัดสต็อก
     path('requisitions/', views.store_requisition_list, name='store_requisition_list'),
+
+    # 🌟 [NEW] เส้นทางสำหรับหน้าประวัติและพิมพ์ใบจัดของ
+    path('requisitions/history/', views.store_requisition_history, name='store_requisition_history'),
+    path('requisitions/print-picking-list/<int:job_id>/', views.store_print_picking_list, name='store_print_picking_list'),
+
     path('requisitions/<int:job_id>/', views.store_requisition_detail, name='store_requisition_detail'),
     path('requisitions/confirm/<int:job_id>/', views.store_confirm_deduction, name='store_confirm_deduction'),
     path('requisitions/trigger-pr/<int:job_id>/', views.store_trigger_pr, name='store_trigger_pr'),
@@ -27,4 +36,9 @@ urlpatterns = [
     path('print-doc/<str:doc_no>/', views.solar_print_document, name='solar_print_document'),
     # เส้นทางสำหรับประวัติใบเบิกของ (GI)
     path('documents/out/', views.solar_document_list_out, name='solar_document_list_out'),
+
+    # 🌟 [NEW] เส้นทางสำหรับพิมพ์ใบ GI ย้อนหลัง
+    path('documents/print-gi/<str:doc_no>/', views.store_print_gi_doc, name='store_print_gi_doc'),
+
+    path('pending-pos/', views.store_pending_po_list, name='store_pending_po_list'),
 ]

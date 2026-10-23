@@ -13,26 +13,30 @@ from .forms import SolarProductForm, SolarStockMovementForm, SolarStandardBOMFor
 
 # 🌟 [NEW] นำเข้าโมเดลใบสั่งงานมาใช้ตัดสต็อก
 from solar_jobs.models import SolarJob, SolarJobBOM
+# 🌟 [NEW] นำเข้าโมเดลจากฝั่งจัดซื้อเพื่อนับยอดรอรับของ
+from solar_purchasing.models import SolarPurchaseOrder
 
 # ==========================================
 # 📦 คลังสินค้าโซล่า (Dashboard & แยกลิสต์ FG/RM)
 # ==========================================
 @login_required
 def solar_inventory_list(request):
-    # 🌟 1. ดึงข้อมูลตัวเลขสรุปสำหรับหน้า Dashboard (ไม่มีการโหลดตารางให้หนักเครื่อง)
     rm_products = SolarProduct.objects.filter(product_type='RM', is_active=True)
     fg_products = SolarProduct.objects.filter(product_type='FG', is_active=True)
 
-    # คำนวณสรุปข้อมูล
     low_stock_count = sum(1 for rm in rm_products if rm.stock_qty <= rm.min_level)
     total_rm_value = sum(rm.total_value for rm in rm_products)
     total_fg_value = sum(fg.total_value for fg in fg_products)
 
-    # นับจำนวนงานที่รอสโตร์จ่ายของ
+    # 🌟 [FIXED] นับรวมงานสถานะ WAITING_PURCHASE (รอจัดซื้อสั่งของ) เข้ามาเป็นงานค้างด้วย
     requisition_count = SolarJob.objects.filter(
         Q(status='WAITING_STORE') |
+        Q(status='WAITING_PURCHASE') |
         Q(status='IN_PROGRESS', job_boms__planned_quantity__gt=F('job_boms__actual_used_quantity'))
     ).distinct().count()
+
+    # 🌟 [NEW] นับใบสั่งซื้อ (PO) ที่อนุมัติแล้ว แต่ยังรับของไม่ครบ
+    pending_po_count = SolarPurchaseOrder.objects.filter(status='APPROVED').exclude(receipt_status='COMPLETED').count()
 
     return render(request, 'solar_inventory/dashboard.html', {
         'rm_count': rm_products.count(),
@@ -40,7 +44,8 @@ def solar_inventory_list(request):
         'low_stock_count': low_stock_count,
         'total_rm_value': total_rm_value,
         'total_fg_value': total_fg_value,
-        'requisition_count': requisition_count
+        'requisition_count': requisition_count,
+        'pending_po_count': pending_po_count  # 🌟 ส่งตัวเลขนี้ไปแสดงบนการ์ดใบที่ 5
     })
 
 # 🌟 2. หน้าแสดงตาราง แพ็กเกจหลัก (FG) เท่านั้น
@@ -216,40 +221,71 @@ def solar_inventory_import(request):
     return redirect('solar_inventory_list')
 
 # ------------------------------------------
-# 📥/📤 ระบบรับเข้า - เบิกออก แมนนวล
+# 📥/📤 ระบบรับเข้า - เบิกออก แมนนวล (แยกหน้าเด็ดขาด)
 # ------------------------------------------
 @login_required
-def solar_stock_movement_create(request):
+def solar_stock_in_create(request):
     if request.method == 'POST':
         form = SolarStockMovementForm(request.POST)
         if form.is_valid():
             movement = form.save(commit=False)
+            movement.movement_type = 'IN' # 🌟 บังคับเซ็ตเป็นรับเข้า 100% ป้องกันคนส่งค่าแฮกฟอร์ม
 
-            # 🌟 [NEW] สร้างหัวเอกสารอัตโนมัติก่อนบันทึกรายการ
-            doc_type = 'GR' if movement.movement_type == 'IN' else 'GI'
+            # สร้างหัวเอกสาร GR อัตโนมัติ
             doc = SolarInventoryDoc.objects.create(
-                doc_type=doc_type,
+                doc_type='GR',
                 reference=movement.reference_doc,
-                description=f"บันทึกรับเข้า/เบิกออก (Manual)",
+                description="บันทึกรับเข้าคลัง (Manual)",
                 created_by=request.user
             )
 
-            movement.doc = doc # ผูกรายการเข้ากับหัวเอกสารเลขใหม่
+            movement.doc = doc
             movement.save()
 
-            action = "รับเข้า" if movement.movement_type == 'IN' else "เบิกออก"
-            messages.success(request, f"✅ บันทึกรายการ{action} และสร้างเอกสารเลขที่ {doc.doc_no} เรียบร้อยแล้ว")
-            return redirect('solar_inventory_list')
+            messages.success(request, f"✅ บันทึกรับเข้า และสร้างเอกสารเลขที่ {doc.doc_no} เรียบร้อยแล้ว")
+            return redirect('solar_document_list_in') # บันทึกเสร็จเด้งไปหน้ารวมประวัติ GR
         else:
             messages.error(request, "❌ กรุณาตรวจสอบความถูกต้องของข้อมูล")
     else:
-        initial_data = {}
+        initial_data = {'movement_type': 'IN'}
         product_id = request.GET.get('product_id')
         if product_id:
             initial_data['product'] = product_id
         form = SolarStockMovementForm(initial=initial_data)
 
-    return render(request, 'solar_inventory/stock_movement_form.html', {'form': form})
+    return render(request, 'solar_inventory/stock_in_form.html', {'form': form})
+
+@login_required
+def solar_stock_out_create(request):
+    if request.method == 'POST':
+        form = SolarStockMovementForm(request.POST)
+        if form.is_valid():
+            movement = form.save(commit=False)
+            movement.movement_type = 'OUT' # 🌟 บังคับเซ็ตเป็นเบิกออก 100%
+
+            # สร้างหัวเอกสาร GI อัตโนมัติ
+            doc = SolarInventoryDoc.objects.create(
+                doc_type='GI',
+                reference=movement.reference_doc,
+                description="บันทึกเบิกออก (Manual)",
+                created_by=request.user
+            )
+
+            movement.doc = doc
+            movement.save()
+
+            messages.success(request, f"✅ บันทึกเบิกออก และสร้างเอกสารเลขที่ {doc.doc_no} เรียบร้อยแล้ว")
+            return redirect('solar_document_list_out') # บันทึกเสร็จเด้งไปหน้ารวมประวัติ GI
+        else:
+            messages.error(request, "❌ กรุณาตรวจสอบความถูกต้องของข้อมูล")
+    else:
+        initial_data = {'movement_type': 'OUT'}
+        product_id = request.GET.get('product_id')
+        if product_id:
+            initial_data['product'] = product_id
+        form = SolarStockMovementForm(initial=initial_data)
+
+    return render(request, 'solar_inventory/stock_out_form.html', {'form': form})
 
 # ------------------------------------------
 # 📊 ระบบ Stock Card (ประวัติความเคลื่อนไหวสินค้าพร้อม Running Balance)
@@ -298,17 +334,18 @@ def solar_stock_card(request, pk):
 # ==========================================
 @login_required
 def store_requisition_list(request):
-    # 🌟 [FIXED] ดึงงานที่รอสโตร์จ่ายของ หรือ งานที่ขอเบิกเพิ่ม (แต่ต้องยังไม่ถูกส่งไปรอจัดซื้อ)
+    # 🌟 [FIXED] ปรับสูตรให้ดึงงานที่รอสโตร์, เบิกเพิ่ม หรือ "รอจัดซื้อ" มาแสดงทั้งหมด (ให้ตรงกับ Dashboard)
     jobs_waiting = SolarJob.objects.filter(
         Q(status='WAITING_STORE') |
+        Q(status='WAITING_PURCHASE') |
         Q(status='IN_PROGRESS', job_boms__planned_quantity__gt=F('job_boms__actual_used_quantity'))
-    ).filter(is_waiting_purchase=False).prefetch_related('job_boms__product').distinct().order_by('created_at')
+    ).prefetch_related('job_boms__product').distinct().order_by('-created_at')
 
     return render(request, 'solar_inventory/store_requisition_list.html', {
         'jobs_waiting': jobs_waiting
     })
 
-# 🌟 [FIXED] ฟังก์ชันแสดงหน้า Detail พร้อมระบบคำนวณของขาดอัตโนมัติ
+# 🌟 [FIXED] ฟังก์ชันแสดงหน้า Detail พร้อมระบบคำนวณของขาดและปลดล็อกอัตโนมัติ
 @login_required
 def store_requisition_detail(request, job_id):
     job = get_object_or_404(SolarJob, id=job_id)
@@ -316,21 +353,34 @@ def store_requisition_detail(request, job_id):
     has_shortage = False
     bom_list = []
 
-    # 🌟 ลูปเพื่อคำนวณว่ามีวัสดุตัวไหนบ้างที่ "สต็อกไม่พอ"
+    # 🌟 ลูปที่ 1: คำนวณหาของขาด (เช็คสต็อก Real-time)
     for bom in job.job_boms.all():
-        # 🌟 [แก้ไขใหม่] คำนวณเฉพาะ "ส่วนต่าง" ที่ต้องเบิกเพิ่ม
         qty_to_deduct = bom.planned_quantity - bom.actual_used_quantity
         missing_qty = 0
 
-        # ถ้าส่วนต่างมากกว่า 0 (แปลว่ามีการขอของเพิ่มจริงๆ) ค่อยเอาไปโชว์สโตร์
         if qty_to_deduct > 0:
             if qty_to_deduct > bom.product.stock_qty:
                 missing_qty = qty_to_deduct - bom.product.stock_qty
-                has_shortage = True # เจอของขาดแล้ว! แจ้งเตือนสโตร์
-
+                has_shortage = True # เจอของขาด
             bom.qty_to_deduct = qty_to_deduct
             bom.missing_qty = missing_qty
             bom_list.append(bom)
+
+    # 🌟 [NEW] ลอจิกปลดล็อกอัตโนมัติ (Auto-Unlock)
+    # ถ้าสถานะเดิมถูกล็อกไว้ว่ารอจัดซื้อ แต่ตอนนี้สต็อกตรวจพบว่า "ของครบแล้ว" (ไม่มี has_shortage)
+    if (job.status == 'WAITING_PURCHASE' or job.is_waiting_purchase) and not has_shortage:
+        job.is_waiting_purchase = False
+        job.status = 'WAITING_STORE'
+        job.save()
+
+        # 🌟 ล้างสถานะ PPO ในฝั่งจัดซื้อที่ผูกกับใบนี้ด้วย (ถ้ามี) ให้กลายเป็นอดีตไป
+        from solar_purchasing.models import SolarPurchasePreparation
+        ppo = SolarPurchasePreparation.objects.filter(solar_jobs=job).exclude(status='CANCELLED').first()
+        if ppo:
+            ppo.status = 'COMPLETED'
+            ppo.save()
+
+        messages.success(request, f"✨ ออโต้เมชั่น: สินค้าครบแล้ว! ระบบทำการปลดล็อกให้จ่ายของได้อัตโนมัติ")
 
     return render(request, 'solar_inventory/store_requisition_detail.html', {
         'job': job,
@@ -338,45 +388,57 @@ def store_requisition_detail(request, job_id):
         'has_shortage': has_shortage
     })
 
-# 🌟 [NEW] ฟังก์ชันสำหรับให้สโตร์กด "ส่งใบขอซื้อ (PR)" ให้จัดซื้อ
+# 🌟 [FIXED] ฟังก์ชันสำหรับให้สโตร์กด "ส่งใบขอซื้อ (PR)" ให้จัดซื้อ (ดึงตารางจากแอปจัดซื้อที่ถูกต้อง)
 @login_required
 def store_trigger_pr(request, job_id):
     if request.method == 'POST':
-        # 🌟 [FIXED] ปลดล็อคสถานะ เพื่อให้กดส่ง PR สำหรับงานที่กำลัง IN_PROGRESS (เบิกเพิ่ม) ได้ 🌟
         job = get_object_or_404(SolarJob, id=job_id)
 
-        from solar_jobs.models import SolarPurchasePreparation, SolarPurchasePreparationItem
+        # 🌟 [UPDATE] นำเข้าตาราง PPO จากแอป solar_purchasing โดยตรง
+        from solar_purchasing.models import SolarPurchasePreparation, SolarPurchasePreparationItem
 
-        # 1. สร้างใบเตรียมสั่งซื้อ (PPO) อัตโนมัติ
+        shortage_items = []
+        for bom in job.job_boms.all():
+            qty_to_deduct = bom.planned_quantity - bom.actual_used_quantity
+            if qty_to_deduct > 0 and qty_to_deduct > bom.product.stock_qty:
+                missing_qty = qty_to_deduct - bom.product.stock_qty
+                shortage_items.append({
+                    'product': bom.product,
+                    'missing_qty': missing_qty
+                })
+
+        if not shortage_items:
+            messages.warning(request, "⚠️ ไม่พบรายการวัสดุที่ขาด ไม่สามารถส่งเรื่องขอซื้อได้")
+            return redirect('store_requisition_list')
+
+        # 🌟 สร้างใบ PPO เปล่าขึ้นมา
         ppo = SolarPurchasePreparation.objects.create(
-            job=job,
-            created_by=getattr(request.user, 'employee', None)
+            created_by=getattr(request.user, 'employee', None),
+            status='PENDING'
         )
 
-        # 2. คัดเฉพาะของที่ "ขาด" ใส่เข้าไปในเอกสาร PPO
-        for bom in job.job_boms.all():
-            # 🌟 [แก้ไขใหม่] ใช้สูตรหาส่วนต่าง
-            qty_to_deduct = bom.planned_quantity - bom.actual_used_quantity
+        # 🌟 [UPDATE] ผูกงาน (JOB) เข้าไปในตะกร้า PPO (เนื่องจากโครงสร้างใหม่เป็น ManyToMany)
+        ppo.solar_jobs.add(job)
 
-            if qty_to_deduct > 0: # ดึงเฉพาะรายการที่เบิกเพิ่ม
-                if qty_to_deduct > bom.product.stock_qty:
-                    missing_qty = qty_to_deduct - bom.product.stock_qty
-                    SolarPurchasePreparationItem.objects.create(
-                        ppo=ppo,
-                        product=bom.product,
-                        quantity_needed=missing_qty
-                    )
+        # สร้างรายการวัสดุที่ขาด
+        for item in shortage_items:
+            SolarPurchasePreparationItem.objects.create(
+                ppo=ppo,
+                product=item['product'],
+                quantity_needed=item['missing_qty'],
+                ordered_qty=0
+            )
 
-        # 🌟 [FIXED] เช็คก่อนว่างานเริ่มติดตั้งไปหรือยัง? ถ้าเริ่มแล้ว ห้ามถอยหลัง! แต่ให้เปิดสวิตช์รอจัดซื้อแทน
         if job.status != 'IN_PROGRESS':
             job.status = 'WAITING_PURCHASE'
 
-        # 🌟 เปิดสวิตช์ความจำว่างานนี้กำลังรอจัดซื้อซื้อของมาเติมให้ (การ์ดจะหายไปจากหน้าสโตร์ชั่วคราว)
         job.is_waiting_purchase = True
         job.save()
 
-        messages.success(request, f"✅ ระบบได้สร้างใบขอซื้อ (PPO) รหัส {ppo.code} สำหรับวัสดุที่ขาด และส่งเรื่องให้แผนกจัดซื้อเรียบร้อยแล้ว!")
+        messages.success(request, f"✅ ระบบได้สร้างใบขอซื้อ (PPO) รหัส {ppo.code} พร้อมดึงรายการวัสดุที่ขาดส่งไปให้แผนกจัดซื้อเรียบร้อยแล้ว!")
         return redirect('store_requisition_list')
+
+    return redirect('store_requisition_list')
 
 @login_required
 def store_confirm_deduction(request, job_id):
@@ -433,20 +495,12 @@ def store_confirm_deduction(request, job_id):
     return redirect('store_requisition_list')
 
 # ==========================================
-# 🌟 [NEW] ระบบจัดการเอกสารคลังสินค้า (Stock In / Print A4)
+# 🌟 [NEW] ระบบจัดการเอกสารคลังสินค้า (Stock In / Print A4) - อัปเกรดระบบค้นหาแบบปลอดภัย (Safe Mode)
 # ==========================================
-@login_required
-def solar_document_list_in(request):
-    # ดึงประวัติใบรับของ (GR) ทั้งหมดเรียงจากใหม่ไปเก่า
-    docs = SolarInventoryDoc.objects.filter(doc_type='GR').order_by('-created_at')
-    return render(request, 'solar_inventory/document_list_in.html', {
-        'docs': docs,
-        'title': 'ประวัติใบรับสินค้า/วัตถุดิบ (Stock In)'
-    })
 
+# 🌟 [FIXED] เพิ่มฟังก์ชันพิมพ์เอกสารที่หายไปกลับเข้ามา
 @login_required
 def solar_print_document(request, doc_no):
-    # ดึงข้อมูลหัวเอกสารตามเลขที่ส่งมา
     doc = get_object_or_404(SolarInventoryDoc, doc_no=doc_no)
 
     # ลองดึงข้อมูลบริษัทมาใช้พิมพ์บนหัวกระดาษ (ถ้ามี)
@@ -463,10 +517,171 @@ def solar_print_document(request, doc_no):
     })
 
 @login_required
+def solar_document_list_in(request):
+    docs = SolarInventoryDoc.objects.filter(doc_type='GR')
+
+    # 🌟 1. ดึงค่าจากหน้าเว็บแบบปลอดภัย
+    search_query = request.GET.get('q', '')
+    if search_query:
+        search_query = search_query.strip()
+
+    product_type = request.GET.get('product_type', '')
+    date_start = request.GET.get('start', '')
+    date_end = request.GET.get('end', '')
+
+    # 🌟 2. ค้นหาจาก เลขที่เอกสาร, อ้างอิง หรือ หมายเหตุ
+    if search_query:
+        docs = docs.filter(
+            Q(doc_no__icontains=search_query) |
+            Q(reference__icontains=search_query) |
+            Q(description__icontains=search_query)
+        )
+
+    # 🌟 3. กรองตามประเภทสินค้า
+    if product_type:
+        docs = docs.filter(movements__product__product_type=product_type).distinct()
+
+    # 🌟 4. กรองตามช่วงวันที่ (ใส่ Try-Except กันระบบรวนหากบราวเซอร์ส่งวันที่ผิด Format)
+    try:
+        if date_start:
+            docs = docs.filter(created_at__date__gte=date_start)
+        if date_end:
+            docs = docs.filter(created_at__date__lte=date_end)
+    except Exception:
+        pass
+
+    docs = docs.order_by('-created_at')
+
+    return render(request, 'solar_inventory/document_list_in.html', {
+        'docs': docs,
+        'title': 'ประวัติใบรับสินค้า/วัตถุดิบ (Stock In)',
+        'search_query': search_query,
+        'product_type': product_type,
+        'date_start': date_start,
+        'date_end': date_end
+    })
+
+@login_required
 def solar_document_list_out(request):
-    # ดึงประวัติใบเบิกของ (GI) ทั้งหมดเรียงจากใหม่ไปเก่า
-    docs = SolarInventoryDoc.objects.filter(doc_type='GI').order_by('-created_at')
+    docs = SolarInventoryDoc.objects.filter(doc_type='GI')
+
+    # 🌟 1. ดึงค่าจากหน้าเว็บแบบปลอดภัย
+    search_query = request.GET.get('q', '')
+    if search_query:
+        search_query = search_query.strip()
+
+    product_type = request.GET.get('product_type', '')
+    date_start = request.GET.get('start', '')
+    date_end = request.GET.get('end', '')
+
+    # 🌟 2. ค้นหาจาก เลขที่เอกสาร, อ้างอิง หรือ หมายเหตุ
+    if search_query:
+        docs = docs.filter(
+            Q(doc_no__icontains=search_query) |
+            Q(reference__icontains=search_query) |
+            Q(description__icontains=search_query)
+        )
+
+    # 🌟 3. กรองตามประเภทสินค้า
+    if product_type:
+        docs = docs.filter(movements__product__product_type=product_type).distinct()
+
+    # 🌟 4. กรองตามช่วงวันที่ (เกราะป้องกัน Error)
+    try:
+        if date_start:
+            docs = docs.filter(created_at__date__gte=date_start)
+        if date_end:
+            docs = docs.filter(created_at__date__lte=date_end)
+    except Exception:
+        pass
+
+    docs = docs.order_by('-created_at')
+
     return render(request, 'solar_inventory/document_list_out.html', {
         'docs': docs,
-        'title': 'ประวัติใบเบิกสินค้า (Stock Out / GI)'
+        'title': 'ประวัติใบเบิกสินค้า (Stock Out / GI)',
+        'search_query': search_query,
+        'product_type': product_type,
+        'date_start': date_start,
+        'date_end': date_end
+    })
+
+# ==========================================
+# 🚚 ระบบจัดการคิวรับสินค้าเข้าคลัง (Pending PO) สำหรับสโตร์
+# ==========================================
+# สร้างฟังก์ชันเช็คสิทธิ์ (กรณีที่ยังไม่มีในไฟล์นี้)
+def is_inventory_staff(user):
+    if user.is_superuser: return True
+    if hasattr(user, 'employee') and user.employee:
+        dept = getattr(user.employee.department, 'name', '')
+        if 'คลังสินค้า' in dept or 'สโตร์' in dept or 'Inventory' in dept or 'Store' in dept:
+            return True
+    return False
+
+@login_required
+def store_pending_po_list(request):
+    if not is_inventory_staff(request.user):
+        messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์เข้าถึงหน้านี้")
+        return redirect('dashboard')
+
+    # ดึงเฉพาะใบสั่งซื้อที่อนุมัติแล้ว แต่ยังรับของไม่ครบ
+    pending_pos = SolarPurchaseOrder.objects.filter(status='APPROVED').exclude(receipt_status='COMPLETED').order_by('-created_at')
+
+    return render(request, 'solar_inventory/store_pending_po_list.html', {
+        'pending_pos': pending_pos
+    })
+
+# ==========================================
+# 🌟 [NEW] ฟังก์ชันสำหรับพิมพ์ใบจัดของ (Picking List) และ ดูประวัติเบิกย้อนหลัง
+# ==========================================
+from django.utils import timezone
+
+@login_required
+def store_print_picking_list(request, job_id):
+    # 1. ดึงข้อมูลงาน (Job)
+    job = get_object_or_404(SolarJob, id=job_id)
+
+    # 2. คัดกรองเฉพาะรายการที่ "ต้องจัดของเพิ่ม" เท่านั้น
+    bom_list = []
+    for bom in job.job_boms.all():
+        qty_to_deduct = bom.planned_quantity - bom.actual_used_quantity
+        if qty_to_deduct > 0:
+            bom.qty_to_deduct = qty_to_deduct
+            bom_list.append(bom)
+
+    return render(request, 'solar_inventory/store_print_picking_list.html', {
+        'job': job,
+        'bom_list': bom_list,
+        'print_date': timezone.now()
+    })
+
+@login_required
+def store_requisition_history(request):
+    # 1. ดึงประวัติใบเบิก (GI) ที่อ้างอิงถึง JOB โซล่าเซลล์เรียงจากใหม่ไปเก่า
+    gi_docs = SolarInventoryDoc.objects.filter(
+        doc_type='GI',
+        reference__icontains='JOB'
+    ).order_by('-created_at')
+
+    # 2. นำรายการมาแบ่งหน้า (Pagination) หน้าละ 20 รายการเพื่อไม่ให้โหลดช้า
+    from django.core.paginator import Paginator
+    paginator = Paginator(gi_docs, 20)
+    page_obj = paginator.get_page(request.GET.get('page'))
+
+    return render(request, 'solar_inventory/store_requisition_history.html', {
+        'page_obj': page_obj
+    })
+
+@login_required
+def store_print_gi_doc(request, doc_no):
+    # 1. ดึงหัวเอกสาร GI ตามเลขที่กดเข้ามา
+    gi_doc = get_object_or_404(SolarInventoryDoc, doc_no=doc_no)
+
+    # 2. ดึงรายการวัสดุที่ถูกตัดสต็อกออกไป "ในบิลใบนี้"
+    movements = SolarStockMovement.objects.filter(doc=gi_doc).order_by('id')
+
+    return render(request, 'solar_inventory/store_print_gi_doc.html', {
+        'gi_doc': gi_doc,
+        'movements': movements,
+        'print_date': timezone.now()
     })

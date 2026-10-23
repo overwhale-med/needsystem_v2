@@ -2,7 +2,8 @@
 {% load humanize %}
 
 {% block content %}
-<div class="container-xxl py-4 px-4">
+<!-- 🌟 [FIXED] เปลี่ยนจาก container-xxl เป็น container-fluid เพื่อขยายหน้าจอเต็ม 100% -->
+<div class="container-fluid py-4 px-4">
 
     <!-- 🌟 ส่วนหัวและปุ่มจัดการ -->
     <div class="d-flex justify-content-between align-items-center mb-4">
@@ -28,7 +29,8 @@
 
     <div class="row g-3">
         <!-- 🌟 ฝั่งซ้าย: ข้อมูลลูกค้า (FIXED Variables) -->
-        <div class="col-lg-4">
+        <!-- 🌟 [FIXED] เปลี่ยนจาก col-lg-4 เป็น col-lg-3 -->
+        <div class="col-lg-3">
             <div class="card shadow-sm border-0 rounded-3 h-100">
                 <div class="card-header bg-white py-3 border-bottom">
                     <h6 class="m-0 fw-bold text-primary"><i class="fas fa-address-card me-2"></i>ข้อมูลลูกค้า</h6>
@@ -51,7 +53,8 @@
         </div>
 
         <!-- 🌟 ฝั่งขวา: รายการสินค้าและสรุปยอด -->
-        <div class="col-lg-8">
+        <!-- 🌟 [FIXED] เปลี่ยนจาก col-lg-8 เป็น col-lg-9 -->
+        <div class="col-lg-9">
 
             {% if qt.status == 'DRAFT' or qt.status == 'PENDING' %}
             <div class="d-flex justify-content-center gap-3 mb-4">

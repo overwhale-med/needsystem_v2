@@ -6,16 +6,19 @@ from .models import SolarProduct, SolarStockMovement, SolarStandardBOM
 class SolarProductForm(forms.ModelForm):
     class Meta:
         model = SolarProduct
-        # 🌟 [NEW] เพิ่ม 'image' เข้าไปในรายการฟิลด์
-        fields = ['product_type', 'image', 'code', 'category', 'rm_category', 'name', 'unit', 'cost_price', 'sell_price', 'stock_qty', 'min_level', 'is_active']
+        # 🌟 [UPDATE] เพิ่ม 'supplier' เข้าไปในรายการ fields
+        fields = ['product_type', 'image', 'code', 'category', 'rm_category', 'supplier', 'name', 'unit', 'cost_price', 'sell_price', 'stock_qty', 'min_level', 'is_active']
         widgets = {
             'product_type': forms.Select(attrs={'class': 'form-select fw-bold text-primary'}),
-            # 🌟 เปลี่ยนจาก ClearableFileInput เป็น FileInput ธรรมดา
             'image': forms.FileInput(attrs={'class': 'form-control'}),
 
             'code': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'เว้นว่างไว้ ระบบจะสร้างรหัสให้โดยอัตโนมัติ'}),
             'category': forms.Select(attrs={'class': 'form-select'}),
             'rm_category': forms.Select(attrs={'class': 'form-select'}),
+
+            # 🌟 [NEW] ตั้งค่าหน้าตาให้ช่องเลือกร้านค้า
+            'supplier': forms.Select(attrs={'class': 'form-select'}),
+
             'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'ระบุชื่อแพ็กเกจ หรือ อุปกรณ์เสริม'}),
             'unit': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'เช่น ชุด, แผง, เมตร'}),
 

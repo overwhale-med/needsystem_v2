@@ -16,59 +16,34 @@
             </h3>
             <p class="text-muted mb-0">ระบบสรุปภาพรวมและจัดการฐานข้อมูล แพ็กเกจ (FG) และ อุปกรณ์เสริม (RM)</p>
         </div>
+
+        <!-- 🌟 [NEW] ย้ายปุ่ม FG และ RM มาไว้ตรงนี้ให้เป็นหมวดหมู่เดียวกัน -->
         <div class="d-flex gap-2 flex-wrap">
-            <a href="{% url 'solar_inventory_download_template' %}" class="btn btn-outline-success rounded-pill px-4 fw-bold shadow-sm">
+            <a href="{% url 'solar_fg_list' %}" class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm">
+                <i class="fas fa-box me-1"></i> แพ็กเกจหลัก (FG)
+            </a>
+            <a href="{% url 'solar_rm_list' %}" class="btn btn-info text-white rounded-pill px-4 fw-bold shadow-sm">
+                <i class="fas fa-tools me-1"></i> อุปกรณ์โซล่า (RM)
+            </a>
+            <a href="{% url 'solar_inventory_download_template' %}" class="btn btn-outline-success rounded-pill px-4 fw-bold shadow-sm ms-2">
                 <i class="fas fa-file-excel me-1"></i> นำเข้าด้วย Excel
             </a>
-            <a href="{% url 'solar_stock_movement_create' %}" class="btn btn-outline-secondary rounded-pill px-4 fw-bold shadow-sm">
-                <i class="fas fa-exchange-alt me-1"></i> รับเข้า / เบิกออก (Manual)
+
+            <a href="{% url 'solar_document_list_in' %}" class="btn btn-outline-success rounded-pill px-4 fw-bold shadow-sm ms-2">
+                <i class="fas fa-download me-1"></i> รับเข้าคลัง (GR)
+            </a>
+            <a href="{% url 'solar_document_list_out' %}" class="btn btn-outline-danger rounded-pill px-4 fw-bold shadow-sm">
+                <i class="fas fa-upload me-1"></i> เบิกออก (GI)
             </a>
         </div>
     </div>
 
-    <!-- 🌟 การ์ดสรุปข้อมูล (KPI Cards) 🌟 -->
+    <!-- 🌟 การ์ดสรุปข้อมูลการปฏิบัติงาน (Operational Cards) 🌟 -->
     <div class="row g-4 mb-4">
-        
-        <!-- การ์ดที่ 1: แพ็กเกจหลัก (FG) -->
-        <div class="col-md-6 col-lg-3">
-            <div class="card border-0 shadow-sm rounded-4 h-100 border-bottom border-4 border-primary hover-scale bg-white">
-                <div class="card-body p-4">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <div class="bg-primary bg-opacity-10 text-primary rounded-circle p-3 d-flex align-items-center justify-content-center" style="width: 60px; height: 60px;">
-                            <i class="fas fa-box fa-2x"></i>
-                        </div>
-                        <h2 class="fw-bold mb-0 text-dark">{{ fg_count }}</h2>
-                    </div>
-                    <h6 class="text-muted fw-bold mb-1">แพ็กเกจหลัก (FG)</h6>
-                    <h4 class="fw-bold text-primary mb-3">฿{{ total_fg_value|floatformat:2|intcomma }}</h4>
-                    <a href="{% url 'solar_fg_list' %}" class="btn btn-primary rounded-pill w-100 fw-bold shadow-sm">
-                        จัดการแพ็กเกจ (FG) <i class="fas fa-arrow-right ms-1"></i>
-                    </a>
-                </div>
-            </div>
-        </div>
 
-        <!-- การ์ดที่ 2: อุปกรณ์เสริม (RM) -->
-        <div class="col-md-6 col-lg-3">
-            <div class="card border-0 shadow-sm rounded-4 h-100 border-bottom border-4 border-info hover-scale bg-white">
-                <div class="card-body p-4">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <div class="bg-info bg-opacity-10 text-info rounded-circle p-3 d-flex align-items-center justify-content-center" style="width: 60px; height: 60px;">
-                            <i class="fas fa-tools fa-2x"></i>
-                        </div>
-                        <h2 class="fw-bold mb-0 text-dark">{{ rm_count }}</h2>
-                    </div>
-                    <h6 class="text-muted fw-bold mb-1">อุปกรณ์เสริม (RM)</h6>
-                    <h4 class="fw-bold text-info mb-3">฿{{ total_rm_value|floatformat:2|intcomma }}</h4>
-                    <a href="{% url 'solar_rm_list' %}" class="btn btn-info text-white rounded-pill w-100 fw-bold shadow-sm">
-                        จัดการอุปกรณ์ (RM) <i class="fas fa-arrow-right ms-1"></i>
-                    </a>
-                </div>
-            </div>
-        </div>
-
-        <!-- การ์ดที่ 3: แจ้งเตือนของใกล้หมด (Low Stock) -->
-        <div class="col-md-6 col-lg-3">
+        <!-- 🌟 [UPDATE] ปรับความกว้างเป็น col-lg-4 เพื่อให้ 3 ใบแบ่งเต็มพื้นที่จอพอดี -->
+        <!-- การ์ดที่ 1: แจ้งเตือนของใกล้หมด (Low Stock) -->
+        <div class="col-md-4 col-lg-4">
             <div class="card border-0 shadow-sm rounded-4 h-100 border-bottom border-4 border-danger hover-scale bg-white">
                 <div class="card-body p-4">
                     <div class="d-flex justify-content-between align-items-center mb-3">
@@ -86,8 +61,8 @@
             </div>
         </div>
 
-        <!-- การ์ดที่ 4: งานรอเบิกของ -->
-        <div class="col-md-6 col-lg-3">
+        <!-- การ์ดที่ 2: งานรอเบิกของ -->
+        <div class="col-md-4 col-lg-4">
             <div class="card border-0 shadow-sm rounded-4 h-100 border-bottom border-4 border-warning hover-scale bg-white">
                 <div class="card-body p-4">
                     <div class="d-flex justify-content-between align-items-center mb-3">
@@ -100,6 +75,25 @@
                     <p class="text-muted small mb-3">งานติดตั้งที่รอสโตร์จ่ายของ</p>
                     <a href="{% url 'store_requisition_list' %}" class="btn btn-warning text-dark rounded-pill w-100 fw-bold shadow-sm">
                         เปิดรายการขอเบิก <i class="fas fa-arrow-right ms-1"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- การ์ดที่ 3: งานรอรับของตามใบสั่งซื้อ -->
+        <div class="col-md-4 col-lg-4">
+            <div class="card border-0 shadow-sm rounded-4 h-100 border-bottom border-4 border-success hover-scale bg-white">
+                <div class="card-body p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div class="bg-success bg-opacity-10 text-success rounded-circle p-3 d-flex align-items-center justify-content-center" style="width: 60px; height: 60px;">
+                            <i class="fas fa-truck-loading fa-2x"></i>
+                        </div>
+                        <h2 class="fw-bold mb-0 text-success">{{ pending_po_count }}</h2>
+                    </div>
+                    <h6 class="text-muted fw-bold mb-1">คิวงานรอรับเข้าคลัง</h6>
+                    <p class="text-muted small mb-3">ใบสั่งซื้อที่กำลังรอซัพพลายเออร์มาส่ง</p>
+                    <a href="{% url 'store_pending_po_list' %}" class="btn btn-success rounded-pill w-100 fw-bold shadow-sm">
+                        เปิดรายการรอรับ <i class="fas fa-arrow-right ms-1"></i>
                     </a>
                 </div>
             </div>

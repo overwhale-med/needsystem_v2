@@ -20,8 +20,16 @@
         </a>
     </div>
 
-    <!-- 🌟 Alert เตือนสโตร์ถ้าของไม่พอ -->
-    {% if has_shortage %}
+    <!-- 🌟 Alert เตือนสโตร์ตามสถานะ -->
+    {% if job.status == 'WAITING_PURCHASE' or job.is_waiting_purchase %}
+    <div class="alert alert-warning rounded-4 shadow-sm border-0 d-flex align-items-center mb-4 text-dark">
+        <i class="fas fa-shopping-cart fs-3 me-3 text-warning"></i>
+        <div>
+            <strong>กำลังรอจัดซื้อสั่งของ:</strong> ระบบได้ส่งเรื่องให้แผนกจัดซื้อเรียบร้อยแล้ว<br>
+            <span class="small">กรุณารอรับสินค้าเข้าคลังก่อน จึงจะสามารถจ่ายของให้ช่างได้ครับ</span>
+        </div>
+    </div>
+    {% elif has_shortage %}
     <div class="alert alert-danger rounded-4 shadow-sm border-0 d-flex align-items-center mb-4">
         <i class="fas fa-exclamation-triangle fs-3 me-3"></i>
         <div>
@@ -70,18 +78,27 @@
                 </table>
             </div>
         </div>
-        <div class="card-footer bg-white border-top py-4 text-end pe-4">
-            
-            <!-- 🌟 สลับปุ่มอัตโนมัติตามสถานะของสต็อก -->
-            {% if has_shortage %}
-                <form action="{% url 'store_trigger_pr' job.id %}" method="POST" class="d-inline">
+        <div class="card-footer bg-white border-top py-4 text-end pe-4 d-flex justify-content-end gap-3 align-items-center">
+
+            <!-- 🌟 [NEW] ปุ่มพิมพ์ใบจัดของ (เปิดหน้าต่างใหม่) -->
+            <a href="{% url 'store_print_picking_list' job.id %}" target="_blank" class="btn btn-outline-info rounded-pill px-4 py-2 fw-bold shadow-sm fs-5">
+                <i class="fas fa-print me-2"></i> พิมพ์ใบจัดของ
+            </a>
+
+            <!-- 🌟 สลับปุ่มอัตโนมัติตามสถานะของสต็อกและสถานะงาน -->
+            {% if job.status == 'WAITING_PURCHASE' or job.is_waiting_purchase %}
+                <button type="button" class="btn btn-secondary rounded-pill px-5 py-2 fw-bold shadow-sm fs-5" disabled>
+                    <i class="fas fa-hourglass-half me-2"></i> รอจัดซื้อสั่งของ...
+                </button>
+            {% elif has_shortage %}
+                <form action="{% url 'store_trigger_pr' job.id %}" method="POST" class="m-0">
                     {% csrf_token %}
                     <button type="submit" class="btn btn-danger rounded-pill px-5 py-2 fw-bold shadow-sm fs-5">
                         <i class="fas fa-file-invoice-dollar me-2"></i> สร้างใบขอซื้อ (ส่งเรื่องให้จัดซื้อ)
                     </button>
                 </form>
             {% else %}
-                <form action="{% url 'store_confirm_deduction' job.id %}" method="POST" class="d-inline">
+                <form action="{% url 'store_confirm_deduction' job.id %}" method="POST" class="m-0">
                     {% csrf_token %}
                     <button type="submit" class="btn btn-gold rounded-pill px-5 py-2 fw-bold shadow-sm fs-5" onclick="return confirm('ยืนยันว่าทำการจัดเตรียมและจ่ายวัสดุตามรายการนี้เรียบร้อยแล้วใช่หรือไม่?\n\n* ระบบจะตัดสต็อกและบันทึกประวัติอัตโนมัติทันที');">
                         <i class="fas fa-check-circle me-2"></i> ยืนยันการจ่ายของ (ตัดสต็อกอัตโนมัติ)

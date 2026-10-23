@@ -45,7 +45,7 @@ def center_dashboard(request):
         'customer', 'package_sold', 'salesperson', 'quotation_ref', 'technician_team'
     ).annotate(
         pending_req_count=Count('job_boms', filter=Q(job_boms__planned_quantity__gt=F('job_boms__actual_used_quantity')), distinct=True),
-        pending_ppo_count=Count('ppos', filter=Q(ppos__status='PENDING'), distinct=True)
+        pending_ppo_count=Count('ppos_purchasing', filter=Q(ppos_purchasing__status='PENDING'), distinct=True)
     ).order_by('-created_at')
 
     if search_q:
@@ -195,18 +195,38 @@ def solar_job_manage(request, job_id):
                     else:
                         added_count = 0
                         for std_bom in standard_boms:
-                            obj, created = SolarJobBOM.objects.get_or_create(
-                                job=saved_job, product=std_bom.raw_material,
-                                defaults={'planned_quantity': std_bom.quantity, 'actual_used_quantity': 0, 'unit_cost': std_bom.raw_material.cost_price}
-                            )
-                            if created: added_count += 1
-                        if added_count > 0: messages.success(request, f"✅ ดึงสูตร BOM เพิ่ม {added_count} รายการ สำเร็จ!")
-                        else: messages.info(request, "✅ บันทึกข้อมูลสำเร็จ! (วัตถุดิบมีครบแล้ว)")
+                            existing_bom = SolarJobBOM.objects.filter(job=saved_job, product=std_bom.raw_material).first()
+
+                            if existing_bom:
+                                existing_bom.planned_quantity = std_bom.quantity
+                                existing_bom.unit_cost = std_bom.raw_material.cost_price
+                                existing_bom.save()
+                            else:
+                                SolarJobBOM.objects.create(
+                                    job=saved_job,
+                                    product=std_bom.raw_material,
+                                    planned_quantity=std_bom.quantity,
+                                    actual_used_quantity=0,
+                                    unit_cost=std_bom.raw_material.cost_price
+                                )
+                                added_count += 1
+
+                        if added_count > 0: messages.success(request, f"✅ ดึงสูตร BOM สำเร็จ! (เพิ่มใหม่ {added_count} รายการ)")
+                        else: messages.info(request, "✅ อัปเดตสูตร BOM สำเร็จ! (ไม่มีรายการวัตถุดิบใหม่เพิ่มเข้ามา)")
                 return redirect('solar_job_manage', job_id=saved_job.id)
 
             if saved_job.status == 'IN_PROGRESS':
                 saved_job.has_unsent_requisition = saved_job.job_boms.filter(planned_quantity__gt=F('actual_used_quantity')).exists()
                 saved_job.save()
+
+            # 🌟 [FIXED] ตัดการสร้าง PPO อัตโนมัติออกไป เพื่อให้สโตร์เป็นคนสร้าง PPO เอง 🌟
+            if request.POST.get('action_submit_store') == 'true':
+                saved_job.status = 'WAITING_STORE'
+                saved_job.has_unsent_requisition = False
+                saved_job.save()
+
+                messages.success(request, f"✅ บันทึกข้อมูลและส่งรายการขอเบิกวัสดุให้สโตร์เรียบร้อยแล้ว!")
+                return redirect('solar_job_manage', job_id=job.id)
 
             messages.success(request, f"✅ บันทึกข้อมูลงาน {job.code} เรียบร้อยแล้ว")
             return redirect('solar_job_manage', job_id=job.id)
@@ -226,10 +246,7 @@ def solar_job_manage(request, job_id):
         form.fields['labor_cost_budget'].widget.input_type = 'text'
         form.fields['labor_cost_budget'].widget.attrs.update({'inputmode': 'decimal', 'autocomplete': 'off', 'placeholder': '0.00'})
 
-        if job.status in ['WAITING_STORE', 'WAITING_PURCHASE']:
-            incomplete_boms = job.job_boms.none()
-        else:
-            incomplete_boms = job.job_boms.filter(planned_quantity__gt=F('actual_used_quantity'))
+        incomplete_boms = job.job_boms.filter(planned_quantity__gt=F('actual_used_quantity'))
         formset = SolarBOMFormSet(instance=job, queryset=incomplete_boms)
 
     raw_materials = SolarProduct.objects.filter(is_active=True, product_type='RM')
@@ -393,6 +410,9 @@ def center_pay_expense(request, expense_id):
 def center_submit_requisition(request, job_id):
     if not is_center_staff(request.user): return redirect('solar_center_dashboard')
     job = get_object_or_404(SolarJob, id=job_id)
+
+    # 🌟 [FIXED] ตัดการสร้าง PPO อัตโนมัติออกไป เพื่อให้สโตร์เป็นคนสร้าง PPO เอง 🌟
+
     if job.status in ['DRAFT', 'PREPARING']:
         job.status = 'WAITING_STORE'
         job.has_unsent_requisition = False
@@ -401,7 +421,8 @@ def center_submit_requisition(request, job_id):
     elif job.status == 'IN_PROGRESS':
         job.has_unsent_requisition = False
         job.save()
-        messages.success(request, f"✅ ส่งใบขอเบิกวัสดุเพิ่มเติมให้สโตร์แล้ว")
+        messages.success(request, f"✅ ส่งใบขอเบิกวัสดุเพิ่มเติมให้สโตร์เรียบร้อยแล้ว")
+
     return redirect('solar_job_manage', job_id=job.id)
 
 @login_required
@@ -418,23 +439,47 @@ def center_start_job(request, job_id):
 def center_complete_job(request, job_id):
     if not is_center_staff(request.user): return redirect('solar_center_dashboard')
     job = get_object_or_404(SolarJob, id=job_id)
+
     if job.status == 'IN_PROGRESS':
         job.status = 'COMPLETED'
         job.actual_finish_date = timezone.now().date()
+
+        # 🌟 [UPDATE] ลอจิกผลิตแพ็กเกจ (FG) อัตโนมัติเมื่อติดตั้งเสร็จ
         if job.package_sold:
-            from solar_inventory.models import SolarStockMovement
-            SolarStockMovement.objects.create(product=job.package_sold, movement_type='IN', quantity=Decimal('1'), reference_doc=job.code)
+            from solar_inventory.models import SolarStockMovement, SolarInventoryDoc
+
+            # 1. สร้างหัวเอกสารรับเข้า (GR) อัตโนมัติ
+            gr_doc = SolarInventoryDoc.objects.create(
+                doc_type='GR',
+                reference=f"JOB: {job.code}",
+                description=f"รับเข้าแพ็กเกจจากการติดตั้งงานเสร็จสิ้น ({job.code})",
+                created_by=request.user
+            )
+
+            # 2. บันทึกสต็อกการ์ด (รับเข้า +1) พร้อมผูกใบ GR
+            SolarStockMovement.objects.create(
+                doc=gr_doc,
+                product=job.package_sold,
+                movement_type='IN',
+                quantity=Decimal('1'),
+                reference_doc=job.code
+            )
+
         job.save()
 
+        # ปรับสถานะใบเสนอราคาเป็น READY ให้ฝั่งบัญชีรู้ว่าพร้อมเปิดบิล
         if job.quotation_ref_id:
+            from solar_sales.models import SolarQuotation
             SolarQuotation.objects.filter(id=job.quotation_ref_id).update(status='READY')
         elif job.note and "QT-SOL" in str(job.note):
             for word in str(job.note).split():
                 if "QT-SOL" in word:
                     qt_code = word.strip().replace(',', '').replace(':', '')
+                    from solar_sales.models import SolarQuotation
                     SolarQuotation.objects.filter(code__icontains=qt_code).update(status='READY')
                     break
-        messages.success(request, f"✅ ปิดจ๊อบงาน {job.code} เรียบร้อย! (แจ้งเตือนแผนกเซลส์อัตโนมัติแล้ว)")
+
+        messages.success(request, f"✅ ปิดจ๊อบงาน {job.code} เรียบร้อย! ระบบสร้างแพ็กเกจพร้อมขาย (+1) อัตโนมัติแล้ว")
     return redirect('solar_job_manage', job_id=job.id)
 
 # ==========================================
@@ -473,10 +518,10 @@ def solar_master_job_report(request):
     inv_dict = {}
     ticket_dict_2 = {}
     ticket_dict_13_5 = {}
-    
+
     invoices = SolarInvoice.objects.filter(quotation_ref_id__in=qt_ids)
     inv_dict = {inv.quotation_ref_id: inv for inv in invoices}
-    
+
     tickets = SolarCommissionTicket.objects.filter(
         Q(quotation_ref_id__in=qt_ids) | Q(invoice_ref__quotation_ref_id__in=qt_ids)
     )

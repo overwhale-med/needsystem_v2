@@ -1,183 +1,317 @@
 {% extends 'core/base.html' %}
+{% load humanize %}
 
 {% block content %}
 <style>
+    /* 🌟 เก็บสไตล์ปุ่มสีทองของคุณปอนด์ไว้ */
     .btn-gold { background: linear-gradient(135deg, #d4af37 0%, #aa8c2c 100%); color: #ffffff !important; border: none; }
     .btn-gold:hover { background: linear-gradient(135deg, #aa8c2c 0%, #8c7324 100%); transform: translateY(-2px); box-shadow: 0 4px 8px rgba(212, 175, 55, 0.3) !important; }
+    .hover-scale { transition: transform 0.2s; }
+    .hover-scale:hover { transform: translateY(-3px); }
+    .form-control:disabled, .form-select:disabled { background-color: #f8f9fa; border-color: #e9ecef; }
 </style>
 
-<div class="container py-4">
+<div class="container-fluid py-4 px-4">
     <div class="d-flex justify-content-between align-items-end mb-4">
         <div>
-            <h4 class="fw-bold mb-1 text-dark"><i class="fas fa-file-invoice-dollar text-primary me-2"></i>สร้างใบสั่งซื้อจาก: <span class="text-warning">{{ ppo.code }}</span></h4>
-            <p class="text-muted small mb-0">อ้างอิงงานติดตั้ง: {{ ppo.job.code }} | ลูกค้า: {{ ppo.job.customer.name }}</p>
+            <h4 class="fw-bold mb-1 text-dark"><i class="fas fa-file-invoice-dollar text-primary me-2"></i>รายละเอียดใบเตรียมสั่งซื้อโซล่า: <span class="text-warning">{{ ppo.code }}</span></h4>
+            <p class="text-muted small mb-0">ระบบจัดสรรร้านค้าและแบ่งยอดสั่งซื้อวัตถุดิบ (Multi-sourcing)</p>
         </div>
-        <a href="{% url 'solar_ppo_list' %}" class="btn btn-outline-secondary rounded-pill px-4 fw-bold shadow-sm">
-            <i class="fas fa-arrow-left me-2"></i> กลับหน้ารายการ
-        </a>
+        <div class="text-end">
+            <a href="{% url 'solar_ppo_list' %}" class="btn btn-outline-secondary rounded-pill px-4 mb-2 shadow-sm">
+                <i class="fas fa-arrow-left me-2"></i> กลับหน้ารายการ
+            </a>
+            <div class="fw-bold text-dark bg-white rounded-pill px-4 py-2 border shadow-sm">
+                <!-- 🌟 [FIXED] ให้คำนวณยอดเงินเฉพาะตอนโหลดหน้า และยอดรวมจะอัปเดตเองจากสคริปต์ด้านล่าง -->
+                ยอดประเมินรวม (เฉพาะค้างสั่งซื้อ): <span id="display_grand_total" class="text-danger fs-5 ms-2">0.00</span> บาท
+            </div>
+        </div>
     </div>
 
-    <form method="POST" action="{% url 'solar_ppo_detail' ppo.id %}">
+    {% if created_pos %}
+    <div class="alert alert-success border border-success rounded-4 mb-4 shadow-sm">
+        <h6 class="fw-bold text-success mb-2"><i class="fas fa-check-circle me-2"></i>ใบสั่งซื้อ (PO) ที่สร้างจากรายการนี้แล้ว:</h6>
+        <div class="d-flex flex-wrap gap-2">
+            {% for po in created_pos %}
+                <a href="{% url 'solar_po_edit' po.id %}" class="badge bg-white text-dark border border-success shadow-sm px-3 py-2 text-decoration-none hover-scale">
+                    <i class="fas fa-file-invoice text-success me-1"></i> {{ po.code }} <span class="opacity-50 mx-1">|</span> <span class="text-muted">{{ po.supplier.name|truncatechars:20 }}</span>
+                </a>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <form method="POST" id="ppoForm">
         {% csrf_token %}
-        <div class="card border-0 shadow-sm rounded-4 bg-white overflow-hidden mb-4">
-            <div class="card-header bg-white py-3 border-bottom d-flex align-items-center">
-                <i class="fas fa-clipboard-list text-danger me-2"></i> <strong class="text-dark">รายการวัสดุที่ต้องสั่งซื้อด่วน</strong>
+        <input type="hidden" name="order_data" id="orderDataInput">
+
+        <div class="card shadow-sm border-0 rounded-4 mb-4 overflow-hidden bg-white">
+            <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+                <h6 class="fw-bold mb-0 text-dark"><i class="fas fa-clipboard-list text-danger me-2"></i>รายการวัตถุดิบที่ต้องสั่งซื้อด่วน</h6>
+                {% if is_fully_ordered %}
+                    <button type="button" class="btn btn-secondary rounded-pill px-4 fw-bold shadow-sm" disabled>
+                        <i class="fas fa-check-circle me-2"></i> เปิดใบสั่งซื้อครบแล้ว
+                    </button>
+                {% else %}
+                    <button type="button" class="btn btn-gold rounded-pill px-4 fw-bold shadow-sm" onclick="submitPOs()">
+                        <i class="fas fa-magic me-2"></i> สั่งสร้างใบสั่งซื้อ (PO) อัตโนมัติ
+                    </button>
+                {% endif %}
             </div>
+
             <div class="table-responsive p-0">
-                <table class="table align-middle mb-0">
-                    <thead class="bg-light text-secondary small">
+                <table class="table table-hover align-middle mb-0" id="materialsTable">
+                    <thead class="bg-light small text-secondary text-uppercase">
                         <tr>
-                            <!-- 🌟 ปรับขนาดความกว้างให้สมดุลเพื่อรองรับคอลัมน์ใหม่ -->
                             <th class="ps-4 py-3 border-0" style="width: 25%;">รหัส / ชื่อวัสดุ (RM)</th>
-                            <th class="text-center py-3 border-0" style="width: 10%;">จำนวนที่สั่ง</th>
-                            <th class="py-3 border-0" style="width: 25%;">เลือกร้านค้า (Supplier)</th>
-                            <th class="text-center py-3 border-0" style="width: 15%;">ราคาต่อหน่วย</th>
-                            <!-- 🌟 [NEW] เพิ่มหัวคอลัมน์ ราคารวมวัตถุดิบ -->
+                            <th class="text-center py-3 border-0">ต้องการรวม</th>
+                            <th class="text-center py-3 border-0">ค้างสั่งซื้อ</th>
+                            <th class="py-3 border-0" style="width: 150px;">ระบุยอดสั่งซื้อ</th>
+                            <th class="py-3 border-0" style="width: 250px;">เลือกร้านค้า (Supplier)</th>
+                            <th class="py-3 border-0" style="width: 150px;">ราคา/หน่วย</th>
                             <th class="text-end pe-4 py-3 border-0" style="width: 15%;">ราคารวมวัตถุดิบ</th>
+                            <th class="text-center pe-4 py-3 border-0">จัดการ</th>
                         </tr>
                     </thead>
-                    <tbody id="po-items-body">
-                        {% for item in ppo.items.all %}
-                        <tr class="border-bottom bg-danger bg-opacity-10 po-item-row">
-                            <td class="ps-4 py-3 fw-bold text-dark">
-                                <input type="hidden" name="item_id[]" value="{{ item.id }}">
-                                {{ item.product.code }} - {{ item.product.name }}
+                    <tbody>
+                        {% for item in materials_list %}
+                        <!-- 🌟 [FIXED] ถ้า remaining == 0 ให้ใส่คลาส d-none เพื่อซ่อนบรรทัดนี้ไปเลย -->
+                        <tr class="material-row {% if item.remaining == 0 %}d-none{% else %}bg-danger bg-opacity-10{% endif %}" data-id="{{ item.id }}">
+                            <td class="ps-4 py-3">
+                                <div class="fw-bold text-dark">{{ item.name }}</div>
+                                <small class="text-muted">{{ item.code }}</small>
                             </td>
-                            <td class="text-center py-3">
-                                <input type="number" step="0.01" name="quantity[]" value="{{ item.quantity_needed }}" class="form-control form-control-sm text-center fw-bold text-danger bg-white input-qty" required>
+                            <td class="text-center fw-bold text-dark total-needed-val" data-val="{{ item.needed }}">{{ item.needed|floatformat:2|intcomma }}</td>
+                            <td class="text-center fw-bold {% if item.remaining > 0 %}text-danger{% else %}text-success{% endif %}">
+                                {{ item.remaining|floatformat:2|intcomma }}
+                                {% if item.remaining == 0 %}<i class="fas fa-check ms-1"></i>{% endif %}
                             </td>
+
                             <td class="py-3">
-                                <select name="supplier_id[]" class="form-select form-select-sm text-secondary border-danger border-opacity-25 shadow-sm" required>
+                                <input type="number" class="form-control form-control-sm text-center fw-bold text-danger bg-white order-qty border-danger border-opacity-25 shadow-sm"
+                                       value="{{ item.remaining }}" min="0" step="0.01" oninput="calcRow(this)"
+                                       {% if item.remaining == 0 %}disabled{% endif %}>
+                            </td>
+
+                            <td class="py-3">
+                                <select class="form-select form-select-sm text-secondary border-danger border-opacity-25 shadow-sm order-supplier" onchange="updateCost(this)" {% if item.remaining == 0 %}disabled{% endif %}>
                                     <option value="">-- เลือกร้านค้า --</option>
-                                    {% for sup in suppliers %}
-                                        <option value="{{ sup.id }}">{{ sup.name }}</option>
-                                    {% endfor %}
+                                    {% if item.suppliers %}
+                                        <optgroup label="ร้านค้าที่ผูกไว้">
+                                        {% for sup in item.suppliers %}
+                                            <option value="{{ sup.id }}" data-cost="{{ sup.cost }}" {% if sup.is_default %}selected{% endif %}>{{ sup.name }}</option>
+                                        {% endfor %}
+                                        </optgroup>
+                                    {% endif %}
+                                    <optgroup label="รายชื่อร้านค้าทั้งหมด">
+                                        {% for sup in all_suppliers %}
+                                            <option value="{{ sup.id }}" data-cost="0">{{ sup.name }}</option>
+                                        {% endfor %}
+                                    </optgroup>
                                 </select>
                             </td>
-                            <td class="text-center py-3">
+
+                            <td class="py-3">
                                 <div class="input-group input-group-sm shadow-sm">
                                     <span class="input-group-text bg-white border-danger border-opacity-25">฿</span>
-                                    <input type="text" inputmode="decimal" name="unit_cost[]" class="form-control text-end border-danger border-opacity-25 input-cost" placeholder="0.00" value="{{ item.product.cost_price }}" required>
+                                    <input type="text" class="form-control text-end order-cost border-danger border-opacity-25"
+                                           value="{{ item.cost|floatformat:2|intcomma }}" oninput="calcRow(this)" onblur="formatInput(this)"
+                                           {% if item.remaining == 0 %}disabled{% endif %}>
                                 </div>
                             </td>
-                            <!-- 🌟 [NEW] ช่องแสดงผลราคารวมของแต่ละแถว -->
-                            <td class="text-end py-3 pe-4 fw-bold text-danger row-total-price">
-                                0.00
+
+                            <td class="text-end pe-4 py-3 fw-bold text-danger fs-6 row-total">0.00</td>
+
+                            <td class="text-center pe-4 py-3">
+                                <button type="button" class="btn btn-sm btn-outline-info rounded-circle btn-split" onclick="splitRow(this)" {% if item.remaining == 0 %}disabled{% endif %} title="แบ่งสั่งร้านอื่น">
+                                    <i class="fas fa-plus"></i>
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-danger rounded-circle d-none btn-remove" onclick="removeRow(this)" title="ลบแถวนี้">
+                                    <i class="fas fa-trash"></i>
+                                </button>
                             </td>
                         </tr>
+                        {% empty %}
+                        <tr><td colspan="8" class="text-center py-5 text-muted"><i class="fas fa-box-open fa-3x mb-3 opacity-25"></i><br>ไม่มีรายการวัตถุดิบ</td></tr>
                         {% endfor %}
                     </tbody>
-                    <!-- 🌟 [NEW] แถวแถมพิเศษ สรุปยอดรวมทั้งบิล -->
-                    <tfoot class="bg-light">
-                        <tr>
-                            <td colspan="4" class="text-end fw-bold py-3 text-dark">รวมเป็นเงินทั้งสิ้น (โดยประมาณ):</td>
-                            <td class="text-end pe-4 fw-bold fs-5 text-danger py-3" id="grand-total-price">0.00</td>
-                        </tr>
-                    </tfoot>
                 </table>
             </div>
-        </div>
+            
+            <div class="card-footer bg-light py-3 border-top-0 d-flex justify-content-end align-items-center flex-wrap gap-2">
+                {% if created_pos %}
+                <button type="button" class="btn btn-outline-primary rounded-pill px-4 fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#poListModal">
+                    <i class="fas fa-list-ol me-2"></i> แสดงรายการใบสั่งซื้อ ({{ created_pos|length }} ใบ)
+                </button>
+                {% endif %}
 
-        <div class="text-end">
-            <button type="submit" class="btn btn-gold rounded-pill px-5 py-2 fw-bold shadow-sm fs-5" onclick="return confirm('ระบบจะทำการสร้างใบสั่งซื้อ (PO) ตามร้านค้าที่เลือกไว้ \nยืนยันการทำรายการหรือไม่?');">
-                <i class="fas fa-magic me-2"></i> สร้างใบสั่งซื้อ (PO) อัตโนมัติ
-            </button>
+                {% if not is_fully_ordered %}
+                    <button type="button" class="btn btn-gold rounded-pill px-5 fw-bold shadow-lg py-2 ms-3 fs-5" onclick="submitPOs()">
+                        <i class="fas fa-magic me-2"></i> สร้างใบสั่งซื้อ (PO) ส่วนที่เหลือ
+                    </button>
+                {% endif %}
+            </div>
         </div>
     </form>
 </div>
 
+<!-- 🌟 หน้าต่างป๊อปอัป (Modal) แสดงรายชื่อใบสั่งซื้อ 🌟 -->
+{% if created_pos %}
+<div class="modal fade" id="poListModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content rounded-4 border-0 shadow-lg">
+            <div class="modal-header bg-primary text-white rounded-top-4 border-0">
+                <h5 class="modal-title fw-bold">
+                    <i class="fas fa-file-invoice me-2"></i> รายการใบสั่งซื้อโซล่า (Solar PO) 
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="bg-light text-secondary small text-uppercase">
+                            <tr>
+                                <th class="ps-4 py-3">เลขที่ใบสั่งซื้อ (POS)</th>
+                                <th class="py-3">ร้านค้า (Supplier)</th>
+                                <th class="text-center py-3">สถานะ</th>
+                                <th class="text-end pe-4 py-3">ยอดเงินสุทธิ</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for po in created_pos %}
+                            <tr>
+                                <td class="ps-4 fw-bold">
+                                    <a href="{% url 'solar_po_print' po.id %}" target="_blank" class="text-decoration-none d-flex align-items-center">
+                                        {{ po.code }} <i class="fas fa-external-link-alt ms-2 small"></i>
+                                    </a>
+                                </td>
+                                <td>{{ po.supplier.name|default:"-" }}</td>
+                                <td class="text-center">
+                                    {% if po.status == 'APPROVED' %}
+                                        <span class="badge bg-success rounded-pill px-3 py-2"><i class="fas fa-check-circle me-1"></i> อนุมัติแล้ว</span>
+                                    {% elif po.status == 'DRAFT' %}
+                                        <span class="badge bg-warning text-dark rounded-pill px-3 py-2"><i class="fas fa-hourglass-half me-1"></i> ร่าง</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary rounded-pill px-3 py-2">{{ po.get_status_display }}</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end pe-4 fw-bold text-primary">{{ po.total_amount|floatformat:2|intcomma }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <script>
     document.addEventListener("DOMContentLoaded", function() {
-        const formElement = document.querySelector("form");
-        const rows = document.querySelectorAll(".po-item-row");
-
-        // 🌟 ฟังก์ชันสำหรับเติมลูกน้ำและทศนิยม 2 ตำแหน่ง
-        function formatNumberWithCommas(value) {
-            if (!value) return "0.00";
-            let cleanValue = value.toString().replace(/,/g, '').replace(/[^0-9.]/g, '');
-            if (!cleanValue) return "0.00";
-
-            let floatVal = parseFloat(cleanValue);
-            if (isNaN(floatVal)) return "0.00";
-
-            let parts = floatVal.toFixed(2).split(".");
-            parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-            return parts.join(".");
-        }
-
-        // 🌟 [NEW] ฟังก์ชันคำนวณราคารวม (แถว และ ยอดสุทธิ)
-        function calculateTotals() {
-            let grandTotal = 0;
-
-            rows.forEach(row => {
-                const qtyInput = row.querySelector('.input-qty');
-                const costInput = row.querySelector('.input-cost');
-                const totalCell = row.querySelector('.row-total-price');
-
-                if (qtyInput && costInput && totalCell) {
-                    const qty = parseFloat(qtyInput.value) || 0;
-                    const cost = parseFloat(costInput.value.replace(/,/g, '')) || 0;
-                    
-                    const rowTotal = qty * cost;
-                    grandTotal += rowTotal;
-
-                    totalCell.innerText = formatNumberWithCommas(rowTotal);
-                }
-            });
-
-            // อัปเดตยอดรวมทั้งหมดด้านล่างสุด
-            const grandTotalCell = document.getElementById('grand-total-price');
-            if (grandTotalCell) {
-                grandTotalCell.innerText = "฿ " + formatNumberWithCommas(grandTotal);
-            }
-        }
-
-        // 🌟 วนลูปจับตาดูการพิมพ์ในแต่ละแถว
-        rows.forEach(row => {
-            const qtyInput = row.querySelector('.input-qty');
-            const costInput = row.querySelector('.input-cost');
-
-            // จัดรูปแบบราคาเริ่มต้นตอนเปิดหน้าเว็บ
-            if (costInput && costInput.value) {
-                costInput.value = formatNumberWithCommas(costInput.value);
-            }
-
-            // คำนวณใหม่เมื่อพิมพ์เปลี่ยน "จำนวน"
-            if (qtyInput) {
-                qtyInput.addEventListener('input', calculateTotals);
-            }
-
-            // คำนวณใหม่เมื่อพิมพ์เปลี่ยน "ราคา"
-            if (costInput) {
-                costInput.addEventListener('input', calculateTotals);
-                
-                // คืนฟอร์แมตลูกน้ำเมื่อคลิกออกจากกล่องราคา
-                costInput.addEventListener('blur', function() {
-                    this.value = formatNumberWithCommas(this.value);
-                    calculateTotals();
-                });
-            }
-        });
-
-        // 🌟 คลุมดำอัตโนมัติเมื่อคลิก (เพื่อความรวดเร็วในการพิมพ์ทับ)
-        document.body.addEventListener('focusin', function(e) {
-            if(e.target.tagName === 'INPUT' && (e.target.classList.contains('input-qty') || e.target.classList.contains('input-cost'))) {
-                e.target.select();
-            }
-        });
-
-        // 🌟 ถอดลูกน้ำออกก่อนกด Submit ส่งค่าให้ Django
-        if (formElement) {
-            formElement.addEventListener("submit", function() {
-                const costInputsToSubmit = document.querySelectorAll('.input-cost');
-                costInputsToSubmit.forEach(input => {
-                    input.value = input.value.replace(/,/g, '');
-                });
-            });
-        }
-
-        // 🌟 สั่งรันคำนวณยอดรวม 1 ครั้ง ตอนเปิดหน้าเว็บ
-        calculateTotals();
+        // เมื่อโหลดหน้าเว็บเสร็จ ให้คำนวณแถวที่ยังไม่ซ่อนทั้งหมด เพื่อหายอดรวมสุทธิ
+        document.querySelectorAll('.order-qty').forEach(el => calcRow(el));
     });
+
+    // 🌟 [FIXED] เพิ่มฟังก์ชันสำหรับคำนวณยอดประเมินรวมใหม่ โดยคิดเฉพาะรายการที่ไม่ถูกซ่อน
+    function calculateGrandTotal() {
+        let total = 0;
+        document.querySelectorAll('.material-row:not(.d-none)').forEach(row => {
+            const rowTotalRaw = row.querySelector('.row-total').innerText.replace(/,/g, '');
+            total += parseFloat(rowTotalRaw) || 0;
+        });
+        document.getElementById('display_grand_total').innerText = total.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    }
+
+    // ฟังก์ชันคืนค่าลูกน้ำเมื่อกรอกราคาเสร็จ
+    function formatInput(el) {
+        const val = parseFloat(el.value.replace(/,/g, '')) || 0;
+        el.value = val.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        calcRow(el);
+    }
+
+    function updateCost(selectEl) {
+        const selectedOption = selectEl.options[selectEl.selectedIndex];
+        const cost = selectedOption.getAttribute('data-cost');
+        if (cost && parseFloat(cost) > 0) {
+            const row = selectEl.closest('tr');
+            row.querySelector('.order-cost').value = parseFloat(cost).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            calcRow(selectEl);
+        }
+    }
+
+    function calcRow(el) {
+        const row = el.closest('tr');
+        // คำนวณยอดเงินรวมจาก "จำนวนที่กรอกสั่งซื้อ" ไม่ใช่จำนวนที่ต้องการรวมทั้งหมด
+        const qty = parseFloat(row.querySelector('.order-qty').value) || 0;
+        const costRaw = row.querySelector('.order-cost').value.replace(/,/g, '');
+        const cost = parseFloat(costRaw) || 0;
+        row.querySelector('.row-total').innerText = (qty * cost).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        
+        // เมื่อคำนวณแถวเสร็จ ให้สั่งอัปเดตยอดประเมินรวมใหญ่ด้วย
+        calculateGrandTotal();
+    }
+
+    function splitRow(btn) {
+        const row = btn.closest('tr');
+        const newRow = row.cloneNode(true);
+        newRow.querySelector('.order-qty').value = 0;
+        newRow.querySelector('.row-total').innerText = '0.00';
+        newRow.querySelector('.order-supplier').selectedIndex = 0;
+        newRow.querySelector('.btn-split').classList.add('d-none');
+        newRow.querySelector('.btn-remove').classList.remove('d-none');
+        row.parentNode.insertBefore(newRow, row.nextSibling);
+    }
+
+    function removeRow(btn) {
+        btn.closest('tr').remove();
+        // คำนวณยอดรวมใหญ่ใหม่เมื่อลบแถว
+        calculateGrandTotal();
+    }
+
+    function submitPOs() {
+        let orderData = {};
+        let isValid = true;
+        let totalQtyToOrder = 0;
+
+        document.querySelectorAll('.material-row:not(.d-none)').forEach(row => {
+            let qty = parseFloat(row.querySelector('.order-qty').value) || 0;
+
+            if (qty > 0) {
+                totalQtyToOrder += qty;
+                let supId = row.querySelector('.order-supplier').value;
+                let prodId = row.getAttribute('data-id');
+
+                let costRaw = row.querySelector('.order-cost').value.replace(/,/g, '');
+                let cost = parseFloat(costRaw) || 0;
+
+                if (!supId) {
+                    alert("⚠️ กรุณาเลือกร้านค้า สำหรับรายการที่ระบุจำนวนสั่งซื้อครับ");
+                    row.querySelector('.order-supplier').focus();
+                    row.classList.add('table-warning');
+                    setTimeout(() => row.classList.remove('table-warning'), 2000);
+                    isValid = false;
+                    return;
+                }
+
+                if (!orderData[supId]) orderData[supId] = [];
+                orderData[supId].push({id: prodId, qty: qty, cost: cost});
+            }
+        });
+
+        if (!isValid) return;
+        if (totalQtyToOrder === 0) {
+            alert("⚠️ กรุณาระบุจำนวนสั่งซื้ออย่างน้อย 1 รายการครับ");
+            return;
+        }
+
+        if(confirm("ระบบจะทำการสร้างใบสั่งซื้อ (PO) ตามร้านค้าที่เลือกไว้ \nยืนยันการทำรายการหรือไม่?")) {
+            event.target.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> กำลังประมวลผล...';
+            event.target.disabled = true;
+
+            document.getElementById('orderDataInput').value = JSON.stringify(orderData);
+            document.getElementById('ppoForm').submit();
+        }
+    }
 </script>
 {% endblock %}

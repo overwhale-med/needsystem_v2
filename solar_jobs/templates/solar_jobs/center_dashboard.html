@@ -131,19 +131,19 @@
                 {% for job in jobs %}
                     {% if job.status == 'DRAFT' %}
                     <div class="kanban-card border-draft" data-id="{{ job.id }}">
-                        <!-- 🌟 หัวการ์ด: มาตรฐานเดียวกัน -->
-                        <div class="d-flex justify-content-between align-items-start mb-2">
-                            <div>
-                                <div class="fw-bold text-dark fs-6">{{ job.code }}</div>
-                                {% if job.quotation_ref %}
-                                <div class="text-primary small" style="font-size: 0.75rem;"><i class="fas fa-link me-1"></i>อ้างอิง: {{ job.quotation_ref.code }}</div>
-                                {% elif "QT-SOL" in job.note %}
-                                <div class="text-primary small" style="font-size: 0.75rem;"><i class="fas fa-link me-1"></i>ดูรหัส QT ในหมายเหตุ</div>
-                                {% else %}
-                                <div class="text-muted small" style="font-size: 0.75rem;"><i class="fas fa-bolt me-1"></i>สร้างงานด่วน</div>
-                                {% endif %}
+                        <!-- 🌟 [FIXED] โครงสร้างหัวการ์ดใหม่: ป้ายอยู่บน เลข JOB อยู่ล่าง -->
+                        <div class="mb-2">
+                            <div class="mb-1">
+                                <span class="badge bg-warning text-dark small shadow-sm">รอรับงาน</span>
                             </div>
-                            <span class="badge bg-warning text-dark small shadow-sm">รอรับงาน</span>
+                            <div class="fw-bold text-dark fs-6">{{ job.code }}</div>
+                            {% if job.quotation_ref %}
+                            <div class="text-primary small text-truncate" style="font-size: 0.75rem;"><i class="fas fa-link me-1"></i>อ้างอิง: {{ job.quotation_ref.code }}</div>
+                            {% elif "QT-SOL" in job.note %}
+                            <div class="text-primary small text-truncate" style="font-size: 0.75rem;"><i class="fas fa-link me-1"></i>ดูรหัส QT ในหมายเหตุ</div>
+                            {% else %}
+                            <div class="text-muted small text-truncate" style="font-size: 0.75rem;"><i class="fas fa-bolt me-1"></i>สร้างงานด่วน</div>
+                            {% endif %}
                         </div>
 
                         <!-- 🌟 ข้อมูลในการ์ด: มาตรฐานเดียวกัน -->
@@ -172,26 +172,28 @@
                     {% if job.status == 'PREPARING' or job.status == 'WAITING_STORE' or job.status == 'WAITING_PURCHASE' %}
                     <div class="kanban-card {% if job.status == 'WAITING_STORE' %}border-warning{% elif job.status == 'WAITING_PURCHASE' %}border-danger{% else %}border-preparing{% endif %}" data-id="{{ job.id }}">
 
-                        <!-- 🌟 หัวการ์ด: มาตรฐานเดียวกัน -->
-                        <div class="d-flex justify-content-between align-items-start mb-2">
-                            <div>
-                                <div class="fw-bold text-dark fs-6">{{ job.code }}</div>
-                                {% if job.quotation_ref %}
-                                <div class="text-primary small" style="font-size: 0.75rem;"><i class="fas fa-link me-1"></i>อ้างอิง: {{ job.quotation_ref.code }}</div>
-                                {% elif "QT-SOL" in job.note %}
-                                <div class="text-primary small" style="font-size: 0.75rem;"><i class="fas fa-link me-1"></i>ดูรหัส QT ในหมายเหตุ</div>
+                        <!-- 🌟 [FIXED] โครงสร้างหัวการ์ดใหม่: ป้ายอยู่บน เลข JOB อยู่ล่าง -->
+                        <div class="mb-2">
+                            <div class="mb-1">
+                                <!-- ป้ายแจ้งเตือน -->
+                                {% if job.status == 'WAITING_PURCHASE' or job.is_waiting_purchase %}
+                                    <span class="badge bg-danger text-white border border-danger small shadow-sm blink_me"><i class="fas fa-shopping-cart me-1"></i> รอจัดซื้อ (ของขาด)</span>
+                                {% elif job.status == 'WAITING_STORE' or job.pending_ppo_count > 0 %}
+                                    <span class="badge bg-warning text-dark border border-warning small shadow-sm"><i class="fas fa-box-open me-1"></i> รอสโตร์เบิกของ</span>
+                                {% elif job.has_unsent_requisition or job.pending_req_count > 0 %}
+                                    <span class="badge bg-warning bg-opacity-10 text-dark border border-warning small shadow-sm"><i class="fas fa-exclamation-triangle me-1"></i> มีรายการค้างส่งสโตร์</span>
                                 {% else %}
-                                <div class="text-muted small" style="font-size: 0.75rem;"><i class="fas fa-bolt me-1"></i>สร้างงานด่วน</div>
+                                    <span class="badge bg-primary small shadow-sm">เตรียมของ</span>
                                 {% endif %}
                             </div>
-
-                            <!-- 🌟 [NEW] เพิ่มป้ายแจ้งเตือน ถ้ารอของอยู่ -->
-                            {% if job.status == 'WAITING_STORE' %}
-                                <span class="badge bg-danger bg-opacity-10 text-danger border border-danger small shadow-sm"><i class="fas fa-box-open me-1"></i> รอสโตร์เบิก</span>
-                            {% elif job.status == 'WAITING_PURCHASE' %}
-                                <span class="badge bg-danger text-white border border-danger small shadow-sm"><i class="fas fa-shopping-cart me-1"></i> รอจัดซื้อสั่งของ</span>
+                            
+                            <div class="fw-bold text-dark fs-6">{{ job.code }}</div>
+                            {% if job.quotation_ref %}
+                            <div class="text-primary small text-truncate" style="font-size: 0.75rem;"><i class="fas fa-link me-1"></i>อ้างอิง: {{ job.quotation_ref.code }}</div>
+                            {% elif "QT-SOL" in job.note %}
+                            <div class="text-primary small text-truncate" style="font-size: 0.75rem;"><i class="fas fa-link me-1"></i>ดูรหัส QT ในหมายเหตุ</div>
                             {% else %}
-                                <span class="badge bg-primary small shadow-sm">เตรียมของ</span>
+                            <div class="text-muted small text-truncate" style="font-size: 0.75rem;"><i class="fas fa-bolt me-1"></i>สร้างงานด่วน</div>
                             {% endif %}
                         </div>
 
@@ -221,27 +223,29 @@
                     {% if job.status == 'IN_PROGRESS' %}
                     <div class="kanban-card border-progress" data-id="{{ job.id }}">
 
-                        <!-- 🌟 หัวการ์ด: มาตรฐานเดียวกัน -->
-                        <div class="d-flex justify-content-between align-items-start mb-2">
-                            <div>
-                                <div class="fw-bold text-dark fs-6">{{ job.code }}</div>
-                                {% if job.quotation_ref %}
-                                <div class="text-primary small" style="font-size: 0.75rem;"><i class="fas fa-link me-1"></i>อ้างอิง: {{ job.quotation_ref.code }}</div>
-                                {% elif "QT-SOL" in job.note %}
-                                <div class="text-primary small" style="font-size: 0.75rem;"><i class="fas fa-link me-1"></i>ดูรหัส QT ในหมายเหตุ</div>
-                                {% else %}
-                                <div class="text-muted small" style="font-size: 0.75rem;"><i class="fas fa-bolt me-1"></i>สร้างงานด่วน</div>
-                                {% endif %}
-                            </div>
-
-                                {% if job.pending_ppo_count > 0 %}
-                                    <!-- 🌟 [NEW] สโตร์เช็คแล้วของหมด สั่งไปให้จัดซื้อซื้อด่วน! -->
+                        <!-- 🌟 [FIXED] โครงสร้างหัวการ์ดใหม่: ป้ายอยู่บน เลข JOB อยู่ล่าง -->
+                        <div class="mb-2">
+                            <div class="mb-1">
+                                <!-- ป้ายแจ้งเตือน -->
+                                {% if job.is_waiting_purchase %}
                                     <span class="badge bg-danger text-white small shadow-sm blink_me"><i class="fas fa-shopping-cart me-1"></i> รอจัดซื้อ (ของขาดหน้างาน)</span>
-                                {% elif job.pending_req_count > 0 %}
-                                    <span class="badge bg-danger small shadow-sm blink_me"><i class="fas fa-exclamation-triangle me-1"></i> ขอเบิกของเพิ่ม</span>
+                                {% elif job.pending_ppo_count > 0 %}
+                                    <span class="badge bg-warning text-dark small shadow-sm"><i class="fas fa-box-open me-1"></i> รอสโตร์เบิกของเพิ่มเติม</span>
+                                {% elif job.has_unsent_requisition or job.pending_req_count > 0 %}
+                                    <span class="badge bg-warning bg-opacity-10 text-dark border border-warning small shadow-sm"><i class="fas fa-exclamation-triangle me-1"></i> ช่างคีย์เบิก (รอส่งสโตร์)</span>
                                 {% else %}
                                     <span class="badge bg-gold small shadow-sm" style="background-color: #c5a059;">กำลังติดตั้ง</span>
                                 {% endif %}
+                            </div>
+
+                            <div class="fw-bold text-dark fs-6">{{ job.code }}</div>
+                            {% if job.quotation_ref %}
+                            <div class="text-primary small text-truncate" style="font-size: 0.75rem;"><i class="fas fa-link me-1"></i>อ้างอิง: {{ job.quotation_ref.code }}</div>
+                            {% elif "QT-SOL" in job.note %}
+                            <div class="text-primary small text-truncate" style="font-size: 0.75rem;"><i class="fas fa-link me-1"></i>ดูรหัส QT ในหมายเหตุ</div>
+                            {% else %}
+                            <div class="text-muted small text-truncate" style="font-size: 0.75rem;"><i class="fas fa-bolt me-1"></i>สร้างงานด่วน</div>
+                            {% endif %}
                         </div>
 
                         <!-- 🌟 ข้อมูลในการ์ด: มาตรฐานเดียวกัน -->
@@ -269,19 +273,19 @@
                     {% if job.status == 'COMPLETED' %}
                     <div class="kanban-card border-completed" data-id="{{ job.id }}">
 
-                        <!-- 🌟 หัวการ์ด: มาตรฐานเดียวกัน -->
-                        <div class="d-flex justify-content-between align-items-start mb-2">
-                            <div>
-                                <div class="fw-bold text-dark fs-6">{{ job.code }}</div>
-                                {% if job.quotation_ref %}
-                                <div class="text-success small" style="font-size: 0.75rem;"><i class="fas fa-link me-1"></i>อ้างอิง: {{ job.quotation_ref.code }}</div>
-                                {% elif "QT-SOL" in job.note %}
-                                <div class="text-success small" style="font-size: 0.75rem;"><i class="fas fa-link me-1"></i>ดูรหัส QT ในหมายเหตุ</div>
-                                {% else %}
-                                <div class="text-muted small" style="font-size: 0.75rem;"><i class="fas fa-bolt me-1"></i>สร้างงานด่วน</div>
-                                {% endif %}
+                        <!-- 🌟 [FIXED] โครงสร้างหัวการ์ดใหม่: ป้ายอยู่บน เลข JOB อยู่ล่าง -->
+                        <div class="mb-2">
+                            <div class="mb-1">
+                                <span class="badge bg-success small shadow-sm">เสร็จสมบูรณ์</span>
                             </div>
-                            <span class="badge bg-success small shadow-sm">เสร็จสมบูรณ์</span>
+                            <div class="fw-bold text-dark fs-6">{{ job.code }}</div>
+                            {% if job.quotation_ref %}
+                            <div class="text-success small text-truncate" style="font-size: 0.75rem;"><i class="fas fa-link me-1"></i>อ้างอิง: {{ job.quotation_ref.code }}</div>
+                            {% elif "QT-SOL" in job.note %}
+                            <div class="text-success small text-truncate" style="font-size: 0.75rem;"><i class="fas fa-link me-1"></i>ดูรหัส QT ในหมายเหตุ</div>
+                            {% else %}
+                            <div class="text-muted small text-truncate" style="font-size: 0.75rem;"><i class="fas fa-bolt me-1"></i>สร้างงานด่วน</div>
+                            {% endif %}
                         </div>
 
                         <!-- 🌟 ข้อมูลในการ์ด: มาตรฐานเดียวกัน -->

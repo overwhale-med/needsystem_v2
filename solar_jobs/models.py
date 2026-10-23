@@ -1,11 +1,8 @@
 from django.db import models
 from django.utils import timezone
 import datetime
-
-from master_data.models import Customer
 from hr.models import Employee
-# 🌟 [FIXED] นำเข้า SolarQuotation มาเพื่อเชื่อมโยงฐานข้อมูล 🌟
-from solar_sales.models import SolarQuotation
+from solar_sales.models import SolarQuotation, SolarCustomer
 from solar_inventory.models import SolarProduct
 
 class SubcontractorTeam(models.Model):
@@ -38,8 +35,7 @@ class SolarJob(models.Model):
 
     # 🌟 [NEW] เพิ่มฟิลด์อ้างอิงใบเสนอราคา เพื่อผูกข้อมูลกัน 🌟
     quotation_ref = models.ForeignKey(SolarQuotation, on_delete=models.SET_NULL, null=True, blank=True, related_name='center_jobs', verbose_name="ใบเสนอราคาอ้างอิง")
-
-    customer = models.ForeignKey(Customer, on_delete=models.SET_NULL, null=True, verbose_name="ลูกค้า")
+    customer = models.ForeignKey(SolarCustomer, on_delete=models.SET_NULL, null=True, verbose_name="ลูกค้า")
     salesperson = models.ForeignKey(Employee, related_name='solar_sales_jobs', on_delete=models.SET_NULL, null=True, verbose_name="พนักงานขาย")
     package_sold = models.ForeignKey(SolarProduct, on_delete=models.SET_NULL, null=True, related_name='solar_jobs', verbose_name="แพ็กเกจที่ขาย (FG)")
 
@@ -163,46 +159,6 @@ class SolarExpense(models.Model):
 
     def __str__(self):
         return f"{self.job.code} - {self.get_expense_type_display()} ({self.amount} บาท)"
-
-# ==========================================
-# 🛒 ระบบใบเตรียมสั่งซื้อสำหรับโซล่าเซลล์ (Solar PPO)
-# ==========================================
-class SolarPurchasePreparation(models.Model):
-    code = models.CharField(max_length=20, unique=True, verbose_name="เลขที่ใบเตรียมสั่งซื้อ (Solar PPO)")
-    job = models.ForeignKey(SolarJob, on_delete=models.CASCADE, related_name='ppos', verbose_name="อ้างอิงใบสั่งงาน (JOB)")
-    created_at = models.DateTimeField(auto_now_add=True)
-    created_by = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, verbose_name="ผู้จัดทำ (สโตร์)")
-    status = models.CharField(max_length=20, choices=[('PENDING', 'รอจัดซื้อดำเนินการ'), ('ORDERED', 'สั่งซื้อแล้ว'), ('CANCELLED', 'ยกเลิก')], default='PENDING')
-
-    class Meta:
-        verbose_name = "ใบเตรียมสั่งซื้อโซล่า (Solar PPO)"
-        verbose_name_plural = "ใบเตรียมสั่งซื้อโซล่า (Solar PPO)"
-
-    def __str__(self):
-        return self.code
-
-    def save(self, *args, **kwargs):
-        if not self.code:
-            today = datetime.date.today()
-            thai_year = (today.year + 543) % 100
-            prefix = f"SPPO{thai_year:02d}{today.strftime('%m')}"
-
-            last_ppo = SolarPurchasePreparation.objects.filter(code__startswith=prefix).order_by('code').last()
-            if last_ppo:
-                try: seq = int(last_ppo.code.replace(prefix, '')) + 1
-                except: seq = 1
-            else:
-                seq = 1
-            self.code = f"{prefix}{seq:03d}"
-        super().save(*args, **kwargs)
-
-class SolarPurchasePreparationItem(models.Model):
-    ppo = models.ForeignKey(SolarPurchasePreparation, on_delete=models.CASCADE, related_name='items')
-    product = models.ForeignKey(SolarProduct, on_delete=models.CASCADE, verbose_name="วัสดุที่ขาด")
-    quantity_needed = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="จำนวนที่ต้องการสั่งเพิ่ม")
-
-    def __str__(self):
-        return f"{self.product.name} ({self.quantity_needed})"
 
 # ==========================================
 # 🌟 [NEW] ตารางที่ 1: ระบบตั้งเบิกค่าสำรวจหน้างาน (Solar Survey Claim) 🌟

@@ -1,10 +1,12 @@
 from django.db import models
 from django.utils import timezone
+from decimal import Decimal
 import datetime
 
 # 🌟 [NEW] เพิ่มเครื่องมือสำหรับเชื่อมโยงผู้ใช้ และบีบอัดรูปภาพ
 from django.contrib.auth.models import User
 from PIL import Image
+from master_data.models import Supplier
 
 class SolarProductCategory(models.Model):
     name = models.CharField(max_length=100, unique=True, verbose_name="หมวดหมู่แพ็กเกจ/สินค้า (FG)")
@@ -28,6 +30,7 @@ class SolarProduct(models.Model):
     unit = models.CharField(max_length=50, blank=True, null=True, verbose_name="หน่วยนับ")
     category = models.ForeignKey(SolarProductCategory, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="หมวดหมู่ (FG)")
     rm_category = models.ForeignKey(SolarRawMaterialCategory, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="หมวดหมู่ (RM)")
+    supplier = models.ForeignKey(Supplier, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="ร้านค้า/ผู้จำหน่าย")
     cost_price = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="ราคาทุน")
     sell_price = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="ราคาขาย")
     stock_qty = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name="จำนวนคงเหลือ")
@@ -49,15 +52,36 @@ class SolarProduct(models.Model):
             return total
         return self.cost_price
 
+    # 🌟 [UPDATE] คำนวณค่าบริหารจัดการ 15.5% (โดยถอด VAT 7% ออกจากราคาขายก่อน)
+    @property
+    def management_cost(self):
+        if self.sell_price > 0 and self.product_type == 'FG':
+            # สูตร: (ราคาขาย * 100 / 107) * 15.5%
+            base_price = (self.sell_price * Decimal('100')) / Decimal('107')
+            return base_price * Decimal('0.155')
+        return Decimal('0')
+
+    # 🌟 [UPDATE] ปรับสูตรกำไรขั้นต้น: ราคาขาย - ต้นทุนBOM - ค่าบริหาร15.5%
     @property
     def gross_profit(self):
-        return self.sell_price - self.total_bom_cost
+        if self.product_type == 'FG':
+            return self.sell_price - self.total_bom_cost - self.management_cost
+        return self.sell_price - self.cost_price
 
     @property
     def gross_margin_percent(self):
         if self.sell_price > 0:
             return (self.gross_profit / self.sell_price) * 100
         return 0
+
+    # 🌟 [NEW] เพิ่มสูตรคำนวณยอดสะสมที่ติดตั้งไปแล้ว (สำหรับแพ็กเกจ FG)
+    @property
+    def total_installed_qty(self):
+        if self.product_type == 'FG':
+            # ค้นหาประวัติการเบิกออก (OUT) ทั้งหมดของสินค้านี้ แล้วนำยอดมารวมกัน
+            total_out = self.solarstockmovement_set.filter(movement_type='OUT').aggregate(total=models.Sum('quantity'))['total']
+            return total_out if total_out else Decimal('0')
+        return Decimal('0')
 
     def save(self, *args, **kwargs):
         if not self.code:
@@ -97,12 +121,20 @@ class SolarInventoryDoc(models.Model):
     created_at = models.DateTimeField(default=timezone.now, verbose_name="วันที่เอกสาร")
 
     def save(self, *args, **kwargs):
-        # ระบบสมองกลสร้างเลขเอกสารอัตโนมัติ (เช่น GR-SOL-6910-001)
+        # ระบบสมองกลสร้างเลขเอกสารอัตโนมัติ
         if not self.doc_no:
             today = datetime.date.today()
             thai_year = (today.year + 543) % 100
             year_month = f"{thai_year:02d}{today.strftime('%m')}"
-            prefix = f"{self.doc_type}-SOL-{year_month}-"
+
+            # 🌟 [NEW] เช็คว่าอ้างอิงมาจากไหนเพื่อแยกประเภทเลขเอกสาร (FG vs RM)
+            if self.reference and 'JOB' in self.reference:
+                prefix = f"{self.doc_type}-FG-SOL-{year_month}-"
+            elif self.reference and 'POS' in self.reference:
+                prefix = f"{self.doc_type}-RM-SOL-{year_month}-"
+            else:
+                prefix = f"{self.doc_type}-SOL-{year_month}-" # สำหรับเอกสารทั่วไป/แมนนวล
+
             last_doc = SolarInventoryDoc.objects.filter(doc_no__startswith=prefix).order_by('doc_no').last()
 
             if last_doc:

@@ -42,27 +42,38 @@
                                     <table class="table table-hover align-middle mb-0">
                                         <thead class="bg-white sticky-top shadow-sm small text-secondary">
                                             <tr>
+                                                {% if is_manager_view or request.user.is_superuser %}
                                                 <th class="text-center" width="50"><input type="checkbox" id="checkAll2" class="form-check-input shadow-sm"></th>
+                                                {% endif %}
                                                 <th>เลขที่สิทธิ์</th>
                                                 <th>อ้างอิงเอกสาร</th>
+                                                {% if is_manager_view or request.user.is_superuser %}
+                                                <th>พนักงานขาย</th>
+                                                {% endif %}
                                                 <th class="text-end">ยอดเบิกได้ (บาท)</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             {% for t in tickets_2 %}
                                             <tr>
+                                                {% if is_manager_view or request.user.is_superuser %}
                                                 <td class="text-center"><input type="checkbox" name="ticket_ids" value="{{ t.id }}" class="form-check-input chk-2"></td>
+                                                {% endif %}
                                                 <td><span class="badge bg-light text-dark border"><i class="fas fa-ticket-alt text-warning me-1"></i>{{ t.code }}</span></td>
                                                 <td class="small fw-bold text-secondary">{{ t.quotation_ref.code|default:"-" }}</td>
+                                                {% if is_manager_view or request.user.is_superuser %}
+                                                <td class="small text-dark"><i class="far fa-user me-1"></i>{{ t.quotation_ref.employee.first_name|default:"ไม่ระบุ" }}</td>
+                                                {% endif %}
                                                 <td class="text-end fw-bold text-success">฿{{ t.commission_amount|floatformat:2|intcomma }}</td>
                                             </tr>
                                             {% empty %}
-                                            <tr><td colspan="4" class="text-center py-4 text-muted">ไม่มีสิทธิ์คงค้าง</td></tr>
+                                            <tr><td colspan="{% if is_manager_view or request.user.is_superuser %}5{% else %}3{% endif %}" class="text-center py-4 text-muted">ไม่มีสิทธิ์คงค้าง</td></tr>
                                             {% endfor %}
                                         </tbody>
                                     </table>
                                 </div>
 
+                                {% if is_manager_view or request.user.is_superuser %}
                                 <!-- โซนระบุบัญชีรับเงิน 2% -->
                                 <div class="card-footer bg-white p-3">
                                     <div class="bg-light p-3 rounded-3 border mb-3 text-start">
@@ -89,13 +100,18 @@
                                             </div>
                                         </div>
                                     </div>
-
                                     <div class="text-end">
-                                        <button type="submit" class="btn btn-warning fw-bold px-4 rounded-pill shadow-sm" {% if not tickets_2 %}disabled{% endif %}>
+                                        <button type="submit" class="btn btn-warning fw-bold px-4 rounded-pill shadow-sm" disabled>
                                             <i class="fas fa-file-invoice-dollar me-1"></i> สร้างใบขอเบิก 2%
                                         </button>
                                     </div>
                                 </div>
+                                {% else %}
+                                <!-- แจ้งเตือนพนักงานขาย -->
+                                <div class="card-footer bg-light p-3 text-center border-top">
+                                    <span class="text-muted fw-bold"><i class="fas fa-clock me-2"></i>สถานะ: รอผู้จัดการฝ่ายขายเป็นผู้ดำเนินการตั้งเบิก</span>
+                                </div>
+                                {% endif %}
                             </form>
                         </div>
 
@@ -107,27 +123,38 @@
                                     <table class="table table-hover align-middle mb-0">
                                         <thead class="bg-white sticky-top shadow-sm small text-secondary">
                                             <tr>
+                                                {% if is_manager_view or request.user.is_superuser %}
                                                 <th class="text-center" width="50"><input type="checkbox" id="checkAll13" class="form-check-input shadow-sm"></th>
+                                                {% endif %}
                                                 <th>เลขที่สิทธิ์</th>
                                                 <th>อ้างอิงเอกสาร</th>
+                                                {% if is_manager_view or request.user.is_superuser %}
+                                                <th>พนักงานขาย</th>
+                                                {% endif %}
                                                 <th class="text-end">ยอดเบิกได้ (บาท)</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             {% for t in tickets_13 %}
                                             <tr>
+                                                {% if is_manager_view or request.user.is_superuser %}
                                                 <td class="text-center"><input type="checkbox" name="ticket_ids" value="{{ t.id }}" class="form-check-input chk-13"></td>
+                                                {% endif %}
                                                 <td><span class="badge bg-light text-dark border"><i class="fas fa-ticket-alt text-success me-1"></i>{{ t.code }}</span></td>
                                                 <td class="small fw-bold text-secondary">{{ t.invoice_ref.code|default:"-" }}</td>
+                                                {% if is_manager_view or request.user.is_superuser %}
+                                                <td class="small text-dark"><i class="far fa-user me-1"></i>{{ t.invoice_ref.quotation_ref.employee.first_name|default:"ไม่ระบุ" }}</td>
+                                                {% endif %}
                                                 <td class="text-end fw-bold text-success">฿{{ t.commission_amount|floatformat:2|intcomma }}</td>
                                             </tr>
                                             {% empty %}
-                                            <tr><td colspan="4" class="text-center py-4 text-muted">ไม่มีสิทธิ์คงค้าง</td></tr>
+                                            <tr><td colspan="{% if is_manager_view or request.user.is_superuser %}5{% else %}3{% endif %}" class="text-center py-4 text-muted">ไม่มีสิทธิ์คงค้าง</td></tr>
                                             {% endfor %}
                                         </tbody>
                                     </table>
                                 </div>
 
+                                {% if is_manager_view or request.user.is_superuser %}
                                 <!-- โซนระบุบัญชีรับเงิน 13.5% -->
                                 <div class="card-footer bg-white p-3">
                                     <div class="bg-light p-3 rounded-3 border mb-3 text-start">
@@ -154,13 +181,18 @@
                                             </div>
                                         </div>
                                     </div>
-
                                     <div class="text-end">
-                                        <button type="submit" class="btn btn-success fw-bold px-4 rounded-pill shadow-sm" {% if not tickets_13 %}disabled{% endif %}>
+                                        <button type="submit" class="btn btn-success fw-bold px-4 rounded-pill shadow-sm" disabled>
                                             <i class="fas fa-file-invoice-dollar me-1"></i> สร้างใบขอเบิก 13.5%
                                         </button>
                                     </div>
                                 </div>
+                                {% else %}
+                                <!-- แจ้งเตือนพนักงานขาย -->
+                                <div class="card-footer bg-light p-3 text-center border-top">
+                                    <span class="text-muted fw-bold"><i class="fas fa-clock me-2"></i>สถานะ: รอผู้จัดการฝ่ายขายเป็นผู้ดำเนินการตั้งเบิก</span>
+                                </div>
+                                {% endif %}
                             </form>
                         </div>
                     </div>
@@ -184,22 +216,16 @@
                                         <div class="fw-bold text-dark mb-1">{{ c.code }} <span class="badge bg-light text-dark border ms-1">{{ c.claim_type }}</span></div>
                                         <div class="small text-muted"><i class="far fa-clock me-1"></i> {{ c.created_at|date:"d/m/Y H:i" }}</div>
                                         <div class="small text-muted mt-1"><i class="far fa-user me-1"></i> เบิกโดย: {{ c.requester.first_name|default:"-" }}</div>
-                                        
-                                        <!-- ข้อมูลบัญชีธนาคาร -->
                                         <div class="small mt-1 text-primary d-flex align-items-start position-relative">
                                             <div>
                                                 <i class="fas fa-university me-1"></i> {{ c.bank_name|default:"ไม่ระบุธนาคาร" }} <br>
                                                 <span class="text-muted ms-3">เลขที่: {{ c.bank_account|default:"-" }}</span><br>
                                                 <span class="text-dark fw-bold ms-3">ชื่อบัญชี: {{ c.account_name|default:"-" }}</span>
                                             </div>
-                                            
-                                            <!-- 🌟 [NEW] ปุ่มแก้ไข (โชว์เฉพาะตอน PENDING) 🌟 -->
                                             {% if c.status == 'PENDING' %}
                                             <button type="button" class="btn btn-sm btn-link text-warning p-0 ms-2" data-bs-toggle="modal" data-bs-target="#editBankModal{{ c.id }}" title="แก้ไขข้อมูลบัญชี">
                                                 <i class="fas fa-edit"></i>
                                             </button>
-                                            
-                                            <!-- 🌟 Modal สำหรับแก้ไขข้อมูลบัญชี 🌟 -->
                                             <div class="modal fade" id="editBankModal{{ c.id }}" tabindex="-1" aria-hidden="true">
                                                 <div class="modal-dialog modal-dialog-centered">
                                                     <div class="modal-content border-0 shadow rounded-4">
@@ -211,7 +237,6 @@
                                                             {% csrf_token %}
                                                             <div class="modal-body p-4 text-start">
                                                                 <p class="text-muted small mb-3">ใบเบิกเลขที่: <strong>{{ c.code }}</strong></p>
-                                                                
                                                                 <div class="mb-3">
                                                                     <label class="form-label small fw-bold">ธนาคาร</label>
                                                                     <select name="bank_name" class="form-select shadow-sm" required>
@@ -248,17 +273,13 @@
                                     </td>
                                     <td class="text-end pe-4">
                                         <h5 class="fw-bold text-primary mb-1">฿{{ c.total_amount|floatformat:2|intcomma }}</h5>
-
                                         {% if c.status == 'PENDING' %}
                                             <span class="badge bg-warning text-dark rounded-pill px-3 shadow-sm mb-2"><i class="fas fa-hourglass-half me-1"></i> รอโอนเงิน</span>
-
-                                            <!-- 🌟 ปุ่มพิมพ์ใบขอเบิก 🌟 -->
                                             <div class="mt-2">
                                                 <a href="{% url 'solar_commission_print' c.id %}" target="_blank" class="btn btn-sm btn-outline-primary rounded-pill px-3 py-1 fw-bold shadow-sm" style="font-size: 0.8rem;">
                                                     <i class="fas fa-print me-1"></i> พิมพ์ใบเบิก (A4)
                                                 </a>
                                             </div>
-
                                         {% else %}
                                             <span class="badge bg-success rounded-pill px-3 shadow-sm"><i class="fas fa-check-circle me-1"></i> โอนแล้ว</span>
                                             {% if c.transfer_slip %}
@@ -284,12 +305,56 @@
 </div>
 
 <script>
-    // สคริปต์ทำปุ่ม "เลือกทั้งหมด (Check All)"
-    document.getElementById('checkAll2').addEventListener('change', function() {
-        document.querySelectorAll('.chk-2').forEach(chk => chk.checked = this.checked);
-    });
-    document.getElementById('checkAll13').addEventListener('change', function() {
-        document.querySelectorAll('.chk-13').forEach(chk => chk.checked = this.checked);
+    document.addEventListener("DOMContentLoaded", function() {
+        const checkAll2 = document.getElementById('checkAll2');
+        if (checkAll2) {
+            checkAll2.addEventListener('change', function() {
+                document.querySelectorAll('.chk-2').forEach(chk => chk.checked = this.checked);
+                validateForm2();
+            });
+        }
+
+        const checkAll13 = document.getElementById('checkAll13');
+        if (checkAll13) {
+            checkAll13.addEventListener('change', function() {
+                document.querySelectorAll('.chk-13').forEach(chk => chk.checked = this.checked);
+                validateForm13();
+            });
+        }
+
+        const form2 = document.querySelector('#content-2percent form');
+        if (form2) {
+            const btnSubmit2 = form2.querySelector('button[type="submit"]');
+            const checkboxes2 = form2.querySelectorAll('.chk-2');
+            const bankSelect2 = form2.querySelector('select[name="bank_name"]');
+            const bankAcc2 = form2.querySelector('input[name="bank_account"]');
+            const accName2 = form2.querySelector('input[name="account_name"]');
+
+            function validateForm2() {
+                let isChecked = Array.from(checkboxes2).some(chk => chk.checked);
+                let isFilled = bankSelect2.value !== "" && bankAcc2.value.trim() !== "" && accName2.value.trim() !== "";
+                btnSubmit2.disabled = !(isChecked && isFilled);
+            }
+            form2.addEventListener('change', validateForm2);
+            form2.addEventListener('input', validateForm2);
+        }
+
+        const form13 = document.querySelector('#content-13percent form');
+        if (form13) {
+            const btnSubmit13 = form13.querySelector('button[type="submit"]');
+            const checkboxes13 = form13.querySelectorAll('.chk-13');
+            const bankSelect13 = form13.querySelector('select[name="bank_name"]');
+            const bankAcc13 = form13.querySelector('input[name="bank_account"]');
+            const accName13 = form13.querySelector('input[name="account_name"]');
+
+            function validateForm13() {
+                let isChecked = Array.from(checkboxes13).some(chk => chk.checked);
+                let isFilled = bankSelect13.value !== "" && bankAcc13.value.trim() !== "" && accName13.value.trim() !== "";
+                btnSubmit13.disabled = !(isChecked && isFilled);
+            }
+            form13.addEventListener('change', validateForm13);
+            form13.addEventListener('input', validateForm13);
+        }
     });
 </script>
 {% endblock %}

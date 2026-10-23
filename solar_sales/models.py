@@ -5,8 +5,47 @@ from decimal import Decimal
 import datetime
 import secrets
 from solar_inventory.models import SolarProduct
-from master_data.models import Customer, Supplier
+from master_data.models import Supplier
 from hr.models import Employee
+
+# ==========================================
+# 📝 1. ฐานข้อมูลลูกค้าโซล่าเซลล์ (แยกจากน็อคดาวน์)
+# ==========================================
+class SolarCustomer(models.Model):
+    name = models.CharField(max_length=200, verbose_name="ชื่อ-นามสกุล / ชื่อบริษัท")
+    code = models.CharField(max_length=50, unique=True, blank=True, verbose_name="รหัสลูกค้า")
+    branch = models.CharField(max_length=100, blank=True, null=True, verbose_name="สาขา")
+    tax_id = models.CharField(max_length=20, blank=True, null=True, verbose_name="เลขประจำตัวผู้เสียภาษี")
+    phone = models.CharField(max_length=50, blank=True, null=True, verbose_name="เบอร์โทรศัพท์")
+    email = models.EmailField(blank=True, null=True, verbose_name="อีเมล")
+
+    address = models.TextField(blank=True, null=True, verbose_name="ที่อยู่ (เลขที่/หมู่บ้าน/ถนน)")
+    province = models.CharField(max_length=100, blank=True, null=True, verbose_name="จังหวัด")
+    district = models.CharField(max_length=100, blank=True, null=True, verbose_name="อำเภอ/เขต")
+    sub_district = models.CharField(max_length=100, blank=True, null=True, verbose_name="ตำบล/แขวง")
+    zip_code = models.CharField(max_length=10, blank=True, null=True, verbose_name="รหัสไปรษณีย์")
+    location = models.URLField(max_length=500, blank=True, null=True, verbose_name="พิกัด GPS")
+    is_active = models.BooleanField(default=True, verbose_name="สถานะใช้งาน")
+
+    contact_person = models.CharField(max_length=100, blank=True, null=True, verbose_name="ชื่อผู้ติดต่อประสานงาน")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def save(self, *args, **kwargs):
+        if not self.code:
+            today = datetime.date.today()
+            thai_year = (today.year + 543) % 100
+            prefix = f"CUS-SOL-{thai_year:02d}{today.strftime('%m')}-"
+            last_customer = SolarCustomer.objects.filter(code__startswith=prefix).order_by('code').last()
+            seq = int(last_customer.code.split('-')[-1]) + 1 if last_customer else 1
+            self.code = f"{prefix}{seq:03d}"
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.code} - {self.name}"
+
+    class Meta:
+        verbose_name = "รายชื่อลูกค้า (โซล่าเซลล์)"
+        verbose_name_plural = "รายชื่อลูกค้า (โซล่าเซลล์)"
 
 # ==========================================
 # 📝 2. ระบบขายโซล่าเซลล์ (Solar Sales)
@@ -29,7 +68,7 @@ class SolarQuotation(models.Model):
 
     valid_until = models.DateField(null=True, blank=True, verbose_name="ยืนยันราคาถึงวันที่ (dd/mm/yyyy)")
 
-    customer = models.ForeignKey(Customer, on_delete=models.SET_NULL, null=True, blank=True)
+    customer = models.ForeignKey(SolarCustomer, on_delete=models.SET_NULL, null=True, blank=True)
     employee = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, verbose_name="พนักงานขาย")
 
     subtotal = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="รวมราคาสินค้า")
@@ -162,7 +201,7 @@ class SolarInvoice(models.Model):
     code = models.CharField(max_length=20, unique=True, verbose_name="เลขที่ใบเสร็จโซล่า")
     quotation_ref = models.OneToOneField(SolarQuotation, on_delete=models.SET_NULL, null=True, blank=True)
     date = models.DateField(default=timezone.now, verbose_name="วันที่เอกสาร (dd/mm/yyyy)")
-    customer = models.ForeignKey(Customer, on_delete=models.SET_NULL, null=True)
+    customer = models.ForeignKey(SolarCustomer, on_delete=models.SET_NULL, null=True)
     grand_total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     balance_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='UNPAID')
@@ -196,7 +235,7 @@ class SolarSurveyJob(models.Model):
     code = models.CharField(max_length=20, unique=True, verbose_name="เลขที่ใบงานสำรวจ")
 
     # 🌟 [FIXED] เปลี่ยนให้ลูกค้าระบบเป็นค่าว่างได้ เผื่อกรณีพิมพ์ชื่อเอง (Walk-in) 🌟
-    customer = models.ForeignKey(Customer, on_delete=models.CASCADE, null=True, blank=True, verbose_name="ลูกค้า")
+    customer = models.ForeignKey(SolarCustomer, on_delete=models.CASCADE, null=True, blank=True, verbose_name="ลูกค้า")
 
     # 🌟 [NEW] เพิ่ม 2 ฟิลด์ใหม่สำหรับเก็บข้อมูลลูกค้า Walk-in 🌟
     walkin_name = models.CharField(max_length=200, blank=True, null=True, verbose_name="ชื่อลูกค้า (Walk-in)")

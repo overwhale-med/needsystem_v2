@@ -25,6 +25,9 @@ class SolarPurchaseOrder(models.Model):
     supplier_name_free_text = models.CharField(max_length=255, blank=True, verbose_name="ชื่อร้านค้า (กรณีเร่งด่วน/ไม่อยู่ในระบบ)")
 
     buyer = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, verbose_name="ผู้จัดซื้อ")
+    # 🌟 [NEW] เพิ่มตัวแปรอ้างอิง PPO และ JOB ให้เหมือนระบบน็อคดาวน์
+    ppo_ref = models.CharField(max_length=20, blank=True, null=True, verbose_name="อ้างอิงใบเตรียมการสั่งซื้อ (Solar PPO)")
+    job_ref = models.ForeignKey('solar_jobs.SolarJob', on_delete=models.SET_NULL, null=True, blank=True, related_name='generated_pos', verbose_name="อ้างอิงใบสั่งงาน (JOB)")
 
     date = models.DateField(default=timezone.now, verbose_name="วันที่สั่งซื้อ")
     expected_date = models.DateField(null=True, blank=True, verbose_name="กำหนดรับของ")
@@ -33,6 +36,9 @@ class SolarPurchaseOrder(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='DRAFT', verbose_name="สถานะเอกสาร")
     payment_status = models.CharField(max_length=20, choices=PAYMENT_STATUS, default='PENDING', verbose_name="สถานะชำระเงิน")
     receipt_status = models.CharField(max_length=20, choices=RECEIPT_STATUS, default='PENDING', verbose_name="สถานะรับของเข้าคลัง")
+
+    # 🌟 [NEW] ช่องสำหรับเก็บภาพใบส่งของตอนตรวจรับเข้าคลัง
+    delivery_note_image = models.ImageField(upload_to='solar_delivery_notes/%Y/%m/', null=True, blank=True, verbose_name="ภาพใบส่งของ (Delivery Note)")
 
     note = models.TextField(blank=True, verbose_name="หมายเหตุ")
     created_at = models.DateTimeField(auto_now_add=True)
@@ -133,3 +139,49 @@ class SolarPurchaseOrderPayment(models.Model):
                     img.thumbnail((800, 800))
                     img.save(self.slip_image.path, quality=85, optimize=True)
             except Exception: pass
+
+# ==========================================
+# 🛒 ระบบใบเตรียมสั่งซื้อสำหรับโซล่าเซลล์ (Solar PPO) - อัปเกรดแบบตะกร้ารวม
+# ==========================================
+class SolarPurchasePreparation(models.Model):
+    code = models.CharField(max_length=20, unique=True, verbose_name="เลขที่ใบเตรียมสั่งซื้อ (Solar PPO)")
+
+    # 🌟 [FIXED] เปลี่ยนเป็น ManyToManyField เพื่อให้ดึงวัตถุดิบจากหลายๆ JOB มารวมกันได้
+    solar_jobs = models.ManyToManyField('solar_jobs.SolarJob', related_name='ppos_purchasing', verbose_name="อ้างอิงใบสั่งงาน (JOB)")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, related_name='solar_ppo_created_purchasing', verbose_name="ผู้จัดทำ (สโตร์)")
+    status = models.CharField(max_length=20, choices=[('PENDING', 'รอจัดซื้อดำเนินการ'), ('ORDERED', 'สั่งซื้อแล้ว'), ('CANCELLED', 'ยกเลิก')], default='PENDING')
+
+    class Meta:
+        verbose_name = "ใบเตรียมสั่งซื้อโซล่า (Solar PPO)"
+        verbose_name_plural = "ใบเตรียมสั่งซื้อโซล่า (Solar PPO)"
+
+    def __str__(self):
+        return self.code
+
+    def save(self, *args, **kwargs):
+        if not self.code:
+            today = datetime.date.today()
+            thai_year = (today.year + 543) % 100
+            prefix = f"SPPO{thai_year:02d}{today.strftime('%m')}"
+
+            last_ppo = SolarPurchasePreparation.objects.filter(code__startswith=prefix).order_by('code').last()
+            if last_ppo:
+                try: seq = int(last_ppo.code.replace(prefix, '')) + 1
+                except: seq = 1
+            else:
+                seq = 1
+            self.code = f"{prefix}{seq:03d}"
+        super().save(*args, **kwargs)
+
+class SolarPurchasePreparationItem(models.Model):
+    ppo = models.ForeignKey(SolarPurchasePreparation, on_delete=models.CASCADE, related_name='items')
+    product = models.ForeignKey(SolarProduct, on_delete=models.CASCADE, verbose_name="วัสดุที่ขาด")
+    quantity_needed = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="จำนวนที่ต้องการสั่งเพิ่ม")
+
+    # 🌟 เพิ่มคอลัมน์เก็บยอดที่จัดซื้อเปิด PO ไปแล้ว (ใช้อัปเดตความคืบหน้า)
+    ordered_qty = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="จำนวนที่สั่ง (PO) ไปแล้ว")
+
+    def __str__(self):
+        return f"{self.product.name} ({self.quantity_needed})"

@@ -1,0 +1,72 @@
+{% extends 'core/base.html' %}
+{% load humanize %}
+
+{% block content %}
+<div class="container-fluid py-4 px-4">
+    <div class="d-flex justify-content-between align-items-end mb-4">
+        <div>
+            <h4 class="fw-bold mb-1 text-dark"><i class="fas fa-truck-loading text-success me-2"></i>คิวงานรอรับเข้าคลัง (Pending PO)</h4>
+            <p class="text-muted small mb-0">รายการใบสั่งซื้อที่กำลังรอซัพพลายเออร์มาส่งสินค้า</p>
+        </div>
+        <div>
+            <a href="{% url 'solar_inventory_list' %}" class="btn btn-outline-secondary rounded-pill px-4 fw-bold shadow-sm">
+                <i class="fas fa-arrow-left me-2"></i> กลับหน้ากระดาน
+            </a>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0 rounded-4 overflow-hidden bg-white">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="bg-light text-secondary small text-uppercase">
+                    <tr>
+                        <th class="ps-4 py-3 border-0 fw-bold">เลขที่ใบสั่งซื้อ (PO)</th>
+                        <th class="py-3 border-0 fw-bold">ร้านค้า (Supplier)</th>
+                        <th class="py-3 border-0 text-center fw-bold">วันที่สั่งซื้อ</th>
+                        <th class="py-3 border-0 text-center fw-bold">สถานะรับของ</th>
+                        <th class="pe-4 py-3 border-0 text-center fw-bold">จัดการ</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for po in pending_pos %}
+                    <tr>
+                        <td class="ps-4 fw-bold text-dark font-monospace">{{ po.code }}</td>
+                        <td>
+                            <div class="fw-bold text-dark">
+                                {% if po.supplier %}
+                                    <i class="fas fa-store text-primary me-1"></i> {{ po.supplier.name }}
+                                {% else %}
+                                    <i class="fas fa-bolt text-warning me-1"></i> {{ po.supplier_name_free_text }}
+                                {% endif %}
+                            </div>
+                        </td>
+                        <td class="text-center text-muted small"><i class="far fa-clock me-1"></i> {{ po.date|date:"d/m/Y" }}</td>
+                        <td class="text-center">
+                            {% if po.receipt_status == 'PARTIAL' %}
+                                <span class="badge bg-info text-dark rounded-pill px-3 shadow-sm">รับบางส่วน</span>
+                            {% else %}
+                                <span class="badge bg-warning text-dark rounded-pill px-3 shadow-sm">รอรับของ</span>
+                            {% endif %}
+                        </td>
+                        <td class="pe-4 text-center">
+                            <!-- ลิงก์ข้ามไปใช้หน้าจอรับของของฝั่งจัดซื้อ (ที่เราเพิ่งเปลี่ยนกุญแจให้สโตร์) -->
+                            <a href="{% url 'solar_po_receive' po.id %}" class="btn btn-sm btn-success rounded-pill px-3 shadow-sm fw-bold">
+                                <i class="fas fa-box-open me-1"></i> รับสินค้า
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="text-center py-5 text-muted">
+                            <i class="fas fa-check-circle fa-3x mb-3 text-success opacity-25"></i>
+                            <h5 class="fw-bold">ไม่มีคิวงานรอรับสินค้า</h5>
+                            <p class="small">ขณะนี้ไม่มีใบสั่งซื้อที่ค้างรับของ</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

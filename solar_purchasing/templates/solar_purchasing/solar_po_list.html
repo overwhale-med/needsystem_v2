@@ -2,76 +2,132 @@
 {% load humanize %}
 
 {% block content %}
+<!-- นำเข้าไลบรารี DateRangePicker -->
+<script type="text/javascript" src="https://cdn.jsdelivr.net/jquery/latest/jquery.min.js"></script>
+<script type="text/javascript" src="https://cdn.jsdelivr.net/momentjs/latest/moment.min.js"></script>
+<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.min.js"></script>
+<link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css" />
+
 <style>
-    /* 🌟 สไตล์ปุ่มและเอฟเฟกต์สีทองแบบพรีเมียม 🌟 */
+    /* 🌟 สไตล์แถบค้นหาแบบแคปซูลเหมือนบ้านน็อคดาวน์ */
+    .search-pill-container {
+        display: flex; align-items: center; background-color: #f8f9fa; border: 1px solid #ced4da;
+        border-radius: 50px; padding: 4px 8px; box-shadow: inset 0 1px 2px rgba(0,0,0,0.05);
+    }
+    .search-pill-input {
+        border: none; background: transparent; box-shadow: none; outline: none;
+        width: 100%; padding: 6px 12px; font-size: 0.85rem; cursor: pointer;
+    }
+    .search-pill-icon { color: #6c757d; padding-left: 10px; }
+    .search-pill-btn {
+        background-color: #ffc107; color: #000; border: none; border-radius: 50px;
+        width: 35px; height: 35px; display: flex; align-items: center; justify-content: center;
+        transition: all 0.2s ease;
+    }
+    .search-pill-btn:hover { background-color: #ffca2c; transform: scale(1.05); }
+    .hidden-date { display: none; }
+
+    /* สไตล์ปุ่มกด */
     .hover-card { transition: all 0.3s ease; cursor: pointer; }
     .hover-card:hover { transform: translateY(-3px); box-shadow: 0 10px 20px rgba(212, 175, 55, 0.15) !important; }
-
     .btn-gold { background: linear-gradient(135deg, #d4af37 0%, #aa8c2c 100%); color: #ffffff !important; border: none; transition: all 0.3s ease; }
     .btn-gold:hover { background: linear-gradient(135deg, #aa8c2c 0%, #8c7324 100%); transform: translateY(-2px); box-shadow: 0 6px 12px rgba(212, 175, 55, 0.3) !important; }
 </style>
 
 <div class="container-fluid py-4 px-4">
+    <!-- ส่วนหัวหน้าจอ -->
     <div class="d-flex justify-content-between align-items-end mb-4">
         <div>
             <h4 class="fw-bold mb-1 text-dark"><i class="fas fa-solar-panel text-warning me-2"></i>ระบบจัดซื้อโซล่าเซลล์ (Solar Purchasing)</h4>
             <p class="text-muted small mb-0">แผงควบคุมและติดตามสถานะใบสั่งซื้อวัตถุดิบโซล่าเซลล์</p>
         </div>
-        <a href="{% url 'purchasing_dashboard' %}" class="btn btn-outline-secondary rounded-pill px-4 fw-bold shadow-sm"><i class="fas fa-arrow-left me-2"></i> กลับศูนย์จัดซื้อหลัก</a>
-    </div>
+        <div class="d-flex gap-2">
+            <a href="{% url 'solar_ppo_list' %}" class="btn btn-warning text-dark rounded-pill px-4 shadow-sm fw-bold position-relative d-flex align-items-center hover-card">
+                <i class="fas fa-file-invoice-dollar me-2"></i> งานขอซื้อ (PPO)
+                {% if pending_solar_ppo_count > 0 %}
+                <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger shadow-sm border border-2 border-white">
+                    {{ pending_solar_ppo_count }}
+                    <span class="visually-hidden">รอจัดซื้อ</span>
+                </span>
+                {% endif %}
+            </a>
 
-    <div class="card border-0 shadow-sm rounded-4 mb-4 bg-white">
-        <div class="card-body p-3 d-flex justify-content-between align-items-center flex-wrap gap-3">
-            <form method="GET" class="d-flex gap-2 align-items-center">
-                <div class="input-group input-group-sm shadow-sm rounded-pill overflow-hidden" style="width: 300px;">
-                    <span class="input-group-text bg-light border-0 ps-3"><i class="fas fa-search text-muted"></i></span>
-                    <input type="text" name="q" class="form-control bg-light border-0 shadow-none fw-bold" placeholder="ค้นหาเลขที่ POS, ชื่อร้านค้า..." value="{{ search_query }}">
-                </div>
-                <div class="input-group input-group-sm shadow-sm rounded-pill overflow-hidden" style="width: 200px;">
-                    <select name="status" class="form-select bg-light border-0 fw-bold text-dark shadow-none" style="cursor: pointer;">
-                        <option value="">-- ทุกสถานะ --</option>
-                        <option value="DRAFT" {% if status_filter == 'DRAFT' %}selected{% endif %}>ร่าง (รออนุมัติ)</option>
-                        <option value="APPROVED" {% if status_filter == 'APPROVED' %}selected{% endif %}>อนุมัติแล้ว</option>
-                        <option value="CANCELLED" {% if status_filter == 'CANCELLED' %}selected{% endif %}>ยกเลิก</option>
-                    </select>
-                </div>
-                <button type="submit" class="btn btn-sm btn-dark rounded-pill px-4 shadow-sm fw-bold">ค้นหา</button>
-            </form>
-
-            <div class="d-flex gap-2">
-                <!-- 🌟 [NEW] ปุ่มแจ้งเตือนงานขอซื้อจากสโตร์ (PPO) 🌟 -->
-                <a href="{% url 'solar_ppo_list' %}" class="btn btn-sm btn-warning text-dark rounded-pill px-4 shadow-sm fw-bold position-relative d-flex align-items-center hover-card">
-                    <i class="fas fa-file-invoice-dollar me-2"></i> คิวงานขอซื้อจากสโตร์ (PPO)
-
-                    {% if pending_solar_ppo_count > 0 %}
-                    <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger shadow-sm border border-2 border-white">
-                        {{ pending_solar_ppo_count }}
-                        <span class="visually-hidden">รอจัดซื้อ</span>
-                    </span>
-                    {% endif %}
-                </a>
-                <!-- 🌟 [NEW] ปุ่มสร้างใบสั่งซื้อด่วนแบบแยกประเภท (Dropdown) 🌟 -->
-                <div class="dropdown">
-                    <button class="btn btn-sm btn-gold rounded-pill px-4 shadow-sm fw-bold d-flex align-items-center hover-card dropdown-toggle" type="button" id="fastTrackDropdown" data-bs-toggle="dropdown" aria-expanded="false">
-                        <i class="fas fa-plus-circle me-2"></i> สร้างใบสั่งซื้อด่วน (Fast Track PO)
-                    </button>
-                    <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0 mt-2 rounded-4" aria-labelledby="fastTrackDropdown">
-                        <li>
-                            <a class="dropdown-item fw-bold text-success py-2 px-3" href="{% url 'solar_po_create' %}?type=FG">
-                                <i class="fas fa-box-open me-2"></i> สั่งซื้อแพ็กเกจสินค้า (FG)
-                            </a>
-                        </li>
-                        <li>
-                            <a class="dropdown-item fw-bold text-primary py-2 px-3" href="{% url 'solar_po_create' %}?type=RM">
-                                <i class="fas fa-tools me-2"></i> สั่งซื้อวัตถุดิบ/อุปกรณ์ (RM)
-                            </a>
-                        </li>
-                    </ul>
-                </div>
+            <div class="dropdown">
+                <button class="btn btn-gold rounded-pill px-4 shadow-sm fw-bold d-flex align-items-center hover-card dropdown-toggle" type="button" id="fastTrackDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="fas fa-plus-circle me-2"></i> สร้างด่วน (PO)
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0 mt-2 rounded-4" aria-labelledby="fastTrackDropdown">
+                    <li><a class="dropdown-item fw-bold text-success py-2 px-3" href="{% url 'solar_po_create' %}?type=FG"><i class="fas fa-box-open me-2"></i> สินค้า (FG)</a></li>
+                    <li><a class="dropdown-item fw-bold text-primary py-2 px-3" href="{% url 'solar_po_create' %}?type=RM"><i class="fas fa-tools me-2"></i> วัสดุ (RM)</a></li>
+                </ul>
             </div>
+
+            <a href="{% url 'purchasing_dashboard' %}" class="btn btn-outline-secondary rounded-pill px-4 fw-bold shadow-sm">
+                <i class="fas fa-arrow-left me-2"></i> หน้าหลัก
+            </a>
         </div>
     </div>
 
+    <!-- ส่วนฟอร์มค้นหาแบบบ้านน็อคดาวน์ -->
+    <div class="card shadow-sm border-0 rounded-4 mb-4 bg-white">
+        <div class="card-body p-3">
+            <form method="GET" class="row g-2 align-items-center">
+                <div class="col-md-3">
+                    <div class="input-group bg-light rounded-pill overflow-hidden border">
+                        <span class="input-group-text bg-transparent border-0 ps-3 text-muted"><i class="fas fa-search"></i></span>
+                        <input type="text" name="q" class="form-control bg-transparent border-0 shadow-none fw-bold" style="font-size: 0.85rem;" placeholder="เลขที่ POS, ชื่อร้าน..." value="{{ search_query|default:'' }}">
+                    </div>
+                </div>
+
+                <div class="col-md-2">
+                    <div class="input-group bg-light rounded-pill overflow-hidden border">
+                        <span class="input-group-text bg-transparent border-0 ps-3 text-muted"><i class="fas fa-money-bill-wave"></i></span>
+                        <select name="payment_status" class="form-select bg-transparent border-0 shadow-none fw-bold" style="font-size: 0.85rem; cursor: pointer;">
+                            <option value="" {% if not payment_filter %}selected{% endif %}>การชำระเงินทั้งหมด</option>
+                            <option value="PENDING" {% if payment_filter == 'PENDING' %}selected{% endif %}>รอชำระ</option>
+                            <option value="DEPOSIT" {% if payment_filter == 'DEPOSIT' %}selected{% endif %}>มัดจำแล้ว</option>
+                            <option value="PAID" {% if payment_filter == 'PAID' %}selected{% endif %}>จ่ายครบ</option>
+                         </select>
+                    </div>
+                </div>
+
+                <div class="col-md-2">
+                    <div class="input-group bg-light rounded-pill overflow-hidden border">
+                         <span class="input-group-text bg-transparent border-0 ps-3 text-muted"><i class="fas fa-file-signature"></i></span>
+                        <select name="status" class="form-select bg-transparent border-0 shadow-none fw-bold" style="font-size: 0.85rem; cursor: pointer;">
+                            <option value="" {% if not status_filter %}selected{% endif %}>สถานะเอกสารทั้งหมด</option>
+                            <option value="DRAFT" {% if status_filter == 'DRAFT' %}selected{% endif %}>ร่าง / รออนุมัติ</option>
+                            <option value="APPROVED" {% if status_filter == 'APPROVED' %}selected{% endif %}>อนุมัติแล้ว</option>
+                            <option value="CANCELLED" {% if status_filter == 'CANCELLED' %}selected{% endif %}>ยกเลิก</option>
+                        </select>
+                    </div>
+                 </div>
+
+                <div class="col-md-4">
+                    <div class="search-pill-container">
+                        <i class="far fa-calendar-alt search-pill-icon"></i>
+                        <input type="text" id="reportrange" class="search-pill-input fw-bold" placeholder="เลือกช่วงวันที่..." readonly>
+                        <button type="submit" class="search-pill-btn" title="ค้นหา">
+                            <i class="fas fa-search"></i>
+                        </button>
+                    </div>
+
+                    <input type="text" name="start_date" id="start_date" class="hidden-date" value="{{ start_date|default:'' }}">
+                    <input type="text" name="end_date" id="end_date" class="hidden-date" value="{{ end_date|default:'' }}">
+                </div>
+
+                <div class="col-md-1 d-flex justify-content-end align-items-center">
+                    {% if search_query or start_date or status_filter or payment_filter %}
+                        <a href="{% url 'solar_po_list' %}" class="btn btn-outline-danger rounded-circle d-flex align-items-center justify-content-center" style="width: 38px; height: 38px;" title="ล้างค่าทั้งหมด">
+                            <i class="fas fa-redo-alt"></i>
+                        </a>
+                    {% endif %}
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ตารางแสดงผลเหมือนบ้านน็อคดาวน์ -->
     <div class="card shadow-sm border-0 rounded-4 overflow-hidden">
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
@@ -90,7 +146,7 @@
                     {% for po in pos %}
                     <tr>
                         <td class="ps-4">
-                            <div class="fw-bold text-dark fs-6" style="font-family: 'Courier New', monospace;">{{ po.code }}</div>
+                            <div class="fw-bold text-dark fs-6 font-monospace">{{ po.code }}</div>
                             <div class="text-muted small mb-1" style="font-size: 0.75rem;">
                                 <i class="far fa-clock me-1"></i> {{ po.date|date:"d/m/Y" }}
                             </div>
@@ -104,84 +160,87 @@
                                 {% endif %}
                             </div>
                         </td>
-                        <!-- 🌟 [UPDATE] จัดชิดขวา (text-end) และเว้นวรรคหลัง ฿ -->
                         <td class="text-end pe-4">
-                            <div class="fw-bold text-dark fs-6">฿ {{ po.total_amount|floatformat:2|intcomma }}</div>
+                            <div class="fw-bold text-primary fs-6">{{ po.total_amount|floatformat:2|intcomma }}</div>
                         </td>
-                        <!-- 🌟 คอลัมน์ที่ 1: สถานะเอกสารหลัก -->
+
                         <td class="text-center">
                             {% if po.status == 'DRAFT' %}
-                                <span class="badge bg-warning text-dark rounded-pill px-3 shadow-sm"><i class="fas fa-hourglass-half me-1"></i> รอผู้จัดการอนุมัติ</span>
+                                <span class="badge bg-secondary bg-opacity-10 text-secondary border rounded-pill px-3 shadow-sm">ร่าง / รออนุมัติ</span>
                             {% elif po.status == 'APPROVED' %}
-                                <span class="badge bg-success rounded-pill px-3 shadow-sm"><i class="fas fa-check-circle me-1"></i> อนุมัติแล้ว</span>
+                                <span class="badge bg-success bg-opacity-10 text-success border rounded-pill px-3 shadow-sm">อนุมัติแล้ว</span>
                             {% else %}
-                                <span class="badge bg-danger bg-opacity-10 text-danger border rounded-pill px-3 shadow-sm"><i class="fas fa-ban me-1"></i> ยกเลิก</span>
+                                <span class="badge bg-danger bg-opacity-10 text-danger border rounded-pill px-3 shadow-sm">ยกเลิก</span>
                             {% endif %}
                         </td>
 
-                        <!-- 🌟 คอลัมน์ที่ 2: สถานะจ่ายเงิน -->
                         <td class="text-center">
                             {% if po.payment_status == 'PAID' %}
-                                <div><span class="badge bg-success text-white rounded-pill px-2 shadow-sm" style="font-size: 0.75rem;"><i class="fas fa-money-bill-wave me-1"></i> จ่ายครบแล้ว</span></div>
+                                <div><span class="badge bg-success rounded-pill px-3 shadow-sm"><i class="fas fa-check me-1"></i> จ่ายครบ</span></div>
                             {% elif po.payment_status == 'DEPOSIT' %}
-                                <div><span class="badge bg-primary text-white rounded-pill px-2 shadow-sm" style="font-size: 0.75rem;"><i class="fas fa-coins me-1"></i> จ่ายมัดจำแล้ว</span></div>
+                                <div><span class="badge bg-info text-dark rounded-pill px-3 shadow-sm">มัดจำแล้ว</span></div>
                             {% else %}
-                                <div><span class="badge bg-light text-secondary border rounded-pill px-2 shadow-sm" style="font-size: 0.75rem;"><i class="fas fa-clock me-1"></i> รอชำระเงิน</span></div>
+                                <div><span class="badge bg-warning text-dark rounded-pill px-3 shadow-sm">รอชำระ</span></div>
                             {% endif %}
                         </td>
 
-                        <!-- 🌟 [NEW] คอลัมน์ที่ 3: สถานะรับของ (ป้ายสถานะ + ปุ่มรับเข้าคลัง) -->
                         <td class="text-center">
                             {% if po.receipt_status == 'COMPLETED' %}
-                                <div><span class="badge bg-info text-white rounded-pill px-2 shadow-sm" style="font-size: 0.75rem;"><i class="fas fa-check-double me-1"></i> รับของครบแล้ว</span></div>
+                                <div><span class="badge bg-success rounded-pill px-3 shadow-sm"><i class="fas fa-box-open me-1"></i> รับครบ</span></div>
                             {% elif po.receipt_status == 'PARTIAL' %}
-                                <div><span class="badge bg-secondary text-white rounded-pill px-2 shadow-sm mb-1" style="font-size: 0.75rem;"><i class="fas fa-box-open me-1"></i> รับบางส่วน</span></div>
-                            {% endif %}
-
-                            {% if po.status == 'APPROVED' and po.receipt_status != 'COMPLETED' %}
-                                <a href="{% url 'solar_po_receive' po.id %}" class="btn btn-sm btn-info text-white rounded-pill px-3 shadow-sm fw-bold d-flex align-items-center justify-content-center text-nowrap hover-card {% if po.receipt_status == 'PARTIAL' %}mt-1{% endif %}" title="ตรวจรับสินค้าเข้าคลัง" style="width: fit-content; margin: 0 auto;">
-                                    <i class="fas fa-box-open me-1"></i> รับเข้าคลัง
-                                </a>
+                                <div><span class="badge bg-info text-dark rounded-pill px-3 shadow-sm mb-1">รับบางส่วน</span></div>
+                            {% else %}
+                                <div><span class="badge bg-warning text-dark rounded-pill px-3 shadow-sm">รอรับของ</span></div>
                             {% endif %}
                         </td>
 
-                        <!-- 🌟 คอลัมน์ที่ 4: จัดการ (เปิดดู, พิมพ์, ยกเลิก, อนุมัติ) -->
                         <td class="pe-4 text-center">
                             <div class="d-flex justify-content-center align-items-center gap-2">
+
+                                <!-- 🌟 1. ปุ่มเปิดดู/แก้ไข (แสดงให้ทุกคนเห็น) -->
                                 <a href="{% url 'solar_po_edit' po.id %}" class="btn btn-sm btn-outline-primary rounded-pill px-3 shadow-sm fw-bold d-flex align-items-center text-nowrap" title="ดูรายละเอียด / แก้ไข">
                                     <i class="fas fa-search me-1"></i> เปิดดู
                                 </a>
 
+                                <!-- 🌟 2. ปุ่มอนุมัติและยกเลิก (แสดงเฉพาะผู้จัดการ เมื่อสถานะเป็น DRAFT) -->
                                 {% if is_manager and po.status == 'DRAFT' %}
-                                <form method="POST" action="{% url 'solar_po_approve' po.id %}" style="display:inline;">
-                                    {% csrf_token %}
-                                    <button type="submit" class="btn btn-sm btn-success rounded-pill px-3 shadow-sm fw-bold d-flex align-items-center text-nowrap" onclick="return confirm('ยืนยันการอนุมัติใบสั่งซื้อ {{ po.code }} ใช่หรือไม่?');">
-                                        <i class="fas fa-check-circle me-1"></i> อนุมัติ
-                                    </button>
-                                </form>
+                                    <form method="POST" action="{% url 'solar_po_approve' po.id %}" style="display:inline;">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-sm btn-success rounded-pill px-3 shadow-sm fw-bold d-flex align-items-center text-nowrap" onclick="return confirm('ยืนยันการอนุมัติใบสั่งซื้อ {{ po.code }} ใช่หรือไม่?');">
+                                            <i class="fas fa-check-circle me-1"></i> อนุมัติ
+                                        </button>
+                                    </form>
 
-                                <form method="POST" action="{% url 'solar_po_cancel' po.id %}" style="display:inline;">
-                                    {% csrf_token %}
-                                    <button type="submit" class="btn btn-sm btn-outline-danger rounded-pill px-3 shadow-sm fw-bold d-flex align-items-center text-nowrap" onclick="return confirm('คำเตือน: ยืนยันการยกเลิกใบสั่งซื้อ {{ po.code }} ใช่หรือไม่?');">
-                                        <i class="fas fa-times-circle me-1"></i> ยกเลิก
-                                    </button>
-                                </form>
+                                    <form method="POST" action="{% url 'solar_po_cancel' po.id %}" style="display:inline;">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-sm btn-outline-danger rounded-pill px-3 shadow-sm fw-bold d-flex align-items-center text-nowrap" onclick="return confirm('คำเตือน: ยืนยันการยกเลิกใบสั่งซื้อ {{ po.code }} ใช่หรือไม่?');">
+                                            <i class="fas fa-times-circle me-1"></i> ยกเลิก
+                                        </button>
+                                    </form>
                                 {% endif %}
 
-                                <!-- 🌟 ปุ่มพิมพ์ใบสั่งซื้อ -->
-                                <a href="{% url 'solar_po_print' po.id %}" target="_blank" class="btn btn-sm btn-secondary rounded-pill px-3 shadow-sm fw-bold d-flex align-items-center text-white text-nowrap" title="พิมพ์ใบสั่งซื้อเป็นเอกสาร A4">
-                                    <i class="fas fa-print me-1"></i> พิมพ์
-                                </a>
+                                <!-- 🌟 3. ปุ่มจัดการอื่นๆ (แสดงหลังจากอนุมัติแล้วเท่านั้น) -->
+                                {% if po.status == 'APPROVED' %}
+                                    {% if user.is_superuser or user.groups.all.0.name == 'Accounting' or user.groups.all.0.name == 'Executive' %}
+                                        <a href="{% url 'solar_po_payment' po.id %}" class="btn btn-sm btn-outline-success shadow-sm rounded-circle" style="width: 32px; height: 32px;" title="บันทึกชำระเงิน">
+                                            <i class="fas fa-money-bill-wave mt-1"></i>
+                                        </a>
+                                    {% endif %}
+
+                                    <a href="{% url 'solar_po_print' po.id %}" target="_blank" class="btn btn-sm btn-outline-secondary shadow-sm rounded-circle" style="width: 32px; height: 32px;" title="พิมพ์ใบสั่งซื้อ">
+                                        <i class="fas fa-print mt-1"></i>
+                                    </a>
+                                {% endif %}
+
                             </div>
                         </td>
                     </tr>
                     {% empty %}
                     <tr>
-                        <!-- 🌟 [UPDATE] ปรับเป็น 7 เพื่อครอบคลุมคอลัมน์สถานะรับของที่เพิ่มขึ้นมา -->
                         <td colspan="7" class="text-center py-5 text-muted">
-                            <i class="fas fa-box-open fa-3x mb-3 opacity-25"></i>
-                            <h5 class="fw-bold">ยังไม่มีข้อมูลการสั่งซื้อ</h5>
-                            <p class="small">กดปุ่ม "สร้างใบสั่งซื้อด่วน" เพื่อเริ่มต้นระบบจัดซื้อโซล่าเซลล์</p>
+                            <i class="fas fa-search fa-3x mb-3 opacity-25"></i>
+                            <h5 class="fw-bold">ไม่พบรายการใบสั่งซื้อที่ค้นหา</h5>
+                            <p class="small">ลองเปลี่ยนเงื่อนไขการค้นหา หรือสร้างใบสั่งซื้อใหม่</p>
                         </td>
                     </tr>
                     {% endfor %}
@@ -190,4 +249,54 @@
         </div>
     </div>
 </div>
+
+<!-- สคริปต์ DateRangePicker ของบ้านน็อคดาวน์ -->
+<script type="text/javascript">
+$(function() {
+    var start = moment("{{ start_date|default:'' }}", "YYYY-MM-DD");
+    var end = moment("{{ end_date|default:'' }}", "YYYY-MM-DD");
+
+    function cb(start, end) {
+        if(start && end && start.isValid() && end.isValid()) {
+            $('#reportrange').val(start.format('DD/MM/YYYY') + ' - ' + end.format('DD/MM/YYYY'));
+            $('#start_date').val(start.format('YYYY-MM-DD'));
+            $('#end_date').val(end.format('YYYY-MM-DD'));
+        }
+    }
+
+    $('#reportrange').daterangepicker({
+        startDate: start.isValid() ? start : moment().subtract(29, 'days'),
+        endDate: end.isValid() ? end : moment(),
+        ranges: {
+           'วันนี้': [moment(), moment()],
+           'เมื่อวาน': [moment().subtract(1, 'days'), moment().subtract(1, 'days')],
+           'ช่วง 7 วันก่อนหน้า': [moment().subtract(6, 'days'), moment()],
+           'ช่วง 30 วันก่อนหน้า': [moment().subtract(29, 'days'), moment()],
+           'เดือนนี้': [moment().startOf('month'), moment().endOf('month')],
+           '1 เดือนก่อนหน้า': [moment().subtract(1, 'month').startOf('month'), moment().subtract(1, 'month').endOf('month')]
+        },
+        locale: {
+            format: 'DD/MM/YYYY',
+            separator: ' - ',
+            applyLabel: 'ตกลง',
+            cancelLabel: 'ยกเลิก',
+            fromLabel: 'จาก',
+            toLabel: 'ถึง',
+            customRangeLabel: 'กำหนดเอง',
+            weekLabel: 'ส',
+            daysOfWeek: ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'],
+            monthNames: ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'],
+            firstDay: 1
+        }
+    }, cb);
+
+    $('#reportrange').on('apply.daterangepicker', function(ev, picker) {
+        cb(picker.startDate, picker.endDate);
+    });
+
+    if(start.isValid() && end.isValid()) {
+        cb(start, end);
+    }
+});
+</script>
 {% endblock %}
