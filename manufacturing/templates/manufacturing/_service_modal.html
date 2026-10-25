@@ -1,0 +1,104 @@
+<div class="modal fade" id="ticketModal-{{ t.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <form method="POST" action="{% url 'process_service_ticket' t.id %}" enctype="multipart/form-data">
+            {% csrf_token %}
+            <div class="modal-content rounded-4 border-0 shadow-lg">
+                <div class="modal-header bg-dark border-0 py-3">
+                    <h5 class="modal-title fw-bold text-white"><i class="fas fa-cogs me-2"></i> จัดการงานซ่อม: {{ t.code }}</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4 bg-light">
+                    <!-- ข้อมูลเบื้องต้น -->
+                    <div class="bg-white p-3 rounded-3 border shadow-sm mb-3">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6 class="fw-bold text-dark mb-1">ข้อมูลลูกค้า</h6>
+                                <p class="text-muted small mb-0"><i class="fas fa-user me-1"></i> {{ t.production_order.customer_name }}</p>
+                                <p class="text-muted small mb-0"><i class="fas fa-box me-1"></i> {{ t.production_order.product.name }}</p>
+                            </div>
+                            <div class="col-md-6 border-start">
+                                <h6 class="fw-bold text-dark mb-1">อาการเสีย ({{ t.get_issue_category_display }})</h6>
+                                <p class="text-danger small mb-0">{{ t.description }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 🌟 [FIXED] รูปก่อนซ่อม (ดึงจากตารางแบบใหม่ รองรับรูปและวิดีโอ) 🌟 -->
+                    <div class="mb-4">
+                        <h6 class="fw-bold text-dark small">📸 รูปภาพความเสียหายจากลูกค้า</h6>
+                        <div class="d-flex flex-wrap gap-2 mt-2">
+                            {% for media in t.media_files.all %}
+                                {% if media.media_type == 'BEFORE' %}
+                                    {% if '.mp4' in media.file.url|lower or '.mov' in media.file.url|lower %}
+                                        <!-- ไฟล์วิดีโอ -->
+                                        <video src="{{ media.file.url }}" controls style="height: 100px; border-radius: 8px; background: #000;"></video>
+                                    {% else %}
+                                        <!-- ไฟล์รูปภาพ -->
+                                        <a href="{{ media.file.url }}" target="_blank">
+                                            <img src="{{ media.file.url }}" style="height: 100px; border-radius: 8px; object-fit: cover; border: 1px solid #ddd;">
+                                        </a>
+                                    {% endif %}
+                                {% endif %}
+                            {% empty %}
+                                <span class="text-muted small">ไม่มีการแนบรูปภาพ</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <!-- ส่วนควบคุมตามสถานะ -->
+                    {% if t.status == 'PENDING' %}
+                        {% if not t.is_warranty %}
+                            <div class="alert alert-warning border-warning">
+                                <h6 class="fw-bold text-dark"><i class="fas fa-comment-dollar text-danger"></i> งานนอกระยะประกัน (มีค่าใช้จ่าย)</h6>
+                                <p class="small mb-2">กรุณาประเมินค่าซ่อม เพื่อส่งให้เซลส์นำไปแจ้งลูกค้าครับ</p>
+                                <div class="input-group mb-2">
+                                    <span class="input-group-text">ค่าซ่อม (บาท)</span>
+                                    <input type="number" name="estimated_cost" class="form-control bg-white text-dark" placeholder="เช่น 1500" required>
+                                </div>
+                                <textarea name="cost_comment" class="form-control bg-white text-dark small" rows="2" placeholder="รายละเอียดอะไหล่ที่ต้องเบิก..."></textarea>
+                                <button type="submit" name="action" value="estimate_cost" class="btn btn-warning w-100 mt-2 fw-bold text-dark"><i class="fas fa-paper-plane me-1"></i> ส่งประเมินให้เซลส์</button>
+                            </div>
+                        {% endif %}
+                        
+                        <!-- 🌟 [FIXED] เปลี่ยนสีพื้นหลังเป็น bg-white ให้สว่าง และเห็นตัวอักษรชัดเจน 🌟 -->
+                        <div class="bg-white p-3 rounded-3 border shadow-sm mt-3">
+                            <h6 class="fw-bold text-dark"><i class="fas fa-hard-hat text-primary"></i> จ่ายงานให้ทีมช่างเข้าพื้นที่</h6>
+                            <div class="row g-2 mt-2">
+                                <div class="col-md-7">
+                                    <select name="production_team" class="form-select bg-light text-dark border" {% if not t.is_warranty %}required{% endif %}>
+                                        <option value="">-- เลือกทีมช่าง --</option>
+                                        {% for tm in teams %}<option value="{{ tm.id }}">{{ tm.name }}</option>{% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-md-5">
+                                    <input type="text" name="appointment_date" class="form-control bg-light text-dark border text-center datepicker" placeholder="dd/mm/yyyy" title="วันที่นัดหมาย" required>
+                                </div>
+                                <div class="col-12 mt-2">
+                                    <button type="submit" name="action" value="assign_team" class="btn btn-primary w-100 fw-bold shadow-sm" {% if not t.is_warranty %}disabled title="ต้องรอคอนเฟิร์มราคาก่อน"{% endif %}>จ่ายงานทันที</button>
+                                </div>
+                            </div>
+                        </div>
+
+                    {% elif t.status == 'WAITING_APPROVAL' %}
+                        <div class="text-center py-4 bg-white rounded-3 border shadow-sm">
+                            <i class="fas fa-hourglass-half fa-3x text-warning mb-2 animate__animated animate__pulse animate__infinite"></i>
+                            <h6 class="text-dark fw-bold">รอเซลส์คอนเฟิร์มราคากับลูกค้า</h6>
+                            <p class="text-muted small mb-0">ประเมินไว้: ฿{{ t.estimated_cost|floatformat:2 }}</p>
+                        </div>
+
+                    {% elif t.status == 'IN_PROGRESS' %}
+                        <div class="bg-white p-3 rounded-3 border shadow-sm">
+                            <h6 class="fw-bold text-success"><i class="fas fa-camera"></i> แนบรูปภาพผลงานหลังซ่อม (เพื่อปิดจ๊อบ)</h6>
+                            <!-- 🌟 [FIXED] ปรับช่องอัปโหลดหลังซ่อม ให้รองรับหลายไฟล์แบบเดียวกับฝั่งเซลส์ -->
+                            <input type="file" name="after_media_files" class="form-control bg-light mb-2" accept="image/*,video/mp4,video/quicktime" multiple required>
+                            <p class="text-muted small mb-3">* สามารถเลือกหลายไฟล์พร้อมกันได้ (รูปภาพหรือวิดีโอ)</p>
+                            <button type="submit" name="action" value="close_ticket" class="btn btn-success w-100 fw-bold shadow-sm" onclick="return confirm('ยืนยันปิดจ๊อบงานซ่อมนี้ใช่หรือไม่?');">
+                                <i class="fas fa-check-circle me-1"></i> ซ่อมเสร็จสิ้น (ปิดงาน)
+                            </button>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </form>
+    </div>
+</div>

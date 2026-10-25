@@ -10,6 +10,10 @@
             <p class="text-muted small mb-0">ตรวจสอบงานจากฝ่ายผลิต รับเข้าคลัง หรือตีกลับให้แก้ไข</p>
         </div>
         <div class="d-flex gap-2">
+            <!-- 🌟 [NEW] ปุ่มดูประวัติการตรวจงานของ QC 🌟 -->
+            <a href="{% url 'my_qc_log' %}" class="btn btn-success rounded-pill px-4 fw-bold shadow-sm text-white">
+                <i class="fas fa-history me-1"></i> ประวัติการตรวจงานของฉัน
+            </a>
             <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary rounded-pill px-4 fw-bold shadow-sm bg-white">
                 <i class="fas fa-home me-1"></i> กลับหน้าหลัก
             </a>
@@ -305,20 +309,20 @@
                             </div>
 
                             <hr>
-                            <h6 class="fw-bold text-danger mb-2"><i class="fas fa-exclamation-circle me-1"></i> กรณีตรวจ "ไม่ผ่าน" (ตีกลับให้ช่างแก้)</h6>
-                            <p class="small text-muted mb-2">กรุณาพิมพ์จุดที่ต้องแก้ และแนบรูปถ่ายหลักฐาน</p>
+                            <!-- 🌟 [NEW] แผงอัปโหลดสื่อสำหรับกรณี "ผ่าน" (สีเขียว) 🌟 -->
+                            <div class="bg-success bg-opacity-10 border border-success border-opacity-25 p-3 rounded-3 mb-3">
+                                <h6 class="fw-bold text-success mb-1"><i class="fas fa-check-circle me-1"></i> กรณีตรวจ "ผ่าน" (ส่งเข้าสต็อก)</h6>
+                                <p class="small text-muted mb-2">แนบรูปภาพ/คลิปวิดีโอผลงานที่สมบูรณ์ เพื่อให้เซลส์ส่งให้ลูกค้า (เลือกได้หลายไฟล์)</p>
+                                <!-- สังเกตคำว่า multiple ทำให้เลือกได้หลายไฟล์ และ accept video ทำให้เลือกคลิปได้ -->
+                                <input type="file" name="passed_media" class="form-control form-control-sm border-success shadow-sm" accept="image/*,video/*" multiple>
+                            </div>
 
-                            <textarea name="comments" class="form-control mb-3 rounded-3 shadow-sm" rows="3" placeholder="ระบุจุดที่ต้องแก้ไข..."></textarea>
-
-                            <div class="row g-2">
-                                <div class="col-md-6">
-                                    <label class="small fw-bold">รูปภาพที่ 1</label>
-                                    <input type="file" name="defect_image_1" class="form-control form-control-sm" accept="image/*">
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="small fw-bold">รูปภาพที่ 2</label>
-                                    <input type="file" name="defect_image_2" class="form-control form-control-sm" accept="image/*">
-                                </div>
+                            <!-- 🌟 [NEW] แผงอัปโหลดสื่อสำหรับกรณี "ไม่ผ่าน" (สีแดง) 🌟 -->
+                            <div class="bg-danger bg-opacity-10 border border-danger border-opacity-25 p-3 rounded-3 mb-3">
+                                <h6 class="fw-bold text-danger mb-1"><i class="fas fa-exclamation-circle me-1"></i> กรณีตรวจ "ไม่ผ่าน" (ตีกลับให้ช่างแก้)</h6>
+                                <p class="small text-muted mb-2">ระบุจุดที่ต้องแก้ และแนบรูป/คลิปตำหนิให้ช่างดู (เลือกได้หลายไฟล์)</p>
+                                <textarea name="comments" class="form-control form-control-sm mb-2 shadow-sm" rows="2" placeholder="พิมพ์จุดที่ต้องแก้ไข..."></textarea>
+                                <input type="file" name="failed_media" class="form-control form-control-sm border-danger shadow-sm" accept="image/*,video/*" multiple>
                             </div>
                         {% endif %}
                     </div>

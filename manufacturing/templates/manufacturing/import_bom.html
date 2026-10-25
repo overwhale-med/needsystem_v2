@@ -9,7 +9,7 @@
                     <h5 class="mb-0 fw-bold"><i class="fas fa-file-excel me-2"></i>นำเข้าสูตรผลิต (BOM) ผ่าน Excel</h5>
                 </div>
                 <div class="card-body p-4">
-                    <div class="alert alert-info small">
+                    <div class="alert alert-info small mb-3">
                         <h6 class="fw-bold">📢 คำแนะนำการเตรียมไฟล์:</h6>
                         <ul class="mb-0">
                             <li>ไฟล์ต้องมีคอลัมน์ชื่อ: <strong>FG SKU</strong>, <strong>RM SKU</strong>, <strong>Quantity</strong></li>
@@ -17,6 +17,13 @@
                             <li><strong>RM SKU:</strong> รหัสวัตถุดิบ (เช่น PA01)</li>
                             <li><strong>Quantity:</strong> จำนวนที่ใช้ต่อ 1 หลัง</li>
                         </ul>
+                    </div>
+
+                    <!-- 🌟 [NEW] ปุ่มดาวน์โหลดไฟล์แม่แบบ 🌟 -->
+                    <div class="text-center mb-4">
+                        <a href="{% url 'download_bom_template' %}" class="btn btn-outline-primary rounded-pill shadow-sm fw-bold px-4">
+                            <i class="fas fa-download me-2"></i> ดาวน์โหลดไฟล์แม่แบบ (Template)
+                        </a>
                     </div>
 
                     <form method="post" enctype="multipart/form-data">

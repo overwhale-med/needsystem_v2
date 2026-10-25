@@ -30,6 +30,7 @@ class SolarProductForm(forms.ModelForm):
         }
 
     def __init__(self, *args, **kwargs):
+        # 1. กลไกเดิม: ดักจับข้อมูลตอนกดบันทึก (POST) เพื่อถอดลูกน้ำออกก่อนเซฟลงฐานข้อมูล
         if len(args) > 0 and hasattr(args[0], 'copy'):
             data = args[0].copy()
             for field in ['cost_price', 'sell_price', 'stock_qty', 'min_level']:
@@ -42,7 +43,32 @@ class SolarProductForm(forms.ModelForm):
                 if field in data:
                     data[field] = str(data[field]).replace(',', '')
             kwargs['data'] = data
+
         super().__init__(*args, **kwargs)
+
+        # 🌟 [NEW] กลไกใหม่: ดักจับข้อมูลตอนเปิดหน้าเว็บเพื่อแก้ไข (GET) เพื่อเติมลูกน้ำใส่กลับเข้าไปให้สวยงาม
+        if self.instance and self.instance.pk:
+            # จัดฟอร์แมตกลุ่มราคา ให้มีลูกน้ำและทศนิยม 2 ตำแหน่งเสมอ
+            for field in ['cost_price', 'sell_price']:
+                val = self.initial.get(field)
+                if val is not None:
+                    try:
+                        self.initial[field] = "{:,.2f}".format(float(val))
+                    except (ValueError, TypeError):
+                        pass
+
+            # จัดฟอร์แมตกลุ่มจำนวนสต็อก ถ้าเป็นเลขลงตัวจะไม่โชว์ทศนิยม
+            for field in ['stock_qty', 'min_level']:
+                val = self.initial.get(field)
+                if val is not None:
+                    try:
+                        val_float = float(val)
+                        if val_float.is_integer():
+                            self.initial[field] = "{:,.0f}".format(val_float)
+                        else:
+                            self.initial[field] = "{:,.2f}".format(val_float)
+                    except (ValueError, TypeError):
+                        pass
 
 class SolarStockMovementForm(forms.ModelForm):
     class Meta:

@@ -25,7 +25,7 @@ from .models import Quotation, QuotationItem, QuotationDeposit, POSOrder, POSOrd
 from master_data.models import Customer, CompanyInfo, ShippingRate
 from hr.models import Employee, SalesGroup, CompanySalesTarget, CommissionLog, FundTransaction
 from .forms import QuotationForm
-from manufacturing.models import ProductionOrder, Salesperson as MfgSalesperson, Branch, MfgBranch, ProductionStatus, JobLaborClaim, JobAirconClaim, JobOtherExpense, MasterExpenseClaim
+from manufacturing.models import ProductionOrder, Salesperson as MfgSalesperson, Branch, MfgBranch, ProductionStatus, JobLaborClaim, JobAirconClaim, JobOtherExpense, MasterExpenseClaim, ServiceTicket, ProductionTeam, ServiceTicketMedia
 from inventory.models import Product, InventoryDoc, StockMovement, Category
 from solar_jobs.models import SolarJob
 
@@ -2690,3 +2690,108 @@ def submit_expense_cart(request):
             messages.error(request, "❌ ยอดเงินเบิกต้องมากกว่า 0 บาท")
 
     return redirect('expense_cart_view')
+
+# ==========================================
+# 🌟 [NEW] สมองกล: ศูนย์แจ้งซ่อมและบริการ (After-Sales) 🌟
+# ==========================================
+from manufacturing.models import ServiceTicket, ProductionTeam
+
+@login_required
+def service_ticket_list(request):
+    if not is_sales_authorized(request.user):
+        messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์เข้าถึงศูนย์แจ้งซ่อม")
+        return redirect('dashboard')
+
+    target_employees, _ = get_target_employees(request.user)
+
+    # ดึงตั๋วซ่อมที่เซลส์ในทีมดูแลอยู่ หรือแอดมินเห็นทั้งหมด
+    if request.user.is_superuser:
+        tickets = ServiceTicket.objects.select_related('production_order', 'salesperson').all()
+    else:
+        emp_ids = list(target_employees.values_list('id', flat=True))
+        tickets = ServiceTicket.objects.select_related('production_order', 'salesperson').filter(salesperson_id__in=emp_ids)
+
+    # ระบบค้นหา
+    search_q = request.GET.get('q', '')
+    status_filter = request.GET.get('status', '')
+
+    if search_q:
+        tickets = tickets.filter(
+            Q(code__icontains=search_q) |
+            Q(production_order__customer_name__icontains=search_q) |
+            Q(production_order__code__icontains=search_q)
+        )
+    if status_filter:
+        tickets = tickets.filter(status=status_filter)
+
+    tickets = tickets.order_by('-created_at')
+
+    paginator = Paginator(tickets, 20)
+    page_obj = paginator.get_page(request.GET.get('page'))
+
+    # เพื่อให้ง่ายต่อการสร้างตั๋วใหม่ ดึงรายการ JOB ที่ส่งมอบแล้วมาเตรียมไว้ให้เลือก
+    completed_jobs = ProductionOrder.objects.filter(is_closed=True).order_by('-finish_date')[:50]
+
+    return render(request, 'sales/service_ticket_list.html', {
+        'page_obj': page_obj,
+        'search_q': search_q,
+        'status_filter': status_filter,
+        'status_choices': ServiceTicket.STATUS_CHOICES,
+        'completed_jobs': completed_jobs,
+        'category_choices': ServiceTicket.CATEGORY_CHOICES,
+        'urgency_choices': ServiceTicket.URGENCY_CHOICES,
+    })
+
+@login_required
+def service_ticket_create(request):
+    if request.method == 'POST':
+        job_id = request.POST.get('job_id')
+        issue_category = request.POST.get('issue_category')
+        description = request.POST.get('description')
+        urgency = request.POST.get('urgency', 'NORMAL')
+        is_warranty = request.POST.get('is_warranty') == 'on'
+
+        job = get_object_or_404(ProductionOrder, pk=job_id)
+        current_emp = getattr(request.user, 'employee', None)
+
+        # 1. สร้างตั๋วแจ้งซ่อม
+        ticket = ServiceTicket.objects.create(
+            production_order=job,
+            salesperson=current_emp,
+            issue_category=issue_category,
+            description=description,
+            urgency=urgency,
+            is_warranty=is_warranty,
+            status='PENDING'
+        )
+
+        # 🌟 2. [NEW] กวาดไฟล์ทั้งหมดที่อัปโหลดมา บันทึกลงตาราง ServiceTicketMedia 🌟
+        media_files = request.FILES.getlist('media_files')
+        for f in media_files:
+            ServiceTicketMedia.objects.create(
+                ticket=ticket,
+                media_type='BEFORE',
+                file=f
+            )
+
+        messages.success(request, f"✅ เปิดตั๋วแจ้งซ่อม {ticket.code} พร้อมแนบไฟล์จำนวน {len(media_files)} ไฟล์ ส่งให้ช่างเรียบร้อยแล้ว!")
+
+    return redirect('service_ticket_list')
+
+@login_required
+def service_ticket_update(request, ticket_id):
+    ticket = get_object_or_404(ServiceTicket, pk=ticket_id)
+    if request.method == 'POST':
+        action = request.POST.get('action')
+
+        if action == 'approve_cost' and ticket.status == 'WAITING_APPROVAL':
+            ticket.status = 'PENDING' # คืนให้ช่างจัดคิว
+            ticket.save()
+            messages.success(request, f"✅ เซลส์คอนเฟิร์มค่าใช้จ่ายกับลูกค้าเรียบร้อยแล้ว ส่งงานกลับให้ช่างจัดคิวซ่อม!")
+
+        elif action == 'cancel' and ticket.status in ['PENDING', 'WAITING_APPROVAL']:
+            ticket.status = 'CANCELLED'
+            ticket.save()
+            messages.warning(request, f"⚠️ ยกเลิกใบแจ้งซ่อม {ticket.code} เรียบร้อยแล้ว")
+
+    return redirect('service_ticket_list')

@@ -3,7 +3,8 @@ from .models import (
     ProductionOrder, ProductionOrderMaterial, BOM, BOMItem, Branch,
     MfgBranch, Salesperson, ProductionStatus, ProductionTeam,
     DeliveryStatus, Transporter, QCInspectionLog, BlueprintClaim,
-    BlueprintLog, BlueprintClaimSplit, LogisticsClaim
+    BlueprintLog, BlueprintClaimSplit, LogisticsClaim,
+    QCReceiptDoc, QCPassedMedia, QCFailedMedia # 👈 เพิ่มบรรทัดนี้
 )
 
 class ProductionOrderMaterialInline(admin.TabularInline):
@@ -39,6 +40,8 @@ admin.site.register(QCInspectionLog)
 admin.site.register(BlueprintClaim)
 admin.site.register(BlueprintLog)
 admin.site.register(BlueprintClaimSplit)
+admin.site.register(QCPassedMedia)
+admin.site.register(QCFailedMedia)
 
 # ==========================================
 # 🌟 ส่วนการจัดการระบบขนส่ง (Logistics) 🌟
@@ -58,3 +61,14 @@ class LogisticsClaimAdmin(admin.ModelAdmin):
     search_fields = ('code', 'transporter__name')
     # 🌟 ล็อกฟิลด์วันที่สร้างบิลให้เป็น 'อ่านอย่างเดียว' เพื่อป้องกัน Error ตอนกด Save
     readonly_fields = ('created_at',)
+
+# ==========================================
+# 🌟 [NEW] แสดงใบรับสินค้าสำเร็จรูป (จาก QC) ใน Admin
+# ==========================================
+@admin.register(QCReceiptDoc)
+class QCReceiptDocAdmin(admin.ModelAdmin):
+    list_display = ('doc_no', 'production_order', 'product', 'quantity', 'created_by', 'created_at')
+    list_filter = ('created_at', 'created_by')
+    search_fields = ('doc_no', 'production_order__code', 'product__name')
+    readonly_fields = ('created_at',)
+    ordering = ('-created_at',)

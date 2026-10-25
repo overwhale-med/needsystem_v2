@@ -145,7 +145,21 @@ class BlueprintClaimSplit(models.Model):
 class BOM(models.Model):
     product = models.OneToOneField(Product, on_delete=models.CASCADE, verbose_name="สินค้าสำเร็จรูป (FG)")
     name = models.CharField(max_length=200, verbose_name="ชื่อสูตร (เช่น สูตรมาตรฐาน)")
-    labor_cost = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, verbose_name="ค่าแรงประกอบ") # 🌟 [NEW] เพิ่มฟิลด์เก็บค่าแรงประกอบตามความต้องการผู้ใช้
+    labor_cost = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, verbose_name="ค่าแรงประกอบ")
+
+    # 🌟 [NEW] เพิ่มตัวแปรสำหรับ แผงควบคุมต้นทุนอื่นๆ 🌟
+    # 1. ค่าบริหารการขาย (หักจากกำไรขั้นต้น หรือ ราคาขายหลังหัก 10%)
+    sales_admin_type = models.CharField(max_length=10, choices=[('PERCENT', 'เปอร์เซ็นต์ (%)'), ('THB', 'บาท')], default='PERCENT', verbose_name="ประเภทค่าบริหาร")
+    sales_admin_value = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, verbose_name="มูลค่าค่าบริหาร")
+
+    # 2. ค่าขนส่ง (ประเมิน)
+    freight_type = models.CharField(max_length=10, choices=[('PERCENT', 'เปอร์เซ็นต์ (%)'), ('THB', 'บาท')], default='THB', verbose_name="ประเภทค่าขนส่ง")
+    freight_value = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, verbose_name="มูลค่าค่าขนส่ง")
+
+    # 3. ค่าใช้จ่ายอื่นๆ (Miscellaneous)
+    misc_expense_type = models.CharField(max_length=10, choices=[('PERCENT', 'เปอร์เซ็นต์ (%)'), ('THB', 'บาท')], default='THB', verbose_name="ประเภทค่าใช้จ่ายอื่นๆ")
+    misc_expense_value = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, verbose_name="มูลค่าค่าใช้จ่ายอื่นๆ")
+
     note = models.TextField(blank=True, verbose_name="หมายเหตุ")
 
     def __str__(self): return f"สูตรผลิต: {self.product.name}"
@@ -304,11 +318,40 @@ class QCInspectionLog(models.Model):
     status = models.CharField(max_length=20, choices=[('PASSED', 'ผ่าน'), ('FAILED', 'ไม่ผ่าน/ตีกลับ')], default='FAILED', verbose_name="ผลการตรวจ")
     comments = models.TextField(blank=True, verbose_name="คอมเมนต์/จุดที่ต้องแก้ไข")
 
+    # (ระบบเก่า - ยังเก็บไว้เพื่อไม่ให้ข้อมูลเดิมหาย)
     defect_image_1 = models.ImageField(upload_to='qc_defects/%Y/%m/', null=True, blank=True, verbose_name="รูปภาพประกอบ 1")
     defect_image_2 = models.ImageField(upload_to='qc_defects/%Y/%m/', null=True, blank=True, verbose_name="รูปภาพประกอบ 2")
 
     def __str__(self):
         return f"QC รอบที่ {self.round_number} - {self.production_order.code}"
+
+# ==========================================
+# 🌟 [NEW] ตารางย่อย: คลังรูปและวิดีโอ "ผ่าน QC" (สำหรับเซลส์/ลูกค้า) 🌟
+# ==========================================
+class QCPassedMedia(models.Model):
+    production_order = models.ForeignKey(ProductionOrder, related_name='passed_media', on_delete=models.CASCADE)
+    uploaded_by = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True)
+    # ใช้ FileField เพื่อให้รองรับทั้งรูปภาพ (JPG, PNG) และคลิปวิดีโอ (MP4)
+    file = models.FileField(upload_to='qc_passed_media/%Y/%m/', verbose_name="ไฟล์รูป/คลิปที่ผ่าน QC")
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "สื่อ - ตรวจผ่าน"
+        verbose_name_plural = "สื่อ - ตรวจผ่าน"
+
+# ==========================================
+# 🌟 [NEW] ตารางย่อย: คลังรูปและวิดีโอ "ไม่ผ่าน/มีตำหนิ" (สำหรับช่าง) 🌟
+# ==========================================
+class QCFailedMedia(models.Model):
+    # ผูกกับประวัติการตรวจ (QCInspectionLog) เพื่อให้รู้ว่ารูปนี้ถูกถ่ายตอนตีกลับ "รอบที่เท่าไหร่"
+    qc_log = models.ForeignKey(QCInspectionLog, related_name='failed_media', on_delete=models.CASCADE)
+    # ใช้ FileField เพื่อให้รองรับทั้งรูปภาพ (JPG, PNG) และคลิปวิดีโอ (MP4)
+    file = models.FileField(upload_to='qc_failed_media/%Y/%m/', verbose_name="ไฟล์รูป/คลิปตำหนิ")
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "สื่อ - ตำหนิ"
+        verbose_name_plural = "สื่อ - ตำหนิ"
 
 # ==========================================
 # 3. รายการวัตถุดิบที่ใช้จริงต่อ 1 งาน (Job Material List)
@@ -525,3 +568,85 @@ class QCReceiptDoc(models.Model):
             else: seq = 1
             self.doc_no = f"{prefix}{seq:03d}"
         super().save(*args, **kwargs)
+
+# ==========================================
+# 🌟 [NEW] ระบบแจ้งซ่อมและบริการหลังการขาย (After-Sales / Service Ticket) 🌟
+# ==========================================
+class ServiceTicket(models.Model):
+    STATUS_CHOICES = [
+        ('PENDING', 'รอหัวหน้าช่างประเมิน'),
+        ('WAITING_APPROVAL', 'รอเซลส์คอนเฟิร์มราคา (งานมีค่าใช้จ่าย)'),
+        ('IN_PROGRESS', 'กำลังดำเนินการ / นัดหมายช่างแล้ว'),
+        ('COMPLETED', 'ซ่อมเสร็จสิ้น (ปิดจ๊อบ)'),
+        ('CANCELLED', 'ยกเลิกการแจ้งซ่อม')
+    ]
+
+    CATEGORY_CHOICES = [
+        ('ROOF', 'หลังคารั่วซึม'),
+        ('ELEC', 'ระบบไฟฟ้า'),
+        ('PLUM', 'ระบบประปา / ห้องน้ำ'),
+        ('PAINT', 'สีหลุดร่อน / รอยร้าว'),
+        ('STRUCT', 'โครงสร้าง / พื้น / ผนัง'),
+        ('OTHER', 'อื่นๆ')
+    ]
+
+    URGENCY_CHOICES = [
+        ('NORMAL', 'ปกติ (ตามคิว)'),
+        ('URGENT', 'ด่วนมาก (ฉุกเฉิน)')
+    ]
+
+    code = models.CharField(max_length=20, unique=True, verbose_name="เลขที่ใบแจ้งซ่อม")
+    production_order = models.ForeignKey(ProductionOrder, on_delete=models.CASCADE, related_name='service_tickets', verbose_name="อ้างอิงใบสั่งผลิตเดิม (JOB)")
+    salesperson = models.ForeignKey('hr.Employee', on_delete=models.SET_NULL, null=True, related_name='created_tickets', verbose_name="เซลส์ผู้รับเรื่อง")
+
+    issue_category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='OTHER', verbose_name="หมวดหมู่ปัญหา")
+    description = models.TextField(verbose_name="รายละเอียดอาการเสีย")
+    urgency = models.CharField(max_length=10, choices=URGENCY_CHOICES, default='NORMAL', verbose_name="ความเร่งด่วน")
+
+    is_warranty = models.BooleanField(default=True, verbose_name="อยู่ในระยะประกัน (ซ่อมฟรี)")
+    estimated_cost = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, verbose_name="ประเมินค่าใช้จ่าย (กรณีหมดประกัน)")
+    cost_comment = models.TextField(blank=True, verbose_name="หมายเหตุค่าใช้จ่ายจากช่าง")
+
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING', verbose_name="สถานะงานซ่อม")
+    production_team = models.ForeignKey(ProductionTeam, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="ทีมช่างที่เข้าซ่อม")
+    appointment_date = models.DateField(null=True, blank=True, verbose_name="วันที่นัดหมายเข้าซ่อม")
+
+    # 🌟 [DELETED] เอาฟิลด์รูปภาพแบบตายตัว 4 บรรทัดเดิมออกไปแล้ว 🌟
+
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="วันที่เปิดแจ้งซ่อม")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="อัปเดตล่าสุด")
+    completed_at = models.DateTimeField(null=True, blank=True, verbose_name="วันที่ซ่อมเสร็จ")
+
+    class Meta:
+        verbose_name = "ตั๋วแจ้งซ่อม (Service Ticket)"
+        verbose_name_plural = "ตั๋วแจ้งซ่อม (Service Tickets)"
+
+    def __str__(self):
+        return f"{self.code} - {self.production_order.customer_name}"
+
+    def save(self, *args, **kwargs):
+        if not self.code:
+            now = timezone.now()
+            thai_year = (now.year + 543) % 100
+            prefix = f"SV-{thai_year:02d}{now.strftime('%m')}"
+            last = ServiceTicket.objects.filter(code__startswith=prefix).order_by('code').last()
+            seq = int(last.code.split('-')[-1]) + 1 if last else 1
+            self.code = f"{prefix}-{seq:04d}"
+        super().save(*args, **kwargs)
+
+# ==========================================
+# 🌟 [NEW] ตารางใหม่: สำหรับเก็บแฟ้มสื่อแจ้งซ่อมแบบไม่จำกัด 🌟
+# ==========================================
+class ServiceTicketMedia(models.Model):
+    MEDIA_TYPE_CHOICES = [
+        ('BEFORE', 'ก่อนซ่อม (อาการเสีย)'),
+        ('AFTER', 'หลังซ่อม (ผลงาน)')
+    ]
+    ticket = models.ForeignKey(ServiceTicket, related_name='media_files', on_delete=models.CASCADE)
+    media_type = models.CharField(max_length=10, choices=MEDIA_TYPE_CHOICES, default='BEFORE')
+    file = models.FileField(upload_to='service_tickets/media/%Y/%m/', verbose_name="ไฟล์รูป/วิดีโอ")
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "สื่อแจ้งซ่อม"
+        verbose_name_plural = "สื่อแจ้งซ่อม"

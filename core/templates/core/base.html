@@ -87,6 +87,10 @@
                             <li><hr class="dropdown-divider"></li>
                             <li><a class="dropdown-item fw-bold text-success" href="{% url 'commission_board' %}"><i class="fas fa-hand-holding-usd me-2 text-success"></i> ศูนย์ตั้งเบิกผลตอบแทนบ้านน็อคดาวน์</a></li>
 
+                            <!-- 🌟 [NEW] เพิ่มเมนู ศูนย์แจ้งซ่อมและบริการ ตรงนี้ 🌟 -->
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item fw-bold text-danger" href="{% url 'service_ticket_list' %}"><i class="fas fa-tools me-2 text-danger"></i> ศูนย์แจ้งซ่อมและบริการ (After-Sales)</a></li>
+
                             <li><hr class="dropdown-divider"></li>
                             <li><a class="dropdown-item fw-bold text-dark" href="{% url 'customer_list' %}"><i class="fas fa-users me-2 text-primary"></i> ฐานข้อมูลลูกค้า</a></li>
                         </ul>
@@ -144,8 +148,18 @@
                             <li><a class="dropdown-item fw-bold text-dark" href="{% url 'production_head_board' %}"><i class="fas fa-hammer me-2 text-warning"></i> กระดานหัวหน้าแผนกผลิต (ช่าง)</a></li>
                             {% endif %}
 
+                            <!-- 🌟 [NEW] เมนูกระดานคิวแจ้งซ่อม สำหรับช่าง 🌟 -->
+                            {% if request.user.is_superuser or group_name == "Executive" or group_name == "Production_Team" or group_name == "Production" %}
+                            <li><a class="dropdown-item fw-bold text-danger" href="{% url 'service_board' %}"><i class="fas fa-tools me-2 text-danger"></i> กระดานคิวงานแจ้งซ่อม (After-Sales)</a></li>
+                            {% endif %}
+
                             {% if request.user.is_superuser or group_name == "Executive" or group_name == "QC_Team" %}
                             <li><a class="dropdown-item fw-bold text-dark" href="{% url 'qc_board' %}"><i class="fas fa-search-plus me-2 text-success"></i> กระดานตรวจสอบคุณภาพ (QC)</a></li>
+                            {% endif %}
+
+                            <!-- 🌟 [NEW] เพิ่มเมนู ศูนย์รวมแฟ้มภาพและบริการ ตรงนี้ 🌟 -->
+                            {% if request.user.is_superuser or group_name == "Executive" or group_name == "Production_Team" or group_name == "Production" or group_name == "QC_Team" %}
+                            <li><a class="dropdown-item fw-bold text-primary" href="{% url 'media_hub_list' %}"><i class="fas fa-photo-video me-2 text-primary"></i> ศูนย์รวมแฟ้มภาพ (Media Hub)</a></li>
                             {% endif %}
 
                             {% if request.user.is_superuser or group_name == "Executive" or group_name == "Logistics_Team" %}

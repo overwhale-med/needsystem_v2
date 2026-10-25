@@ -1,0 +1,121 @@
+{% extends 'core/base.html' %}
+{% block content %}
+<div class="container-fluid py-4 px-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h3 class="fw-bold text-dark mb-1"><i class="fas fa-tools text-danger me-2"></i> กระดานคิวงานแจ้งซ่อม (After-Sales)</h3>
+            <p class="text-muted small mb-0">ประเมินราคา, จ่ายงานให้ทีมช่าง, และตรวจสอบผลการแก้ไข</p>
+        </div>
+    </div>
+
+    <div class="row g-3 kanban-board flex-nowrap" style="overflow-x: auto; padding-bottom: 20px;">
+
+        <!-- คอลัมน์ที่ 1: รอประเมิน/รอคอนเฟิร์ม -->
+        <div class="col-12 col-md-4" style="min-width: 350px;">
+            <div class="card bg-light border-0 shadow-sm rounded-4 h-100">
+                <div class="card-header bg-white border-0 py-3 rounded-top-4 d-flex justify-content-between align-items-center shadow-sm">
+                    <h6 class="fw-bold m-0 text-danger"><i class="fas fa-inbox text-danger me-2"></i>1. รอจัดคิว / รอประเมิน</h6>
+                    <span class="badge bg-danger rounded-pill">{{ col1_pending|length }}</span>
+                </div>
+                <div class="card-body p-3 kanban-column">
+                    {% for t in col1_pending %}
+                        <div class="card mb-3 shadow-sm border-0 kanban-card border-start border-danger border-4" data-bs-toggle="modal" data-bs-target="#ticketModal-{{ t.id }}">
+                            <div class="card-body p-3">
+                                {% if t.status == 'WAITING_APPROVAL' %}
+                                    <span class="badge bg-warning text-dark rounded-pill px-3 py-1 mb-2 d-inline-block shadow-sm animate__animated animate__pulse animate__infinite"><i class="fas fa-hourglass-half"></i> รอเซลส์คอนเฟิร์มราคา</span>
+                                {% else %}
+                                    <span class="badge bg-danger rounded-pill px-3 py-1 mb-2 d-inline-block shadow-sm"><i class="fas fa-exclamation-circle"></i> แจ้งซ่อมใหม่</span>
+                                {% endif %}
+
+                                <div class="fw-bold text-dark mb-1">{{ t.production_order.customer_name }}</div>
+                                <div class="text-muted small mb-2"><i class="fas fa-tools text-secondary me-1"></i> ปัญหา: {{ t.get_issue_category_display }}</div>
+
+                                <div class="d-flex justify-content-between border-top pt-2 mt-2">
+                                    <span class="badge bg-light text-dark border small">{{ t.code }}</span>
+                                    {% if t.is_warranty %}
+                                        <span class="badge bg-success small"><i class="fas fa-shield-alt"></i> ในประกัน</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary small">นอกประกัน</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    {% empty %}
+                        <div class="text-center py-5 opacity-50"><i class="fas fa-check-double fa-3x text-muted mb-2"></i><h6 class="text-muted">ไม่มีงานรอประเมิน</h6></div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- คอลัมน์ที่ 2: กำลังดำเนินการ (จ่ายงานแล้ว) -->
+        <div class="col-12 col-md-4" style="min-width: 350px;">
+            <div class="card bg-light border-0 shadow-sm rounded-4 h-100">
+                <div class="card-header bg-white border-0 py-3 rounded-top-4 d-flex justify-content-between align-items-center shadow-sm">
+                    <h6 class="fw-bold m-0 text-primary"><i class="fas fa-truck-pickup text-primary me-2"></i>2. นัดหมายช่างเข้าพื้นที่แล้ว</h6>
+                    <span class="badge bg-primary rounded-pill">{{ col2_inprogress|length }}</span>
+                </div>
+                <div class="card-body p-3 kanban-column">
+                    {% for t in col2_inprogress %}
+                        <div class="card mb-3 shadow-sm border-0 kanban-card border-start border-primary border-4" data-bs-toggle="modal" data-bs-target="#ticketModal-{{ t.id }}">
+                            <div class="card-body p-3">
+                                <span class="badge bg-primary rounded-pill px-3 py-1 mb-2 d-inline-block shadow-sm"><i class="fas fa-hard-hat"></i> คิวซ่อม: {{ t.appointment_date|date:"d/m/Y"|default:"ยังไม่ระบุ" }}</span>
+                                <div class="fw-bold text-dark mb-1">{{ t.production_order.customer_name }}</div>
+                                <div class="text-muted small mb-2"><i class="fas fa-users text-secondary me-1"></i> ทีมรับผิดชอบ: {{ t.production_team.name|default:"-" }}</div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- คอลัมน์ที่ 3: ซ่อมเสร็จสิ้น -->
+        <div class="col-12 col-md-4" style="min-width: 350px;">
+            <div class="card bg-light border-0 shadow-sm rounded-4 h-100">
+                <div class="card-header bg-white border-0 py-3 rounded-top-4 d-flex justify-content-between align-items-center shadow-sm">
+                    <h6 class="fw-bold m-0 text-success"><i class="fas fa-check-circle text-success me-2"></i>3. ซ่อมเสร็จเรียบร้อย</h6>
+                    <span class="badge bg-success rounded-pill">{{ col3_completed|length }}</span>
+                </div>
+                <div class="card-body p-3 kanban-column">
+                    {% for t in col3_completed %}
+                        <div class="card mb-3 shadow-sm border-0 kanban-card border-start border-success border-4" data-bs-toggle="modal" data-bs-target="#ticketModal-{{ t.id }}">
+                            <div class="card-body p-3">
+                                <span class="badge bg-success rounded-pill px-3 py-1 mb-2 d-inline-block shadow-sm"><i class="fas fa-flag-checkered"></i> ปิดจ๊อบแล้ว</span>
+                                <div class="fw-bold text-dark mb-1">{{ t.production_order.customer_name }}</div>
+                                <div class="text-muted small mb-2"><i class="far fa-calendar-check text-secondary me-1"></i> เสร็จเมื่อ: {{ t.completed_at|date:"d/m/Y" }}</div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ================= Modals แผงควบคุมช่าง ================= -->
+{% for t in col1_pending %}{% include "manufacturing/_service_modal.html" %}{% endfor %}
+{% for t in col2_inprogress %}{% include "manufacturing/_service_modal.html" %}{% endfor %}
+{% for t in col3_completed %}{% include "manufacturing/_service_modal.html" %}{% endfor %}
+
+<style>
+    .kanban-column { height: calc(100vh - 200px); overflow-y: auto; }
+    .kanban-card { transition: transform 0.2s, box-shadow 0.2s; cursor: pointer; }
+    .kanban-card:hover { transform: translateY(-3px); box-shadow: 0 .5rem 1rem rgba(0,0,0,.15)!important; }
+    .kanban-column::-webkit-scrollbar { width: 6px; }
+    .kanban-column::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 10px; }
+</style>
+<!-- โหลด Library ปฏิทิน Flatpickr -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        // เปิดใช้งาน Datepicker และกำหนดรูปแบบเป็น dd/mm/yyyy
+        flatpickr(".datepicker", {
+            dateFormat: "Y-m-d", // รูปแบบที่ส่งไปบันทึกในฐานข้อมูล
+            altInput: true,
+            altFormat: "d/m/Y",  // รูปแบบที่โชว์ให้ผู้ใช้เห็น (dd/mm/yyyy)
+            allowInput: true
+        });
+    });
+</script>
+{% endblock %}

@@ -57,4 +57,10 @@ urlpatterns = [
     path('master-job-report/', views.master_job_report, name='master_job_report'),
     path('expense-cart/', views.expense_cart_view, name='expense_cart_view'),
     path('expense-cart/submit/', views.submit_expense_cart, name='submit_expense_cart'),
+    # ==========================================
+    # 🌟 [NEW] ระบบแจ้งซ่อมและบริการ (After-Sales) 🌟
+    # ==========================================
+    path('service-tickets/', views.service_ticket_list, name='service_ticket_list'),
+    path('service-tickets/create/', views.service_ticket_create, name='service_ticket_create'),
+    path('service-tickets/<int:ticket_id>/update/', views.service_ticket_update, name='service_ticket_update'),
 ]

@@ -106,7 +106,7 @@ def solar_job_overview(request):
         'customer', 'package_sold', 'salesperson', 'quotation_ref', 'technician_team'
     ).prefetch_related('job_boms').annotate(
         pending_req_count=Count('job_boms', filter=Q(job_boms__planned_quantity__gt=F('job_boms__actual_used_quantity')), distinct=True),
-        pending_ppo_count=Count('ppos', filter=Q(ppos__status='PENDING'), distinct=True)
+        pending_ppo_count=Count('ppos_purchasing', filter=Q(ppos_purchasing__status='PENDING'), distinct=True)
     ).all()
 
     if search_q:

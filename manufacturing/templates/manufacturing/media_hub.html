@@ -1,0 +1,213 @@
+{% extends 'core/base.html' %}
+
+{% block content %}
+<style>
+    body { background-color: #f4f7fa; font-family: 'Sarabun', sans-serif; }
+    .nav-pills .nav-link {
+        color: #495057; font-weight: 600; border-radius: 50px; padding: 10px 24px; margin-right: 10px; border: 1px solid #dee2e6; transition: all 0.3s ease;
+    }
+    .nav-pills .nav-link:hover { background-color: #e9ecef; }
+    .nav-pills .nav-link.active {
+        background-color: #0d6efd; color: white; border-color: #0d6efd; box-shadow: 0 4px 10px rgba(13, 110, 253, 0.2);
+    }
+    .media-card {
+        border-radius: 12px; border: 1px solid rgba(0,0,0,0.05); transition: transform 0.2s; cursor: pointer; overflow: hidden; height: 100%;
+    }
+    .media-card:hover { transform: translateY(-5px); box-shadow: 0 8px 15px rgba(0,0,0,0.1); }
+    .media-img { width: 100%; height: 180px; object-fit: cover; }
+    .media-overlay {
+        position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.2s;
+    }
+    .media-card:hover .media-overlay { opacity: 1; }
+    .play-icon { font-size: 3rem; color: white; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3)); }
+</style>
+
+<div class="container-fluid py-4 px-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="fw-bold mb-1 text-dark">
+                <i class="fas fa-photo-video text-primary me-2"></i>ศูนย์รวมแฟ้มภาพและบริการ (Media Hub)
+            </h4>
+            <p class="text-muted mb-0">รหัสเอกสารอ้างอิง: <span class="badge bg-primary rounded-pill px-2">{{ order.code }}</span> | ลูกค้า: <strong>{{ order.customer_name|default:"-" }}</strong></p>
+        </div>
+        <div>
+            <!-- ปุ่มปิดแท็บ/กลับหน้าเดิม -->
+            <button onclick="window.close();" class="btn btn-outline-secondary rounded-pill px-4 fw-bold shadow-sm">
+                <i class="fas fa-times me-1"></i> ปิดหน้าต่างนี้
+            </button>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm rounded-4 mb-4">
+        <div class="card-header bg-white p-3 border-bottom">
+            <!-- 🌟 แท็บเมนู (แบ่งหมวดหมู่ชัดเจน) 🌟 -->
+            <ul class="nav nav-pills" id="mediaTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="passed-tab" data-bs-toggle="pill" data-bs-target="#passed" type="button" role="tab">
+                        <i class="fas fa-check-circle text-success me-1"></i> ผลงานสมบูรณ์ (สำหรับลูกค้า)
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="failed-tab" data-bs-toggle="pill" data-bs-target="#failed" type="button" role="tab">
+                        <i class="fas fa-exclamation-triangle text-danger me-1"></i> ประวัติแก้ไขงาน (ช่าง/QC)
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="service-tab" data-bs-toggle="pill" data-bs-target="#service" type="button" role="tab">
+                        <i class="fas fa-tools text-warning me-1"></i> ระบบแจ้งซ่อม (After-Sales)
+                    </button>
+                </li>
+            </ul>
+        </div>
+
+        <div class="card-body p-4 bg-light">
+            <div class="tab-content" id="mediaTabsContent">
+
+                <!-- 🟢 TAB 1: ผลงานสมบูรณ์ (ผ่าน QC) 🟢 -->
+                <div class="tab-pane fade show active" id="passed" role="tabpanel">
+                    {% if passed_medias %}
+                        <div class="row g-3">
+                            {% for media in passed_medias %}
+                            <div class="col-6 col-md-4 col-lg-3 col-xl-2">
+                                <a href="{{ media.file.url }}" target="_blank" class="text-decoration-none">
+                                    <div class="card media-card position-relative">
+                                        <!-- ตรวจสอบนามสกุลไฟล์คร่าวๆ เพื่อโชว์ไอคอนวิดีโอ -->
+                                        {% if ".mp4" in media.file.url|lower or ".mov" in media.file.url|lower %}
+                                            <div class="bg-dark d-flex align-items-center justify-content-center" style="height: 180px;">
+                                                <i class="fas fa-video fa-3x text-muted"></i>
+                                            </div>
+                                            <div class="media-overlay"><i class="fas fa-play-circle play-icon"></i></div>
+                                        {% else %}
+                                            <img src="{{ media.file.url }}" class="media-img" alt="Passed QC">
+                                            <div class="media-overlay"><i class="fas fa-search-plus play-icon"></i></div>
+                                        {% endif %}
+                                        <div class="card-footer bg-white py-2 text-center border-top-0">
+                                            <small class="text-success fw-bold"><i class="fas fa-check"></i> ผ่าน QC</small>
+                                        </div>
+                                    </div>
+                                </a>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="text-center py-5 opacity-50">
+                            <i class="fas fa-images fa-4x text-muted mb-3"></i>
+                            <h5 class="text-muted fw-bold">ยังไม่มีรูปผลงาน</h5>
+                            <p class="small">รอแผนก QC อัปโหลดไฟล์ผลงานที่สมบูรณ์</p>
+                        </div>
+                    {% endif %}
+                </div>
+
+                <!-- 🔴 TAB 2: ประวัติแก้ไขงาน (ไม่ผ่าน QC) 🔴 -->
+                <div class="tab-pane fade" id="failed" role="tabpanel">
+                    {% if qc_logs %}
+                        <div class="accordion" id="qcLogAccordion">
+                            {% for log in qc_logs %}
+                            <div class="accordion-item border-0 shadow-sm mb-3 rounded-4 overflow-hidden">
+                                <h2 class="accordion-header">
+                                    <button class="accordion-button {% if not forloop.first %}collapsed{% endif %} bg-white fw-bold text-danger" type="button" data-bs-toggle="collapse" data-bs-target="#collapseLog{{ log.id }}">
+                                        <i class="fas fa-times-circle me-2"></i> ตีกลับรอบที่ {{ log.round_number }} <span class="ms-2 badge bg-danger text-white rounded-pill fw-normal">{{ log.inspected_at|date:"d/m/Y H:i" }}</span>
+                                    </button>
+                                </h2>
+                                <div id="collapseLog{{ log.id }}" class="accordion-collapse collapse {% if forloop.first %}show{% endif %}" data-bs-parent="#qcLogAccordion">
+                                    <div class="accordion-body bg-danger bg-opacity-10 border-top border-danger border-opacity-25">
+                                        <p class="mb-3 text-dark fw-bold"><i class="fas fa-comment-dots me-1 text-danger"></i> ข้อความจาก QC: <span class="fw-normal">{{ log.comments|default:"ไม่มีคอมเมนต์ระบุไว้" }}</span></p>
+
+                                        <div class="row g-2">
+                                            <!-- รูปจากระบบเก่า -->
+                                            {% if log.defect_image_1 %}
+                                                <div class="col-auto"><a href="{{ log.defect_image_1.url }}" target="_blank" class="btn btn-sm btn-danger rounded-pill"><i class="fas fa-image me-1"></i>รูปที่ 1 (ระบบเก่า)</a></div>
+                                            {% endif %}
+                                            {% if log.defect_image_2 %}
+                                                <div class="col-auto"><a href="{{ log.defect_image_2.url }}" target="_blank" class="btn btn-sm btn-danger rounded-pill"><i class="fas fa-image me-1"></i>รูปที่ 2 (ระบบเก่า)</a></div>
+                                            {% endif %}
+
+                                            <!-- รูปจากระบบใหม่ (ดึงผ่าน related_name="failed_media") -->
+                                            {% for media in log.failed_media.all %}
+                                                <div class="col-auto"><a href="{{ media.file.url }}" target="_blank" class="btn btn-sm btn-outline-danger bg-white rounded-pill fw-bold"><i class="fas fa-file-alt me-1"></i>ไฟล์ตำหนิ {{ forloop.counter }}</a></div>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="text-center py-5 opacity-50">
+                            <i class="fas fa-shield-alt fa-4x text-success mb-3"></i>
+                            <h5 class="text-success fw-bold">ยอดเยี่ยม! ไม่มีประวัติงานตีกลับ</h5>
+                        </div>
+                    {% endif %}
+                </div>
+
+                <!-- 🟠 TAB 3: ระบบแจ้งซ่อม (After-Sales) 🟠 -->
+                <div class="tab-pane fade" id="service" role="tabpanel">
+                    {% if service_tickets %}
+                        <div class="accordion" id="serviceAccordion">
+                            {% for ticket in service_tickets %}
+                            <div class="accordion-item border-0 shadow-sm mb-3 rounded-4 overflow-hidden">
+                                <h2 class="accordion-header">
+                                    <button class="accordion-button {% if not forloop.first %}collapsed{% endif %} bg-white fw-bold text-dark" type="button" data-bs-toggle="collapse" data-bs-target="#collapseService{{ ticket.id }}">
+                                        <i class="fas fa-tools text-warning me-2"></i> แจ้งซ่อม: {{ ticket.code }}
+                                        <span class="ms-2 badge {% if ticket.status == 'COMPLETED' %}bg-success{% elif ticket.status == 'CANCELLED' %}bg-secondary{% else %}bg-warning text-dark{% endif %} rounded-pill fw-normal">
+                                            {{ ticket.get_status_display }}
+                                        </span>
+                                    </button>
+                                </h2>
+                                <div id="collapseService{{ ticket.id }}" class="accordion-collapse collapse {% if forloop.first %}show{% endif %}" data-bs-parent="#serviceAccordion">
+                                    <div class="accordion-body bg-warning bg-opacity-10 border-top border-warning border-opacity-25">
+
+                                        <div class="row g-3">
+                                            <div class="col-md-6">
+                                                <p class="mb-1 text-dark fw-bold"><i class="fas fa-exclamation-circle me-1 text-danger"></i> อาการเสีย ({{ ticket.get_issue_category_display }}):</p>
+                                                <p class="small text-muted ms-4 mb-3">{{ ticket.description }}</p>
+
+                                                <p class="mb-1 text-dark fw-bold"><i class="fas fa-shield-alt me-1 text-success"></i> การรับประกัน:</p>
+                                                <p class="small text-muted ms-4 mb-0">
+                                                    {% if ticket.is_warranty %}
+                                                        อยู่ในระยะประกัน (ซ่อมฟรี)
+                                                    {% else %}
+                                                        นอกประกัน (ประเมินค่าซ่อม: ฿{{ ticket.estimated_cost|floatformat:2 }})<br>
+                                                        <span class="text-danger">หมายเหตุจากช่าง: {{ ticket.cost_comment|default:"-" }}</span>
+                                                    {% endif %}
+                                                </p>
+                                            </div>
+
+                                            <div class="col-md-6 border-start">
+                                                <p class="mb-1 text-dark fw-bold"><i class="fas fa-images me-1 text-info"></i> รูปภาพความเสียหาย (จากลูกค้า):</p>
+                                                <div class="d-flex gap-2 ms-4 mb-3">
+                                                    {% if ticket.before_image_1 %}<a href="{{ ticket.before_image_1.url }}" target="_blank"><img src="{{ ticket.before_image_1.url }}" style="height: 70px; border-radius: 6px;"></a>{% endif %}
+                                                    {% if ticket.before_image_2 %}<a href="{{ ticket.before_image_2.url }}" target="_blank"><img src="{{ ticket.before_image_2.url }}" style="height: 70px; border-radius: 6px;"></a>{% endif %}
+                                                    {% if not ticket.before_image_1 and not ticket.before_image_2 %}<span class="small text-muted">ไม่มีการแนบรูปภาพ</span>{% endif %}
+                                                </div>
+
+                                                <p class="mb-1 text-dark fw-bold"><i class="fas fa-camera text-success me-1"></i> รูปภาพผลงานหลังซ่อม (จากช่าง):</p>
+                                                <div class="d-flex gap-2 ms-4 mb-0">
+                                                    {% if ticket.after_image_1 %}<a href="{{ ticket.after_image_1.url }}" target="_blank"><img src="{{ ticket.after_image_1.url }}" style="height: 70px; border-radius: 6px;"></a>{% endif %}
+                                                    {% if ticket.after_image_2 %}<a href="{{ ticket.after_image_2.url }}" target="_blank"><img src="{{ ticket.after_image_2.url }}" style="height: 70px; border-radius: 6px;"></a>{% endif %}
+                                                    {% if not ticket.after_image_1 and not ticket.after_image_2 %}<span class="small text-muted">ยังไม่มีการประเมินหรือยังซ่อมไม่เสร็จ</span>{% endif %}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="mt-3 pt-2 border-top text-end">
+                                            <small class="text-muted"><i class="far fa-calendar-alt"></i> วันที่แจ้ง: {{ ticket.created_at|date:"d/m/Y" }} | ซ่อมเสร็จ: {{ ticket.completed_at|date:"d/m/Y"|default:"ยังไม่เสร็จ" }}</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="text-center py-5 opacity-50">
+                            <i class="fas fa-shield-alt fa-4x text-success mb-3"></i>
+                            <h5 class="text-success fw-bold">ยอดเยี่ยม! บ้านหลังนี้ยังไม่เคยแจ้งซ่อม</h5>
+                        </div>
+                    {% endif %}
+                </div>
+
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

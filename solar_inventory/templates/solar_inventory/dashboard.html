@@ -3,8 +3,25 @@
 
 {% block content %}
 <style>
+    /* เอฟเฟกต์เด้งและเงาสว่าง (Pulse) แบบที่โรงงานใช้ */
     .hover-scale { transition: transform 0.2s ease-in-out; }
     .hover-scale:hover { transform: translateY(-5px); }
+    .badge-pulse { animation: pulse-animation 2s infinite; }
+    @keyframes pulse-animation {
+        0% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7); }
+        70% { box-shadow: 0 0 0 8px rgba(220, 53, 69, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0); }
+    }
+
+    /* เอฟเฟกต์ปุ่มสีทองเวลาเลื่อนเมาส์ชี้ */
+    .btn-hover-gold {
+        transition: all 0.3s ease;
+    }
+    .btn-hover-gold:hover {
+        background-color: #FFD700 !important; /* สีทอง */
+        color: #212529 !important;
+        border-color: #FFD700 !important;
+    }
 </style>
 
 <div class="container-fluid py-4 px-4">
@@ -17,59 +34,91 @@
             <p class="text-muted mb-0">ระบบสรุปภาพรวมและจัดการฐานข้อมูล แพ็กเกจ (FG) และ อุปกรณ์เสริม (RM)</p>
         </div>
 
-        <!-- 🌟 [NEW] ย้ายปุ่ม FG และ RM มาไว้ตรงนี้ให้เป็นหมวดหมู่เดียวกัน -->
+        <!-- 🌟 ปุ่มเมนูต่างๆ จัดกลุ่มใหม่สไตล์โรงงาน -->
         <div class="d-flex gap-2 flex-wrap">
-            <a href="{% url 'solar_fg_list' %}" class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm">
-                <i class="fas fa-box me-1"></i> แพ็กเกจหลัก (FG)
-            </a>
-            <a href="{% url 'solar_rm_list' %}" class="btn btn-info text-white rounded-pill px-4 fw-bold shadow-sm">
-                <i class="fas fa-tools me-1"></i> อุปกรณ์โซล่า (RM)
-            </a>
-            <a href="{% url 'solar_inventory_download_template' %}" class="btn btn-outline-success rounded-pill px-4 fw-bold shadow-sm ms-2">
-                <i class="fas fa-file-excel me-1"></i> นำเข้าด้วย Excel
-            </a>
+            <button type="button" class="btn rounded-pill px-4 fw-bold shadow-sm ms-2 hover-scale" style="background-color: #e0f7fa; color: #00838f;" data-bs-toggle="modal" data-bs-target="#importExcelModal">
+                <i class="fas fa-file-excel me-1"></i> นำสูตรเข้า (Excel)
+            </button>
 
-            <a href="{% url 'solar_document_list_in' %}" class="btn btn-outline-success rounded-pill px-4 fw-bold shadow-sm ms-2">
+            <!-- ปุ่มเอกสารย้อนหลัง -->
+            <a href="{% url 'solar_document_list_in' %}" class="btn border border-success text-success bg-white rounded-pill px-4 fw-bold shadow-sm ms-2 btn-hover-gold">
                 <i class="fas fa-download me-1"></i> รับเข้าคลัง (GR)
             </a>
-            <a href="{% url 'solar_document_list_out' %}" class="btn btn-outline-danger rounded-pill px-4 fw-bold shadow-sm">
+            <a href="{% url 'solar_document_list_out' %}" class="btn border border-danger text-danger bg-white rounded-pill px-4 fw-bold shadow-sm btn-hover-gold">
                 <i class="fas fa-upload me-1"></i> เบิกออก (GI)
             </a>
         </div>
     </div>
 
-    <!-- 🌟 การ์ดสรุปข้อมูลการปฏิบัติงาน (Operational Cards) 🌟 -->
+    <!-- 🌟 การ์ดสรุปข้อมูล 5 ใบ (สไตล์โรงงาน) 🌟 -->
     <div class="row g-4 mb-4">
 
-        <!-- 🌟 [UPDATE] ปรับความกว้างเป็น col-lg-4 เพื่อให้ 3 ใบแบ่งเต็มพื้นที่จอพอดี -->
-        <!-- การ์ดที่ 1: แจ้งเตือนของใกล้หมด (Low Stock) -->
-        <div class="col-md-4 col-lg-4">
+        <!-- Card 1: FG -->
+        <div class="col-xl col-md-4">
+            <div class="card border-0 shadow-sm rounded-4 h-100 border-bottom border-4 border-primary hover-scale bg-white">
+                <div class="card-body p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div class="bg-primary bg-opacity-10 text-primary rounded-circle p-3 d-flex align-items-center justify-content-center" style="width: 60px; height: 60px;">
+                            <i class="fas fa-box-open fa-2x"></i>
+                        </div>
+                        <h2 class="fw-bold mb-0 text-primary">{{ fg_count|intcomma }}</h2>
+                    </div>
+                    <h6 class="text-muted fw-bold mb-1">แพ็กเกจหลัก (FG)</h6>
+                    <p class="text-muted small mb-3">จำนวนรายการพร้อมขาย</p>
+                    <a href="{% url 'solar_fg_list' %}" class="btn btn-outline-primary rounded-pill w-100 fw-bold shadow-sm">
+                        ดูรายการ FG <i class="fas fa-arrow-right ms-1"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card 2: RM -->
+        <div class="col-xl col-md-4">
+            <div class="card border-0 shadow-sm rounded-4 h-100 border-bottom border-4 border-warning hover-scale bg-white">
+                <div class="card-body p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div class="bg-warning bg-opacity-10 text-warning rounded-circle p-3 d-flex align-items-center justify-content-center" style="width: 60px; height: 60px;">
+                            <i class="fas fa-tools fa-2x"></i>
+                        </div>
+                        <h2 class="fw-bold mb-0 text-warning">{{ rm_count|intcomma }}</h2>
+                    </div>
+                    <h6 class="text-muted fw-bold mb-1">อุปกรณ์โซล่า (RM)</h6>
+                    <p class="text-muted small mb-3">จำนวนรายการอุปกรณ์</p>
+                    <a href="{% url 'solar_rm_list' %}" class="btn btn-outline-warning text-dark rounded-pill w-100 fw-bold shadow-sm">
+                        ดูรายการ RM <i class="fas fa-arrow-right ms-1"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card 3: Low Stock -->
+        <div class="col-xl col-md-4">
             <div class="card border-0 shadow-sm rounded-4 h-100 border-bottom border-4 border-danger hover-scale bg-white">
                 <div class="card-body p-4">
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <div class="bg-danger bg-opacity-10 text-danger rounded-circle p-3 d-flex align-items-center justify-content-center" style="width: 60px; height: 60px;">
                             <i class="fas fa-exclamation-triangle fa-2x"></i>
                         </div>
-                        <h2 class="fw-bold mb-0 text-danger">{{ low_stock_count }}</h2>
+                        <h2 class="fw-bold mb-0 text-danger">{{ low_stock_count|intcomma }}</h2>
                     </div>
                     <h6 class="text-muted fw-bold mb-1">อุปกรณ์ใกล้หมดสต็อก</h6>
                     <p class="text-muted small mb-3">รายการ RM ที่ต้องสั่งซื้อด่วน</p>
-                    <a href="{% url 'solar_rm_list' %}" class="btn btn-outline-danger rounded-pill w-100 fw-bold shadow-sm">
+                    <a href="{% url 'solar_rm_list' %}?stock_status=out_of_stock" class="btn btn-outline-danger rounded-pill w-100 fw-bold shadow-sm">
                         ตรวจสอบสต็อก <i class="fas fa-search ms-1"></i>
                     </a>
                 </div>
             </div>
         </div>
 
-        <!-- การ์ดที่ 2: งานรอเบิกของ -->
-        <div class="col-md-4 col-lg-4">
+        <!-- Card 4: งานรอเบิก -->
+        <div class="col-xl col-md-6">
             <div class="card border-0 shadow-sm rounded-4 h-100 border-bottom border-4 border-warning hover-scale bg-white">
                 <div class="card-body p-4">
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <div class="bg-warning bg-opacity-10 text-warning rounded-circle p-3 d-flex align-items-center justify-content-center" style="width: 60px; height: 60px;">
                             <i class="fas fa-clipboard-check fa-2x"></i>
                         </div>
-                        <h2 class="fw-bold mb-0 text-warning">{{ requisition_count }}</h2>
+                        <h2 class="fw-bold mb-0 text-warning">{{ requisition_count|intcomma }}</h2>
                     </div>
                     <h6 class="text-muted fw-bold mb-1">ใบสั่งงานรอเบิกของ</h6>
                     <p class="text-muted small mb-3">งานติดตั้งที่รอสโตร์จ่ายของ</p>
@@ -80,25 +129,155 @@
             </div>
         </div>
 
-        <!-- การ์ดที่ 3: งานรอรับของตามใบสั่งซื้อ -->
-        <div class="col-md-4 col-lg-4">
+        <!-- Card 5: Pending PO -->
+        <div class="col-xl col-md-6">
             <div class="card border-0 shadow-sm rounded-4 h-100 border-bottom border-4 border-success hover-scale bg-white">
                 <div class="card-body p-4">
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <div class="bg-success bg-opacity-10 text-success rounded-circle p-3 d-flex align-items-center justify-content-center" style="width: 60px; height: 60px;">
                             <i class="fas fa-truck-loading fa-2x"></i>
                         </div>
-                        <h2 class="fw-bold mb-0 text-success">{{ pending_po_count }}</h2>
+                        <h2 class="fw-bold mb-0 text-success">{{ pending_po_count|intcomma }}</h2>
                     </div>
                     <h6 class="text-muted fw-bold mb-1">คิวงานรอรับเข้าคลัง</h6>
-                    <p class="text-muted small mb-3">ใบสั่งซื้อที่กำลังรอซัพพลายเออร์มาส่ง</p>
+                    <p class="text-muted small mb-3">ใบสั่งซื้อรอซัพพลายเออร์มาส่ง</p>
                     <a href="{% url 'store_pending_po_list' %}" class="btn btn-success rounded-pill w-100 fw-bold shadow-sm">
                         เปิดรายการรอรับ <i class="fas fa-arrow-right ms-1"></i>
                     </a>
                 </div>
             </div>
         </div>
+    </div>
+
+    <!-- 🌟 ประวัติความเคลื่อนไหวล่าสุด (แยกซ้าย-ขวา 50:50) 🌟 -->
+    <div class="row g-4">
+
+        <!-- 🌟 ฝั่งซ้าย: ความเคลื่อนไหวล่าสุด (อุปกรณ์ - RM) 🌟 -->
+        <div class="col-lg-6">
+            <div class="card border-0 shadow-sm rounded-4 overflow-hidden h-100 bg-white border-top border-4 border-warning">
+                <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 fw-bold text-dark"><i class="fas fa-history me-2 text-warning"></i>ความเคลื่อนไหวล่าสุด (อุปกรณ์ - RM)</h6>
+                    <a href="{% url 'solar_document_list_in' %}?product_type=RM" class="text-decoration-none small text-muted hover-scale fw-bold">ดูทั้งหมด <i class="fas fa-chevron-right ms-1"></i></a>
+                </div>
+                <div class="list-group list-group-flush">
+                    {% for doc in recent_rm_docs %}
+                    <div class="list-group-item py-3 border-bottom-0">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <a href="{% url 'solar_print_document' doc.doc_no %}" target="_blank" class="text-decoration-none">
+                                <span class="badge {% if doc.doc_type == 'GR' %}bg-success bg-opacity-10 text-success border border-success{% else %}bg-warning bg-opacity-10 text-dark border border-warning{% endif %} rounded-pill px-3 py-1 shadow-sm hover-scale" style="cursor: pointer;">
+                                    <i class="fas fa-print me-1"></i> {{ doc.doc_no }}
+                                </span>
+                            </a>
+                            <small class="text-muted"><i class="far fa-clock me-1"></i>{{ doc.created_at|date:"d/m/Y H:i" }}</small>
+                        </div>
+                        {% for move in doc.movements.all %}
+                        <div class="d-flex justify-content-between align-items-center ps-3 border-start border-3 {% if doc.doc_type == 'GR' %}border-success{% else %}border-warning{% endif %} ms-2 my-2 bg-light rounded p-2">
+                            <span class="text-dark small fw-bold text-truncate" style="max-width: 250px;">{{ move.product.name }}</span>
+                            <span class="fw-bold fs-6 {% if doc.doc_type == 'GR' %}text-success{% else %}text-danger{% endif %}">
+                                {% if doc.doc_type == 'GR' %}+{% else %}-{% endif %}{{ move.quantity }}
+                            </span>
+                        </div>
+                        {% endfor %}
+                        <div class="d-flex justify-content-between align-items-center mt-2">
+                            <span class="small text-muted fw-bold">
+                                <i class="fas fa-user-circle text-primary"></i> {{ doc.created_by.first_name }}
+                            </span>
+                            {% if doc.reference %}<span class="small text-muted"><i class="fas fa-tag me-1"></i>{{ doc.reference }}</span>{% endif %}
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="p-5 text-center text-muted">
+                        <i class="fas fa-box-open fa-3x mb-3 opacity-25 text-warning"></i>
+                        <p class="mb-0">ยังไม่มีรายการรับ-เบิกอุปกรณ์</p>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- 🌟 ฝั่งขวา: ความเคลื่อนไหวล่าสุด (แพ็กเกจ - FG) 🌟 -->
+        <div class="col-lg-6">
+            <div class="card border-0 shadow-sm rounded-4 overflow-hidden h-100 bg-white border-top border-4 border-primary">
+                <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 fw-bold text-primary"><i class="fas fa-history me-2"></i>ความเคลื่อนไหวล่าสุด (แพ็กเกจ - FG)</h6>
+                    <a href="{% url 'solar_document_list_in' %}?product_type=FG" class="text-decoration-none small text-muted hover-scale fw-bold">ดูทั้งหมด <i class="fas fa-chevron-right ms-1"></i></a>
+                </div>
+                <div class="list-group list-group-flush">
+                    {% for doc in recent_fg_docs %}
+                    <div class="list-group-item py-3 border-bottom-0">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <a href="{% url 'solar_print_document' doc.doc_no %}" target="_blank" class="text-decoration-none">
+                                <span class="badge {% if doc.doc_type == 'GR' %}bg-success bg-opacity-10 text-success border border-success{% else %}bg-warning bg-opacity-10 text-dark border border-warning{% endif %} rounded-pill px-3 py-1 shadow-sm hover-scale" style="cursor: pointer;">
+                                    <i class="fas fa-print me-1"></i> {{ doc.doc_no }}
+                                </span>
+                            </a>
+                            <small class="text-muted"><i class="far fa-clock me-1"></i>{{ doc.created_at|date:"d/m/Y H:i" }}</small>
+                        </div>
+                        {% for move in doc.movements.all %}
+                        <div class="d-flex justify-content-between align-items-center ps-3 border-start border-3 {% if doc.doc_type == 'GR' %}border-success{% else %}border-warning{% endif %} ms-2 my-2 bg-light rounded p-2">
+                            <span class="text-dark small fw-bold text-truncate" style="max-width: 250px;">{{ move.product.name }}</span>
+                            <span class="fw-bold fs-6 {% if doc.doc_type == 'GR' %}text-success{% else %}text-danger{% endif %}">
+                                {% if doc.doc_type == 'GR' %}+{% else %}-{% endif %}{{ move.quantity }}
+                            </span>
+                        </div>
+                        {% endfor %}
+                        <div class="d-flex justify-content-between align-items-center mt-2">
+                            <span class="small text-muted fw-bold">
+                                <i class="fas fa-user-circle text-primary"></i> {{ doc.created_by.first_name }}
+                            </span>
+                            {% if doc.reference %}<span class="small text-muted"><i class="fas fa-tag me-1"></i>{{ doc.reference }}</span>{% endif %}
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="p-5 text-center text-muted">
+                        <i class="fas fa-box-open fa-3x mb-3 opacity-25 text-primary"></i>
+                        <p class="mb-0">ยังไม่มีรายการรับ-เบิกแพ็กเกจ</p>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
 
     </div>
 </div>
+<!-- 🌟 Modal สำหรับนำเข้า Excel 🌟 -->
+    <div class="modal fade" id="importExcelModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content rounded-4 border-0 shadow-lg">
+                <div class="modal-header bg-success text-white py-3 border-bottom-0">
+                    <h5 class="modal-title fw-bold"><i class="fas fa-file-excel me-2"></i>นำเข้าข้อมูลผ่าน Excel</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-4 text-start">
+                    <div class="alert alert-info small mb-4">
+                        <h6 class="fw-bold">📢 คำแนะนำการนำเข้า:</h6>
+                        <ul class="mb-0 ps-3">
+                            <li>รองรับการนำเข้าทั้ง <strong>FG (แพ็กเกจ)</strong> และ <strong>RM (อุปกรณ์)</strong></li>
+                            <li>หากระบุ <strong>"รหัสสินค้า"</strong> ที่มีอยู่แล้ว ระบบจะทำการอัปเดตข้อมูลให้</li>
+                            <li>ระบุคอลัมน์ <strong>"ชื่อร้านค้า"</strong> ระบบจะผูกกับฐานข้อมูล Supplier อัตโนมัติ</li>
+                        </ul>
+                    </div>
+
+                    <div class="text-center mb-4 pb-3 border-bottom">
+                        <a href="{% url 'solar_inventory_download_template' %}" class="btn btn-outline-primary rounded-pill shadow-sm fw-bold px-4 hover-scale">
+                            <i class="fas fa-download me-2"></i> ดาวน์โหลดไฟล์แม่แบบ (Template)
+                        </a>
+                    </div>
+
+                    <form method="post" action="{% url 'solar_inventory_import' %}" enctype="multipart/form-data">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label class="form-label fw-bold text-dark small">เลือกไฟล์ Excel (.xlsx)</label>
+                            <input type="file" name="excel_file" class="form-control" accept=".xlsx, .xls" required>
+                        </div>
+                        <div class="d-grid mt-4">
+                            <button type="submit" class="btn btn-success rounded-pill fw-bold shadow-sm hover-scale py-2">
+                                <i class="fas fa-upload me-2"></i> เริ่มนำเข้าข้อมูล
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
 {% endblock %}

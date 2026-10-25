@@ -1,0 +1,69 @@
+{% extends 'core/base.html' %}
+{% block content %}
+<div class="container-fluid py-4 px-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="fw-bold mb-1 text-dark"><i class="fas fa-search-plus text-success me-2"></i> ประวัติการตรวจงานของฉัน</h4>
+            <p class="text-muted small mb-0">รายการตรวจสอบคุณภาพที่คุณเคยประเมิน (ผู้ตรวจ: <strong class="text-success">{{ user.first_name }}</strong>)</p>
+        </div>
+        <div>
+            <a href="{% url 'qc_board' %}" class="btn btn-outline-secondary rounded-pill px-4 fw-bold shadow-sm bg-white">
+                <i class="fas fa-arrow-left me-1"></i> กลับกระดาน QC
+            </a>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm rounded-4">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="text-secondary small text-uppercase bg-light">
+                    <tr>
+                        <th class="ps-4 py-3 fw-bold">เลขที่ JOB</th>
+                        <th class="py-3 fw-bold">วันที่และเวลาตรวจ</th>
+                        <th class="py-3 fw-bold text-center">ผลการประเมิน</th>
+                        <th class="py-3 fw-bold">คอมเมนต์ / สาเหตุ</th>
+                        <th class="text-center py-3 fw-bold">แฟ้มผลงาน</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in qc_logs %}
+                    <tr>
+                        <td class="ps-4 py-3">
+                            <span class="badge bg-primary fs-6 shadow-sm">{{ log.production_order.code }}</span>
+                        </td>
+                        <td>
+                            <div class="text-dark fw-bold"><i class="far fa-clock text-secondary me-1"></i>{{ log.inspected_at|date:"d/m/Y H:i" }}</div>
+                            <div class="text-muted small">รอบที่: {{ log.round_number }}</div>
+                        </td>
+                        <td class="text-center">
+                            {% if log.status == 'PASSED' %}
+                                <span class="badge bg-success bg-opacity-10 text-success border border-success rounded-pill px-3"><i class="fas fa-check-circle me-1"></i> ผ่าน</span>
+                            {% else %}
+                                <span class="badge bg-danger bg-opacity-10 text-danger border border-danger rounded-pill px-3"><i class="fas fa-times-circle me-1"></i> ตีกลับ</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="text-dark small" style="max-width: 250px; white-space: normal;">
+                                {{ log.comments|default:"ไม่มีคอมเมนต์" }}
+                            </div>
+                        </td>
+                        <td class="text-center">
+                            <a href="{% url 'media_hub' log.production_order.id %}" target="_blank" class="btn btn-outline-primary rounded-pill fw-bold px-3 shadow-sm" style="font-size: 0.8rem;">
+                                <i class="fas fa-photo-video me-1"></i> เปิดแฟ้ม
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="text-center py-5 opacity-50">
+                            <i class="fas fa-tasks fa-3x text-muted mb-3"></i>
+                            <h6 class="text-muted">คุณยังไม่มีประวัติการตรวจงาน</h6>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

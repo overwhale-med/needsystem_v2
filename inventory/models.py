@@ -101,16 +101,27 @@ class InventoryDoc(models.Model):
             today = datetime.date.today()
             thai_year = (today.year + 543) % 100
             year_month = f"{thai_year:02d}{today.strftime('%m')}"
-            prefix = f"{self.doc_type}-{year_month}-"
+
+            # 🌟 [NEW] ตรวจสอบ "ซิก" จาก Views (ถ้ามีการฝัง _doc_category มาให้ใช้โครงสร้างใหม่)
+            doc_cat = getattr(self, '_doc_category', None)
+
+            if doc_cat:
+                # 🌟 รูปแบบใหม่: GR-RM-KNK-6910-001
+                prefix = f"{self.doc_type}-{doc_cat}-KNK-{year_month}-"
+            else:
+                # 🌟 รูปแบบเดิม (Fallback): GR-6910-001 (กันพังสำหรับโค้ดเก่าที่ยังไม่ได้แก้)
+                prefix = f"{self.doc_type}-{year_month}-"
+
             last_doc = InventoryDoc.objects.filter(doc_no__startswith=prefix).order_by('doc_no').last()
             if last_doc:
                 try: running_number = int(last_doc.doc_no.split('-')[-1]) + 1
                 except ValueError: running_number = 1
             else: running_number = 1
             self.doc_no = f"{prefix}{running_number:03d}"
+
         super().save(*args, **kwargs)
 
-        # 🌟 [NEW] ระบบบีบอัดรูปอัตโนมัติ ช่วยเซฟพื้นที่ Server 🌟
+        # 🌟 ระบบบีบอัดรูปอัตโนมัติ ช่วยเซฟพื้นที่ Server
         if self.slip_image:
             try:
                 img = Image.open(self.slip_image.path)

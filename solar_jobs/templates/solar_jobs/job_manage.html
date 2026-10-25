@@ -35,6 +35,8 @@
 
     <form method="POST" id="jobManageForm">
         {% csrf_token %}
+        <!-- 🌟 [FIXED] ถ้าสถานะปิดจ๊อบแล้ว ให้ล็อค (disabled) ช่องกรอกข้อมูลทั้งหมดทันที -->
+        <fieldset {% if job.status == 'CLOSED' %}disabled{% endif %} style="border: none; padding: 0; margin: 0;">
 
         {% if form.errors or formset.errors %}
         <div class="alert alert-danger border-0 shadow-sm rounded-4 mb-4">
@@ -147,27 +149,35 @@
                     {% endif %}
                 </h6>
 
-                <div class="d-flex gap-2">
+                <!-- 🌟 [FIXED] ย้ายปุ่มประวัติการเบิกจ่ายมาไว้ตรงนี้ เพื่อให้อยู่ด้านนอกสุด และกดได้เสมอ! -->
+                <div class="d-flex gap-2" style="position: relative; z-index: 10;">
                     {% if has_completed_boms %}
-                    <a href="{% url 'solar_job_bom_history' job.id %}" target="_blank" class="btn btn-sm btn-outline-info rounded-pill px-3 fw-bold shadow-sm">
+                    <a href="{% url 'solar_job_bom_history' job.id %}" target="_blank" class="btn btn-sm btn-info text-white rounded-pill px-3 fw-bold shadow-sm" style="pointer-events: auto;">
                         <i class="fas fa-history me-1"></i> ประวัติการเบิกจ่าย
                     </a>
                     {% endif %}
+                </div>
+            </div>
 
-                    {% if job.status == 'DRAFT' or job.status == 'PREPARING' %}
-                    <!-- 🌟 เปลี่ยนปุ่มดึงรายการ BOM ให้เปิด Modal แทน Alert เดิม 🌟 -->
-                    <button type="button" class="btn btn-sm btn-outline-warning text-dark fw-bold rounded-pill px-3 shadow-sm hover-card" data-bs-toggle="modal" data-bs-target="#confirmBomModal">
-                        <i class="fas fa-magic me-1"></i> ดึงรายการวัตถุดิบ (BOM)
-                    </button>
-                    {% endif %}
-
-                    <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3 fw-bold" id="add-material-btn">
-                        {% if job.status == 'IN_PROGRESS' %}
-                            <i class="fas fa-plus me-1"></i> ขอเบิกวัสดุเพิ่มเติม
-                        {% else %}
-                            <i class="fas fa-plus me-1"></i> เบิกวัตถุดิบเพิ่มเติม
+            <!-- เริ่มต้นส่วนที่โดนล็อคด้วย Fieldset -->
+            <div class="card-header bg-white py-2 border-bottom-0 d-flex justify-content-end align-items-center">
+                <div class="d-flex gap-2">
+                    <!-- 🌟 [FIXED] ซ่อนปุ่มดึงข้อมูลและขอเบิกเพิ่ม ถ้าสถานะปิดจ๊อบแล้ว -->
+                    {% if job.status != 'CLOSED' %}
+                        {% if job.status == 'DRAFT' or job.status == 'PREPARING' %}
+                        <button type="button" class="btn btn-sm btn-outline-warning text-dark fw-bold rounded-pill px-3 shadow-sm hover-card" data-bs-toggle="modal" data-bs-target="#confirmBomModal">
+                            <i class="fas fa-magic me-1"></i> ดึงรายการวัตถุดิบ (BOM)
+                        </button>
                         {% endif %}
-                    </button>
+
+                        <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3 fw-bold" id="add-material-btn">
+                            {% if job.status == 'IN_PROGRESS' %}
+                                <i class="fas fa-plus me-1"></i> ขอเบิกวัสดุเพิ่มเติม
+                            {% else %}
+                                <i class="fas fa-plus me-1"></i> เบิกวัตถุดิบเพิ่มเติม
+                            {% endif %}
+                        </button>
+                    {% endif %}
                 </div>
             </div>
 
@@ -210,7 +220,8 @@
                                                 <div>
                                                     {% if job.status == 'WAITING_PURCHASE' or job.is_waiting_purchase %}
                                                         <span class="badge bg-danger px-2 py-1 shadow-sm"><i class="fas fa-shopping-cart me-1"></i> ของขาด รอจัดซื้อสั่งของ</span>
-                                                    {% else %}
+                                                    <!-- 🌟 [FIXED] เพิ่มเงื่อนไขว่าต้องไม่ใช่ DRAFT และ PREPARING ถึงจะโชว์ป้ายเหลือง -->
+                                                    {% elif job.status != 'DRAFT' and job.status != 'PREPARING' %}
                                                         <span class="badge bg-warning text-dark px-2 py-1 shadow-sm"><i class="fas fa-clock me-1"></i> ส่งเรื่องแล้วรอสโตร์เบิกของ</span>
                                                     {% endif %}
                                                 </div>
@@ -285,23 +296,25 @@
             </div>
         </div>
 
-        <!-- 🌟 [UPDATE] ปุ่มบันทึกเหลือปุ่มเดียว (แยกปุ่มปิดจ๊อบออกไปแล้ว) -->
+        <!-- 🌟 [UPDATE] ซ่อนแผงปุ่มบันทึกทั้งหมดเมื่อสถานะถูก Archive แล้ว -->
+        {% if job.status != 'CLOSED' %}
         <div class="d-flex justify-content-end gap-3 mt-4 pb-5 flex-wrap">
             <button type="submit" id="main-save-btn" class="btn btn-gold rounded-pill px-4 fw-bold shadow-sm fs-6">
                 <i class="fas fa-save me-2"></i> <span>บันทึกข้อมูลงาน</span>
             </button>
 
-            <!-- ซ่อนปุ่มขอเบิกแบบเก่าตอนสถานะ IN_PROGRESS เพราะรวมความสามารถไว้ที่ปุ่มบันทึกแล้ว -->
             {% if job.status == 'DRAFT' or job.status == 'PREPARING' %}
                 <a href="{% url 'center_submit_requisition' job.id %}" class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm fs-6" onclick="return confirm('ยืนยันส่งใบขอเบิกวัสดุไปให้แผนกสโตร์?\n\n(หากมีการเพิ่มรายการวัตถุดิบ กรุณากดปุ่มบันทึกข้อมูลงานก่อนนะครับ)');">
                     <i class="fas fa-paper-plane me-2"></i> ส่งให้สโตร์เบิกของ
                 </a>
             {% endif %}
 
-            <!-- 🌟 [NEW] Input ซ่อนเอาไว้รับค่าจากการกดยืนยัน Modal หรือ การกดส่งสโตร์ -->
             <input type="hidden" name="action_fetch_bom" id="hiddenFetchBom" value="">
             <input type="hidden" name="action_submit_store" id="hiddenSubmitStore" value="false">
         </div>
+        {% endif %}
+
+        </fieldset> <!-- 🌟 [FIXED] อย่าลืมใส่แท็กปิด fieldset ตรงนี้ครับ -->
     </form>
 </div>
 
@@ -580,6 +593,5 @@
         }
 
         setTimeout(calculateRowAndGrandTotal, 100);
-    });
 </script>
 {% endblock %}

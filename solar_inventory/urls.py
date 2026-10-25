@@ -7,11 +7,11 @@ urlpatterns = [
     # 🌟 [NEW] เพิ่มเส้นทางแยกสำหรับหน้า FG และ RM
     path('fg/', views.solar_fg_list, name='solar_fg_list'),
     path('rm/', views.solar_rm_list, name='solar_rm_list'),
-    
+
     # 🌟 [UPDATE] แยกเส้นทางสำหรับบันทึกรับเข้า (GR) และ เบิกออก (GI) แบบ Manual ให้ขาดจากกัน
     path('stock-in/create/', views.solar_stock_in_create, name='solar_stock_in_create'),
     path('stock-out/create/', views.solar_stock_out_create, name='solar_stock_out_create'),
-    
+
     path('create/', views.solar_product_create, name='solar_product_create'),
     path('edit/<int:pk>/', views.solar_product_edit, name='solar_product_edit'),
     path('stock-card/<int:pk>/', views.solar_stock_card, name='solar_stock_card'),
@@ -41,4 +41,6 @@ urlpatterns = [
     path('documents/print-gi/<str:doc_no>/', views.store_print_gi_doc, name='store_print_gi_doc'),
 
     path('pending-pos/', views.store_pending_po_list, name='store_pending_po_list'),
+    # 🌟 [NEW] เส้นทางสำหรับพิมพ์ใบตรวจนับสต็อก (A4)
+    path('print-stock-count/', views.solar_print_stock_count, name='solar_print_stock_count'),
 ]

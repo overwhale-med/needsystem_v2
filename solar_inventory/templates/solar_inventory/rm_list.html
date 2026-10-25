@@ -10,12 +10,55 @@
             <p class="text-muted mb-0">รายการวัตถุดิบและอุปกรณ์สำหรับงานติดตั้งโซล่าเซลล์</p>
         </div>
         <div class="d-flex gap-2">
-            <a href="{% url 'solar_product_create' %}?type=RM" class="btn btn-info text-white rounded-pill px-4 fw-bold shadow-sm">
-                <i class="fas fa-plus-circle me-1"></i> เพิ่มอุปกรณ์ (RM)
-            </a>
             <a href="{% url 'solar_inventory_list' %}" class="btn btn-outline-secondary rounded-pill px-4 fw-bold shadow-sm">
                 <i class="fas fa-arrow-left me-1"></i> กลับ Dashboard
             </a>
+
+            <!-- 🌟 [NEW] ปุ่มพิมพ์ใบตรวจนับสต็อก (ส่งพารามิเตอร์การค้นหาตามไปด้วย) -->
+            <a href="{% url 'solar_print_stock_count' %}?type=RM&q={{ search_query }}&rm_category={{ selected_rm_cat }}&stock_status={{ stock_status }}" target="_blank" class="btn btn-info text-white shadow-sm rounded-pill px-4 fw-bold">
+                <i class="fas fa-print me-1"></i> พิมพ์ใบตรวจนับ
+            </a>
+
+            <a href="{% url 'solar_product_create' %}?type=RM" class="btn btn-primary text-white rounded-pill px-4 fw-bold shadow-sm">
+                <i class="fas fa-plus-circle me-1"></i> เพิ่มอุปกรณ์ (RM)
+            </a>
+        </div>
+    </div>
+    <!-- 🌟 [NEW] แถบค้นหาและกรองข้อมูล (Filter Form) 🌟 -->
+    <div class="card shadow-sm border-0 rounded-4 mb-4 bg-white">
+        <div class="card-body p-3">
+            <form method="GET" class="d-flex flex-wrap gap-2 w-100 align-items-center">
+
+                <div class="input-group border rounded-pill overflow-hidden" style="max-width: 350px;">
+                    <span class="input-group-text bg-white border-0 ps-3"><i class="fas fa-search text-muted"></i></span>
+                    <input type="text" name="q" class="form-control border-0 shadow-none" placeholder="ค้นหารหัส / ชื่อสินค้า..." value="{{ search_query }}">
+                </div>
+
+                <select name="rm_category" class="form-select border rounded-pill text-secondary" style="max-width: 250px;">
+                    <option value="">-- ทุกหมวดหมู่วัตถุดิบ (แผนก) --</option>
+                    {% for cat in rm_categories %}
+                        <option value="{{ cat.id }}" {% if selected_rm_cat == cat.id|stringformat:"s" %}selected{% endif %}>
+                            {{ cat.name }}
+                        </option>
+                    {% endfor %}
+                </select>
+
+                <select name="stock_status" class="form-select border rounded-pill text-secondary" style="max-width: 220px;">
+                    <option value="">-- สถานะสินค้าทั้งหมด --</option>
+                    <option value="in_stock" {% if stock_status == 'in_stock' %}selected{% endif %}>✅ มีสินค้า (สต็อก > 0)</option>
+                    <option value="out_of_stock" {% if stock_status == 'out_of_stock' %}selected{% endif %}>❌ สินค้าหมด (สต็อก = 0)</option>
+                </select>
+
+                <button type="submit" class="btn btn-info text-white rounded-pill px-4 fw-bold shadow-sm">
+                    <i class="fas fa-filter me-1"></i> ค้นหา
+                </button>
+
+                {% if search_query or selected_rm_cat or stock_status %}
+                    <a href="{% url 'solar_rm_list' %}" class="btn btn-outline-secondary rounded-pill px-4 fw-bold shadow-sm" title="ล้างค่าการค้นหาทั้งหมด">
+                        <i class="fas fa-sync-alt me-1"></i> ล้างค่า
+                    </a>
+                {% endif %}
+            </form>
         </div>
     </div>
 

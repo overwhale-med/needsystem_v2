@@ -601,6 +601,13 @@
                                                     <i class="fas {% if qt.status != 'DRAFT' %}fa-eye text-primary{% else %}fa-pen text-primary{% endif %} me-2" style="width: 16px;"></i> {% if qt.status != 'DRAFT' %}ดูรายละเอียดเอกสาร{% else %}แก้ไขเอกสาร{% endif %}
                                                 </a></li>
 
+                                        <!-- 🌟 [NEW] ปุ่มทะลุมิติไปหน้า Media Hub 🌟 -->
+                                                {% with job=qt.production_orders.first %}
+                                                    {% if job %}
+                                                        <li><a class="dropdown-item py-2 text-success fw-bold" href="{% url 'media_hub' job.id %}" target="_blank"><i class="fas fa-photo-video me-2" style="width: 16px;"></i> แฟ้มภาพผลงาน/แจ้งซ่อม</a></li>
+                                                    {% endif %}
+                                                {% endwith %}
+
                                                 {% if qt.status != 'CANCELLED' %}
                                                     <li><hr class="dropdown-divider opacity-50"></li>
                                                     <li><h6 class="dropdown-header text-muted small text-uppercase fw-bold pb-0">เอกสารสิ่งพิมพ์</h6></li>

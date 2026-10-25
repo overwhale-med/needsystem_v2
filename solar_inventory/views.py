@@ -38,6 +38,10 @@ def solar_inventory_list(request):
     # 🌟 [NEW] นับใบสั่งซื้อ (PO) ที่อนุมัติแล้ว แต่ยังรับของไม่ครบ
     pending_po_count = SolarPurchaseOrder.objects.filter(status='APPROVED').exclude(receipt_status='COMPLETED').count()
 
+    # 🌟 [NEW] แยกดึงประวัติเอกสารเป็น 2 กอง กองละ 10 รายการล่าสุด (โคลนมาจากระบบบ้านน็อคดาวน์)
+    recent_rm_docs = SolarInventoryDoc.objects.filter(movements__product__product_type='RM').distinct().order_by('-created_at')[:10]
+    recent_fg_docs = SolarInventoryDoc.objects.filter(movements__product__product_type='FG').distinct().order_by('-created_at')[:10]
+
     return render(request, 'solar_inventory/dashboard.html', {
         'rm_count': rm_products.count(),
         'fg_count': fg_products.count(),
@@ -45,7 +49,9 @@ def solar_inventory_list(request):
         'total_rm_value': total_rm_value,
         'total_fg_value': total_fg_value,
         'requisition_count': requisition_count,
-        'pending_po_count': pending_po_count  # 🌟 ส่งตัวเลขนี้ไปแสดงบนการ์ดใบที่ 5
+        'pending_po_count': pending_po_count,
+        'recent_rm_docs': recent_rm_docs,  # 🌟 ส่งประวัติ RM ไปหน้าเว็บ
+        'recent_fg_docs': recent_fg_docs   # 🌟 ส่งประวัติ FG ไปหน้าเว็บ
     })
 
 # 🌟 2. หน้าแสดงตาราง แพ็กเกจหลัก (FG) เท่านั้น
@@ -54,11 +60,41 @@ def solar_fg_list(request):
     fg_products = SolarProduct.objects.filter(product_type='FG').order_by('-is_active', '-created_at')
     return render(request, 'solar_inventory/fg_list.html', {'fg_products': fg_products})
 
-# 🌟 3. หน้าแสดงตาราง อุปกรณ์เสริม (RM) เท่านั้น
+# 🌟 3. หน้าแสดงตาราง อุปกรณ์เสริม (RM) เท่านั้น (อัปเกรดระบบค้นหา)
 @login_required
 def solar_rm_list(request):
+    # 🌟 1. รับค่าจากฟอร์มค้นหา
+    search_query = request.GET.get('q', '')
+    rm_category_id = request.GET.get('rm_category', '')
+    stock_status = request.GET.get('stock_status', '')
+
+    # 🌟 2. ดึงข้อมูลพื้นฐานมาทั้งหมดก่อน
     rm_products = SolarProduct.objects.filter(product_type='RM').order_by('-is_active', '-created_at')
-    return render(request, 'solar_inventory/rm_list.html', {'rm_products': rm_products})
+
+    # 🌟 3. ลอจิกคัดกรองข้อมูล (Filter)
+    if search_query:
+        rm_products = rm_products.filter(
+            Q(code__icontains=search_query) |
+            Q(name__icontains=search_query)
+        )
+    if rm_category_id:
+        rm_products = rm_products.filter(rm_category_id=rm_category_id)
+
+    if stock_status == 'in_stock':
+        rm_products = rm_products.filter(stock_qty__gt=0)
+    elif stock_status == 'out_of_stock':
+        rm_products = rm_products.filter(stock_qty__lte=0)
+
+    # 🌟 4. ดึงหมวดหมู่ทั้งหมดไปแสดงใน Dropdown
+    rm_categories = SolarRawMaterialCategory.objects.all().order_by('name')
+
+    return render(request, 'solar_inventory/rm_list.html', {
+        'rm_products': rm_products,
+        'search_query': search_query,
+        'rm_categories': rm_categories,
+        'selected_rm_cat': rm_category_id,
+        'stock_status': stock_status
+    })
 
 @login_required
 def solar_product_create(request):
@@ -157,6 +193,9 @@ def add_rm_category_ajax(request):
         return JsonResponse({'success': False, 'error': 'กรุณาระบุชื่อหมวดหมู่'})
     return JsonResponse({'success': False, 'error': 'Invalid request'})
 
+# ==========================================
+# 🌟 [UPDATE] อัปเกรดเทมเพลต และ ระบบนำเข้าให้รองรับ Supplier
+# ==========================================
 @login_required
 def solar_inventory_download_template(request):
     response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
@@ -164,10 +203,12 @@ def solar_inventory_download_template(request):
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Solar Inventory"
-    headers = ['ประเภท (FG หรือ RM)', 'รหัสสินค้า (เว้นว่างได้)', 'หมวดหมู่ (Category)', 'ชื่อสินค้า/แพ็กเกจ', 'หน่วยนับ', 'ราคาทุน', 'ราคาขาย', 'จำนวนคงเหลือ', 'จุดสั่งซื้อ']
+
+    # 🌟 [UPDATE] เพิ่มคอลัมน์ 'ชื่อร้านค้า (Supplier)'
+    headers = ['ประเภท (FG หรือ RM)', 'รหัสสินค้า (เว้นว่างได้)', 'หมวดหมู่ (Category)', 'ชื่อสินค้า/แพ็กเกจ', 'หน่วยนับ', 'ราคาทุน', 'ราคาขาย', 'จำนวนคงเหลือ', 'จุดสั่งซื้อ', 'ชื่อร้านค้า (Supplier)']
     ws.append(headers)
-    ws.append(['RM', 'RM-001', 'อุปกรณ์สายไฟ', 'สายไฟ DC 4mm (ตัวอย่าง)', 'เมตร', 15, 25, 100, 20])
-    ws.append(['FG', '', 'แพ็กเกจ 5kW', 'แพ็กเกจ 5kW 1 Phase (ตัวอย่าง)', 'ชุด', 100000, 150000, 5, 2])
+    ws.append(['RM', 'RM-001', 'อุปกรณ์สายไฟ', 'สายไฟ DC 4mm (ตัวอย่าง)', 'เมตร', 15, 25, 100, 20, 'สยามเคเบิล จำกัด'])
+    ws.append(['FG', '', 'แพ็กเกจ 5kW', 'แพ็กเกจ 5kW 1 Phase (ตัวอย่าง)', 'ชุด', 100000, 150000, 5, 2, ''])
     wb.save(response)
     return response
 
@@ -184,6 +225,9 @@ def solar_inventory_import(request):
             sheet = wb.active
             count_created, count_updated = 0, 0
 
+            # นำเข้าตาราง Supplier จากแอป master_data
+            from master_data.models import Supplier
+
             for row in sheet.iter_rows(min_row=2, values_only=True):
                 product_type = str(row[0]).strip().upper() if row[0] else 'RM'
                 code = str(row[1]).strip() if row[1] else None
@@ -195,17 +239,27 @@ def solar_inventory_import(request):
                 stock_qty = float(row[7]) if row[7] else 0.0
                 min_level = float(row[8]) if row[8] else 0.0
 
+                # 🌟 [NEW] อ่านค่าคอลัมน์ชื่อร้านค้า (คอลัมน์ J)
+                supplier_name = str(row[9]).strip() if len(row) > 9 and row[9] else None
+
                 if name and name != 'None':
                     if product_type not in ['FG', 'RM']: product_type = 'RM'
-                    fg_cat, rm_cat = None, None
+
+                    fg_cat, rm_cat, supplier_obj = None, None, None
+
                     if cat_name and cat_name != 'None':
                         if product_type == 'FG': fg_cat, _ = SolarProductCategory.objects.get_or_create(name=cat_name)
                         else: rm_cat, _ = SolarRawMaterialCategory.objects.get_or_create(name=cat_name)
 
+                    # 🌟 [NEW] แปลงชื่อร้านค้าให้กลายเป็นฐานข้อมูล Supplier
+                    if supplier_name and supplier_name != 'None':
+                        supplier_obj, _ = Supplier.objects.get_or_create(name=supplier_name)
+
                     defaults_data = {
                         'product_type': product_type, 'name': name, 'category': fg_cat, 'rm_category': rm_cat,
                         'unit': unit, 'cost_price': cost_price, 'sell_price': sell_price, 'stock_qty': stock_qty,
-                        'min_level': min_level, 'is_active': True
+                        'min_level': min_level, 'is_active': True,
+                        'supplier': supplier_obj # 🌟 แปะข้อมูลร้านค้าลงไป
                     }
                     if code and code != 'None':
                         obj, created = SolarProduct.objects.update_or_create(code=code, defaults=defaults_data)
@@ -684,4 +738,52 @@ def store_print_gi_doc(request, doc_no):
         'gi_doc': gi_doc,
         'movements': movements,
         'print_date': timezone.now()
+    })
+
+# ==========================================
+# 🌟 [NEW] ระบบพิมพ์ใบตรวจนับสต็อก (Stock Count Sheet) 🌟
+# ==========================================
+@login_required
+def solar_print_stock_count(request):
+    p_type = request.GET.get('type', 'RM') # ค่าเริ่มต้นให้เป็น RM
+    search_query = request.GET.get('q', '')
+    rm_category_id = request.GET.get('rm_category', '')
+    stock_status = request.GET.get('stock_status', '')
+
+    # 1. ดึงข้อมูลพื้นฐาน
+    products = SolarProduct.objects.filter(is_active=True, product_type=p_type).order_by('code')
+
+    # 2. กรองข้อมูลตามที่ส่งมาจากหน้าเว็บ (เพื่อให้ตรงกับที่ตาเห็น)
+    if search_query:
+        products = products.filter(Q(code__icontains=search_query) | Q(name__icontains=search_query))
+    if rm_category_id:
+        products = products.filter(rm_category_id=rm_category_id)
+
+    if stock_status == 'in_stock':
+        products = products.filter(stock_qty__gt=0)
+    elif stock_status == 'out_of_stock':
+        products = products.filter(stock_qty__lte=0)
+
+    # 3. ดึงชื่อแผนกมาแสดงที่หัวกระดาษ (ถ้ามีการเลือกกรอง)
+    category_name = "ทั้งหมด"
+    if rm_category_id:
+        try: category_name = SolarRawMaterialCategory.objects.get(id=rm_category_id).name
+        except: pass
+
+    # 4. ดึงข้อมูลบริษัท (ถ้ามี)
+    company = None
+    try:
+        from master_data.models import CompanyInfo
+        company = CompanyInfo.objects.first()
+    except ImportError:
+        pass
+
+    title = 'คลังแพ็กเกจหลัก (FG)' if p_type == 'FG' else 'คลังอุปกรณ์เสริม (RM)'
+
+    return render(request, 'solar_inventory/stock_count_print.html', {
+        'products': products,
+        'title': title,
+        'p_type': p_type,
+        'category_name': category_name,
+        'company': company
     })

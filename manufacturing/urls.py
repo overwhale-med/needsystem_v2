@@ -20,7 +20,7 @@ urlpatterns = [
     path('production/<int:pk>/process-logistics/', views.process_logistics, name='process_logistics'),
     path('production/logistics-claim/', views.create_logistics_claim, name='create_logistics_claim'),
     path('production/<int:pk>/print-delivery/', views.print_delivery_note, name='print_delivery_note'),
-    
+
     # 🌟 [FIXED] เพิ่มเส้นทาง URL สำหรับพิมพ์ใบยินยอมและใบตรวจสอบหน้างานที่หายไป 🌟
     path('production/<int:pk>/print-consent/', views.print_consent_form, name='print_consent_form'),
     path('production/<int:pk>/print-site-checklist/', views.print_site_checklist, name='print_site_checklist'),
@@ -32,6 +32,12 @@ urlpatterns = [
     path('production/<int:pk>/process-qc/', views.process_qc, name='process_qc'),
     path('production/<int:po_id>/print/', views.production_print, name='production_print'),
     path('production/<int:pk>/detail/', views.production_detail, name='production_detail'),
+    path('production/<int:pk>/media-hub/', views.media_hub, name='media_hub'),
+    # 🌟 เพิ่มบรรทัดนี้ลงไปครับ 🌟
+    path('production/media-hub/', views.media_hub_list, name='media_hub_list'),
+    # 🌟 [NEW] เส้นทางสำหรับหน้าประวัติการทำงานของช่างและ QC 🌟
+    path('production/my-log/', views.my_production_log, name='my_production_log'),
+    path('production/my-qc-log/', views.my_qc_log, name='my_qc_log'),
     path('production/<int:pk>/generate-pos/', views.generate_pos_from_production, name='generate_pos_from_production'),
     path('prepare-purchase/', views.ppo_prepare, name='ppo_prepare'),
     path('production/<int:pk>/upload-blueprint/', views.upload_blueprint, name='upload_blueprint'),
@@ -44,7 +50,7 @@ urlpatterns = [
     path('production/<int:pk>/add-material/', views.add_additional_material, name='add_additional_material'),
     path('production/material/<int:pk>/delete/', views.delete_production_material, name='delete_production_material'),
     path('production/<int:pk>/blueprint-viewer/', views.blueprint_viewer, name='blueprint_viewer'),
-    
+
     # 🧱 สูตรการผลิต (BOM)
     path('bom/', views.bom_list, name='bom_list'),
     path('bom/create/', views.bom_create, name='bom_create'),
@@ -52,7 +58,7 @@ urlpatterns = [
     path('bom/<int:pk>/edit/', views.bom_edit, name='bom_edit'),
     path('bom/<int:pk>/update-labor-cost/', views.update_bom_labor_cost, name='update_bom_labor_cost'),
     path('bom/<int:pk>/print/', views.print_master_bom, name='print_master_bom'),
-    
+
     path('production/<int:pk>/update-board/', views.update_production_board, name='update_production_board'),
     path('ajax/add-branch/', views.ajax_add_branch, name='ajax_add_branch'),
     path('ajax/add-salesperson/', views.ajax_add_salesperson, name='ajax_add_salesperson'),
@@ -63,6 +69,10 @@ urlpatterns = [
     path('ajax/add-transporter-full/', views.ajax_add_transporter_full, name='ajax_add_transporter_full'),
     path('ajax/get-fg-by-category/', views.ajax_get_fg_by_category, name='ajax_get_fg_by_category'),
     path('bom/import/', views.import_bom_excel, name='import_bom_excel'),
+    path('bom/import/template/', views.download_bom_template, name='download_bom_template'), # 🌟 เส้นทางสำหรับดาวน์โหลดไฟล์แม่แบบ
     path('ajax/search-raw-material/', views.ajax_search_raw_material, name='ajax_search_raw_material'),
     path('production/logistics-claim/<int:claim_id>/pay/', views.pay_logistics_claim, name='pay_logistics_claim'),
+    # 🌟 [NEW] กระดานแจ้งซ่อมและบริการ (สำหรับช่าง) 🌟
+    path('production/service-board/', views.service_board, name='service_board'),
+    path('production/service-tickets/<int:ticket_id>/process/', views.process_service_ticket, name='process_service_ticket'),
 ]
