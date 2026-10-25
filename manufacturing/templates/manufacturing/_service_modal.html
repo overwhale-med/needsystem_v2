@@ -1,5 +1,6 @@
 <div class="modal fade" id="ticketModal-{{ t.id }}" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-lg">
+    <!-- 🌟 [FIXED] ขยายหน้าต่างให้กว้างขึ้น 85% ของหน้าจอและจัดกึ่งกลางเป๊ะๆ -->
+    <div class="modal-dialog modal-dialog-centered" style="max-width: 1300px; width: 85%;">
         <form method="POST" action="{% url 'process_service_ticket' t.id %}" enctype="multipart/form-data">
             {% csrf_token %}
             <div class="modal-content rounded-4 border-0 shadow-lg">
@@ -10,19 +11,52 @@
                 <div class="modal-body p-4 bg-light">
                     <!-- ข้อมูลเบื้องต้น -->
                     <div class="bg-white p-3 rounded-3 border shadow-sm mb-3">
-                        <div class="row">
-                            <div class="col-md-6">
-                                <h6 class="fw-bold text-dark mb-1">ข้อมูลลูกค้า</h6>
-                                <p class="text-muted small mb-0"><i class="fas fa-user me-1"></i> {{ t.production_order.customer_name }}</p>
-                                <p class="text-muted small mb-0"><i class="fas fa-box me-1"></i> {{ t.production_order.product.name }}</p>
+                        <div class="row g-3">
+                            <!-- คอลัมน์ 1: ข้อมูลลูกค้า -->
+                            <div class="col-md-4">
+                                <h6 class="fw-bold text-dark mb-2 border-bottom pb-2">ข้อมูลหน้างาน (ลูกค้า)</h6>
+                                <p class="text-dark small mb-1"><i class="fas fa-user text-muted me-1" style="width: 15px;"></i> {{ t.production_order.customer_name }}</p>
+                                <p class="text-dark small mb-1"><i class="fas fa-box text-muted me-1" style="width: 15px;"></i> {{ t.production_order.product.name }}</p>
+                                <p class="text-dark small mb-1"><i class="fas fa-phone-alt text-muted me-1" style="width: 15px;"></i> {{ t.customer_phone|default:"ไม่ได้ระบุเบอร์โทร" }}</p>
+                                <p class="text-dark small mb-0"><i class="fas fa-map-marker-alt text-danger me-1" style="width: 15px;"></i>
+                                    {% if t.customer_location %}
+                                        {% if "http" in t.customer_location %}
+                                            <a href="{{ t.customer_location }}" target="_blank" class="text-primary text-decoration-none fw-bold">คลิกดูแผนที่ (Google Maps)</a>
+                                        {% else %}
+                                            {{ t.customer_location }}
+                                        {% endif %}
+                                    {% else %}
+                                        <span class="text-muted">ไม่ได้ระบุพิกัด</span>
+                                    {% endif %}
+                                </p>
                             </div>
-                            <div class="col-md-6 border-start">
-                                <h6 class="fw-bold text-dark mb-1">อาการเสีย ({{ t.get_issue_category_display }})</h6>
-                                <p class="text-danger small mb-0">{{ t.description }}</p>
+
+                            <!-- คอลัมน์ 2: ข้อมูลทีมช่างที่ผลิตเดิม -->
+                            <div class="col-md-4 border-start">
+                                <h6 class="fw-bold text-dark mb-2 border-bottom pb-2">ข้อมูลการผลิตเดิม</h6>
+                                <p class="text-dark small mb-2"><i class="fas fa-industry text-muted me-1" style="width: 15px;"></i> สาขาที่ผลิต: <span class="fw-bold">{{ t.production_order.branch.name|default:"ไม่ระบุสาขา" }}</span></p>
+                                <p class="text-dark small mb-0"><i class="fas fa-hard-hat text-muted me-1" style="width: 15px;"></i> ทีมช่างที่ประกอบ: <span class="fw-bold">{{ t.production_order.production_team.name|default:"ไม่ระบุทีม" }}</span></p>
+                            </div>
+
+                            <!-- คอลัมน์ 3: อาการเสีย & ผู้รับเรื่อง -->
+                            <div class="col-md-4 border-start">
+                                <h6 class="fw-bold text-dark mb-2 border-bottom pb-2">อาการเสีย & ผู้รับเรื่อง</h6>
+                                <p class="text-danger small mb-1"><i class="fas fa-exclamation-triangle me-1"></i> <strong>{{ t.get_issue_category_display }}</strong></p>
+
+                                <!-- 🌟 [FIXED] ดึง {{ t.description }} ขึ้นมาไว้บรรทัดเดียวกัน เพื่อไม่ให้มีช่องว่างบรรทัดแรก -->
+                                <div class="p-2 bg-danger bg-opacity-10 border border-danger border-opacity-25 rounded-3 text-dark small mb-2" style="white-space: pre-line; max-height: 120px; overflow-y: auto;">{{ t.description }}</div>
+
+                                <div class="bg-light p-2 rounded-2 border">
+                                    <p class="text-dark small fw-bold mb-0"><i class="fas fa-user-tie text-primary me-1"></i> เซลส์ผู้รับเรื่อง:</p>
+                                    <p class="text-muted small mb-0 ms-3">
+                                        {{ t.salesperson.first_name|default:"ไม่ได้ระบุ" }} {{ t.salesperson.last_name|default:"" }}
+                                        {% if t.salesperson.phone %}(โทร: {{ t.salesperson.phone }}){% endif %}
+                                    </p>
+                                </div>
                             </div>
                         </div>
                     </div>
-                    
+
                     <!-- 🌟 [FIXED] รูปก่อนซ่อม (ดึงจากตารางแบบใหม่ รองรับรูปและวิดีโอ) 🌟 -->
                     <div class="mb-4">
                         <h6 class="fw-bold text-dark small">📸 รูปภาพความเสียหายจากลูกค้า</h6>
@@ -45,6 +79,26 @@
                         </div>
                     </div>
 
+                    <!-- 🌟 [NEW] รูปผลงานหลังซ่อม (โชว์เฉพาะเมื่อปิดจ๊อบแล้ว) 🌟 -->
+                    {% if t.status == 'COMPLETED' %}
+                    <div class="mb-4 pt-3 border-top border-success border-opacity-25">
+                        <h6 class="fw-bold text-success small"><i class="fas fa-check-double me-1"></i> 📸 รูปภาพผลงานหลังซ่อมเสร็จ (จากทีมช่าง)</h6>
+                        <div class="d-flex flex-wrap gap-2 mt-2">
+                            {% for media in t.media_files.all %}
+                                {% if media.media_type == 'AFTER' %}
+                                    {% if '.mp4' in media.file.url|lower or '.mov' in media.file.url|lower %}
+                                        <video src="{{ media.file.url }}" controls style="height: 100px; border-radius: 8px; background: #000;"></video>
+                                    {% else %}
+                                        <a href="{{ media.file.url }}" target="_blank">
+                                            <img src="{{ media.file.url }}" style="height: 100px; border-radius: 8px; object-fit: cover; border: 2px solid #198754;">
+                                        </a>
+                                    {% endif %}
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+
                     <!-- ส่วนควบคุมตามสถานะ -->
                     {% if t.status == 'PENDING' %}
                         {% if not t.is_warranty %}
@@ -59,7 +113,7 @@
                                 <button type="submit" name="action" value="estimate_cost" class="btn btn-warning w-100 mt-2 fw-bold text-dark"><i class="fas fa-paper-plane me-1"></i> ส่งประเมินให้เซลส์</button>
                             </div>
                         {% endif %}
-                        
+
                         <!-- 🌟 [FIXED] เปลี่ยนสีพื้นหลังเป็น bg-white ให้สว่าง และเห็นตัวอักษรชัดเจน 🌟 -->
                         <div class="bg-white p-3 rounded-3 border shadow-sm mt-3">
                             <h6 class="fw-bold text-dark"><i class="fas fa-hard-hat text-primary"></i> จ่ายงานให้ทีมช่างเข้าพื้นที่</h6>
@@ -97,8 +151,20 @@
                             </button>
                         </div>
                     {% endif %}
+                </div> <!-- ปิดส่วน modal-body -->
+
+                <!-- 🌟 [NEW] ส่วนท้ายของ Modal (ปุ่มปิดหน้าต่าง และ ปุ่มปิดงานถาวร) 🌟 -->
+                <div class="modal-footer border-0 bg-white py-3 d-flex justify-content-between rounded-bottom-4">
+                    <button type="button" class="btn btn-secondary rounded-pill px-4 fw-bold shadow-sm" data-bs-dismiss="modal">ปิดหน้าต่าง</button>
+
+                    {% if t.status == 'COMPLETED' %}
+                        <button type="submit" name="action" value="archive_ticket" class="btn btn-dark rounded-pill px-4 fw-bold shadow-sm" onclick="return confirm('ยืนยันการปิดงาน?\nการ์ดใบนี้จะหายไปจากกระดาน และย้ายไปอยู่ที่หน้าตารางประวัติรวมครับ');">
+                            <i class="fas fa-archive me-1"></i> ปิดงาน (นำออกจากกระดาน)
+                        </button>
+                    {% endif %}
                 </div>
-            </div>
+
+            </div> <!-- ปิดส่วน modal-content -->
         </form>
     </div>
 </div>

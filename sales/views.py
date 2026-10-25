@@ -25,7 +25,7 @@ from .models import Quotation, QuotationItem, QuotationDeposit, POSOrder, POSOrd
 from master_data.models import Customer, CompanyInfo, ShippingRate
 from hr.models import Employee, SalesGroup, CompanySalesTarget, CommissionLog, FundTransaction
 from .forms import QuotationForm
-from manufacturing.models import ProductionOrder, Salesperson as MfgSalesperson, Branch, MfgBranch, ProductionStatus, JobLaborClaim, JobAirconClaim, JobOtherExpense, MasterExpenseClaim, ServiceTicket, ProductionTeam, ServiceTicketMedia
+from manufacturing.models import ProductionOrder, Salesperson as MfgSalesperson, Branch, MfgBranch, ProductionStatus, JobLaborClaim, JobAirconClaim, JobOtherExpense, MasterExpenseClaim, ServiceTicket, ProductionTeam, ServiceTicketMedia, ServiceLaborClaim
 from inventory.models import Product, InventoryDoc, StockMovement, Category
 from solar_jobs.models import SolarJob
 
@@ -2605,8 +2605,6 @@ def master_job_report(request):
 # ==========================================
 # 🛒 [NEW] ฟังก์ชันดูตะกร้าเบิกส่วนตัว (Shopping Cart)
 # ==========================================
-from manufacturing.models import MasterExpenseClaim
-
 @login_required
 def expense_cart_view(request):
     current_emp = getattr(request.user, 'employee', None)
@@ -2618,16 +2616,17 @@ def expense_cart_view(request):
     aircon_items = JobAirconClaim.objects.filter(requester=current_emp, status='UNCLAIMED').order_by('created_at')
     other_items = JobOtherExpense.objects.filter(requester=current_emp, status='UNCLAIMED').order_by('created_at')
 
-    # ประวัติใบคุมที่เคยเบิก
-    master_claims = MasterExpenseClaim.objects.filter(requester=current_emp).order_by('-created_at')
+    # 🌟 [NEW] เพิ่มการดึงบิลค่าแรงซ่อม
+    service_labor_items = ServiceLaborClaim.objects.filter(requester=current_emp, status='UNCLAIMED').order_by('created_at')
 
-    # ดึงรายชื่อธนาคารไปใช้ใน Dropdown
+    master_claims = MasterExpenseClaim.objects.filter(requester=current_emp).order_by('-created_at')
     bank_choices = MasterExpenseClaim.BANK_CHOICES
 
     return render(request, 'sales/expense_cart.html', {
         'labor_items': labor_items,
         'aircon_items': aircon_items,
         'other_items': other_items,
+        'service_labor_items': service_labor_items, # 🌟 [NEW] ส่งไปแสดงผล
         'master_claims': master_claims,
         'bank_choices': bank_choices
     })
@@ -2641,17 +2640,16 @@ def submit_expense_cart(request):
     if request.method == 'POST':
         current_emp = getattr(request.user, 'employee', None)
 
-        # รับค่าบิลที่ถูกติ๊กเลือก
         selected_labors = request.POST.getlist('labor_ids')
         selected_aircons = request.POST.getlist('aircon_ids')
         selected_others = request.POST.getlist('other_ids')
+        selected_service_labors = request.POST.getlist('service_labor_ids') # 🌟 [NEW]
 
-        # ข้อมูลบัญชีธนาคาร
         bank_name = request.POST.get('bank_name')
         bank_acc_num = request.POST.get('bank_account_number')
         bank_acc_name = request.POST.get('bank_account_name')
 
-        if not (selected_labors or selected_aircons or selected_others):
+        if not (selected_labors or selected_aircons or selected_others or selected_service_labors):
             messages.error(request, "❌ กรุณาเลือกบิลอย่างน้อย 1 รายการเพื่อสร้างใบคุมรวม")
             return redirect('expense_cart_view')
 
@@ -2659,18 +2657,19 @@ def submit_expense_cart(request):
             messages.error(request, "❌ กรุณากรอกข้อมูลบัญชีธนาคารให้ครบถ้วนเพื่อความรวดเร็วในการโอนเงิน")
             return redirect('expense_cart_view')
 
-        # ดึงบิลที่ติ๊ก และรวมยอดเงิน
         labor_qs = JobLaborClaim.objects.filter(id__in=selected_labors, requester=current_emp, status='UNCLAIMED')
         aircon_qs = JobAirconClaim.objects.filter(id__in=selected_aircons, requester=current_emp, status='UNCLAIMED')
         other_qs = JobOtherExpense.objects.filter(id__in=selected_others, requester=current_emp, status='UNCLAIMED')
+        service_labor_qs = ServiceLaborClaim.objects.filter(id__in=selected_service_labors, requester=current_emp, status='UNCLAIMED') # 🌟 [NEW]
 
         total_labor = sum(item.amount for item in labor_qs)
         total_aircon = sum(item.amount for item in aircon_qs)
         total_other = sum(item.amount for item in other_qs)
-        grand_total = total_labor + total_aircon + total_other
+        total_service_labor = sum(item.amount for item in service_labor_qs) # 🌟 [NEW]
+
+        grand_total = total_labor + total_aircon + total_other + total_service_labor
 
         if grand_total > 0:
-            # สร้างใบคุมรวม Master Expense Claim
             master_claim = MasterExpenseClaim.objects.create(
                 requester=current_emp,
                 total_amount=grand_total,
@@ -2680,12 +2679,12 @@ def submit_expense_cart(request):
                 status='PENDING'
             )
 
-            # ผูกบิลย่อยเข้ากับใบคุมนี้ และเปลี่ยนสถานะเป็น PENDING เพื่อส่งให้บัญชี
             labor_qs.update(master_claim=master_claim, status='PENDING')
             aircon_qs.update(master_claim=master_claim, status='PENDING')
             other_qs.update(master_claim=master_claim, status='PENDING')
+            service_labor_qs.update(master_claim=master_claim, status='PENDING') # 🌟 [NEW]
 
-            messages.success(request, f"🎉 สร้างใบคุมรวม {master_claim.code} จำนวน {grand_total:,.2f} บาท สำเร็จ! (ข้อมูลส่งถึงโต๊ะฝ่ายบัญชีแล้วครับ)")
+            messages.success(request, f"🎉 สร้างใบคุมรวม {master_claim.code} จำนวน {grand_total:,.2f} บาท สำเร็จ!")
         else:
             messages.error(request, "❌ ยอดเงินเบิกต้องมากกว่า 0 บาท")
 
@@ -2694,8 +2693,6 @@ def submit_expense_cart(request):
 # ==========================================
 # 🌟 [NEW] สมองกล: ศูนย์แจ้งซ่อมและบริการ (After-Sales) 🌟
 # ==========================================
-from manufacturing.models import ServiceTicket, ProductionTeam
-
 @login_required
 def service_ticket_list(request):
     if not is_sales_authorized(request.user):
@@ -2704,12 +2701,22 @@ def service_ticket_list(request):
 
     target_employees, _ = get_target_employees(request.user)
 
-    # ดึงตั๋วซ่อมที่เซลส์ในทีมดูแลอยู่ หรือแอดมินเห็นทั้งหมด
+    # 🌟 [UPDATED] เพิ่มการดึงข้อมูล branch และ production_team มาด้วย เพื่อความเร็ว (N+1 Query) 🌟
     if request.user.is_superuser:
-        tickets = ServiceTicket.objects.select_related('production_order', 'salesperson').all()
+        tickets = ServiceTicket.objects.select_related(
+            'production_order',
+            'production_order__branch',
+            'production_order__production_team',
+            'salesperson'
+        ).all()
     else:
         emp_ids = list(target_employees.values_list('id', flat=True))
-        tickets = ServiceTicket.objects.select_related('production_order', 'salesperson').filter(salesperson_id__in=emp_ids)
+        tickets = ServiceTicket.objects.select_related(
+            'production_order',
+            'production_order__branch',
+            'production_order__production_team',
+            'salesperson'
+        ).filter(salesperson_id__in=emp_ids)
 
     # ระบบค้นหา
     search_q = request.GET.get('q', '')
@@ -2751,10 +2758,14 @@ def service_ticket_create(request):
         urgency = request.POST.get('urgency', 'NORMAL')
         is_warranty = request.POST.get('is_warranty') == 'on'
 
+        # 🌟 [NEW] รับค่าเบอร์โทรและสถานที่หน้างาน 🌟
+        customer_phone = request.POST.get('customer_phone', '')
+        customer_location = request.POST.get('customer_location', '')
+
         job = get_object_or_404(ProductionOrder, pk=job_id)
         current_emp = getattr(request.user, 'employee', None)
 
-        # 1. สร้างตั๋วแจ้งซ่อม
+        # 1. สร้างตั๋วแจ้งซ่อมพร้อมบันทึกข้อมูลติดต่อ
         ticket = ServiceTicket.objects.create(
             production_order=job,
             salesperson=current_emp,
@@ -2762,10 +2773,12 @@ def service_ticket_create(request):
             description=description,
             urgency=urgency,
             is_warranty=is_warranty,
+            customer_phone=customer_phone,       # บันทึกเบอร์โทรหน้างาน
+            customer_location=customer_location, # บันทึกพิกัดหน้างาน
             status='PENDING'
         )
 
-        # 🌟 2. [NEW] กวาดไฟล์ทั้งหมดที่อัปโหลดมา บันทึกลงตาราง ServiceTicketMedia 🌟
+        # 2. กวาดไฟล์ทั้งหมดที่อัปโหลดมา บันทึกลงตาราง ServiceTicketMedia
         media_files = request.FILES.getlist('media_files')
         for f in media_files:
             ServiceTicketMedia.objects.create(
@@ -2774,7 +2787,7 @@ def service_ticket_create(request):
                 file=f
             )
 
-        messages.success(request, f"✅ เปิดตั๋วแจ้งซ่อม {ticket.code} พร้อมแนบไฟล์จำนวน {len(media_files)} ไฟล์ ส่งให้ช่างเรียบร้อยแล้ว!")
+        messages.success(request, f"✅ เปิดตั๋วแจ้งซ่อม {ticket.code} สำหรับลูกค้า {job.customer_name} เรียบร้อยแล้ว! (ส่งเรื่องให้ช่างประเมิน)")
 
     return redirect('service_ticket_list')
 

@@ -16,7 +16,7 @@
     <form method="POST" action="{% url 'submit_expense_cart' %}" id="cartForm">
         {% csrf_token %}
         <div class="row g-4">
-            
+
             <!-- ซ้าย: รายการบิลในตะกร้า -->
             <div class="col-lg-8">
                 <div class="card shadow-sm border-0 rounded-4 mb-4">
@@ -74,7 +74,20 @@
                                 </tr>
                                 {% endfor %}
 
-                                {% if not labor_items and not aircon_items and not other_items %}
+                                <!-- 🌟 [NEW] หมวด 4: ค่าแรงซ่อม 🌟 -->
+                                {% for item in service_labor_items %}
+                                <tr>
+                                    <td class="ps-4"><input type="checkbox" name="service_labor_ids" value="{{ item.id }}" class="form-check-input cart-checkbox shadow-sm border-secondary" data-amount="{{ item.amount }}" onchange="calculateTotal()"></td>
+                                    <td>
+                                        <span class="badge bg-danger text-white me-2">ค่าแรงซ่อม</span>
+                                        <span class="fw-bold text-dark">{{ item.technician_name }}</span>
+                                    </td>
+                                    <td><span class="font-monospace text-muted">{{ item.service_ticket.code }}</span></td>
+                                    <td class="text-end pe-4 fw-bold text-danger">{{ item.amount|intcomma }}</td>
+                                </tr>
+                                {% endfor %}
+
+                                {% if not labor_items and not aircon_items and not other_items and not service_labor_items %}
                                 <tr>
                                     <td colspan="4" class="text-center py-5 text-muted">
                                         <i class="fas fa-box-open fa-3x mb-3 opacity-25"></i>
@@ -127,7 +140,7 @@
                 <div class="card shadow border-0 rounded-4 sticky-top" style="top: 90px; background: linear-gradient(180deg, #ffffff 0%, #f8f9fa 100%);">
                     <div class="card-body p-4">
                         <h6 class="fw-bold text-dark mb-4 text-center"><i class="fas fa-university text-primary me-2"></i>ข้อมูลบัญชีรับเงิน (รอบนี้)</h6>
-                        
+
                         <div class="mb-3">
                             <label class="form-label small fw-bold text-muted">ธนาคารปลายทาง <span class="text-danger">*</span></label>
                             <select name="bank_name" class="form-select border-primary shadow-sm" required>
@@ -137,7 +150,7 @@
                                 {% endfor %}
                             </select>
                         </div>
-                        
+
                         <div class="mb-3">
                             <label class="form-label small fw-bold text-muted">เลขที่บัญชี / พร้อมเพย์ <span class="text-danger">*</span></label>
                             <input type="text" name="bank_account_number" class="form-control border-primary shadow-sm font-monospace fs-5" required placeholder="000-0-00000-0">
@@ -172,14 +185,14 @@
     function calculateTotal() {
         let total = 0;
         let checkedBoxes = document.querySelectorAll('.cart-checkbox:checked');
-        
+
         checkedBoxes.forEach(function(cb) {
             total += parseFloat(cb.getAttribute('data-amount') || 0);
         });
 
         // อัปเดตตัวเลขแบบมีคอมม่า
         document.getElementById('grandTotalDisplay').innerText = total.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-        
+
         // ถ้าติ๊กเลือกอย่างน้อย 1 ใบ ให้เปิดปุ่ม Submit
         document.getElementById('submitBtn').disabled = (checkedBoxes.length === 0);
     }

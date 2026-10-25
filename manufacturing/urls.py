@@ -75,4 +75,8 @@ urlpatterns = [
     # 🌟 [NEW] กระดานแจ้งซ่อมและบริการ (สำหรับช่าง) 🌟
     path('production/service-board/', views.service_board, name='service_board'),
     path('production/service-tickets/<int:ticket_id>/process/', views.process_service_ticket, name='process_service_ticket'),
+    # 🌟 เพิ่มบรรทัดนี้ลงไปครับ 🌟
+    path('production/service-history/', views.service_history_list, name='service_history_list'),
+    # 🌟 ฟังก์ชันตั้งเบิกค่าแรงซ่อม
+    path('production/service-tickets/<int:ticket_id>/claim-labor/', views.submit_service_labor_claim, name='submit_service_labor_claim'),
 ]

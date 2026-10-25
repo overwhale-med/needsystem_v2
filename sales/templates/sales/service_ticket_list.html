@@ -42,11 +42,14 @@
     <div class="card border-0 shadow-sm rounded-4">
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
+                <!-- 🌟 [NEW] หัวตารางแบบ 7 คอลัมน์ 🌟 -->
                 <thead class="text-secondary small text-uppercase bg-light">
                     <tr>
                         <th class="ps-4 py-3 fw-bold">เลขที่ตั๋ว / วันที่แจ้ง</th>
-                        <th class="py-3 fw-bold">อ้างอิงลูกค้า / เลข JOB</th>
-                        <th class="py-3 fw-bold">หมวดหมู่ / อาการเสีย</th>
+                        <th class="py-3 fw-bold">ลูกค้า / เลข JOB</th>
+                        <th class="py-3 fw-bold">สาขา / ทีมช่างผลิต</th>
+                        <th class="py-3 fw-bold">หมวดหมู่ปัญหา</th>
+                        <th class="py-3 fw-bold">อาการเสีย</th>
                         <th class="py-3 fw-bold text-center">สถานะ / ประกัน</th>
                         <th class="text-center py-3 fw-bold">จัดการ</th>
                     </tr>
@@ -62,13 +65,28 @@
                             <div class="fw-bold text-dark">{{ t.production_order.customer_name|default:"-" }}</div>
                             <a href="{% url 'media_hub' t.production_order.id %}" target="_blank" class="text-decoration-none small text-primary fw-bold"><i class="fas fa-link me-1"></i>{{ t.production_order.code }}</a>
                         </td>
+
+                        <!-- 🌟 [NEW] คอลัมน์สาขาและทีมช่างที่แยกออกมา 🌟 -->
                         <td>
-                            <span class="badge bg-secondary mb-1">{{ t.get_issue_category_display }}</span>
-                            {% if t.urgency == 'URGENT' %}<span class="badge bg-warning text-dark"><i class="fas fa-exclamation-triangle"></i> ด่วน</span>{% endif %}
-                            <div class="text-muted small" style="max-width: 250px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{{ t.description }}">
+                            <div class="d-flex flex-column gap-1 align-items-start mt-1">
+                                <span class="badge bg-light text-secondary border border-secondary border-opacity-25 small shadow-sm"><i class="fas fa-industry me-1"></i> {{ t.production_order.branch.name|default:"ไม่ระบุสาขา" }}</span>
+                                <span class="badge bg-light text-secondary border border-secondary border-opacity-25 small shadow-sm"><i class="fas fa-hard-hat me-1"></i> {{ t.production_order.production_team.name|default:"ไม่ระบุทีม" }}</span>
+                            </div>
+                        </td>
+
+                        <!-- 🌟 [NEW] คอลัมน์หมวดหมู่ 🌟 -->
+                        <td>
+                            <span class="badge bg-secondary mb-1">{{ t.get_issue_category_display }}</span><br>
+                            {% if t.urgency == 'URGENT' %}<span class="badge bg-warning text-dark mt-1"><i class="fas fa-exclamation-triangle"></i> ด่วน</span>{% endif %}
+                        </td>
+
+                        <!-- 🌟 [NEW] คอลัมน์รายละเอียดอาการเสีย (แสดงได้ 2 บรรทัด) 🌟 -->
+                        <td>
+                            <div class="text-muted small" style="max-width: 250px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;" title="{{ t.description }}">
                                 {{ t.description }}
                             </div>
                         </td>
+
                         <td class="text-center">
                             {% if t.status == 'PENDING' %}
                                 <span class="badge bg-info text-dark rounded-pill px-3 py-2"><i class="fas fa-search me-1"></i> รอช่างประเมิน</span>
@@ -94,11 +112,9 @@
                             </div>
                         </td>
                         <td class="text-center">
-                            <!-- 🌟 [NEW] ปุ่มดูรายละเอียด -->
                             <button class="btn btn-sm btn-outline-primary rounded-pill shadow-sm" data-bs-toggle="modal" data-bs-target="#viewTicketModal-{{ t.id }}" title="ดูรายละเอียด">
                                 <i class="fas fa-eye"></i>
                             </button>
-                            <!-- ปุ่มแผงควบคุมตามสถานะ -->
                             {% if t.status == 'WAITING_APPROVAL' %}
                                 <form method="POST" action="{% url 'service_ticket_update' t.id %}" class="d-inline">
                                     {% csrf_token %}
@@ -107,20 +123,12 @@
                                     </button>
                                 </form>
                             {% endif %}
-
-                            {% if t.status in 'PENDING,WAITING_APPROVAL' %}
-                                <form method="POST" action="{% url 'service_ticket_update' t.id %}" class="d-inline ms-1">
-                                    {% csrf_token %}
-                                    <button type="submit" name="action" value="cancel" class="btn btn-sm btn-outline-danger rounded-pill" onclick="return confirm('ต้องการยกเลิกตั๋วแจ้งซ่อมนี้ใช่หรือไม่?');" title="ยกเลิก">
-                                        <i class="fas fa-trash"></i>
-                                    </button>
-                                </form>
-                            {% endif %}
                         </td>
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="5" class="text-center py-5 opacity-50">
+                        <!-- 🌟 [FIXED] ขยาย colspan ให้เป็น 7 เพื่อให้ข้อความอยู่ตรงกลาง 🌟 -->
+                        <td colspan="7" class="text-center py-5 opacity-50">
                             <i class="fas fa-clipboard-check fa-4x text-muted mb-3"></i>
                             <h5 class="text-muted fw-bold">ไม่มีรายการแจ้งซ่อม</h5>
                         </td>
@@ -148,6 +156,9 @@
                         <div class="col-md-6">
                             <p class="mb-1 text-muted small">อ้างอิงลูกค้า / เลข JOB</p>
                             <h6 class="fw-bold text-dark">{{ t.production_order.customer_name }} <a href="{% url 'media_hub' t.production_order.id %}" target="_blank" class="ms-1 small text-primary"><i class="fas fa-link"></i> {{ t.production_order.code }}</a></h6>
+                            <!-- 🌟 [NEW] ข้อมูลสาขาและทีมประกอบ 🌟 -->
+                            <p class="small text-muted mb-0 mt-2"><i class="fas fa-industry me-1"></i> สาขาผลิต: <span class="fw-bold text-dark">{{ t.production_order.branch.name|default:"ไม่ระบุ" }}</span></p>
+                            <p class="small text-muted mb-0"><i class="fas fa-hard-hat me-1"></i> ทีมช่างเดิม: <span class="fw-bold text-dark">{{ t.production_order.production_team.name|default:"ไม่ระบุ" }}</span></p>
                         </div>
                         <div class="col-md-6 border-start">
                             <p class="mb-1 text-muted small">หมวดหมู่ / สถานะล่าสุด</p>
@@ -205,6 +216,26 @@
                     </div>
                 </div>
 
+                <!-- 🌟 [NEW] รูปผลงานหลังซ่อมเสร็จ (จากทีมช่าง) วางโค้ดตรงนี้ครับ 🌟 -->
+                {% if t.status == 'COMPLETED' or t.status == 'CLOSED' %}
+                <div class="mt-4 pt-3 border-top border-success border-opacity-25">
+                    <p class="fw-bold text-success mb-2"><i class="fas fa-check-double me-1"></i> ไฟล์แนบผลงานหลังซ่อมเสร็จ (จากช่าง)</p>
+                    <div class="d-flex flex-wrap gap-2">
+                        {% for media in t.media_files.all %}
+                            {% if media.media_type == 'AFTER' %}
+                                {% if '.mp4' in media.file.url|lower or '.mov' in media.file.url|lower %}
+                                    <video src="{{ media.file.url }}" controls style="height: 120px; border-radius: 8px; background: #000;"></video>
+                                {% else %}
+                                    <a href="{{ media.file.url }}" target="_blank">
+                                        <img src="{{ media.file.url }}" style="height: 120px; border-radius: 8px; object-fit: cover; border: 2px solid #198754; transition: 0.2s;">
+                                    </a>
+                                {% endif %}
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
             </div>
             <div class="modal-footer border-0 bg-white py-3">
                 <button type="button" class="btn btn-secondary rounded-pill px-4 fw-bold shadow-sm" data-bs-dismiss="modal">ปิดหน้าต่าง</button>
@@ -256,13 +287,25 @@
                         </div>
                     </div>
 
+                    <!-- 🌟 [NEW] เพิ่มช่องกรอกเบอร์โทรและพิกัดหน้างาน 🌟 -->
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold text-dark small">4. เบอร์โทรติดต่อหน้างาน (ช่างต้องโทรหาใคร)</label>
+                            <input type="text" name="customer_phone" class="form-control" placeholder="เช่น 08X-XXX-XXXX" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold text-dark small">5. สถานที่ / พิกัด (Google Maps)</label>
+                            <input type="text" name="customer_location" class="form-control" placeholder="วางลิงก์ หรือ พิมพ์จุดสังเกต" required>
+                        </div>
+                    </div>
+
                     <div class="mb-3">
-                        <label class="form-label fw-bold text-dark small">4. รายละเอียดอาการเสีย</label>
+                        <label class="form-label fw-bold text-dark small">6. รายละเอียดอาการเสีย</label>
                         <textarea name="description" class="form-control" rows="3" placeholder="ลูกค้าแจ้งว่าน้ำรั่วซึมบริเวณหน้าต่างด้านขวา เวลาฝนตกหนัก..." required></textarea>
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label fw-bold text-dark small">5. รูปภาพและวิดีโอจากลูกค้า (อัปโหลดพร้อมกันได้หลายไฟล์)</label>
+                        <label class="form-label fw-bold text-dark small">7. รูปภาพและวิดีโอจากลูกค้า (อัปโหลดพร้อมกันได้หลายไฟล์)</label>
                         <p class="text-muted" style="font-size: 0.75rem; margin-bottom: 5px;">* รูปภาพแนบได้สูงสุด 20 รูป | วิดีโอแนบได้สูงสุด 10 คลิป (MP4, MOV)</p>
                         <input type="file" name="media_files" id="mediaUploadInput" class="form-control mb-1" accept="image/*,video/mp4,video/quicktime" multiple required>
                         <div id="mediaUploadError" class="text-danger fw-bold small" style="display: none;"></div>

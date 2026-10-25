@@ -2126,4 +2126,86 @@ def process_service_ticket(request, ticket_id):
             else:
                 messages.error(request, "❌ กรุณาแนบรูปภาพ/วิดีโอหลังซ่อมเสร็จอย่างน้อย 1 ไฟล์เพื่อปิดงาน")
 
+        # 🌟 [NEW] 4. หัวหน้าช่างกดปิดงาน นำออกจากกระดาน (Archive) 🌟
+        elif action == 'archive_ticket':
+            ticket.status = 'CLOSED'
+            ticket.save()
+            messages.success(request, f"📦 ปิดงานซ่อม {ticket.code} ถาวร! การ์ดถูกย้ายไปที่ตารางประวัติเรียบร้อยแล้วครับ")
+
     return redirect('service_board')
+
+# ==========================================
+# 🌟 [NEW] ตารางประวัติแจ้งซ่อม และ ตั้งเบิกค่าแรงซ่อม 🌟
+# ==========================================
+@login_required
+def service_history_list(request):
+    if not is_sales_authorized(request.user):
+        messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์เข้าถึง")
+        return redirect('dashboard')
+
+    # ดึงตั๋วแจ้งซ่อมทั้งหมดเรียงตามวันล่าสุด (เน้นงานที่ปิดจ๊อบแล้ว)
+    tickets = ServiceTicket.objects.select_related('production_order', 'salesperson', 'production_team').all().order_by('-created_at')
+
+    search_q = request.GET.get('q', '')
+    status_filter = request.GET.get('status', '')
+
+    if search_q:
+        tickets = tickets.filter(
+            Q(code__icontains=search_q) |
+            Q(production_order__customer_name__icontains=search_q) |
+            Q(production_order__code__icontains=search_q)
+        )
+    if status_filter:
+        tickets = tickets.filter(status=status_filter)
+
+    paginator = Paginator(tickets, 20)
+    page_obj = paginator.get_page(request.GET.get('page'))
+
+    return render(request, 'manufacturing/service_history_list.html', {
+        'page_obj': page_obj,
+        'search_q': search_q,
+        'status_filter': status_filter,
+        'status_choices': ServiceTicket.STATUS_CHOICES,
+    })
+
+@login_required
+@transaction.atomic
+def submit_service_labor_claim(request, ticket_id):
+    if request.method == 'POST':
+        ticket = get_object_or_404(ServiceTicket, pk=ticket_id)
+        current_emp = getattr(request.user, 'employee', None)
+
+        # 🌟 ป้องกันการเบิกซ้ำ 🌟
+        if ticket.labor_claims.exists():
+            messages.error(request, f"❌ ตั๋วแจ้งซ่อม {ticket.code} ถูกตั้งเบิกค่าแรงไปแล้ว ไม่สามารถตั้งเบิกซ้ำได้")
+            return redirect('service_history_list')
+
+        try:
+            amount_str = request.POST.get('claim_amount', '0').replace(',', '')
+            amount = Decimal(amount_str)
+            contractor_name = request.POST.get('technician_name', '')
+            slip_file = request.FILES.get('claim_slip')
+
+            if amount <= 0:
+                messages.error(request, "❌ ยอดเงินเบิกต้องมากกว่า 0 บาท")
+                return redirect('service_history_list')
+            if not slip_file:
+                messages.error(request, "❌ กรุณาแนบรูปบิล/หลักฐานหน้างาน")
+                return redirect('service_history_list')
+
+            # สร้างใบเบิกค่าแรงซ่อม และบันทึกลงตะกร้า (UNCLAIMED)
+            from manufacturing.models import ServiceLaborClaim # ดึงโมเดลมาใช้
+            ServiceLaborClaim.objects.create(
+                service_ticket=ticket,
+                requester=current_emp,
+                technician_name=contractor_name,
+                amount=amount,
+                slip_image=slip_file,
+                status='UNCLAIMED'
+            )
+
+            messages.success(request, f"🛒 หยอดบิลค่าแรงซ่อม {ticket.code} ลงตะกร้าเบิกส่วนตัวสำเร็จ!")
+        except Exception as e:
+            messages.error(request, f"❌ เกิดข้อผิดพลาด: {str(e)}")
+
+    return redirect('service_history_list')

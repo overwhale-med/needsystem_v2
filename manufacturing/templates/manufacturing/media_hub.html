@@ -175,17 +175,33 @@
 
                                             <div class="col-md-6 border-start">
                                                 <p class="mb-1 text-dark fw-bold"><i class="fas fa-images me-1 text-info"></i> รูปภาพความเสียหาย (จากลูกค้า):</p>
-                                                <div class="d-flex gap-2 ms-4 mb-3">
-                                                    {% if ticket.before_image_1 %}<a href="{{ ticket.before_image_1.url }}" target="_blank"><img src="{{ ticket.before_image_1.url }}" style="height: 70px; border-radius: 6px;"></a>{% endif %}
-                                                    {% if ticket.before_image_2 %}<a href="{{ ticket.before_image_2.url }}" target="_blank"><img src="{{ ticket.before_image_2.url }}" style="height: 70px; border-radius: 6px;"></a>{% endif %}
-                                                    {% if not ticket.before_image_1 and not ticket.before_image_2 %}<span class="small text-muted">ไม่มีการแนบรูปภาพ</span>{% endif %}
+                                                <div class="d-flex flex-wrap gap-2 ms-4 mb-3">
+                                                    {% for media in ticket.media_files.all %}
+                                                        {% if media.media_type == 'BEFORE' %}
+                                                            {% if '.mp4' in media.file.url|lower or '.mov' in media.file.url|lower %}
+                                                                <video src="{{ media.file.url }}" controls style="height: 70px; border-radius: 6px; background: #000;"></video>
+                                                            {% else %}
+                                                                <a href="{{ media.file.url }}" target="_blank"><img src="{{ media.file.url }}" style="height: 70px; border-radius: 6px; object-fit: cover;"></a>
+                                                            {% endif %}
+                                                        {% endif %}
+                                                    {% empty %}
+                                                        <span class="small text-muted">ไม่มีการแนบรูปภาพ</span>
+                                                    {% endfor %}
                                                 </div>
 
                                                 <p class="mb-1 text-dark fw-bold"><i class="fas fa-camera text-success me-1"></i> รูปภาพผลงานหลังซ่อม (จากช่าง):</p>
-                                                <div class="d-flex gap-2 ms-4 mb-0">
-                                                    {% if ticket.after_image_1 %}<a href="{{ ticket.after_image_1.url }}" target="_blank"><img src="{{ ticket.after_image_1.url }}" style="height: 70px; border-radius: 6px;"></a>{% endif %}
-                                                    {% if ticket.after_image_2 %}<a href="{{ ticket.after_image_2.url }}" target="_blank"><img src="{{ ticket.after_image_2.url }}" style="height: 70px; border-radius: 6px;"></a>{% endif %}
-                                                    {% if not ticket.after_image_1 and not ticket.after_image_2 %}<span class="small text-muted">ยังไม่มีการประเมินหรือยังซ่อมไม่เสร็จ</span>{% endif %}
+                                                <div class="d-flex flex-wrap gap-2 ms-4 mb-0">
+                                                    {% for media in ticket.media_files.all %}
+                                                        {% if media.media_type == 'AFTER' %}
+                                                            {% if '.mp4' in media.file.url|lower or '.mov' in media.file.url|lower %}
+                                                                <video src="{{ media.file.url }}" controls style="height: 70px; border-radius: 6px; background: #000;"></video>
+                                                            {% else %}
+                                                                <a href="{{ media.file.url }}" target="_blank"><img src="{{ media.file.url }}" style="height: 70px; border-radius: 6px; object-fit: cover;"></a>
+                                                            {% endif %}
+                                                        {% endif %}
+                                                    {% empty %}
+                                                        <span class="small text-muted">ยังไม่มีการประเมินหรือยังซ่อมไม่เสร็จ</span>
+                                                    {% endfor %}
                                                 </div>
                                             </div>
                                         </div>

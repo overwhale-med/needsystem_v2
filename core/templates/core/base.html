@@ -151,6 +151,8 @@
                             <!-- 🌟 [NEW] เมนูกระดานคิวแจ้งซ่อม สำหรับช่าง 🌟 -->
                             {% if request.user.is_superuser or group_name == "Executive" or group_name == "Production_Team" or group_name == "Production" %}
                             <li><a class="dropdown-item fw-bold text-danger" href="{% url 'service_board' %}"><i class="fas fa-tools me-2 text-danger"></i> กระดานคิวงานแจ้งซ่อม (After-Sales)</a></li>
+                            <!-- 🌟 [NEW] ลิงก์ไปหน้าตารางประวัติงานแจ้งซ่อม 🌟 -->
+                            <li><a class="dropdown-item text-muted" href="{% url 'service_history_list' %}"><i class="fas fa-history me-2"></i> ประวัติงานแจ้งซ่อม (ดูทั้งหมด/เบิกเงิน)</a></li>
                             {% endif %}
 
                             {% if request.user.is_superuser or group_name == "Executive" or group_name == "QC_Team" %}

@@ -234,6 +234,12 @@
                                                         <i class="fas fa-edit text-info me-2" style="width: 20px;"></i> อัปเดตสถานะ / จัดส่ง / QC
                                                      </button>
                                                 </li>
+                                                <!-- 🌟 [NEW] ลิงก์เปิด Media Hub 🌟 -->
+                                                <li>
+                                                    <a href="{% url 'media_hub' order.id %}" target="_blank" class="dropdown-item py-2 text-dark rounded-3 fw-bold">
+                                                        <i class="fas fa-photo-video text-primary me-2" style="width: 20px;"></i> เปิดแฟ้มภาพและบริการ
+                                                    </a>
+                                                </li>
                                                 <li>
                                                     <a href="{% url 'production_print' order.id %}" target="_blank" class="dropdown-item py-2 text-dark rounded-3 fw-bold">
                                                         <i class="fas fa-print text-secondary me-2" style="width: 20px;"></i> พิมพ์ใบงานช่าง
@@ -344,6 +350,11 @@
                              </div>
 
                             <div class="d-flex justify-content-end gap-2 align-items-center">
+                                <!-- 🌟 [NEW] ปุ่มเปิด Media Hub สำหรับประวัติปิดจ๊อบ 🌟 -->
+                                <a href="{% url 'media_hub' order.id %}" target="_blank" class="btn btn-sm btn-outline-primary shadow-sm rounded-pill fw-bold px-3 py-2 d-flex align-items-center" title="เปิดดูแฟ้มภาพและบริการ">
+                                    <i class="fas fa-photo-video me-1"></i> แฟ้มภาพ
+                                </a>
+
                                 {% if is_sales and not request.user.is_superuser %}
                                 <button type="button" class="btn btn-sm btn-outline-secondary shadow-sm rounded-pill fw-bold px-3 py-2 d-flex align-items-center" disabled title="สงวนสิทธิ์เฉพาะฝ่ายผลิต">
                                     <i class="fas fa-lock text-danger me-1"></i> ดูข้อมูล
@@ -567,7 +578,7 @@
         if (status === 'IN_PROGRESS' || status === 'WAITING_QC' || status === 'REWORK') {
             document.getElementById('colProduction').className = 'col-md-6 border-end';
             document.getElementById('colQC').className = 'col-md-6';
-            document.getElementById('colDelivery').style.display = 'none'; 
+            document.getElementById('colDelivery').style.display = 'none';
 
             document.getElementById('qcCompleteBtnContainer').style.display = 'block';
             document.getElementById('qcCompletedAlert').style.display = 'none';
@@ -575,14 +586,14 @@
             document.getElementById('colProduction').className = 'col-md-4 border-end';
             document.getElementById('colQC').className = 'col-md-4 border-end';
             document.getElementById('colDelivery').className = 'col-md-4';
-            document.getElementById('colDelivery').style.display = 'block'; 
+            document.getElementById('colDelivery').style.display = 'block';
 
             document.getElementById('qcCompleteBtnContainer').style.display = 'none';
             document.getElementById('qcCompletedAlert').style.display = 'block';
         }
 
         document.getElementById('updateForm').action = `/manufacturing/production/${jobId}/update-board/`;
-        
+
         const modalEl = document.getElementById('updateBoardModal');
         const modalInstance = bootstrap.Modal.getOrCreateInstance(modalEl);
         modalInstance.show();

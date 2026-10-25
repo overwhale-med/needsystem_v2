@@ -538,6 +538,48 @@ class JobOtherExpense(models.Model):
         super().save(*args, **kwargs)
 
 # ==========================================
+# 🌟 ตารางที่ 4: ระบบตั้งเบิกค่าแรงแจ้งซ่อม (Service Labor Claim) 🌟
+# ==========================================
+class ServiceLaborClaim(models.Model):
+    STATUS_CHOICES = [
+        ('UNCLAIMED', 'รอตั้งเบิก (ในตะกร้า)'),
+        ('PENDING', 'รอจ่ายเงิน (Pending)'),
+        ('PAID', 'จ่ายเงินแล้ว (Paid)')
+    ]
+
+    code = models.CharField(max_length=20, unique=True, verbose_name="เลขที่ใบเบิก")
+
+    # 🌟 [FIXED] ใส่เครื่องหมายคำพูด 'ServiceTicket' ครอบไว้
+    service_ticket = models.ForeignKey('ServiceTicket', on_delete=models.CASCADE, related_name='labor_claims', verbose_name="อ้างอิงใบแจ้งซ่อม")
+
+    master_claim = models.ForeignKey(MasterExpenseClaim, on_delete=models.SET_NULL, null=True, blank=True, related_name='service_items', verbose_name="ใบคุมรวม")
+    requester = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, verbose_name="พนักงานผู้หยอดกระปุก")
+
+    technician_name = models.CharField(max_length=150, verbose_name="ชื่อช่าง/ผู้รับเหมาที่เข้าซ่อม")
+    amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, verbose_name="ยอดเบิกค่าแรงซ่อม")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='UNCLAIMED', verbose_name="สถานะการจ่ายเงิน")
+    slip_image = models.ImageField(upload_to='service_labor_slips/%Y/%m/', null=True, blank=True, verbose_name="หลักฐาน/บิลค่าแรง")
+
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="วันที่ตั้งเบิก")
+    paid_at = models.DateTimeField(null=True, blank=True, verbose_name="วันที่จ่ายเงิน")
+
+    class Meta:
+        verbose_name = "ใบเบิกค่าแรงซ่อม"
+        verbose_name_plural = "ใบเบิกค่าแรงซ่อม"
+
+    def __str__(self): return f"{self.code} - {self.technician_name}"
+
+    def save(self, *args, **kwargs):
+        if not self.code:
+            now = timezone.now()
+            thai_year = (now.year + 543) % 100
+            prefix = f"SLC-{thai_year:02d}{now.strftime('%m')}"
+            last = ServiceLaborClaim.objects.filter(code__startswith=prefix).order_by('code').last()
+            seq = int(last.code.split('-')[-1]) + 1 if last else 1
+            self.code = f"{prefix}-{seq:04d}"
+        super().save(*args, **kwargs)
+
+# ==========================================
 # 🌟 [NEW] ตาราง: ใบรับสินค้าสำเร็จรูป (จาก QC PASS) 🌟
 # ==========================================
 class QCReceiptDoc(models.Model):
@@ -577,7 +619,8 @@ class ServiceTicket(models.Model):
         ('PENDING', 'รอหัวหน้าช่างประเมิน'),
         ('WAITING_APPROVAL', 'รอเซลส์คอนเฟิร์มราคา (งานมีค่าใช้จ่าย)'),
         ('IN_PROGRESS', 'กำลังดำเนินการ / นัดหมายช่างแล้ว'),
-        ('COMPLETED', 'ซ่อมเสร็จสิ้น (ปิดจ๊อบ)'),
+        ('COMPLETED', 'ซ่อมเสร็จสิ้น (รอปิดงาน)'),
+        ('CLOSED', 'ปิดจ๊อบ/เคลียร์บัญชีแล้ว (ซ่อนจากกระดาน)'), # 🌟 [NEW] เพิ่มสถานะนี้
         ('CANCELLED', 'ยกเลิกการแจ้งซ่อม')
     ]
 
@@ -602,6 +645,9 @@ class ServiceTicket(models.Model):
     issue_category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='OTHER', verbose_name="หมวดหมู่ปัญหา")
     description = models.TextField(verbose_name="รายละเอียดอาการเสีย")
     urgency = models.CharField(max_length=10, choices=URGENCY_CHOICES, default='NORMAL', verbose_name="ความเร่งด่วน")
+    # 🌟 ข้อมูลติดต่อเพิ่มเติมหน้างาน
+    customer_phone = models.CharField(max_length=50, blank=True, null=True, verbose_name="เบอร์โทรติดต่อหน้างาน")
+    customer_location = models.TextField(blank=True, null=True, verbose_name="สถานที่/พิกัดหน้างาน")
 
     is_warranty = models.BooleanField(default=True, verbose_name="อยู่ในระยะประกัน (ซ่อมฟรี)")
     estimated_cost = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, verbose_name="ประเมินค่าใช้จ่าย (กรณีหมดประกัน)")
