@@ -85,13 +85,16 @@
                     <tr>
                         <th style="width: 14%;">1. เลขที่ JOB</th>
                         <th style="width: 12%;">2. ใบเสนอราคา</th>
-                        <th style="width: 12%;">3. ใบเสร็จรับเงิน</th>
-                        <th style="width: 9%;">4. คอมฯ 2%</th>
-                        <th style="width: 9%;">5. คอมฯ 3%</th>
-                        <th style="width: 9%;">6. ค่าขนส่ง</th>
+                        <th style="width: 11%;">3. ใบเสร็จรับเงิน</th>
+                        <th style="width: 8%;">4. คอมฯ 2%</th>
+                        <th style="width: 8%;">5. คอมฯ 3%</th>
+                        <th style="width: 8%;">6. ค่าขนส่ง</th>
                         <th style="width: 10%;">7. ค่าแรงเหมา</th>
                         <th style="width: 10%;">8. ค่าแอร์</th>
-                        <th style="width: 15%;">9. ค่าใช้จ่ายอื่นๆ</th>
+                        <!-- 🌟 [NEW] เพิ่มคอลัมน์ค่าซ่อมงาน -->
+                        <th style="width: 10%;">9. ค่าซ่อมงาน</th>
+                        <!-- 🌟 เลื่อนเป็นคอลัมน์ 10 -->
+                        <th style="width: 9%;">10. ค่าใช้จ่ายอื่นๆ</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -123,9 +126,12 @@
                                     {% if job.quotation_ref.status == 'CANCELLED' %}
                                         <span class="badge-status bg-red-soft">ยกเลิกแล้ว</span>
                                     {% elif job.quotation_ref.is_deposit_paid %}
-                                        <a href="{% url 'deposit_print' job.quotation_ref.id %}" target="_blank" class="text-decoration-none">
-                                            <span class="badge-status bg-green-soft"><i class="fas fa-check-circle"></i> รับมัดจำแล้ว</span>
-                                        </a>
+                                        <!-- 🌟 [UPDATE] วนลูปโชว์ใบเสร็จมัดจำทุกใบ -->
+                                        {% for rvd in job.quotation_ref.deposits.all %}
+                                            <a href="{% url 'deposit_print' job.quotation_ref.id %}?rvd={{ rvd.id }}" target="_blank" class="text-decoration-none d-block mb-1">
+                                                <span class="badge-status bg-green-soft"><i class="fas fa-check-circle"></i> {{ rvd.code }}</span>
+                                            </a>
+                                        {% endfor %}
                                     {% else %}
                                         <span class="badge-status bg-yellow-soft">รอรับมัดจำ</span>
                                     {% endif %}
@@ -164,10 +170,13 @@
                             {% if job.quotation_ref %}
                                 {% for t in job.matched_tickets_2 %}
                                     <div class="mb-1">
-                                        {% if t.status == 'PAID' %}
-                                            <span class="badge-status bg-green-soft">จ่ายแล้ว</span>
+                                        {% if t.status == 'PAID' and t.claim_ref %}
+                                            <span class="badge-status bg-green-soft d-block mb-1 mx-auto" style="width: max-content;">จ่ายแล้ว</span>
+                                            <a href="{% url 'print_commission_claim' t.claim_ref.id %}" target="_blank" class="btn btn-sm btn-outline-dark rounded-pill px-2 py-0 d-print-none fw-bold" style="font-size: 0.7rem;">
+                                                <i class="fas fa-file-invoice"></i> {{ t.claim_ref.code }}
+                                            </a>
                                         {% else %}
-                                            <span class="badge-status bg-red-soft">รอจ่าย</span>
+                                            <span class="badge-status bg-red-soft d-block mx-auto" style="width: max-content;">รอจ่าย</span>
                                         {% endif %}
                                     </div>
                                 {% empty %}
@@ -183,10 +192,13 @@
                             {% if job.quotation_ref %}
                                 {% for t in job.matched_tickets_3 %}
                                     <div class="mb-1">
-                                        {% if t.status == 'PAID' %}
-                                            <span class="badge-status bg-green-soft">จ่ายแล้ว</span>
+                                        {% if t.status == 'PAID' and t.claim_ref %}
+                                            <span class="badge-status bg-green-soft d-block mb-1 mx-auto" style="width: max-content;">จ่ายแล้ว</span>
+                                            <a href="{% url 'print_commission_claim' t.claim_ref.id %}" target="_blank" class="btn btn-sm btn-outline-dark rounded-pill px-2 py-0 d-print-none fw-bold" style="font-size: 0.7rem;">
+                                                <i class="fas fa-file-invoice"></i> {{ t.claim_ref.code }}
+                                            </a>
                                         {% else %}
-                                            <span class="badge-status bg-red-soft">รอจ่าย</span>
+                                            <span class="badge-status bg-red-soft d-block mx-auto" style="width: max-content;">รอจ่าย</span>
                                         {% endif %}
                                     </div>
                                 {% empty %}
@@ -201,9 +213,12 @@
                         <td class="text-center">
                             {% if job.logistics_claim %}
                                 {% if job.logistics_claim.status == 'PAID' %}
-                                    <span class="badge-status bg-green-soft">จ่ายแล้ว</span>
+                                    <span class="badge-status bg-green-soft d-block mb-1 mx-auto" style="width: max-content;">จ่ายแล้ว</span>
+                                    <a href="{% url 'print_logistics_claim' job.logistics_claim.id %}" target="_blank" class="btn btn-sm btn-outline-dark rounded-pill px-2 py-0 d-print-none fw-bold" style="font-size: 0.7rem;">
+                                        <i class="fas fa-file-invoice"></i> {{ job.logistics_claim.code }}
+                                    </a>
                                 {% else %}
-                                    <span class="badge-status bg-red-soft">รอจ่าย</span>
+                                    <span class="badge-status bg-red-soft d-block mx-auto" style="width: max-content;">รอจ่าย</span>
                                 {% endif %}
                             {% else %}
                                 <span class="text-muted">-</span>
@@ -234,7 +249,7 @@
                                             <button class="btn btn-sm btn-outline-primary rounded-pill px-2 py-0 d-print-none" style="font-size: 0.7rem;" data-bs-toggle="modal" data-bs-target="#editLaborModal{{ claim.id }}">✏️ แก้ไข</button>
                                         {% endif %}
                                     </div>
-                                    
+
                                     {% if claim.status == 'UNCLAIMED' %}
                                     <!-- Modal แก้ไข ค่าแรง (โหลดเฉพาะตอนอยู่ในตะกร้า) -->
                                     <div class="modal fade text-start" id="editLaborModal{{ claim.id }}" tabindex="-1">
@@ -249,7 +264,7 @@
                                                     <input type="hidden" name="action" value="edit_expense_claim">
                                                     <input type="hidden" name="claim_id" value="{{ claim.id }}">
                                                     <input type="hidden" name="claim_type" value="LABOR">
-                                                    
+
                                                     <div class="modal-body p-4 bg-light">
                                                         <div class="mb-3">
                                                             <label class="form-label fw-bold small">ชื่อผู้รับเหมา / หัวหน้าช่าง</label>
@@ -270,7 +285,7 @@
                                                             </div>
                                                         </div>
                                                     </div>
-                                                    
+
                                                     <div class="modal-footer bg-white border-top-0 rounded-bottom-4 d-flex justify-content-between">
                                                         <button type="submit" name="action" value="delete_expense_claim" class="btn btn-outline-danger rounded-pill px-3" onclick="return confirm('ยืนยันการลบรายการนี้ออกจากตะกร้า?')"><i class="fas fa-trash"></i> ลบทิ้ง</button>
                                                         <div>
@@ -330,7 +345,7 @@
                                                     <input type="hidden" name="action" value="edit_expense_claim">
                                                     <input type="hidden" name="claim_id" value="{{ claim.id }}">
                                                     <input type="hidden" name="claim_type" value="AIRCON">
-                                                    
+
                                                     <div class="modal-body p-4 bg-light">
                                                         <div class="mb-2">
                                                             <label class="form-label fw-bold small">ชื่อช่างแอร์ / ร้านแอร์</label>
@@ -355,7 +370,7 @@
                                                             </div>
                                                         </div>
                                                     </div>
-                                                    
+
                                                     <div class="modal-footer bg-white border-top-0 rounded-bottom-4 d-flex justify-content-between">
                                                         <button type="submit" name="action" value="delete_expense_claim" class="btn btn-outline-danger rounded-pill px-3" onclick="return confirm('ยืนยันการลบรายการนี้ออกจากตะกร้า?')"><i class="fas fa-trash"></i> ลบทิ้ง</button>
                                                         <div>
@@ -376,13 +391,52 @@
                             {% endif %}
                         </td>
 
-                        <!-- 🌟 9. ค่าใช้จ่ายอื่นๆ (อัปเดตปุ่มจัดการใน Modal) 🌟 -->
+                        <!-- 🌟 9. ค่าซ่อมงาน (NEW) 🌟 -->
+                        <td class="text-center bg-light">
+                            {% if job.service_tickets.all %}
+                                {% for ticket in job.service_tickets.all %}
+                                    <div class="mb-1 pb-1 {% if not forloop.last %}border-bottom{% endif %}">
+                                        <div style="font-size: 0.65rem;" class="text-muted fw-bold mb-1">{{ ticket.code }}</div>
+
+                                        {% if ticket.labor_claims.all %}
+                                            {% for claim in ticket.labor_claims.all %}
+                                                {% if claim.status == 'PAID' %}
+                                                    <span class="badge-status bg-green-soft d-block mb-1 mx-auto" style="width: max-content;">จ่ายแล้ว</span>
+                                                    {% if claim.master_claim %}
+                                                        <a href="{% url 'accounting_job_expense_detail' claim.master_claim.id %}" target="_blank" class="btn btn-sm btn-outline-dark rounded-pill px-2 py-0 d-print-none fw-bold" style="font-size: 0.7rem;">
+                                                            <i class="fas fa-file-invoice"></i> {{ claim.master_claim.code }}
+                                                        </a>
+                                                    {% endif %}
+                                                {% elif claim.status == 'PENDING' %}
+                                                    <span class="badge-status bg-red-soft d-block mb-1 mx-auto" style="width: max-content;">รอโอนเงิน</span>
+                                                    {% if claim.master_claim %}
+                                                        <a href="{% url 'accounting_job_expense_detail' claim.master_claim.id %}" target="_blank" class="btn btn-sm btn-outline-dark rounded-pill px-2 py-0 d-print-none fw-bold" style="font-size: 0.7rem;">
+                                                            <i class="fas fa-file-invoice"></i> {{ claim.master_claim.code }}
+                                                        </a>
+                                                    {% endif %}
+                                                {% else %}
+                                                    <span class="badge-status bg-yellow-soft border-warning d-block mb-1 mx-auto" style="width: max-content;">ในตะกร้า</span>
+                                                {% endif %}
+                                            {% endfor %}
+                                        {% else %}
+                                            <!-- 🌟 ช่างซ่อมแล้วแต่ยังไม่กดตั้งเบิก -->
+                                            <span class="badge-status" style="background-color: #ffe8cc; color: #fd7e14; border: 1px solid #ffd8a8; display: block; margin: 0 auto; width: max-content;">รอตั้งเบิก</span>
+                                        {% endif %}
+                                    </div>
+                                {% endfor %}
+                            {% else %}
+                                <!-- 🌟 ไม่มีประวัติซ่อมใดๆ ทั้งสิ้น -->
+                                <span class="badge-status bg-gray-soft">ไม่มีประวัติซ่อม</span>
+                            {% endif %}
+                        </td>
+
+                        <!-- 🌟 10. ค่าใช้จ่ายอื่นๆ (อัปเดตปุ่มจัดการใน Modal) 🌟 -->
                         <td class="text-center bg-light">
                             {% if job.other_expenses.all %}
                                 <button class="btn btn-sm btn-info text-white rounded-pill px-2 py-0 shadow-sm d-print-none" style="font-size: 0.7rem;" data-bs-toggle="modal" data-bs-target="#expenseModal{{ job.id }}">
-                                    <i class="fas fa-search"></i> ดู/แก้ไข ({{ job.other_expenses.count }})
+                                    <i class="fas fa-search"></i> ดูรายการ ({{ job.other_expenses.count }})
                                 </button>
-                                
+
                                 <!-- Modal โชว์รายการค่าใช้จ่ายย่อย -->
                                 <div class="modal fade text-start" id="expenseModal{{ job.id }}" tabindex="-1">
                                     <div class="modal-dialog modal-dialog-centered modal-xl">
@@ -409,7 +463,7 @@
                                                                 {% csrf_token %}
                                                                 <input type="hidden" name="claim_id" value="{{ exp.id }}">
                                                                 <input type="hidden" name="claim_type" value="OTHER">
-                                                                
+
                                                                 <td class="ps-4 fw-bold font-monospace">{{ exp.code }}</td>
                                                                 <td>
                                                                     {% if exp.status == 'UNCLAIMED' %}
@@ -419,7 +473,7 @@
                                                                         {% endif %}
                                                                         <input type="file" name="claim_slip" class="form-control form-control-sm mt-1" accept="image/*" style="font-size: 0.7rem;">
                                                                     {% else %}
-                                                                        {{ exp.description }} 
+                                                                        {{ exp.description }}
                                                                         {% if exp.receipt_image %}
                                                                             <a href="{{ exp.receipt_image.url }}" target="_blank" class="small ms-2 text-decoration-none badge bg-secondary">🖼️ รูปบิล</a>
                                                                         {% endif %}
@@ -469,7 +523,7 @@
                                     </div>
                                 </div>
                             {% endif %}
-                            
+
                             <!-- ปุ่มตั้งเบิกเพิ่ม สำหรับหมวดอื่นๆ (มีได้หลายบิล) -->
                             <button class="btn btn-sm btn-outline-success border-success rounded-pill px-2 py-0 mt-1 shadow-sm d-print-none" style="font-size: 0.7rem; font-weight: bold;" onclick="openExpenseModal('{{ job.id }}', '{{ job.code }}', 'OTHER')">
                                 <i class="fas fa-plus"></i> ตั้งเบิกเพิ่ม
@@ -520,21 +574,21 @@
                 <input type="hidden" name="action" value="submit_expense_claim">
                 <input type="hidden" name="job_id" id="modalJobId">
                 <input type="hidden" name="claim_type" id="modalClaimType">
-                
+
                 <div class="modal-body p-4 bg-light">
                     <!-- Dynamic fields container -->
                     <div id="laborFields" class="d-none mb-3 bg-white p-3 rounded-3 border">
                         <label class="form-label fw-bold small text-dark"><i class="fas fa-hard-hat me-1 text-warning"></i> ชื่อผู้รับเหมา / หัวหน้าช่าง <span class="text-danger">*</span></label>
                         <input type="text" name="contractor_name" id="laborInput" class="form-control" placeholder="ระบุชื่อช่าง">
                     </div>
-                    
+
                     <div id="airconFields" class="d-none mb-3 bg-white p-3 rounded-3 border">
                         <label class="form-label fw-bold small text-dark"><i class="fas fa-snowflake me-1 text-info"></i> ชื่อช่างแอร์ <span class="text-danger">*</span></label>
                         <input type="text" name="technician_name" id="airconInput1" class="form-control mb-2" placeholder="ระบุชื่อช่างแอร์">
                         <label class="form-label fw-bold small text-dark">รายละเอียดการติดตั้ง <span class="text-danger">*</span></label>
                         <input type="text" name="aircon_desc" id="airconInput2" class="form-control" placeholder="เช่น แอร์ 12000 BTU">
                     </div>
-                    
+
                     <div id="otherFields" class="d-none mb-3 bg-white p-3 rounded-3 border">
                         <label class="form-label fw-bold small text-dark"><i class="fas fa-shopping-bag me-1 text-secondary"></i> รายการค่าใช้จ่ายอื่นๆ <span class="text-danger">*</span></label>
                         <input type="text" name="other_desc" id="otherInput" class="form-control" placeholder="เช่น ค่าน้ำมัน, ซื้อซิลิโคน">
@@ -553,7 +607,7 @@
                             <input type="file" name="claim_slip" class="form-control border-primary" accept="image/*" required>
                         </div>
                     </div>
-                    
+
                     <div class="mt-3 text-muted" style="font-size: 0.75rem;">
                         <i class="fas fa-info-circle text-warning me-1"></i> บิลจะถูกบันทึกเก็บไว้ใน <b>"ตะกร้าตั้งเบิก"</b> ก่อน จนกว่าคุณจะกดสร้างใบคุมรวมเพื่อส่งให้ฝ่ายบัญชี
                     </div>
@@ -578,7 +632,7 @@
         document.getElementById('laborFields').classList.add('d-none');
         document.getElementById('airconFields').classList.add('d-none');
         document.getElementById('otherFields').classList.add('d-none');
-        
+
         // ยกเลิก Required ทั้งหมด
         document.getElementById('laborInput').required = false;
         document.getElementById('airconInput1').required = false;

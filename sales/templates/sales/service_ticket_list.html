@@ -96,6 +96,9 @@
                                 <span class="badge bg-primary rounded-pill px-3 py-2"><i class="fas fa-tools me-1"></i> นัดคิวซ่อมแล้ว</span>
                             {% elif t.status == 'COMPLETED' %}
                                 <span class="badge bg-success rounded-pill px-3 py-2"><i class="fas fa-check-circle me-1"></i> ซ่อมเสร็จสิ้น</span>
+                            <!-- 🌟 [NEW] เพิ่มสถานะ ปิดจ๊อบถาวร 🌟 -->
+                            {% elif t.status == 'CLOSED' %}
+                                <span class="badge bg-dark rounded-pill px-3 py-2"><i class="fas fa-archive me-1"></i> ปิดจ๊อบถาวร</span>
                             {% else %}
                                 <span class="badge bg-secondary rounded-pill px-3 py-2"><i class="fas fa-ban me-1"></i> ยกเลิก</span>
                             {% endif %}
@@ -164,7 +167,8 @@
                             <p class="mb-1 text-muted small">หมวดหมู่ / สถานะล่าสุด</p>
                             <h6 class="fw-bold text-dark">
                                 <span class="badge bg-secondary me-1">{{ t.get_issue_category_display }}</span>
-                                <span class="text-primary">{{ t.get_status_display }}</span>
+                                <!-- เปลี่ยนสีป้ายให้ตรงกับตารางหลัก -->
+                                <span class="badge {% if t.status == 'COMPLETED' %}bg-success{% elif t.status == 'CLOSED' %}bg-dark{% elif t.status == 'CANCELLED' %}bg-secondary{% else %}bg-primary{% endif %} rounded-pill px-3">{{ t.get_status_display }}</span>
                             </h6>
                         </div>
                     </div>

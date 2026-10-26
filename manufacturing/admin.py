@@ -4,7 +4,7 @@ from .models import (
     MfgBranch, Salesperson, ProductionStatus, ProductionTeam,
     DeliveryStatus, Transporter, QCInspectionLog, BlueprintClaim,
     BlueprintLog, BlueprintClaimSplit, LogisticsClaim,
-    QCReceiptDoc, QCPassedMedia, QCFailedMedia # 👈 เพิ่มบรรทัดนี้
+    QCReceiptDoc, QCPassedMedia, QCFailedMedia, MasterExpenseClaim
 )
 
 class ProductionOrderMaterialInline(admin.TabularInline):
@@ -72,3 +72,9 @@ class QCReceiptDocAdmin(admin.ModelAdmin):
     search_fields = ('doc_no', 'production_order__code', 'product__name')
     readonly_fields = ('created_at',)
     ordering = ('-created_at',)
+
+@admin.register(MasterExpenseClaim)
+class MasterExpenseClaimAdmin(admin.ModelAdmin):
+    list_display = ('code', 'requester', 'total_amount', 'status', 'created_at')
+    search_fields = ('code', 'requester__first_name')
+    list_filter = ('status',)

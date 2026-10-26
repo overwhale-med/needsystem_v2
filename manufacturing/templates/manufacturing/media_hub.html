@@ -26,7 +26,7 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
             <h4 class="fw-bold mb-1 text-dark">
-                <i class="fas fa-photo-video text-primary me-2"></i>ศูนย์รวมแฟ้มภาพและบริการ (Media Hub)
+                <i class="fas fa-photo-video text-primary me-2"></i>ศูนย์รวมรูปภาพการทำงานทั้งหมดของ JOB
             </h4>
             <p class="text-muted mb-0">รหัสเอกสารอ้างอิง: <span class="badge bg-primary rounded-pill px-2">{{ order.code }}</span> | ลูกค้า: <strong>{{ order.customer_name|default:"-" }}</strong></p>
         </div>
@@ -44,17 +44,23 @@
             <ul class="nav nav-pills" id="mediaTabs" role="tablist">
                 <li class="nav-item" role="presentation">
                     <button class="nav-link active" id="passed-tab" data-bs-toggle="pill" data-bs-target="#passed" type="button" role="tab">
-                        <i class="fas fa-check-circle text-success me-1"></i> ผลงานสมบูรณ์ (สำหรับลูกค้า)
+                        <i class="fas fa-check-circle text-success me-1"></i> รูปผ่านการ QC(ส่งให้ลูกค้า)
                     </button>
                 </li>
                 <li class="nav-item" role="presentation">
                     <button class="nav-link" id="failed-tab" data-bs-toggle="pill" data-bs-target="#failed" type="button" role="tab">
-                        <i class="fas fa-exclamation-triangle text-danger me-1"></i> ประวัติแก้ไขงาน (ช่าง/QC)
+                        <i class="fas fa-exclamation-triangle text-danger me-1"></i> รูป QC ไม่ผ่าน(ส่งทีมช่างแก้ไข)
                     </button>
                 </li>
                 <li class="nav-item" role="presentation">
                     <button class="nav-link" id="service-tab" data-bs-toggle="pill" data-bs-target="#service" type="button" role="tab">
-                        <i class="fas fa-tools text-warning me-1"></i> ระบบแจ้งซ่อม (After-Sales)
+                        <i class="fas fa-tools text-warning me-1"></i> รูปภาพแจ้งซ่อม (ก่อนและหลังการซ่อม)
+                    </button>
+                </li>
+                <!-- 🌟 [NEW] แท็บที่ 4: รูปจากแผนกขนส่ง 🌟 -->
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="delivery-tab" data-bs-toggle="pill" data-bs-target="#delivery" type="button" role="tab">
+                        <i class="fas fa-truck text-info me-1"></i> รูปภาพการจัดส่งสินค้า
                     </button>
                 </li>
             </ul>
@@ -218,6 +224,39 @@
                         <div class="text-center py-5 opacity-50">
                             <i class="fas fa-shield-alt fa-4x text-success mb-3"></i>
                             <h5 class="text-success fw-bold">ยอดเยี่ยม! บ้านหลังนี้ยังไม่เคยแจ้งซ่อม</h5>
+                        </div>
+                    {% endif %}
+                </div>
+
+                <!-- 🔵 TAB 4: รูปจากแผนกขนส่ง (Logistics) 🔵 -->
+                <div class="tab-pane fade" id="delivery" role="tabpanel">
+                    <!-- ตรวจสอบว่าระบบมีรูป proof_of_delivery หรือไม่ -->
+                    {% if order.proof_of_delivery %}
+                        <div class="row justify-content-center">
+                            <div class="col-md-6 col-lg-4">
+                                <div class="card border-0 shadow-sm rounded-4 overflow-hidden text-center">
+                                    <div class="bg-info bg-opacity-10 p-3 border-bottom border-info border-opacity-25">
+                                        <h6 class="mb-0 fw-bold text-info"><i class="fas fa-file-signature me-1"></i> หลักฐานการส่งมอบ / ลายเซ็นลูกค้า</h6>
+                                    </div>
+                                    <div class="p-3 bg-white">
+                                        <!-- แสดงรูปภาพ พร้อมลิงก์ให้กดขยาย -->
+                                        <a href="{{ order.proof_of_delivery.url }}" target="_blank">
+                                            <img src="{{ order.proof_of_delivery.url }}" class="img-fluid rounded-3 shadow-sm border" style="max-height: 400px; object-fit: contain;">
+                                        </a>
+                                    </div>
+                                    <div class="card-footer bg-light border-0 py-3">
+                                        <small class="text-muted"><i class="fas fa-truck me-1"></i> จัดส่งโดย: <strong>{{ order.transporter.name|default:"-" }}</strong></small><br>
+                                        <small class="text-muted"><i class="far fa-calendar-check me-1"></i> วันที่จัดส่ง: <strong>{{ order.delivery_date|date:"d/m/Y"|default:"-" }}</strong></small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    {% else %}
+                        <!-- กรณีที่ยังไม่ได้อัปโหลดรูปลงในระบบ -->
+                        <div class="text-center py-5 opacity-50">
+                            <i class="fas fa-truck-loading fa-4x text-muted mb-3"></i>
+                            <h5 class="text-muted fw-bold">ยังไม่มีรูปการส่งมอบสินค้า</h5>
+                            <p class="small">แผนกจัดส่งยังไม่ได้แนบหลักฐาน (Proof of Delivery) สำหรับบ้านหลังนี้</p>
                         </div>
                     {% endif %}
                 </div>

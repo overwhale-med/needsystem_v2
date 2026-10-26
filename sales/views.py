@@ -2553,9 +2553,10 @@ def master_job_report(request):
 
         return redirect('master_job_report')
 
-    # โค้ดเดิมดึงข้อมูลมาแสดง...
+    # 🌟 [UPDATE] เพิ่มการดึง service_tickets และ labor_claims 🌟
     jobs_query = ProductionOrder.objects.select_related('quotation_ref', 'logistics_claim').prefetch_related(
-        'labor_claims', 'aircon_claims', 'other_expenses'
+        'labor_claims', 'aircon_claims', 'other_expenses',
+        'service_tickets', 'service_tickets__labor_claims', 'service_tickets__labor_claims__master_claim'
     ).order_by('-id')
 
     search_query = request.GET.get('q', '')

@@ -2036,7 +2036,7 @@ def my_qc_log(request):
         'production_order', 'production_order__product'
     ).filter(
         inspector=emp
-    ).order_by('-inspected_at')[:100] # 🌟 [FIXED] เปลี่ยนจาก created_at เป็น inspected_at
+    ).order_by('-inspected_at')[:100] # 🌟 [FIXED] แก้เป็น -inspected_at
 
     return render(request, 'manufacturing/my_qc_log.html', {
         'qc_logs': qc_logs,
@@ -2149,6 +2149,11 @@ def service_history_list(request):
     search_q = request.GET.get('q', '')
     status_filter = request.GET.get('status', '')
 
+    # 🌟 [NEW] รับค่าตัวกรองใหม่
+    search_team = request.GET.get('team', '')
+    start_date = request.GET.get('start_date', '')
+    end_date = request.GET.get('end_date', '')
+
     if search_q:
         tickets = tickets.filter(
             Q(code__icontains=search_q) |
@@ -2158,14 +2163,31 @@ def service_history_list(request):
     if status_filter:
         tickets = tickets.filter(status=status_filter)
 
+    # 🌟 [NEW] กรองตามทีมช่างที่ประกอบงาน (อ้างอิงจากใบสั่งผลิตต้นทาง)
+    if search_team:
+        tickets = tickets.filter(production_order__production_team_id=search_team)
+
+    # 🌟 [NEW] กรองตามช่วงวันที่แจ้งซ่อม
+    if start_date:
+        tickets = tickets.filter(created_at__date__gte=start_date)
+    if end_date:
+        tickets = tickets.filter(created_at__date__lte=end_date)
+
     paginator = Paginator(tickets, 20)
     page_obj = paginator.get_page(request.GET.get('page'))
+
+    # 🌟 [NEW] ดึงรายชื่อทีมช่างทั้งหมดไปแสดงใน Dropdown
+    teams = ProductionTeam.objects.all().order_by('name')
 
     return render(request, 'manufacturing/service_history_list.html', {
         'page_obj': page_obj,
         'search_q': search_q,
         'status_filter': status_filter,
+        'search_team': search_team,
+        'start_date': start_date,
+        'end_date': end_date,
         'status_choices': ServiceTicket.STATUS_CHOICES,
+        'teams': teams,
     })
 
 @login_required

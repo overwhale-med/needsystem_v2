@@ -1,5 +1,31 @@
 {% extends 'core/base.html' %}
 {% block content %}
+<!-- 🌟 [NEW] นำเข้าไลบรารี Date Range Picker สำหรับระบบค้นหาวันที่ -->
+<script type="text/javascript" src="https://cdn.jsdelivr.net/jquery/latest/jquery.min.js"></script>
+<script type="text/javascript" src="https://cdn.jsdelivr.net/momentjs/latest/moment.min.js"></script>
+<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.min.js"></script>
+<link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css" />
+
+<style>
+    /* 🌟 [NEW] สไตล์แถบค้นหาแบบแคปซูล (Pill-shaped Search Bar) 🌟 */
+    .search-pill-container {
+        display: flex; align-items: center; background-color: #ffffff; border: 1px solid #ced4da;
+        border-radius: 50px; padding: 4px 8px; box-shadow: inset 0 1px 2px rgba(0,0,0,0.05);
+    }
+    .search-pill-input {
+        border: none; background: transparent; box-shadow: none; outline: none;
+        width: 100%; padding: 6px 12px; font-size: 0.85rem; cursor: pointer;
+    }
+    .search-pill-icon { color: #6c757d; padding-left: 10px; }
+    .search-pill-btn {
+        background-color: #212529; color: white; border: none; border-radius: 50px;
+        width: 35px; height: 35px; display: flex; align-items: center; justify-content: center;
+        transition: all 0.2s ease;
+    }
+    .search-pill-btn:hover { background-color: #000; transform: scale(1.05); }
+    .hidden-date { display: none; }
+</style>
+
 <div class="container-fluid py-4 px-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
@@ -15,10 +41,10 @@
     <div class="card border-0 shadow-sm rounded-4 mb-4">
         <div class="card-body p-3 bg-light rounded-4">
             <form method="GET" class="row g-2 align-items-center">
-                <div class="col-md-4">
-                    <input type="text" name="q" class="form-control rounded-pill px-3" placeholder="🔍 ค้นหาเลขตั๋ว, เลข JOB, หรือชื่อลูกค้า..." value="{{ search_q }}">
-                </div>
                 <div class="col-md-3">
+                    <input type="text" name="q" class="form-control rounded-pill px-3" placeholder="🔍 เลขตั๋ว, เลข JOB..." value="{{ search_q }}">
+                </div>
+                <div class="col-md-2">
                     <select name="status" class="form-select rounded-pill px-3">
                         <option value="">-- ทุกสถานะ --</option>
                         {% for val, label in status_choices %}
@@ -26,12 +52,34 @@
                         {% endfor %}
                     </select>
                 </div>
+                <!-- 🌟 ตัวกรองทีมช่างประกอบ -->
                 <div class="col-md-2">
-                    <button type="submit" class="btn btn-dark rounded-pill w-100 fw-bold shadow-sm">กรองข้อมูล</button>
+                    <select name="team" class="form-select rounded-pill px-3">
+                        <option value="">-- ทุกทีมช่างผลิต --</option>
+                        {% for tm in teams %}
+                            <option value="{{ tm.id }}" {% if search_team == tm.id|stringformat:"s" %}selected{% endif %}>{{ tm.name }}</option>
+                        {% endfor %}
+                    </select>
                 </div>
-                {% if search_q or status_filter %}
+
+                <!-- 🌟 [NEW] Date Range Picker แบบแคปซูล (สไตล์เดียวกับใบเสนอราคา) 🌟 -->
+                <div class="col-md-4 d-flex align-items-center gap-2">
+                    <div class="search-pill-container flex-grow-1">
+                        <i class="far fa-calendar-alt search-pill-icon"></i>
+                        <input type="text" id="reportrange" class="search-pill-input text-center" placeholder="เลือกช่วงวันที่..." readonly>
+                        <button type="submit" class="search-pill-btn" title="กรองข้อมูล">
+                            <i class="fas fa-search"></i>
+                        </button>
+                    </div>
+
+                    <!-- ซ่อน Input วันที่จริง เพื่อให้ระบบหลังบ้านรับค่าได้ -->
+                    <input type="text" name="start_date" id="start_date" class="hidden-date" value="{{ start_date|default:'' }}">
+                    <input type="text" name="end_date" id="end_date" class="hidden-date" value="{{ end_date|default:'' }}">
+                </div>
+
+                {% if search_q or status_filter or search_team or start_date or end_date %}
                 <div class="col-md-1">
-                    <a href="{% url 'service_history_list' %}" class="btn btn-outline-danger rounded-pill w-100"><i class="fas fa-redo"></i></a>
+                    <a href="{% url 'service_history_list' %}" class="btn btn-outline-danger rounded-pill w-100 shadow-sm" title="ล้างค่า"><i class="fas fa-redo"></i></a>
                 </div>
                 {% endif %}
             </form>
@@ -44,7 +92,12 @@
             <table class="table table-hover align-middle mb-0">
                 <thead class="text-secondary small text-uppercase bg-light">
                     <tr>
-                        <th class="ps-4 py-3 fw-bold">เลขที่ตั๋ว / วันที่แจ้ง</th>
+                        <!-- 🌟 [NEW] แสดงคอลัมน์ลำดับที่ (#) เฉพาะเวลาที่มีการค้นหา/กรองข้อมูล -->
+                        {% if search_q or status_filter or search_team or start_date or end_date %}
+                        <th class="ps-4 py-3 fw-bold text-center" style="width: 50px;">#</th>
+                        {% endif %}
+
+                        <th class="{% if not search_q and not status_filter and not search_team and not start_date and not end_date %}ps-4{% endif %} py-3 fw-bold">เลขที่ตั๋ว / วันที่แจ้ง</th>
                         <th class="py-3 fw-bold">ลูกค้า / เลข JOB</th>
                         <th class="py-3 fw-bold">สาขา / ทีมช่างผลิต</th>
                         <th class="py-3 fw-bold">หมวดหมู่ปัญหา</th>
@@ -56,7 +109,14 @@
                 <tbody>
                     {% for t in page_obj %}
                     <tr>
-                        <td class="ps-4 py-3">
+                        <!-- 🌟 [NEW] คำนวณเลขลำดับแถว (หน้า 1 เริ่ม 1, หน้า 2 เริ่ม 21) -->
+                        {% if search_q or status_filter or search_team or start_date or end_date %}
+                        <td class="ps-4 py-3 text-center fw-bold text-muted">
+                            {{ page_obj.start_index|add:forloop.counter0 }}
+                        </td>
+                        {% endif %}
+
+                        <td class="{% if not search_q and not status_filter and not search_team and not start_date and not end_date %}ps-4{% endif %} py-3">
                             <span class="badge bg-secondary fs-6 shadow-sm mb-1">{{ t.code }}</span>
                             <div class="text-muted small"><i class="far fa-clock me-1"></i>{{ t.created_at|date:"d/m/Y" }}</div>
                         </td>
@@ -107,8 +167,8 @@
                             <button class="btn btn-sm btn-outline-primary rounded-pill shadow-sm" data-bs-toggle="modal" data-bs-target="#ticketModal-{{ t.id }}" title="ดูรายละเอียด">
                                 <i class="fas fa-eye"></i>
                             </button>
-                            <!-- 🌟 [FIXED] ปุ่มเบิกค่าแรงซ่อม -->
-                            {% if t.status == 'CLOSED' or t.status == 'COMPLETED' %}
+                            <!-- 🌟 [FIXED] ให้แสดงปุ่มตั้งเบิกเฉพาะตอนที่สถานะเป็น 'ซ่อมเสร็จสิ้น' เท่านั้น 🌟 -->
+                            {% if t.status == 'COMPLETED' %}
                                 {% if not t.labor_claims.all %}
                                 <button class="btn btn-sm btn-outline-success rounded-pill shadow-sm ms-1" data-bs-toggle="modal" data-bs-target="#claimModal-{{ t.id }}" title="ตั้งเบิกค่าแรง">
                                     <i class="fas fa-money-bill-wave"></i>
@@ -123,7 +183,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="7" class="text-center py-5 opacity-50">
+                        <td colspan="{% if search_q or status_filter or search_team or start_date or end_date %}8{% else %}7{% endif %}" class="text-center py-5 opacity-50">
                             <i class="fas fa-history fa-4x text-muted mb-3"></i>
                             <h5 class="text-muted fw-bold">ไม่พบประวัติแจ้งซ่อม</h5>
                         </td>
@@ -139,15 +199,15 @@
             <nav>
                 <ul class="pagination justify-content-center mb-0">
                     {% if page_obj.has_previous %}
-                        <li class="page-item"><a class="page-link text-danger" href="?page=1{% if search_q %}&q={{ search_q }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}">&laquo; หน้าแรก</a></li>
-                        <li class="page-item"><a class="page-link text-danger" href="?page={{ page_obj.previous_page_number }}{% if search_q %}&q={{ search_q }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}">ก่อนหน้า</a></li>
+                        <li class="page-item"><a class="page-link text-danger" href="?page=1{% if search_q %}&q={{ search_q }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if search_team %}&team={{ search_team }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}">&laquo; หน้าแรก</a></li>
+                        <li class="page-item"><a class="page-link text-danger" href="?page={{ page_obj.previous_page_number }}{% if search_q %}&q={{ search_q }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if search_team %}&team={{ search_team }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}">ก่อนหน้า</a></li>
                     {% endif %}
 
                     <li class="page-item active"><span class="page-link bg-danger border-danger">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span></li>
 
                     {% if page_obj.has_next %}
-                        <li class="page-item"><a class="page-link text-danger" href="?page={{ page_obj.next_page_number }}{% if search_q %}&q={{ search_q }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}">ถัดไป</a></li>
-                        <li class="page-item"><a class="page-link text-danger" href="?page={{ page_obj.paginator.num_pages }}{% if search_q %}&q={{ search_q }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}">หน้าสุดท้าย &raquo;</a></li>
+                        <li class="page-item"><a class="page-link text-danger" href="?page={{ page_obj.next_page_number }}{% if search_q %}&q={{ search_q }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if search_team %}&team={{ search_team }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}">ถัดไป</a></li>
+                        <li class="page-item"><a class="page-link text-danger" href="?page={{ page_obj.paginator.num_pages }}{% if search_q %}&q={{ search_q }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if search_team %}&team={{ search_team }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}">หน้าสุดท้าย &raquo;</a></li>
                     {% endif %}
                 </ul>
             </nav>
@@ -155,13 +215,15 @@
         {% endif %}
     </div>
 </div>
+
 <!-- ================= Modals แผงควบคุม ================= -->
 {% for t in page_obj %}
     {% include "manufacturing/_service_modal.html" %}
 {% endfor %}
 <!-- ================= Modals ตั้งเบิกค่าแรงซ่อม ================= -->
 {% for t in page_obj %}
-    {% if t.status == 'CLOSED' or t.status == 'COMPLETED' %}
+    <!-- 🌟 [FIXED] สร้าง Modal ตั้งเบิกให้เฉพาะงานที่สถานะเป็น 'ซ่อมเสร็จสิ้น' เท่านั้น 🌟 -->
+    {% if t.status == 'COMPLETED' %}
     <div class="modal fade" id="claimModal-{{ t.id }}" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <form method="POST" action="{% url 'submit_service_labor_claim' t.id %}" enctype="multipart/form-data" class="modal-content rounded-4 border-0 shadow-lg">
@@ -193,4 +255,67 @@
     </div>
     {% endif %}
 {% endfor %}
+
+<!-- 🌟 [NEW] สคริปต์ควบคุม Date Range Picker 🌟 -->
+<script>
+    $(function() {
+        var start_val = "{{ start_date|default:'' }}";
+        var end_val = "{{ end_date|default:'' }}";
+
+        var start = start_val ? moment(start_val, "YYYY-MM-DD") : null;
+        var end = end_val ? moment(end_val, "YYYY-MM-DD") : null;
+
+        function cb(start, end) {
+            if(start && end && start.isValid() && end.isValid()) {
+                $('#reportrange').val(start.format('DD/MM/YYYY') + ' - ' + end.format('DD/MM/YYYY'));
+                $('#start_date').val(start.format('YYYY-MM-DD'));
+                $('#end_date').val(end.format('YYYY-MM-DD'));
+            } else {
+                $('#reportrange').val('');
+                $('#start_date').val('');
+                $('#end_date').val('');
+            }
+        }
+
+        $('#reportrange').daterangepicker({
+            startDate: start || moment(),
+            endDate: end || moment(),
+            linkedCalendars: false,
+            ranges: {
+               'วันนี้': [moment(), moment()],
+               'เมื่อวาน': [moment().subtract(1, 'days'), moment().subtract(1, 'days')],
+               'ช่วง 7 วันก่อนหน้า': [moment().subtract(6, 'days'), moment()],
+               'ช่วง 30 วันก่อนหน้า': [moment().subtract(29, 'days'), moment()],
+               'ช่วง 3 เดือนก่อนหน้า': [moment().subtract(3, 'months'), moment()],
+               'เดือนนี้': [moment().startOf('month'), moment().endOf('month')],
+               '1 เดือนก่อนหน้า': [moment().subtract(1, 'month').startOf('month'), moment().subtract(1, 'month').endOf('month')]
+            },
+            locale: {
+                format: 'DD/MM/YYYY',
+                separator: ' - ',
+                applyLabel: 'ตกลง',
+                cancelLabel: 'ยกเลิก',
+                fromLabel: 'จาก',
+                toLabel: 'ถึง',
+                customRangeLabel: 'กำหนดเอง',
+                weekLabel: 'ส',
+                daysOfWeek: ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'],
+                monthNames: ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'],
+                firstDay: 1
+            }
+        }, cb);
+
+        // ตอนโหลดหน้าเว็บครั้งแรก ถ้ามีค่าเก่าให้แสดง ถ้าไม่มีให้ปล่อยว่าง
+        if (start_val && end_val) {
+            cb(start, end);
+        } else {
+            $('#reportrange').val('');
+        }
+
+        // เวลาเลือกวันที่เสร็จ ให้ผูกค่าเข้าช่อง Input จริง
+        $('#reportrange').on('apply.daterangepicker', function(ev, picker) {
+            cb(picker.startDate, picker.endDate);
+        });
+    });
+</script>
 {% endblock %}
