@@ -1224,17 +1224,58 @@ from .models import SolarCommissionTicket, SolarCommissionClaim
 
 @login_required
 def solar_commission_board(request):
-    # ดึงสิทธิ์ที่ยังไม่ได้เบิกมาโชว์ให้เซลส์เลือก
-    tickets_2 = SolarCommissionTicket.objects.filter(ticket_type='2%', status='AVAILABLE').order_by('created_at')
-    tickets_13 = SolarCommissionTicket.objects.filter(ticket_type='13.5%', status='AVAILABLE').order_by('created_at')
+    current_emp = getattr(request.user, 'employee', None)
 
-    # ดึงประวัติใบเบิกที่ถูกสร้างแล้วมาแสดง
-    claims = SolarCommissionClaim.objects.all().order_by('-created_at')
+    # 🌟 1. กำหนดสิทธิ์การมองเห็น (Role-Based Access) 🌟
+    is_executive = False
+    is_admin_head = False
+    is_tech_head = False
+    is_sales = False
+
+    if request.user.is_superuser:
+        is_executive = is_admin_head = is_tech_head = is_sales = True
+    elif current_emp:
+        rank = current_emp.business_rank.lower() if current_emp.business_rank else ""
+        dept_name = getattr(current_emp.department, 'name', '').lower()
+        pos_title = getattr(current_emp.position, 'title', '').lower()
+
+        # ค้นหาคำในชื่อแผนก/ตำแหน่ง เพื่อแจกสิทธิ์
+        if rank in ['manager', 'director'] or 'บริหาร' in dept_name or 'ผู้จัดการ' in pos_title:
+            is_executive = True
+        if 'admin' in dept_name or 'แอดมิน' in dept_name:
+            is_admin_head = True
+        if 'ช่าง' in dept_name or 'tech' in dept_name:
+            is_tech_head = True
+        if 'ขาย' in dept_name or 'sales' in dept_name:
+            is_sales = True
+
+    # 🌟 2. ดึงข้อมูลตั๋วที่พร้อมเบิก (แยก 4 กระเป๋า) 🌟
+    tickets_15 = SolarCommissionTicket.objects.filter(ticket_type='1.5%', status='AVAILABLE').order_by('created_at')
+    tickets_75 = SolarCommissionTicket.objects.filter(ticket_type='7.5%', status='AVAILABLE').order_by('created_at')
+    tickets_25 = SolarCommissionTicket.objects.filter(ticket_type='2.5%', status='AVAILABLE').order_by('created_at')
+
+    # สำหรับเซลส์ ดึงเฉพาะงานของตัวเอง (แต่ถ้าเป็นผู้บริหารให้เห็นของเซลส์ทุกคนเพื่อตรวจ)
+    if is_executive or is_admin_head or is_tech_head:
+        tickets_4 = SolarCommissionTicket.objects.filter(ticket_type='4%', status='AVAILABLE').order_by('created_at')
+    else:
+        tickets_4 = SolarCommissionTicket.objects.filter(ticket_type='4%', status='AVAILABLE', invoice_ref__quotation_ref__employee=current_emp).order_by('created_at')
+
+    # 🌟 3. ดึงประวัติใบเบิก 🌟
+    if is_executive:
+        claims = SolarCommissionClaim.objects.all().order_by('-created_at')
+    else:
+        claims = SolarCommissionClaim.objects.filter(requester=current_emp).order_by('-created_at')
 
     return render(request, 'solar_sales/commission_board.html', {
-        'tickets_2': tickets_2,
-        'tickets_13': tickets_13,
-        'claims': claims
+        'tickets_15': tickets_15,
+        'tickets_25': tickets_25,
+        'tickets_4': tickets_4,
+        'tickets_75': tickets_75,
+        'claims': claims,
+        'is_executive': is_executive,
+        'is_admin_head': is_admin_head,
+        'is_tech_head': is_tech_head,
+        'is_sales': is_sales,
     })
 
 @login_required

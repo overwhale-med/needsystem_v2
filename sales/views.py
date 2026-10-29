@@ -1600,18 +1600,17 @@ def confirm_payment(request, doc_type, doc_id):
                 if obj.employee:
                     process_commission_logic(sale_amt, obj.employee, obj.code)
 
-                    # 🌟 AUTOMATION: สร้างตั๋วคอมมิชชัน 3% (บ้านน็อคดาวน์) 🌟
+                    # 🌟 AUTOMATION: สร้างตั๋วคอมมิชชัน 2.5% (บ้านน็อคดาวน์) 🌟
                     if obj.quotation_ref and obj.quotation_ref.grand_total > 0:
-                        # 🌟 [FIXED] เช็คและผูกตั๋วเข้ากับ Quotation ตรงๆ เหมือนตั๋ว 2%
-                        if not CommissionTicket.objects.filter(quotation_ref=obj.quotation_ref, ticket_type='3%').exists():
-                            # ดึงยอดรวมจาก Quotation มาหักต้นทุน 10%
+                        # 🌟 [UPDATE] เช็คว่าเคยออก 2.5% หรือ 3% ไปแล้วหรือยัง
+                        if not CommissionTicket.objects.filter(quotation_ref=obj.quotation_ref, ticket_type__in=['2.5%', '3%']).exists():
                             grand_total = obj.quotation_ref.grand_total
                             base_amount = grand_total - (grand_total * Decimal('0.10'))
-                            comm_amount = base_amount * Decimal('0.03') # คูณ 3%
+                            comm_amount = base_amount * Decimal('0.025') # คูณ 2.5% แทน
 
                             CommissionTicket.objects.create(
-                                ticket_type='3%',
-                                quotation_ref=obj.quotation_ref, # 🌟 [FIXED] ผูกกับ Quotation
+                                ticket_type='2.5%',
+                                quotation_ref=obj.quotation_ref,
                                 base_amount=base_amount,
                                 commission_amount=comm_amount
                             )
@@ -1825,22 +1824,25 @@ def verify_deposit(request, deposit_id): # 🌟 รับ id ของตาร�
     qt.is_deposit_verified = True
     qt.save()
 
-    # 🌟 AUTOMATION: สร้างตั๋วคอมมิชชัน 2% (บ้านน็อคดาวน์) จากยอดมัดจำใบนี้ 🌟
+    # 🌟 AUTOMATION: สร้างตั๋วคอมมิชชัน 0.5% และ 2% (บ้านน็อคดาวน์) จากยอดมัดจำใบนี้ 🌟
     if qt.employee and deposit.amount > 0:
-        # เช็คป้องกันการสร้างตั๋วซ้ำจากใบมัดจำนี้
-        if not CommissionTicket.objects.filter(quotation_ref=qt, ticket_type='2%').exists():
-            # สูตร: หักออก 10% จาก Grand Total (คำนวณจากยอดรวมใบเสนอราคาตามเดิม)
-            base_amount = qt.grand_total - (qt.grand_total * Decimal('0.10'))
-            comm_amount = base_amount * Decimal('0.02') # คูณ 2%
+        base_amount = qt.grand_total - (qt.grand_total * Decimal('0.10'))
 
+        # 1. เช็คและสร้างตั๋ว 2%
+        if not CommissionTicket.objects.filter(quotation_ref=qt, ticket_type='2%').exists():
+            comm_amount_2 = base_amount * Decimal('0.02') # คูณ 2%
             CommissionTicket.objects.create(
-                ticket_type='2%',
-                quotation_ref=qt,
-                base_amount=base_amount,
-                commission_amount=comm_amount
+                ticket_type='2%', quotation_ref=qt, base_amount=base_amount, commission_amount=comm_amount_2
             )
 
-    messages.success(request, f"✅ บัญชียืนยันตรวจสอบยอดมัดจำใบเสร็จ {deposit.code} เรียบร้อยแล้ว! (ระบบสร้างตั๋วคอมมิชชัน 2% ให้พนักงานขายแล้ว)")
+        # 2. เช็คและสร้างตั๋ว 0.5% (ใหม่)
+        if not CommissionTicket.objects.filter(quotation_ref=qt, ticket_type='0.5%').exists():
+            comm_amount_05 = base_amount * Decimal('0.005') # คูณ 0.5%
+            CommissionTicket.objects.create(
+                ticket_type='0.5%', quotation_ref=qt, base_amount=base_amount, commission_amount=comm_amount_05
+            )
+
+    messages.success(request, f"✅ บัญชียืนยันตรวจสอบยอดมัดจำใบเสร็จ {deposit.code} เรียบร้อยแล้ว! (ระบบสร้างตั๋วคอมมิชชัน 0.5% และ 2% ให้พนักงานขายแล้ว)")
     return redirect('deposit_list')
 
 # ==========================================
@@ -2209,12 +2211,14 @@ def commission_board(request):
 
     # 🌟 3. ดึงข้อมูลตั๋วตามสิทธิ์
     if is_manager_view:
+        tickets_05 = CommissionTicket.objects.filter(ticket_type='0.5%', status='AVAILABLE').select_related('quotation_ref', 'quotation_ref__employee').order_by('-created_at')
         tickets_2 = CommissionTicket.objects.filter(ticket_type='2%', status='AVAILABLE').select_related('quotation_ref', 'quotation_ref__employee').order_by('-created_at')
-        tickets_3 = CommissionTicket.objects.filter(ticket_type='3%', status='AVAILABLE').select_related('quotation_ref', 'quotation_ref__employee').order_by('-created_at')
+        tickets_3 = CommissionTicket.objects.filter(ticket_type__in=['2.5%', '3%'], status='AVAILABLE').select_related('quotation_ref', 'quotation_ref__employee').order_by('-created_at')
         claims_qs = CommissionClaim.objects.all().select_related('requester').order_by('-created_at')
     else:
+        tickets_05 = CommissionTicket.objects.filter(ticket_type='0.5%', status='AVAILABLE', quotation_ref__employee=current_emp).order_by('-created_at')
         tickets_2 = CommissionTicket.objects.filter(ticket_type='2%', status='AVAILABLE', quotation_ref__employee=current_emp).order_by('-created_at')
-        tickets_3 = CommissionTicket.objects.filter(ticket_type='3%', status='AVAILABLE', quotation_ref__employee=current_emp).order_by('-created_at')
+        tickets_3 = CommissionTicket.objects.filter(ticket_type__in=['2.5%', '3%'], status='AVAILABLE', quotation_ref__employee=current_emp).order_by('-created_at')
         claims_qs = CommissionClaim.objects.filter(requester=current_emp).order_by('-created_at')
 
     # 🌟 4. กรองข้อมูลตามคำค้นหา (Search) 🌟
@@ -2229,9 +2233,10 @@ def commission_board(request):
     claims_list = claims_qs[:10]
 
     return render(request, 'sales/commission_board.html', {
+        'tickets_05': tickets_05,
         'tickets_2': tickets_2,
         'tickets_3': tickets_3,
-        'claims': claims_list, # 🌟 ส่งลิสต์ 10 รายการไปแทน
+        'claims': claims_list,
         'search_query': search_query,
         'is_manager_view': is_manager_view,
     })
@@ -2573,13 +2578,18 @@ def master_job_report(request):
     inv_dict = {inv.quotation_ref_id: inv for inv in invoices}
 
     tickets = CommissionTicket.objects.filter(Q(quotation_ref_id__in=qt_ids) | Q(invoice_ref__quotation_ref_id__in=qt_ids))
+    ticket_dict_05 = {}
     ticket_dict_2 = {}
     ticket_dict_3 = {}
     for t in tickets:
-        if t.ticket_type == '2%' and t.quotation_ref_id:
+        if t.ticket_type == '0.5%' and t.quotation_ref_id:
+            ticket_dict_05.setdefault(t.quotation_ref_id, []).append(t)
+        elif t.ticket_type == '2%' and t.quotation_ref_id:
             ticket_dict_2.setdefault(t.quotation_ref_id, []).append(t)
-        elif t.ticket_type == '3%' and getattr(t.invoice_ref, 'quotation_ref_id', None):
-            ticket_dict_3.setdefault(t.invoice_ref.quotation_ref_id, []).append(t)
+        elif t.ticket_type in ['2.5%', '3%']:
+            q_id = t.quotation_ref_id or getattr(t.invoice_ref, 'quotation_ref_id', None)
+            if q_id:
+                ticket_dict_3.setdefault(q_id, []).append(t)
 
     cart_count = 0
     if current_emp:
@@ -2592,10 +2602,12 @@ def master_job_report(request):
     for job in page_obj:
         if job.quotation_ref_id:
             job.matched_invoice = inv_dict.get(job.quotation_ref_id)
+            job.matched_tickets_05 = ticket_dict_05.get(job.quotation_ref_id, [])
             job.matched_tickets_2 = ticket_dict_2.get(job.quotation_ref_id, [])
             job.matched_tickets_3 = ticket_dict_3.get(job.quotation_ref_id, [])
         else:
             job.matched_invoice = None
+            job.matched_tickets_05 = []
             job.matched_tickets_2 = []
             job.matched_tickets_3 = []
 

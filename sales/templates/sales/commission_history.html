@@ -33,7 +33,9 @@
                     <label class="form-label small fw-bold text-muted mb-1">ประเภท</label>
                     <select name="type" class="form-select form-select-sm shadow-sm">
                         <option value="">-- ทั้งหมด --</option>
+                        <option value="0.5%" {% if claim_type == '0.5%' %}selected{% endif %}>โควตา 0.5%</option>
                         <option value="2%" {% if claim_type == '2%' %}selected{% endif %}>โควตา 2%</option>
+                        <option value="2.5%" {% if claim_type == '2.5%' %}selected{% endif %}>โควตา 2.5%</option>
                         <option value="3%" {% if claim_type == '3%' %}selected{% endif %}>โควตา 3%</option>
                     </select>
                 </div>

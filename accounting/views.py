@@ -179,18 +179,6 @@ def approve_transaction(request, task_type, item_id):
                     qt.is_deposit_verified = True
                     qt.save()
 
-                    # 🌟 [NEW] ระบบอัตโนมัติ: สร้างใบคุมสิทธิ์ 2% ส่งไปที่ศูนย์ตั้งเบิกโซล่าเซลล์
-                    from solar_sales.models import SolarCommissionTicket
-                    from decimal import Decimal
-                    base_amount = qt.subtotal - qt.discount + qt.survey_fee
-                    comm_amount = base_amount * Decimal('0.02')
-
-                    SolarCommissionTicket.objects.get_or_create(
-                        ticket_type='2%',
-                        quotation_ref=qt,
-                        defaults={'base_amount': base_amount, 'commission_amount': comm_amount}
-                    )
-
                 Income.objects.create(title=f"รับมัดจำ RVD โซล่า #{dep.code} (อ้างอิง: {qt.code})", amount=dep.amount, date=timezone.now().date(), note="อนุมัติโดยฝ่ายบัญชี")
                 messages.success(request, f"✅ ยืนยันรับมัดจำโซล่า {dep.code} เข้าสู่ระบบบัญชีเรียบร้อย")
             else:
@@ -207,25 +195,27 @@ def approve_transaction(request, task_type, item_id):
                     qt.is_deposit_verified = True
                     qt.save()
 
-                    # 🌟 [NEW] ระบบอัตโนมัติ: สร้างใบคุมสิทธิ์ 2% ส่งไปที่ศูนย์ตั้งเบิกน็อคดาวน์
+                    # 🌟 [NEW] ระบบอัตโนมัติ: สร้างใบคุมสิทธิ์ 0.5% และ 2% ส่งไปที่ศูนย์ตั้งเบิกน็อคดาวน์
                     from sales.models import CommissionTicket
                     from decimal import Decimal
                     if qt.employee and qt.deposit_amount > 0:
-                        # เช็คป้องกันการสร้างตั๋วซ้ำ (1 Job = 1 สิทธิ์ 2%)
-                        if not CommissionTicket.objects.filter(quotation_ref=qt, ticket_type='2%').exists():
-                            # 🧮 สูตรใหม่: คิดเฉพาะจาก "ยอดรับเงินมัดจำรวม" หัก 10%
-                            base_amount = qt.deposit_amount - (qt.deposit_amount * Decimal('0.10'))
-                            comm_amount = base_amount * Decimal('0.02') # คูณ 2%
-
+                        base_amount = qt.deposit_amount - (qt.deposit_amount * Decimal('0.10'))
+                        
+                        # 1. สร้างตั๋ว 0.5% (บริหาร)
+                        if not CommissionTicket.objects.filter(quotation_ref=qt, ticket_type='0.5%').exists():
                             CommissionTicket.objects.create(
-                                ticket_type='2%',
-                                quotation_ref=qt,
-                                base_amount=base_amount,
-                                commission_amount=comm_amount
+                                ticket_type='0.5%', quotation_ref=qt,
+                                base_amount=base_amount, commission_amount=base_amount * Decimal('0.005')
+                            )
+                        # 2. สร้างตั๋ว 2% (ขาย)
+                        if not CommissionTicket.objects.filter(quotation_ref=qt, ticket_type='2%').exists():
+                            CommissionTicket.objects.create(
+                                ticket_type='2%', quotation_ref=qt,
+                                base_amount=base_amount, commission_amount=base_amount * Decimal('0.02')
                             )
 
                 Income.objects.create(title=f"รับมัดจำ RVD #{dep.code} (อ้างอิง: {qt.code})", amount=dep.amount, date=timezone.now().date(), note="อนุมัติโดยฝ่ายบัญชี")
-                messages.success(request, f"✅ ยืนยันรับมัดจำ {dep.code} เข้าระบบบัญชี และอัปเดตสิทธิ์คอมมิชชัน 2% เรียบร้อยแล้ว")
+                messages.success(request, f"✅ ยืนยันรับมัดจำ {dep.code} เข้าระบบบัญชี และอัปเดตสิทธิ์คอมมิชชัน (0.5%, 2%) เรียบร้อยแล้ว")
 
         elif task_type == 'invoices':
             doc_type = request.POST.get('doc_type', '').strip().lower()
@@ -244,17 +234,31 @@ def approve_transaction(request, task_type, item_id):
                     inv.balance_amount = 0
                     inv.status = 'PAID'
 
-                    # 🌟 [NEW] ระบบอัตโนมัติ: ถ้าจ่ายครบ 100% ให้สร้างคูปอง 13.5% ทันที
+                    # 🌟 [NEW] ระบบอัตโนมัติ: จ่ายครบ 100% ให้สร้างตั๋ว 4 ใบ แจก 4 แผนก ทันที! 🌟
                     if inv.quotation_ref:
                         from solar_sales.models import SolarCommissionTicket
                         from decimal import Decimal
-                        base_amount = inv.quotation_ref.subtotal - inv.quotation_ref.discount + inv.quotation_ref.survey_fee
-                        comm_amount = base_amount * Decimal('0.135')
 
+                        # 1. หาราคาขายก่อน VAT 7%
+                        total_price = inv.quotation_ref.subtotal - inv.quotation_ref.discount + inv.quotation_ref.survey_fee
+                        # สูตรถอด VAT ออกเป็นฐานสุทธิ: ยอดเต็ม / 1.07
+                        base_amount = total_price / Decimal('1.07')
+
+                        # 2. สร้างตั๋วใบที่ 1: แผนก Admin (1.5%)
                         SolarCommissionTicket.objects.get_or_create(
-                            ticket_type='13.5%',
-                            invoice_ref=inv,
-                            defaults={'base_amount': base_amount, 'commission_amount': comm_amount}
+                            ticket_type='1.5%', invoice_ref=inv, defaults={'base_amount': base_amount, 'commission_amount': base_amount * Decimal('0.015')}
+                        )
+                        # 3. สร้างตั๋วใบที่ 2: พนักงานขาย (4.0%)
+                        SolarCommissionTicket.objects.get_or_create(
+                            ticket_type='4%', invoice_ref=inv, defaults={'base_amount': base_amount, 'commission_amount': base_amount * Decimal('0.04')}
+                        )
+                        # 4. สร้างตั๋วใบที่ 3: แผนกช่างติดตั้ง (7.5%)
+                        SolarCommissionTicket.objects.get_or_create(
+                            ticket_type='7.5%', invoice_ref=inv, defaults={'base_amount': base_amount, 'commission_amount': base_amount * Decimal('0.075')}
+                        )
+                        # 5. สร้างตั๋วใบที่ 4: แผนกบริหาร (2.5%)
+                        SolarCommissionTicket.objects.get_or_create(
+                            ticket_type='2.5%', invoice_ref=inv, defaults={'base_amount': base_amount, 'commission_amount': base_amount * Decimal('0.025')}
                         )
                 else:
                     inv.status = 'UNPAID' # ถ้าจ่ายไม่ครบ ให้กลับไปเป็น UNPAID ทวงต่อ
@@ -282,21 +286,20 @@ def approve_transaction(request, task_type, item_id):
                 inv.status = 'PAID'
                 inv.save()
 
-                # 🌟 [NEW] ระบบอัตโนมัติ: สร้างใบคุมสิทธิ์ 3% ส่งไปที่ศูนย์ตั้งเบิกน็อคดาวน์
+                # 🌟 [NEW] ระบบอัตโนมัติ: สร้างใบคุมสิทธิ์ 2.5% ส่งไปที่ศูนย์ตั้งเบิกน็อคดาวน์
                 if doc_type != 'pos' and getattr(inv, 'quotation_ref', None):
                     from sales.models import CommissionTicket
                     from decimal import Decimal
                     qt = inv.quotation_ref
 
                     if qt.employee and inv.grand_total > 0:
-                        # เช็คป้องกันการสร้างตั๋วซ้ำ (1 Job = 1 สิทธิ์ 3%)
-                        if not CommissionTicket.objects.filter(invoice_ref=inv, ticket_type='3%').exists():
-                            # 🧮 สูตรใหม่: กลับมาใช้ยอดสุทธิรวม (Grand Total) เป็นฐานหัก 10%
+                        # เช็คป้องกันการสร้างตั๋วซ้ำ
+                        if not CommissionTicket.objects.filter(invoice_ref=inv, ticket_type='2.5%').exists():
                             base_amount = inv.grand_total - (inv.grand_total * Decimal('0.10'))
-                            comm_amount = base_amount * Decimal('0.03') # คูณ 3%
+                            comm_amount = base_amount * Decimal('0.025') # คูณ 2.5%
 
                             CommissionTicket.objects.create(
-                                ticket_type='3%',
+                                ticket_type='2.5%',
                                 invoice_ref=inv,
                                 base_amount=base_amount,
                                 commission_amount=comm_amount
@@ -308,7 +311,7 @@ def approve_transaction(request, task_type, item_id):
                     date=timezone.now().date(),
                     note="ชำระเต็มจำนวน"
                 )
-                messages.success(request, f"✅ ยืนยันรับชำระ {inv.code} เข้าระบบบัญชี และอัปเดตสิทธิ์คอมมิชชัน 3% เรียบร้อยแล้ว")
+                messages.success(request, f"✅ ยืนยันรับชำระ {inv.code} เข้าระบบบัญชี และอัปเดตสิทธิ์คอมมิชชัน 2.5% เรียบร้อยแล้ว")
 
         elif task_type == 'po_payments':
             po = get_object_or_404(PurchaseOrder, id=item_id)
@@ -397,46 +400,45 @@ def commission_recon_board(request):
         jobs = jobs_query[:100]
 
         for job in jobs:
-            # (โค้ดเดิมด้านล่างปล่อยไว้เหมือนเดิมครับ...)
             qt = job.quotation_ref
             inv = Invoice.objects.filter(quotation_ref=qt).first() if qt else None
+            
+            # 🌟 ดึงตั๋ว 3 ใบของน็อคดาวน์
+            t05 = CommissionTicket.objects.filter(quotation_ref=qt, ticket_type='0.5%').first() if qt else None
             t2 = CommissionTicket.objects.filter(quotation_ref=qt, ticket_type='2%').first() if qt else None
-            t3 = CommissionTicket.objects.filter(invoice_ref=inv, ticket_type='3%').first() if inv else None
+            t25 = CommissionTicket.objects.filter(invoice_ref=inv, ticket_type='2.5%').first() if inv else None
 
-            # 🌟 [FIXED] ลอจิกการกรองสถานะที่แม่นยำขึ้น 🌟
+            # 🌟 ลอจิกการกรองสถานะ 🌟
             if status_dep == 'AVAILABLE':
                 if not ((t2 and t2.status == 'AVAILABLE') or (not t2 and qt and qt.is_deposit_paid)): continue
             elif status_dep == 'CLAIMING':
                 if not (t2 and t2.status == 'CLAIMING'): continue
             elif status_dep == 'PAID':
                 if not (t2 and t2.status == 'PAID'): continue
-            # หากเลือก HIDDEN ให้ข้ามการกรอง t2 ไปเลย
 
             if status_inv == 'AVAILABLE':
-                if not ((t3 and t3.status == 'AVAILABLE') or (not t3 and inv and inv.status == 'PAID')): continue
+                if not ((t25 and t25.status == 'AVAILABLE') or (not t25 and inv and inv.status == 'PAID')): continue
             elif status_inv == 'CLAIMING':
-                if not (t3 and t3.status == 'CLAIMING'): continue
+                if not (t25 and t25.status == 'CLAIMING'): continue
             elif status_inv == 'PAID':
-                if not (t3 and t3.status == 'PAID'): continue
-            # หากเลือก HIDDEN ให้ข้ามการกรอง t3 ไปเลย
+                if not (t25 and t25.status == 'PAID'): continue
 
-
-            # 🌟 [FIXED] ลอจิกสถานะบัญชีรวมแบบ Linear (เช็คจากซ้ายไปขวา) 🌟
+            # 🌟 ลอจิกสถานะบัญชีรวมแบบ Linear (เช็คจากซ้ายไปขวา) 🌟
             fin_status = 'WAITING_DEPOSIT'
             if qt and qt.is_deposit_paid:
-                if not t2 or t2.status != 'PAID':
-                    fin_status = 'DEPOSIT_PAID' # ติดล็อกที่ 1: รอจ่ายคอมฯ 2%
+                if not t05 or t05.status != 'PAID' or not t2 or t2.status != 'PAID':
+                    fin_status = 'DEPOSIT_PAID' # ติดล็อกที่ 1: รอจ่ายคอมฯ มัดจำ (0.5% หรือ 2%)
                 elif not inv or inv.status != 'PAID':
-                    fin_status = 'WAITING_INV'  # ผ่าน 2% มาแล้ว -> รอเงินปิดบิล
-                elif not t3 or t3.status != 'PAID':
-                    fin_status = 'INV_PAID'     # ได้เงินปิดบิลแล้ว -> รอจ่ายคอมฯ ตามใบขาย
+                    fin_status = 'WAITING_INV'  # ผ่านมัดจำมาแล้ว -> รอเงินปิดบิล
+                elif not t25 or t25.status != 'PAID':
+                    fin_status = 'INV_PAID'     # ได้เงินปิดบิลแล้ว -> รอจ่ายคอมฯ 2.5%
                 else:
                     fin_status = 'CLEARED'      # จบกระบวนการ 100%
 
             data_list.append({
                 'job_code': job.code,
                 'customer_name': job.customer_name or (qt.customer.name if qt and qt.customer else '-'),
-                'qt': qt, 'inv': inv, 't2': t2, 't3': t3, 'fin_status': fin_status
+                'qt': qt, 'inv': inv, 't05': t05, 't2': t2, 't25': t25, 'fin_status': fin_status
             })
 
     elif tab == 'solar':
@@ -452,7 +454,7 @@ def commission_recon_board(request):
                 Q(quotation_ref__solarinvoice__code__icontains=search_q)
             )
 
-        # 🌟 [NEW] กรองข้อมูลช่วงเวลา (ใช้ created_at ของใบงานโซล่า) 🌟
+        # กรองข้อมูลช่วงเวลา
         if start_date and end_date:
             jobs_query = jobs_query.filter(created_at__date__gte=start_date, created_at__date__lte=end_date)
 
@@ -461,40 +463,37 @@ def commission_recon_board(request):
         for job in jobs:
             qt = job.quotation_ref
             inv = SolarInvoice.objects.filter(quotation_ref=qt).first() if qt else None
-            t2 = SolarCommissionTicket.objects.filter(quotation_ref=qt, ticket_type='2%').first() if qt else None
-            t13 = SolarCommissionTicket.objects.filter(invoice_ref=inv, ticket_type='13.5%').first() if inv else None
 
-            # 🌟 [FIXED] ลอจิกการกรองสถานะที่แม่นยำขึ้น 🌟
-            if status_dep == 'AVAILABLE':
-                if not ((t2 and t2.status == 'AVAILABLE') or (not t2 and qt and qt.is_deposit_paid)): continue
-            elif status_dep == 'CLAIMING':
-                if not (t2 and t2.status == 'CLAIMING'): continue
-            elif status_dep == 'PAID':
-                if not (t2 and t2.status == 'PAID'): continue
+            # 🌟 [NEW] ดึงตั๋ว 4 กระเป๋าใหม่ จากใบเสร็จ (Invoice)
+            t15 = SolarCommissionTicket.objects.filter(invoice_ref=inv, ticket_type='1.5%').first() if inv else None
+            t4 = SolarCommissionTicket.objects.filter(invoice_ref=inv, ticket_type='4%').first() if inv else None
+            t75 = SolarCommissionTicket.objects.filter(invoice_ref=inv, ticket_type='7.5%').first() if inv else None
+            t25 = SolarCommissionTicket.objects.filter(invoice_ref=inv, ticket_type='2.5%').first() if inv else None
 
+            # 🌟 ลอจิกการกรองสถานะ (ขอใช้ตั๋วเซลส์ 4% เป็นตัวแทนในการกรอง เพื่อให้ง่าย)
             if status_inv == 'AVAILABLE':
-                if not ((t13 and t13.status == 'AVAILABLE') or (not t13 and inv and inv.status == 'PAID')): continue
+                if not ((t4 and t4.status == 'AVAILABLE') or (not t4 and inv and inv.status == 'PAID')): continue
             elif status_inv == 'CLAIMING':
-                if not (t13 and t13.status == 'CLAIMING'): continue
+                if not (t4 and t4.status == 'CLAIMING'): continue
             elif status_inv == 'PAID':
-                if not (t13 and t13.status == 'PAID'): continue
+                if not (t4 and t4.status == 'PAID'): continue
 
-            # 🌟 [FIXED] ลอจิกสถานะบัญชีรวมแบบ Linear (เช็คจากซ้ายไปขวา) 🌟
+            # 🌟 ลอจิกสถานะบัญชีรวมแบบใหม่
             fin_status = 'WAITING_DEPOSIT'
             if qt and qt.is_deposit_paid:
-                if not t2 or t2.status != 'PAID':
-                    fin_status = 'DEPOSIT_PAID' # ติดล็อกที่ 1: รอจ่ายคอมฯ 2%
-                elif not inv or inv.status != 'PAID':
-                    fin_status = 'WAITING_INV'  # ผ่าน 2% มาแล้ว -> รอเงินปิดบิล
-                elif not t13 or t13.status != 'PAID':
-                    fin_status = 'INV_PAID'     # ได้เงินปิดบิลแล้ว -> รอจ่ายคอมฯ ตามใบขาย
+                if not inv or inv.status != 'PAID':
+                    fin_status = 'WAITING_INV'  # รอรับเงินปิดบิล
+                elif not t4 or t4.status != 'PAID' or not t15 or t15.status != 'PAID' or not t75 or t75.status != 'PAID' or not t25 or t25.status != 'PAID':
+                    fin_status = 'INV_PAID'     # ได้เงินปิดบิลแล้ว -> รอจ่ายคอมฯ 4 กระเป๋าให้ครบ
                 else:
                     fin_status = 'CLEARED'      # จบกระบวนการ 100%
 
             data_list.append({
                 'job_code': job.code,
                 'customer_name': job.customer.name if job.customer else '-',
-                'qt': qt, 'inv': inv, 't2': t2, 't3': t13, 'fin_status': fin_status
+                'qt': qt, 'inv': inv,
+                't15': t15, 't4': t4, 't75': t75, 't25': t25, # ส่ง 4 ตัวแปรใหม่ไป
+                'fin_status': fin_status
             })
 
     context = {'tab': tab, 'data_list': data_list}

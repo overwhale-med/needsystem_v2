@@ -2062,7 +2062,7 @@ def service_board(request):
             col1_pending.append(t)
         elif t.status == 'IN_PROGRESS':
             col2_inprogress.append(t)
-        elif t.status == 'COMPLETED':
+        elif t.status in ['COMPLETED', 'CANCELLED']:
             if completed_count < 30:
                 col3_completed.append(t)
                 completed_count += 1
@@ -2085,7 +2085,11 @@ def process_service_ticket(request, ticket_id):
 
         # 1. หัวหน้าช่างประเมินราคา (กรณีหมดประกัน)
         if action == 'estimate_cost':
-            cost = request.POST.get('estimated_cost', '0').replace(',', '')
+            # 🌟 [FIXED] ดักจับกรณีช่างลืมกรอกเลข
+            cost_str = request.POST.get('estimated_cost', '0')
+            if not cost_str: cost_str = '0'
+            cost = cost_str.replace(',', '')
+
             comment = request.POST.get('cost_comment', '')
 
             ticket.estimated_cost = Decimal(cost)
@@ -2093,6 +2097,14 @@ def process_service_ticket(request, ticket_id):
             ticket.status = 'WAITING_APPROVAL' # เด้งกลับไปให้เซลส์คอนเฟิร์ม
             ticket.save()
             messages.warning(request, f"ส่งประเมินราคา ฿{ticket.estimated_cost:,.2f} ให้เซลส์เพื่อคอนเฟิร์มกับลูกค้าแล้ว")
+
+        # 🌟 [NEW] หัวหน้าช่างอนุโลมซ่อมฟรี (ข้ามขั้นตอนเซลส์) 🌟
+        elif action == 'free_repair':
+            ticket.estimated_cost = Decimal('0.00')
+            ticket.cost_comment = "อนุโลมซ่อมฟรี (หัวหน้าช่างประเมินแล้วไม่มีค่าใช้จ่าย)"
+            # ไม่เปลี่ยนสถานะเป็น WAITING_APPROVAL เพื่อให้ช่างจ่ายงานต่อได้เลย
+            ticket.save()
+            messages.success(request, f"🎁 ดำเนินการอนุโลมซ่อมฟรี! คุณสามารถจ่ายงานให้ทีมช่างเข้าพื้นที่ได้เลยครับ")
 
         # 2. จ่ายงานให้ทีมช่าง
         elif action == 'assign_team':

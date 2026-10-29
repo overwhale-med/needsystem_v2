@@ -83,18 +83,18 @@
             <table class="table table-master mb-0">
                 <thead>
                     <tr>
-                        <th style="width: 14%;">1. เลขที่ JOB</th>
-                        <th style="width: 12%;">2. ใบเสนอราคา</th>
-                        <th style="width: 11%;">3. ใบเสร็จรับเงิน</th>
-                        <th style="width: 8%;">4. คอมฯ 2%</th>
-                        <th style="width: 8%;">5. คอมฯ 3%</th>
-                        <th style="width: 8%;">6. ค่าขนส่ง</th>
-                        <th style="width: 10%;">7. ค่าแรงเหมา</th>
-                        <th style="width: 10%;">8. ค่าแอร์</th>
-                        <!-- 🌟 [NEW] เพิ่มคอลัมน์ค่าซ่อมงาน -->
-                        <th style="width: 10%;">9. ค่าซ่อมงาน</th>
-                        <!-- 🌟 เลื่อนเป็นคอลัมน์ 10 -->
-                        <th style="width: 9%;">10. ค่าใช้จ่ายอื่นๆ</th>
+                        <th style="width: 12%;">1. เลขที่ JOB</th>
+                        <th style="width: 10%;">2. ใบเสนอราคา</th>
+                        <th style="width: 10%;">3. ใบเสร็จรับเงิน</th>
+                        <!-- 🌟 [NEW] เพิ่มคอลัมน์ 0.5% -->
+                        <th style="width: 7%;">4. คอมฯ 0.5%</th>
+                        <th style="width: 7%;">5. คอมฯ 2%</th>
+                        <th style="width: 8%;">6. คอมฯ 2.5%</th>
+                        <th style="width: 7%;">7. ค่าขนส่ง</th>
+                        <th style="width: 10%;">8. ค่าแรงเหมา</th>
+                        <th style="width: 10%;">9. ค่าแอร์</th>
+                        <th style="width: 9%;">10. ค่าซ่อมงาน</th>
+                        <th style="width: 10%;">11. ค่าใช้จ่ายอื่นๆ</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -164,7 +164,28 @@
                                 <span class="badge-status bg-gray-soft">ยังไม่ได้ขาย</span>
                             {% endif %}
                         </td>
-
+                        
+                        <!-- 🌟 [NEW] 4. คอมฯ 0.5% -->
+                        <td class="text-center">
+                            {% if job.quotation_ref %}
+                                {% for t in job.matched_tickets_05 %}
+                                    <div class="mb-1">
+                                        {% if t.status == 'PAID' and t.claim_ref %}
+                                            <span class="badge-status bg-green-soft d-block mb-1 mx-auto" style="width: max-content;">จ่ายแล้ว</span>
+                                            <a href="{% url 'print_commission_claim' t.claim_ref.id %}" target="_blank" class="btn btn-sm btn-outline-dark rounded-pill px-2 py-0 d-print-none fw-bold" style="font-size: 0.7rem;">
+                                                <i class="fas fa-file-invoice"></i> {{ t.claim_ref.code }}
+                                            </a>
+                                        {% else %}
+                                            <span class="badge-status bg-red-soft d-block mx-auto" style="width: max-content;">รอจ่าย</span>
+                                        {% endif %}
+                                    </div>
+                                {% empty %}
+                                    <span class="text-muted">-</span>
+                                {% endfor %}
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
                         <!-- 4. คอมฯ 2% -->
                         <td class="text-center">
                             {% if job.quotation_ref %}
@@ -187,7 +208,7 @@
                             {% endif %}
                         </td>
 
-                        <!-- 5. คอมฯ 3% -->
+                        <!-- 6. คอมฯ 2.5% (และ 3% เดิม) -->
                         <td class="text-center">
                             {% if job.quotation_ref %}
                                 {% for t in job.matched_tickets_3 %}
@@ -533,7 +554,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="9" class="text-center py-5 text-muted">
+                        <td colspan="11" class="text-center py-5 text-muted">
                             <i class="fas fa-clipboard-list fa-3x mb-3 opacity-25"></i>
                             <h5>ไม่พบข้อมูลใบสั่งผลิต</h5>
                         </td>

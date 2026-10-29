@@ -515,9 +515,12 @@ def solar_master_job_report(request):
     page_obj = paginator.get_page(request.GET.get('page'))
 
     qt_ids = [job.quotation_ref_id for job in page_obj if job.quotation_ref_id]
-    inv_dict = {}
-    ticket_dict_2 = {}
-    ticket_dict_13_5 = {}
+
+    # 🌟 [FIXED] เตรียมตะกร้า 4 ใบสำหรับตั๋วคอมมิชชันรูปแบบใหม่ 🌟
+    ticket_dict_15 = {}
+    ticket_dict_4 = {}
+    ticket_dict_75 = {}
+    ticket_dict_25 = {}
 
     invoices = SolarInvoice.objects.filter(quotation_ref_id__in=qt_ids)
     inv_dict = {inv.quotation_ref_id: inv for inv in invoices}
@@ -525,21 +528,33 @@ def solar_master_job_report(request):
     tickets = SolarCommissionTicket.objects.filter(
         Q(quotation_ref_id__in=qt_ids) | Q(invoice_ref__quotation_ref_id__in=qt_ids)
     )
+
+    # 🌟 [FIXED] แยกตั๋วลงตะกร้าให้ตรงประเภท 🌟
     for t in tickets:
-        if t.ticket_type == '2%' and getattr(t, 'quotation_ref_id', None):
-            ticket_dict_2.setdefault(t.quotation_ref_id, []).append(t)
-        elif t.ticket_type == '13.5%' and getattr(t.invoice_ref, 'quotation_ref_id', None):
-            ticket_dict_13_5.setdefault(t.invoice_ref.quotation_ref_id, []).append(t)
+        q_id = getattr(t.invoice_ref, 'quotation_ref_id', None)
+        if q_id:
+            if t.ticket_type == '1.5%':
+                ticket_dict_15.setdefault(q_id, []).append(t)
+            elif t.ticket_type == '4%':
+                ticket_dict_4.setdefault(q_id, []).append(t)
+            elif t.ticket_type == '7.5%':
+                ticket_dict_75.setdefault(q_id, []).append(t)
+            elif t.ticket_type == '2.5%':
+                ticket_dict_25.setdefault(q_id, []).append(t)
 
     for job in page_obj:
         if job.quotation_ref_id:
             job.matched_invoice = inv_dict.get(job.quotation_ref_id)
-            job.matched_tickets_2 = ticket_dict_2.get(job.quotation_ref_id, [])
-            job.matched_tickets_13_5 = ticket_dict_13_5.get(job.quotation_ref_id, [])
+            job.matched_tickets_15 = ticket_dict_15.get(job.quotation_ref_id, [])
+            job.matched_tickets_4 = ticket_dict_4.get(job.quotation_ref_id, [])
+            job.matched_tickets_75 = ticket_dict_75.get(job.quotation_ref_id, [])
+            job.matched_tickets_25 = ticket_dict_25.get(job.quotation_ref_id, [])
         else:
             job.matched_invoice = None
-            job.matched_tickets_2 = []
-            job.matched_tickets_13_5 = []
+            job.matched_tickets_15 = []
+            job.matched_tickets_4 = []
+            job.matched_tickets_75 = []
+            job.matched_tickets_25 = []
 
     return render(request, 'solar_jobs/solar_master_job_report.html', {
         'page_obj': page_obj, 'search_query': search_query

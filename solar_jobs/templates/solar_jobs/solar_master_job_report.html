@@ -11,28 +11,21 @@
     .bg-blue-soft { background-color: #cff4fc; color: #055160; border: 1px solid #b6effb; }
 
     .table-container { overflow-x: auto; white-space: nowrap; padding-bottom: 10px; }
-    .table-master th { background-color: #ff9800; color: #ffffff; text-align: center; vertical-align: middle; padding: 12px 8px; font-size: 0.75rem; border-right: 1px solid #e68a00; }
-    .table-master td { vertical-align: middle; padding: 10px 8px; font-size: 0.8rem; border-right: 1px solid #e9ecef; }
+    .table-master th { background-color: #ff9800; color: #ffffff; text-align: center; vertical-align: middle; padding: 12px 6px; font-size: 0.75rem; border-right: 1px solid #e68a00; }
+    .table-master td { vertical-align: middle; padding: 10px 6px; font-size: 0.75rem; border-right: 1px solid #e9ecef; }
     .table-master tbody tr:hover { background-color: #fffdf5; }
-    /* 🌟 สำหรับสั่งพิมพ์แนวนอน (ตั้งค่ากระดาษและกรอบตาราง) 🌟 */
+    
     @media print {
         .navbar, .sidebar, form, .d-print-none, .btn { display: none !important; }
         @page { size: A4 landscape; margin: 5mm; }
         body { background-color: #fff !important; font-size: 8pt; color: #000; }
         .container-fluid { padding: 0 !important; width: 100% !important; max-width: 100% !important; }
         .main-content { margin-left: 0 !important; padding: 0 !important; }
-
         .card { border: none !important; box-shadow: none !important; }
-
-        /* 🌟 ตีกรอบตารางให้เหมือนหน้าบิลบัญชี 🌟 */
         .table-master { border: 1px solid #000 !important; }
-        .table-master th { background-color: transparent !important; color: #000 !important; border: 1px solid #000 !important; padding: 5px !important; }
-        .table-master td { border: 1px solid #000 !important; color: #000 !important; padding: 5px !important; }
-
-        /* 🌟 ลบสีพื้นหลังของป้ายสถานะเพื่อให้พิมพ์ขาวดำชัดขึ้น 🌟 */
+        .table-master th { background-color: transparent !important; color: #000 !important; border: 1px solid #000 !important; padding: 5px !important; font-size: 7pt; }
+        .table-master td { border: 1px solid #000 !important; color: #000 !important; padding: 5px !important; font-size: 7pt; }
         .badge-status { border: none !important; background: transparent !important; color: #000 !important; padding: 0 !important; }
-
-        /* 🌟 บังคับให้ปุ่มเปิดดูซ่อนไปตอนพิมพ์ เพราะกดไม่ได้ 🌟 */
         button[data-bs-toggle="modal"] { display: none !important; }
     }
 </style>
@@ -40,7 +33,7 @@
 <div class="container-fluid py-4 px-4">
     <div class="d-flex justify-content-between align-items-end mb-4 d-print-none">
         <div>
-            <h4 class="fw-bold mb-1 text-dark"><i class="fas fa-solar-panel text-warning me-2"></i>รายงานควบคุมค่าใช้จ่ายตามใบงาน (JOB) - ระบบโซล่าเซลล์</h4>
+            <h4 class="fw-bold mb-1 text-dark"><i class="fas fa-solar-panel text-warning me-2"></i>รายงานควบคุมค่าใช้จ่ายตามใบงาน (JOB) - โซล่าเซลล์</h4>
             <p class="text-muted small mb-0">แผงควบคุม (Audit Board) สำหรับตรวจสอบสถานะเอกสารและการเบิกจ่ายของแผนกโซล่าเซลล์</p>
         </div>
         <div>
@@ -72,15 +65,19 @@
             <table class="table table-master mb-0">
                 <thead>
                     <tr>
-                        <th style="width: 14%;">1. เลขที่ JOB</th>
-                        <th style="width: 12%;">2. ใบเสนอราคา</th>
-                        <th style="width: 12%;">3. ใบเสร็จรับเงิน</th>
-                        <th style="width: 9%;">4. คอมฯ 2%</th>
-                        <th style="width: 9%;">5. กองทุน 13.5%</th>
-                        <th style="width: 9%;">6. ค่าสำรวจ</th>
-                        <th style="width: 10%;">7. ค่าติดตั้ง</th>
-                        <th style="width: 10%;">8. สำรองค่าแรง</th>
-                        <th style="width: 15%;">9. ค่าใช้จ่ายอื่นๆ</th>
+                        <th style="width: 12%;">1. เลขที่ JOB</th>
+                        <th style="width: 10%;">2. ใบเสนอราคา</th>
+                        <th style="width: 10%;">3. ใบเสร็จรับเงิน</th>
+                        <!-- 🌟 เปลี่ยนจาก 2 ช่อง เป็น 4 ช่อง 🌟 -->
+                        <th style="width: 8%;">4. แอดมิน<br>(1.5%)</th>
+                        <th style="width: 8%;">5. เซลส์<br>(4%)</th>
+                        <th style="width: 8%;">6. ช่างติดตั้ง<br>(7.5%)</th>
+                        <th style="width: 8%;">7. บริหาร<br>(2.5%)</th>
+                        
+                        <th style="width: 8%;">8. ค่าสำรวจ</th>
+                        <th style="width: 8%;">9. ค่าติดตั้ง</th>
+                        <th style="width: 8%;">10. สำรองค่าแรง</th>
+                        <th style="width: 12%;">11. ค่าใช้จ่ายอื่นๆ</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -135,14 +132,14 @@
                             {% endif %}
                         </td>
 
-                        <!-- 4. คอมฯ 2% -->
+                        <!-- 🌟 4. คอมฯ Admin 1.5% 🌟 -->
                         <td class="text-center">
-                            {% for t in job.matched_tickets_2 %}
+                            {% for t in job.matched_tickets_15 %}
                                 <div class="mb-1">
                                     {% if t.status == 'PAID' %}
-                                        <span class="badge-status bg-green-soft">จ่ายแล้ว</span>
+                                        <span class="badge-status bg-green-soft border-success text-success">จ่ายแล้ว</span>
                                     {% else %}
-                                        <span class="badge-status bg-red-soft">รอจ่าย</span>
+                                        <span class="badge-status bg-red-soft border-danger text-danger">รอเคลียร์</span>
                                     {% endif %}
                                 </div>
                             {% empty %}
@@ -150,14 +147,14 @@
                             {% endfor %}
                         </td>
 
-                        <!-- 🌟 5. คอมฯ 13.5% (กองทุน) 🌟 -->
+                        <!-- 🌟 5. คอมฯ Sales 4% 🌟 -->
                         <td class="text-center">
-                            {% for t in job.matched_tickets_13_5 %}
+                            {% for t in job.matched_tickets_4 %}
                                 <div class="mb-1">
                                     {% if t.status == 'PAID' %}
-                                        <span class="badge-status bg-green-soft border-success text-success fw-bold">จ่ายแล้ว</span>
+                                        <span class="badge-status bg-green-soft border-success text-success">จ่ายแล้ว</span>
                                     {% else %}
-                                        <span class="badge-status bg-red-soft border-danger text-danger fw-bold">รอเคลียร์ยอด</span>
+                                        <span class="badge-status bg-red-soft border-danger text-danger">รอเคลียร์</span>
                                     {% endif %}
                                 </div>
                             {% empty %}
@@ -165,7 +162,37 @@
                             {% endfor %}
                         </td>
 
-                        <!-- 🌟 6. ค่าสำรวจหน้างาน 🌟 -->
+                        <!-- 🌟 6. คอมฯ Tech 7.5% 🌟 -->
+                        <td class="text-center">
+                            {% for t in job.matched_tickets_75 %}
+                                <div class="mb-1">
+                                    {% if t.status == 'PAID' %}
+                                        <span class="badge-status bg-green-soft border-success text-success">จ่ายแล้ว</span>
+                                    {% else %}
+                                        <span class="badge-status bg-red-soft border-danger text-danger">รอเคลียร์</span>
+                                    {% endif %}
+                                </div>
+                            {% empty %}
+                                <span class="text-muted">-</span>
+                            {% endfor %}
+                        </td>
+                        
+                        <!-- 🌟 7. คอมฯ Exec 2.5% 🌟 -->
+                        <td class="text-center">
+                            {% for t in job.matched_tickets_25 %}
+                                <div class="mb-1">
+                                    {% if t.status == 'PAID' %}
+                                        <span class="badge-status bg-green-soft border-success text-success">จ่ายแล้ว</span>
+                                    {% else %}
+                                        <span class="badge-status bg-red-soft border-danger text-danger">รอเคลียร์</span>
+                                    {% endif %}
+                                </div>
+                            {% empty %}
+                                <span class="text-muted">-</span>
+                            {% endfor %}
+                        </td>
+
+                        <!-- 🌟 8. ค่าสำรวจหน้างาน 🌟 -->
                         <td class="text-center bg-light">
                             {% for claim in job.survey_claims.all %}
                                 <div class="mb-1">
@@ -180,7 +207,7 @@
                             {% endfor %}
                         </td>
 
-                        <!-- 🌟 7. ค่าติดตั้ง 🌟 -->
+                        <!-- 🌟 9. ค่าติดตั้ง 🌟 -->
                         <td class="text-center bg-light">
                             {% for claim in job.install_claims.all %}
                                 <div class="mb-1">
@@ -195,7 +222,7 @@
                             {% endfor %}
                         </td>
 
-                        <!-- 🌟 8. สำรองค่าแรง 🌟 -->
+                        <!-- 🌟 10. สำรองค่าแรง 🌟 -->
                         <td class="text-center bg-light">
                             {% for claim in job.advance_labor_claims.all %}
                                 <div class="mb-1">
@@ -210,10 +237,10 @@
                             {% endfor %}
                         </td>
 
-                        <!-- 9. ค่าใช้จ่ายอื่นๆ -->
+                        <!-- 11. ค่าใช้จ่ายอื่นๆ -->
                         <td class="text-center bg-light">
                             {% if job.other_expenses.all %}
-                                <button class="btn btn-sm btn-outline-info rounded-pill px-3 fw-bold" style="font-size: 0.75rem;" data-bs-toggle="modal" data-bs-target="#expenseModal{{ job.id }}">
+                                <button class="btn btn-sm btn-outline-info rounded-pill px-3 fw-bold" style="font-size: 0.7rem;" data-bs-toggle="modal" data-bs-target="#expenseModal{{ job.id }}">
                                     <i class="fas fa-search me-1"></i> เปิดดู ({{ job.other_expenses.count }})
                                 </button>
 
@@ -263,7 +290,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="9" class="text-center py-5 text-muted">
+                        <td colspan="11" class="text-center py-5 text-muted">
                             <i class="fas fa-solar-panel fa-3x mb-3 opacity-25"></i>
                             <h5>ไม่พบข้อมูลใบสั่งงานโซล่าเซลล์</h5>
                         </td>

@@ -1,4 +1,5 @@
 {% extends 'core/base.html' %}
+{% load humanize %}
 {% block content %}
 <div class="container-fluid py-4 px-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
@@ -109,7 +110,7 @@
                             {% else %}
                                 <small class="text-danger fw-bold"><i class="fas fa-times-circle"></i> นอกประกัน</small>
                                 {% if t.estimated_cost > 0 %}
-                                    <small class="d-block text-muted">ค่าซ่อม: ฿{{ t.estimated_cost|floatformat:2 }}</small>
+                                    <small class="d-block text-muted">ค่าซ่อม: ฿{{ t.estimated_cost|floatformat:2|intcomma }}</small>
                                 {% endif %}
                             {% endif %}
                             </div>
@@ -122,7 +123,11 @@
                                 <form method="POST" action="{% url 'service_ticket_update' t.id %}" class="d-inline">
                                     {% csrf_token %}
                                     <button type="submit" name="action" value="approve_cost" class="btn btn-sm btn-success rounded-pill fw-bold shadow-sm" onclick="return confirm('ยืนยันว่าลูกค้าตกลงจ่ายค่าซ่อม ฿{{ t.estimated_cost }} แล้วใช่หรือไม่?');">
-                                        <i class="fas fa-check me-1"></i> คอนเฟิร์มราคา
+                                        <i class="fas fa-check me-1"></i> คอนเฟิร์ม
+                                    </button>
+                                    <!-- 🌟 [NEW] ปุ่มลูกค้ายกเลิกซ่อม -->
+                                    <button type="submit" name="action" value="cancel" class="btn btn-sm btn-danger rounded-pill fw-bold shadow-sm ms-1" onclick="return confirm('ยืนยันยกเลิกงานซ่อมนี้ เนื่องจากลูกค้าไม่ตกลงราคาใช่หรือไม่?');">
+                                        <i class="fas fa-times me-1"></i> ยกเลิกซ่อม
                                     </button>
                                 </form>
                             {% endif %}
@@ -189,7 +194,7 @@
                         {% else %}
                             <span class="badge bg-danger mb-2"><i class="fas fa-times-circle"></i> นอกประกัน (มีค่าใช้จ่าย)</span>
                             {% if t.estimated_cost > 0 %}
-                                <div class="text-dark fw-bold small mt-1">ประเมินค่าซ่อม: <span class="text-danger">฿{{ t.estimated_cost|floatformat:2 }}</span></div>
+                                <div class="text-dark fw-bold small mt-1">ประเมินค่าซ่อม: <span class="text-danger">฿{{ t.estimated_cost|floatformat:2|intcomma }}</span></div>
                                 {% if t.cost_comment %}<div class="text-muted small mt-1">หมายเหตุช่าง: {{ t.cost_comment }}</div>{% endif %}
                             {% else %}
                                 <div class="text-warning fw-bold small mt-1"><i class="fas fa-hourglass-half"></i> รอช่างประเมินราคา</div>

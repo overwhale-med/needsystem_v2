@@ -22,23 +22,107 @@
                     <h6 class="fw-bold mb-0 text-dark"><i class="fas fa-ticket-alt text-warning me-2"></i>ใบคุมสิทธิ์ที่พร้อมเบิก (Available Tickets)</h6>
                 </div>
                 <div class="card-body p-0">
-                    <!-- แท็บเลือกประเภท 2% หรือ 3% -->
+                    <!-- แท็บเลือกประเภท 0.5%, 2% หรือ 2.5/3% -->
                     <ul class="nav nav-tabs nav-fill bg-light m-0 border-0" id="commissionTabs" role="tablist">
                         <li class="nav-item" role="presentation">
-                            <button class="nav-link active fw-bold text-dark rounded-0 border-0 py-3" id="tab-2percent" data-bs-toggle="tab" data-bs-target="#content-2percent" type="button" role="tab">
-                                <i class="fas fa-bolt text-warning me-1"></i> โควตา 2% (จากรับมัดจำ) <span class="badge bg-danger ms-2">{{ tickets_2|length }}</span>
+                            <button class="nav-link active fw-bold text-dark rounded-0 border-0 py-3" id="tab-05percent" data-bs-toggle="tab" data-bs-target="#content-05percent" type="button" role="tab">
+                                <i class="fas fa-bolt text-info me-1"></i> คอมฯ 0.5% (บริหาร) <span class="badge bg-danger ms-2">{{ tickets_05|length }}</span>
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link fw-bold text-dark rounded-0 border-0 py-3" id="tab-2percent" data-bs-toggle="tab" data-bs-target="#content-2percent" type="button" role="tab">
+                                <i class="fas fa-bolt text-warning me-1"></i> คอมฯ 2% (รับมัดจำ) <span class="badge bg-danger ms-2">{{ tickets_2|length }}</span>
                             </button>
                         </li>
                         <li class="nav-item" role="presentation">
                             <button class="nav-link fw-bold text-dark rounded-0 border-0 py-3" id="tab-3percent" data-bs-toggle="tab" data-bs-target="#content-3percent" type="button" role="tab">
-                                <i class="fas fa-check-double text-success me-1"></i> โควตา 3% (จากปิดบิล) <span class="badge bg-danger ms-2">{{ tickets_3|length }}</span>
+                                <i class="fas fa-check-double text-success me-1"></i> คอมฯ 2.5% (ปิดใบขาย) <span class="badge bg-danger ms-2">{{ tickets_3|length }}</span>
                             </button>
                         </li>
                     </ul>
 
                     <div class="tab-content" id="commissionTabsContent">
+                        <!-- 🎟️ ตาราง 0.5% -->
+                        <div class="tab-pane fade show active" id="content-05percent" role="tabpanel">
+                            <form action="{% url 'commission_create_claim' '0.5%' %}" method="post">
+                                {% csrf_token %}
+                                <div class="table-responsive" style="max-height: 400px;">
+                                    <table class="table table-hover align-middle mb-0">
+                                        <thead class="bg-white sticky-top shadow-sm small text-secondary">
+                                            <tr>
+                                                {% if is_manager_view or request.user.is_superuser %}
+                                                <th class="text-center" width="50"><input type="checkbox" id="checkAll05" class="form-check-input shadow-sm"></th>
+                                                {% endif %}
+                                                <th>เลขที่สิทธิ์</th>
+                                                <th>อ้างอิงใบเสนอราคา</th>
+                                                {% if is_manager_view or request.user.is_superuser %}
+                                                <th>พนักงานขาย</th>
+                                                {% endif %}
+                                                <th class="text-end">ยอดเบิกได้ (บาท)</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for t in tickets_05 %}
+                                            <tr>
+                                                {% if is_manager_view or request.user.is_superuser %}
+                                                <td class="text-center"><input type="checkbox" name="ticket_ids" value="{{ t.id }}" class="form-check-input chk-05"></td>
+                                                {% endif %}
+                                                <td><span class="badge bg-light text-dark border"><i class="fas fa-ticket-alt text-info me-1"></i>{{ t.code }}</span></td>
+                                                <td class="small fw-bold text-secondary">{{ t.quotation_ref.code|default:"-" }}</td>
+                                                {% if is_manager_view or request.user.is_superuser %}
+                                                <td class="small text-dark"><i class="far fa-user me-1"></i>{{ t.quotation_ref.employee.first_name|default:"ไม่ระบุ" }}</td>
+                                                {% endif %}
+                                                <td class="text-end fw-bold text-primary">฿{{ t.commission_amount|floatformat:2|intcomma }}</td>
+                                            </tr>
+                                            {% empty %}
+                                            <tr><td colspan="{% if is_manager_view or request.user.is_superuser %}5{% else %}3{% endif %}" class="text-center py-4 text-muted">ไม่มีสิทธิ์คงค้าง</td></tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                {% if is_manager_view or request.user.is_superuser %}
+                                <div class="card-footer bg-white p-3">
+                                    <div class="bg-light p-3 rounded-3 border mb-3 text-start">
+                                        <h6 class="fw-bold text-dark mb-3" style="font-size: 14px;"><i class="fas fa-university text-primary me-2"></i>ระบุบัญชีรับเงิน (Payment Details)</h6>
+                                        <div class="row g-2">
+                                            <div class="col-md-4">
+                                                <select name="bank_name" class="form-select form-select-sm shadow-sm" required>
+                                                    <option value="">-- เลือกธนาคาร --</option>
+                                                    <option value="กสิกรไทย (KBANK)">กสิกรไทย (KBANK)</option>
+                                                    <option value="ไทยพาณิชย์ (SCB)">ไทยพาณิชย์ (SCB)</option>
+                                                    <option value="กรุงเทพ (BBL)">กรุงเทพ (BBL)</option>
+                                                    <option value="กรุงไทย (KTB)">กรุงไทย (KTB)</option>
+                                                    <option value="กรุงศรีอยุธยา (BAY)">กรุงศรีอยุธยา (BAY)</option>
+                                                    <option value="ทหารไทยธนชาต (TTB)">ทหารไทยธนชาต (TTB)</option>
+                                                    <option value="ออมสิน (GSB)">ออมสิน (GSB)</option>
+                                                    <option value="พร้อมเพย์ (PromptPay)">พร้อมเพย์ (PromptPay)</option>
+                                                </select>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <input type="text" name="bank_account" class="form-control form-control-sm shadow-sm" placeholder="เลขที่บัญชี / เบอร์พร้อมเพย์" required>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <input type="text" name="account_name" class="form-control form-control-sm shadow-sm" placeholder="ชื่อบัญชี (นาย/นาง/นางสาว...)" required>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="text-end">
+                                        <button type="submit" class="btn btn-info text-white fw-bold px-4 rounded-pill shadow-sm" disabled onclick="return confirm('ยืนยันสร้างใบขอเบิกยอด 0.5% ใช่หรือไม่?');">
+                                            <i class="fas fa-file-invoice-dollar me-1"></i> สร้างใบขอเบิก 0.5%
+                                        </button>
+                                    </div>
+                                </div>
+                                {% else %}
+                                <div class="card-footer bg-light p-3 text-center border-top">
+                                    <span class="text-muted fw-bold"><i class="fas fa-clock me-2"></i>สถานะ: รอผู้จัดการฝ่ายขายเป็นผู้ดำเนินการตั้งเบิก</span>
+                                </div>
+                                {% endif %}
+                            </form>
+                        </div>
+
                         <!-- 🎟️ ตาราง 2% -->
-                        <div class="tab-pane fade show active" id="content-2percent" role="tabpanel">
+                        <div class="tab-pane fade" id="content-2percent" role="tabpanel">
                             <form action="{% url 'commission_create_claim' '2%' %}" method="post">
                                 {% csrf_token %}
                                 <div class="table-responsive" style="max-height: 400px;">
@@ -278,6 +362,31 @@
 
 <script>
     document.addEventListener("DOMContentLoaded", function() {
+        const checkAll05 = document.getElementById('checkAll05');
+        if (checkAll05) {
+            checkAll05.addEventListener('change', function() {
+                document.querySelectorAll('.chk-05').forEach(chk => chk.checked = this.checked);
+                validateForm05();
+            });
+        }
+
+        const form05 = document.querySelector('#content-05percent form');
+        if (form05) {
+            const btnSubmit05 = form05.querySelector('button[type="submit"]');
+            const checkboxes05 = form05.querySelectorAll('.chk-05');
+            const bankSelect05 = form05.querySelector('select[name="bank_name"]');
+            const bankAcc05 = form05.querySelector('input[name="bank_account"]');
+            const accName05 = form05.querySelector('input[name="account_name"]');
+
+            function validateForm05() {
+                let isChecked = Array.from(checkboxes05).some(chk => chk.checked);
+                let isFilled = bankSelect05.value !== "" && bankAcc05.value.trim() !== "" && accName05.value.trim() !== "";
+                btnSubmit05.disabled = !(isChecked && isFilled);
+            }
+            form05.addEventListener('change', validateForm05);
+            form05.addEventListener('input', validateForm05);
+        }
+
         const checkAll2 = document.getElementById('checkAll2');
         if (checkAll2) {
             checkAll2.addEventListener('change', function() {

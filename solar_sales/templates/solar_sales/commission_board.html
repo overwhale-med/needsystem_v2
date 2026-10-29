@@ -3,204 +3,215 @@
 
 {% block content %}
 <div class="container-fluid py-4 px-4">
-    <!-- Header -->
     <div class="d-flex justify-content-between align-items-end mb-4">
         <div>
             <h4 class="fw-bold mb-1 text-dark"><i class="fas fa-hand-holding-usd text-success me-2"></i>ศูนย์ตั้งเบิกผลตอบแทน (Incentive)</h4>
-            <p class="text-muted small mb-0">ระบบจัดการสิทธิ์และรวบรวมยอดขอเบิกค่าคอมมิชชัน แผนกโซล่าเซลล์</p>
+            <p class="text-muted small mb-0">ระบบจัดการสิทธิ์และรวบรวมยอดขอเบิกค่าคอมมิชชัน แผนกโซล่าเซลล์ (หัก VAT 7% แล้ว)</p>
         </div>
     </div>
 
     <div class="row g-4">
-        <!-- 🌟 ฝั่งซ้าย: ตารางคูปองที่รอเบิก (2% และ 13.5%) -->
+        <!-- 🌟 ฝั่งซ้าย: ตารางคูปองที่รอเบิก (4 กระเป๋า) -->
         <div class="col-lg-7">
             <div class="card border-0 shadow-sm rounded-4 mb-4">
                 <div class="card-header bg-white py-3 border-bottom d-flex align-items-center">
                     <h6 class="fw-bold mb-0 text-dark"><i class="fas fa-ticket-alt text-warning me-2"></i>ใบคุมสิทธิ์ที่พร้อมเบิก (Available Tickets)</h6>
                 </div>
                 <div class="card-body p-0">
-                    <!-- แท็บเลือกประเภท 2% หรือ 13.5% -->
+
+                    <!-- แท็บเลือกกระเป๋า 4 ใบ -->
                     <ul class="nav nav-tabs nav-fill bg-light m-0 border-0" id="commissionTabs" role="tablist">
+                        {% if is_admin_head or is_executive %}
                         <li class="nav-item" role="presentation">
-                            <button class="nav-link active fw-bold text-dark rounded-0 border-0 py-3" id="tab-2percent" data-bs-toggle="tab" data-bs-target="#content-2percent" type="button" role="tab">
-                                <i class="fas fa-bolt text-warning me-1"></i> โควตา 2% (จากมัดจำ) <span class="badge bg-danger ms-2">{{ tickets_2|length }}</span>
+                            <button class="nav-link {% if not is_executive or is_admin_head %}active{% endif %} fw-bold text-dark rounded-0 border-0 py-3" id="tab-15" data-bs-toggle="tab" data-bs-target="#content-15" type="button" role="tab">
+                                <i class="fas fa-desktop text-primary me-1"></i> Admin (1.5%) <span class="badge bg-danger ms-1">{{ tickets_15|length }}</span>
                             </button>
                         </li>
+                        {% endif %}
+
+                        {% if is_sales or is_executive %}
                         <li class="nav-item" role="presentation">
-                            <button class="nav-link fw-bold text-dark rounded-0 border-0 py-3" id="tab-13percent" data-bs-toggle="tab" data-bs-target="#content-13percent" type="button" role="tab">
-                                <i class="fas fa-check-double text-success me-1"></i> โควตา 13.5% (จากปิดบิล) <span class="badge bg-danger ms-2">{{ tickets_13|length }}</span>
+                            <button class="nav-link {% if is_sales and not is_admin_head and not is_executive %}active{% endif %} fw-bold text-dark rounded-0 border-0 py-3" id="tab-4" data-bs-toggle="tab" data-bs-target="#content-4" type="button" role="tab">
+                                <i class="fas fa-user-tie text-success me-1"></i> Sales (4%) <span class="badge bg-danger ms-1">{{ tickets_4|length }}</span>
                             </button>
                         </li>
+                        {% endif %}
+
+                        {% if is_tech_head or is_executive %}
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link {% if is_tech_head and not is_admin_head and not is_sales and not is_executive %}active{% endif %} fw-bold text-dark rounded-0 border-0 py-3" id="tab-75" data-bs-toggle="tab" data-bs-target="#content-75" type="button" role="tab">
+                                <i class="fas fa-tools text-warning me-1"></i> Tech (7.5%) <span class="badge bg-danger ms-1">{{ tickets_75|length }}</span>
+                            </button>
+                        </li>
+                        {% endif %}
+
+                        {% if is_executive %}
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link {% if is_executive and not is_admin_head and not is_sales and not is_tech_head %}active{% endif %} fw-bold text-dark rounded-0 border-0 py-3" id="tab-25" data-bs-toggle="tab" data-bs-target="#content-25" type="button" role="tab">
+                                <i class="fas fa-briefcase text-info me-1"></i> บริหาร (2.5%) <span class="badge bg-danger ms-1">{{ tickets_25|length }}</span>
+                            </button>
+                        </li>
+                        {% endif %}
                     </ul>
 
                     <div class="tab-content" id="commissionTabsContent">
-                        <!-- 🎟️ ตาราง 2% -->
-                        <div class="tab-pane fade show active" id="content-2percent" role="tabpanel">
-                            <form action="{% url 'solar_commission_create_claim' '2%' %}" method="post">
+
+                        <!-- 🎟️ กระเป๋า Admin (1.5%) -->
+                        {% if is_admin_head or is_executive %}
+                        <div class="tab-pane fade {% if not is_executive or is_admin_head %}show active{% endif %}" id="content-15" role="tabpanel">
+                            <form action="{% url 'solar_commission_create_claim' '1.5%' %}" method="post">
                                 {% csrf_token %}
                                 <div class="table-responsive" style="max-height: 400px;">
                                     <table class="table table-hover align-middle mb-0">
                                         <thead class="bg-white sticky-top shadow-sm small text-secondary">
                                             <tr>
-                                                {% if is_manager_view or request.user.is_superuser %}
-                                                <th class="text-center" width="50"><input type="checkbox" id="checkAll2" class="form-check-input shadow-sm"></th>
-                                                {% endif %}
+                                                {% if is_admin_head %}<th class="text-center" width="50"><input type="checkbox" id="checkAll15" class="form-check-input shadow-sm"></th>{% endif %}
                                                 <th>เลขที่สิทธิ์</th>
                                                 <th>อ้างอิงเอกสาร</th>
-                                                {% if is_manager_view or request.user.is_superuser %}
-                                                <th>พนักงานขาย</th>
-                                                {% endif %}
                                                 <th class="text-end">ยอดเบิกได้ (บาท)</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {% for t in tickets_2 %}
+                                            {% for t in tickets_15 %}
                                             <tr>
-                                                {% if is_manager_view or request.user.is_superuser %}
-                                                <td class="text-center"><input type="checkbox" name="ticket_ids" value="{{ t.id }}" class="form-check-input chk-2"></td>
-                                                {% endif %}
-                                                <td><span class="badge bg-light text-dark border"><i class="fas fa-ticket-alt text-warning me-1"></i>{{ t.code }}</span></td>
-                                                <td class="small fw-bold text-secondary">{{ t.quotation_ref.code|default:"-" }}</td>
-                                                {% if is_manager_view or request.user.is_superuser %}
-                                                <td class="small text-dark"><i class="far fa-user me-1"></i>{{ t.quotation_ref.employee.first_name|default:"ไม่ระบุ" }}</td>
-                                                {% endif %}
+                                                {% if is_admin_head %}<td class="text-center"><input type="checkbox" name="ticket_ids" value="{{ t.id }}" class="form-check-input chk-15"></td>{% endif %}
+                                                <td><span class="badge bg-light text-dark border"><i class="fas fa-ticket-alt text-primary me-1"></i>{{ t.code }}</span></td>
+                                                <td class="small fw-bold text-secondary">{{ t.invoice_ref.code|default:"-" }}</td>
                                                 <td class="text-end fw-bold text-success">฿{{ t.commission_amount|floatformat:2|intcomma }}</td>
                                             </tr>
                                             {% empty %}
-                                            <tr><td colspan="{% if is_manager_view or request.user.is_superuser %}5{% else %}3{% endif %}" class="text-center py-4 text-muted">ไม่มีสิทธิ์คงค้าง</td></tr>
+                                            <tr><td colspan="4" class="text-center py-4 text-muted">ไม่มีสิทธิ์คงค้าง</td></tr>
                                             {% endfor %}
                                         </tbody>
                                     </table>
                                 </div>
-
-                                {% if is_manager_view or request.user.is_superuser %}
-                                <!-- โซนระบุบัญชีรับเงิน 2% -->
-                                <div class="card-footer bg-white p-3">
-                                    <div class="bg-light p-3 rounded-3 border mb-3 text-start">
-                                        <h6 class="fw-bold text-dark mb-3" style="font-size: 14px;"><i class="fas fa-university text-primary me-2"></i>ระบุบัญชีรับเงิน (Payment Details)</h6>
-                                        <div class="row g-2">
-                                            <div class="col-md-4">
-                                                <select name="bank_name" class="form-select form-select-sm shadow-sm" required>
-                                                    <option value="">-- เลือกธนาคาร --</option>
-                                                    <option value="กสิกรไทย (KBANK)">กสิกรไทย (KBANK)</option>
-                                                    <option value="ไทยพาณิชย์ (SCB)">ไทยพาณิชย์ (SCB)</option>
-                                                    <option value="กรุงเทพ (BBL)">กรุงเทพ (BBL)</option>
-                                                    <option value="กรุงไทย (KTB)">กรุงไทย (KTB)</option>
-                                                    <option value="กรุงศรีอยุธยา (BAY)">กรุงศรีอยุธยา (BAY)</option>
-                                                    <option value="ทหารไทยธนชาต (TTB)">ทหารไทยธนชาต (TTB)</option>
-                                                    <option value="ออมสิน (GSB)">ออมสิน (GSB)</option>
-                                                    <option value="พร้อมเพย์ (PromptPay)">พร้อมเพย์ (PromptPay)</option>
-                                                </select>
-                                            </div>
-                                            <div class="col-md-4">
-                                                <input type="text" name="bank_account" class="form-control form-control-sm shadow-sm" placeholder="เลขที่บัญชี / เบอร์พร้อมเพย์" required>
-                                            </div>
-                                            <div class="col-md-4">
-                                                <input type="text" name="account_name" class="form-control form-control-sm shadow-sm" placeholder="ชื่อบัญชี (นาย/นาง/นางสาว...)" required>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="text-end">
-                                        <button type="submit" class="btn btn-warning fw-bold px-4 rounded-pill shadow-sm" disabled>
-                                            <i class="fas fa-file-invoice-dollar me-1"></i> สร้างใบขอเบิก 2%
-                                        </button>
-                                    </div>
-                                </div>
+                                {% if is_admin_head %}
+                                    {% include "solar_sales/_commission_bank_form.html" with form_class="15" btn_color="primary" btn_text="สร้างใบขอเบิก Admin (1.5%)" %}
                                 {% else %}
-                                <!-- แจ้งเตือนพนักงานขาย -->
-                                <div class="card-footer bg-light p-3 text-center border-top">
-                                    <span class="text-muted fw-bold"><i class="fas fa-clock me-2"></i>สถานะ: รอผู้จัดการฝ่ายขายเป็นผู้ดำเนินการตั้งเบิก</span>
-                                </div>
+                                    <div class="card-footer bg-light p-3 text-center border-top"><span class="text-muted fw-bold"><i class="fas fa-eye me-2"></i>สถานะ: โหมดผู้สังเกตการณ์ (อ่านได้อย่างเดียว)</span></div>
                                 {% endif %}
                             </form>
                         </div>
+                        {% endif %}
 
-                        <!-- 🎟️ ตาราง 13.5% -->
-                        <div class="tab-pane fade" id="content-13percent" role="tabpanel">
-                            <form action="{% url 'solar_commission_create_claim' '13.5%' %}" method="post">
+                        <!-- 🎟️ กระเป๋า Sales (4%) -->
+                        {% if is_sales or is_executive %}
+                        <div class="tab-pane fade {% if is_sales and not is_admin_head and not is_executive %}show active{% endif %}" id="content-4" role="tabpanel">
+                            <form action="{% url 'solar_commission_create_claim' '4%' %}" method="post">
                                 {% csrf_token %}
                                 <div class="table-responsive" style="max-height: 400px;">
                                     <table class="table table-hover align-middle mb-0">
                                         <thead class="bg-white sticky-top shadow-sm small text-secondary">
                                             <tr>
-                                                {% if is_manager_view or request.user.is_superuser %}
-                                                <th class="text-center" width="50"><input type="checkbox" id="checkAll13" class="form-check-input shadow-sm"></th>
-                                                {% endif %}
+                                                {% if is_sales %}<th class="text-center" width="50"><input type="checkbox" id="checkAll4" class="form-check-input shadow-sm"></th>{% endif %}
                                                 <th>เลขที่สิทธิ์</th>
                                                 <th>อ้างอิงเอกสาร</th>
-                                                {% if is_manager_view or request.user.is_superuser %}
                                                 <th>พนักงานขาย</th>
-                                                {% endif %}
                                                 <th class="text-end">ยอดเบิกได้ (บาท)</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {% for t in tickets_13 %}
+                                            {% for t in tickets_4 %}
                                             <tr>
-                                                {% if is_manager_view or request.user.is_superuser %}
-                                                <td class="text-center"><input type="checkbox" name="ticket_ids" value="{{ t.id }}" class="form-check-input chk-13"></td>
-                                                {% endif %}
+                                                {% if is_sales %}<td class="text-center"><input type="checkbox" name="ticket_ids" value="{{ t.id }}" class="form-check-input chk-4"></td>{% endif %}
                                                 <td><span class="badge bg-light text-dark border"><i class="fas fa-ticket-alt text-success me-1"></i>{{ t.code }}</span></td>
                                                 <td class="small fw-bold text-secondary">{{ t.invoice_ref.code|default:"-" }}</td>
-                                                {% if is_manager_view or request.user.is_superuser %}
                                                 <td class="small text-dark"><i class="far fa-user me-1"></i>{{ t.invoice_ref.quotation_ref.employee.first_name|default:"ไม่ระบุ" }}</td>
-                                                {% endif %}
                                                 <td class="text-end fw-bold text-success">฿{{ t.commission_amount|floatformat:2|intcomma }}</td>
                                             </tr>
                                             {% empty %}
-                                            <tr><td colspan="{% if is_manager_view or request.user.is_superuser %}5{% else %}3{% endif %}" class="text-center py-4 text-muted">ไม่มีสิทธิ์คงค้าง</td></tr>
+                                            <tr><td colspan="5" class="text-center py-4 text-muted">ไม่มีสิทธิ์คงค้าง</td></tr>
                                             {% endfor %}
                                         </tbody>
                                     </table>
                                 </div>
-
-                                {% if is_manager_view or request.user.is_superuser %}
-                                <!-- โซนระบุบัญชีรับเงิน 13.5% -->
-                                <div class="card-footer bg-white p-3">
-                                    <div class="bg-light p-3 rounded-3 border mb-3 text-start">
-                                        <h6 class="fw-bold text-dark mb-3" style="font-size: 14px;"><i class="fas fa-university text-primary me-2"></i>ระบุบัญชีรับเงิน (Payment Details)</h6>
-                                        <div class="row g-2">
-                                            <div class="col-md-4">
-                                                <select name="bank_name" class="form-select form-select-sm shadow-sm" required>
-                                                    <option value="">-- เลือกธนาคาร --</option>
-                                                    <option value="กสิกรไทย (KBANK)">กสิกรไทย (KBANK)</option>
-                                                    <option value="ไทยพาณิชย์ (SCB)">ไทยพาณิชย์ (SCB)</option>
-                                                    <option value="กรุงเทพ (BBL)">กรุงเทพ (BBL)</option>
-                                                    <option value="กรุงไทย (KTB)">กรุงไทย (KTB)</option>
-                                                    <option value="กรุงศรีอยุธยา (BAY)">กรุงศรีอยุธยา (BAY)</option>
-                                                    <option value="ทหารไทยธนชาต (TTB)">ทหารไทยธนชาต (TTB)</option>
-                                                    <option value="ออมสิน (GSB)">ออมสิน (GSB)</option>
-                                                    <option value="พร้อมเพย์ (PromptPay)">พร้อมเพย์ (PromptPay)</option>
-                                                </select>
-                                            </div>
-                                            <div class="col-md-4">
-                                                <input type="text" name="bank_account" class="form-control form-control-sm shadow-sm" placeholder="เลขที่บัญชี / เบอร์พร้อมเพย์" required>
-                                            </div>
-                                            <div class="col-md-4">
-                                                <input type="text" name="account_name" class="form-control form-control-sm shadow-sm" placeholder="ชื่อบัญชี (นาย/นาง/นางสาว...)" required>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="text-end">
-                                        <button type="submit" class="btn btn-success fw-bold px-4 rounded-pill shadow-sm" disabled>
-                                            <i class="fas fa-file-invoice-dollar me-1"></i> สร้างใบขอเบิก 13.5%
-                                        </button>
-                                    </div>
-                                </div>
+                                {% if is_sales %}
+                                    {% include "solar_sales/_commission_bank_form.html" with form_class="4" btn_color="success" btn_text="สร้างใบขอเบิก Sales (4%)" %}
                                 {% else %}
-                                <!-- แจ้งเตือนพนักงานขาย -->
-                                <div class="card-footer bg-light p-3 text-center border-top">
-                                    <span class="text-muted fw-bold"><i class="fas fa-clock me-2"></i>สถานะ: รอผู้จัดการฝ่ายขายเป็นผู้ดำเนินการตั้งเบิก</span>
-                                </div>
+                                    <div class="card-footer bg-light p-3 text-center border-top"><span class="text-muted fw-bold"><i class="fas fa-eye me-2"></i>สถานะ: โหมดผู้สังเกตการณ์ (อ่านได้อย่างเดียว)</span></div>
                                 {% endif %}
                             </form>
                         </div>
+                        {% endif %}
+
+                        <!-- 🎟️ กระเป๋า Tech (7.5%) -->
+                        {% if is_tech_head or is_executive %}
+                        <div class="tab-pane fade {% if is_tech_head and not is_admin_head and not is_sales and not is_executive %}show active{% endif %}" id="content-75" role="tabpanel">
+                            <form action="{% url 'solar_commission_create_claim' '7.5%' %}" method="post">
+                                {% csrf_token %}
+                                <div class="table-responsive" style="max-height: 400px;">
+                                    <table class="table table-hover align-middle mb-0">
+                                        <thead class="bg-white sticky-top shadow-sm small text-secondary">
+                                            <tr>
+                                                {% if is_tech_head %}<th class="text-center" width="50"><input type="checkbox" id="checkAll75" class="form-check-input shadow-sm"></th>{% endif %}
+                                                <th>เลขที่สิทธิ์</th>
+                                                <th>อ้างอิงเอกสาร</th>
+                                                <th class="text-end">ยอดเบิกได้ (บาท)</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for t in tickets_75 %}
+                                            <tr>
+                                                {% if is_tech_head %}<td class="text-center"><input type="checkbox" name="ticket_ids" value="{{ t.id }}" class="form-check-input chk-75"></td>{% endif %}
+                                                <td><span class="badge bg-light text-dark border"><i class="fas fa-ticket-alt text-warning me-1"></i>{{ t.code }}</span></td>
+                                                <td class="small fw-bold text-secondary">{{ t.invoice_ref.code|default:"-" }}</td>
+                                                <td class="text-end fw-bold text-success">฿{{ t.commission_amount|floatformat:2|intcomma }}</td>
+                                            </tr>
+                                            {% empty %}
+                                            <tr><td colspan="4" class="text-center py-4 text-muted">ไม่มีสิทธิ์คงค้าง</td></tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                {% if is_tech_head %}
+                                    {% include "solar_sales/_commission_bank_form.html" with form_class="75" btn_color="warning text-dark" btn_text="สร้างใบขอเบิกกองกลางช่าง (7.5%)" %}
+                                {% else %}
+                                    <div class="card-footer bg-light p-3 text-center border-top"><span class="text-muted fw-bold"><i class="fas fa-eye me-2"></i>สถานะ: โหมดผู้สังเกตการณ์ (อ่านได้อย่างเดียว)</span></div>
+                                {% endif %}
+                            </form>
+                        </div>
+                        {% endif %}
+
+                        <!-- 🎟️ กระเป๋า Executive (2.5%) -->
+                        {% if is_executive %}
+                        <div class="tab-pane fade {% if is_executive and not is_admin_head and not is_sales and not is_tech_head %}show active{% endif %}" id="content-25" role="tabpanel">
+                            <form action="{% url 'solar_commission_create_claim' '2.5%' %}" method="post">
+                                {% csrf_token %}
+                                <div class="table-responsive" style="max-height: 400px;">
+                                    <table class="table table-hover align-middle mb-0">
+                                        <thead class="bg-white sticky-top shadow-sm small text-secondary">
+                                            <tr>
+                                                <th class="text-center" width="50"><input type="checkbox" id="checkAll25" class="form-check-input shadow-sm"></th>
+                                                <th>เลขที่สิทธิ์</th>
+                                                <th>อ้างอิงเอกสาร</th>
+                                                <th class="text-end">ยอดเบิกได้ (บาท)</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for t in tickets_25 %}
+                                            <tr>
+                                                <td class="text-center"><input type="checkbox" name="ticket_ids" value="{{ t.id }}" class="form-check-input chk-25"></td>
+                                                <td><span class="badge bg-light text-dark border"><i class="fas fa-ticket-alt text-info me-1"></i>{{ t.code }}</span></td>
+                                                <td class="small fw-bold text-secondary">{{ t.invoice_ref.code|default:"-" }}</td>
+                                                <td class="text-end fw-bold text-success">฿{{ t.commission_amount|floatformat:2|intcomma }}</td>
+                                            </tr>
+                                            {% empty %}
+                                            <tr><td colspan="4" class="text-center py-4 text-muted">ไม่มีสิทธิ์คงค้าง</td></tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                {% include "solar_sales/_commission_bank_form.html" with form_class="25" btn_color="info text-white" btn_text="สร้างใบขอเบิกฝ่ายบริหาร (2.5%)" %}
+                            </form>
+                        </div>
+                        {% endif %}
+
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- 🌟 ฝั่งขวา: ประวัติใบตั้งเบิกที่รอโอน/โอนแล้ว -->
+        <!-- 🌟 ฝั่งขวา: ประวัติใบตั้งเบิกที่รอโอน/โอนแล้ว (โค้ดเดิม) -->
         <div class="col-lg-5">
             <div class="card border-0 shadow-sm rounded-4">
                 <div class="card-header bg-white py-3 border-bottom d-flex align-items-center">
@@ -216,70 +227,11 @@
                                         <div class="fw-bold text-dark mb-1">{{ c.code }} <span class="badge bg-light text-dark border ms-1">{{ c.claim_type }}</span></div>
                                         <div class="small text-muted"><i class="far fa-clock me-1"></i> {{ c.created_at|date:"d/m/Y H:i" }}</div>
                                         <div class="small text-muted mt-1"><i class="far fa-user me-1"></i> เบิกโดย: {{ c.requester.first_name|default:"-" }}</div>
-                                        <div class="small mt-1 text-primary d-flex align-items-start position-relative">
-                                            <div>
-                                                <i class="fas fa-university me-1"></i> {{ c.bank_name|default:"ไม่ระบุธนาคาร" }} <br>
-                                                <span class="text-muted ms-3">เลขที่: {{ c.bank_account|default:"-" }}</span><br>
-                                                <span class="text-dark fw-bold ms-3">ชื่อบัญชี: {{ c.account_name|default:"-" }}</span>
-                                            </div>
-                                            {% if c.status == 'PENDING' %}
-                                            <button type="button" class="btn btn-sm btn-link text-warning p-0 ms-2" data-bs-toggle="modal" data-bs-target="#editBankModal{{ c.id }}" title="แก้ไขข้อมูลบัญชี">
-                                                <i class="fas fa-edit"></i>
-                                            </button>
-                                            <div class="modal fade" id="editBankModal{{ c.id }}" tabindex="-1" aria-hidden="true">
-                                                <div class="modal-dialog modal-dialog-centered">
-                                                    <div class="modal-content border-0 shadow rounded-4">
-                                                        <div class="modal-header bg-warning text-dark border-0 rounded-top-4">
-                                                            <h5 class="modal-title fw-bold"><i class="fas fa-edit me-2"></i>แก้ไขบัญชีรับเงิน</h5>
-                                                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                                                        </div>
-                                                        <form method="post" action="{% url 'solar_commission_edit_bank' c.id %}">
-                                                            {% csrf_token %}
-                                                            <div class="modal-body p-4 text-start">
-                                                                <p class="text-muted small mb-3">ใบเบิกเลขที่: <strong>{{ c.code }}</strong></p>
-                                                                <div class="mb-3">
-                                                                    <label class="form-label small fw-bold">ธนาคาร</label>
-                                                                    <select name="bank_name" class="form-select shadow-sm" required>
-                                                                        <option value="{{ c.bank_name }}" selected>{{ c.bank_name }}</option>
-                                                                        <option value="กสิกรไทย (KBANK)">กสิกรไทย (KBANK)</option>
-                                                                        <option value="ไทยพาณิชย์ (SCB)">ไทยพาณิชย์ (SCB)</option>
-                                                                        <option value="กรุงเทพ (BBL)">กรุงเทพ (BBL)</option>
-                                                                        <option value="กรุงไทย (KTB)">กรุงไทย (KTB)</option>
-                                                                        <option value="กรุงศรีอยุธยา (BAY)">กรุงศรีอยุธยา (BAY)</option>
-                                                                        <option value="ทหารไทยธนชาต (TTB)">ทหารไทยธนชาต (TTB)</option>
-                                                                        <option value="ออมสิน (GSB)">ออมสิน (GSB)</option>
-                                                                        <option value="พร้อมเพย์ (PromptPay)">พร้อมเพย์ (PromptPay)</option>
-                                                                    </select>
-                                                                </div>
-                                                                <div class="mb-3">
-                                                                    <label class="form-label small fw-bold">เลขที่บัญชี</label>
-                                                                    <input type="text" name="bank_account" class="form-control shadow-sm" value="{{ c.bank_account|default:'' }}" required>
-                                                                </div>
-                                                                <div class="mb-3">
-                                                                    <label class="form-label small fw-bold">ชื่อบัญชี (นาย/นาง/นางสาว...)</label>
-                                                                    <input type="text" name="account_name" class="form-control shadow-sm" value="{{ c.account_name|default:'' }}" required>
-                                                                </div>
-                                                            </div>
-                                                            <div class="modal-footer border-0 pb-4 pe-4 bg-light rounded-bottom-4">
-                                                                <button type="button" class="btn btn-outline-secondary rounded-pill px-4 fw-bold" data-bs-dismiss="modal">ยกเลิก</button>
-                                                                <button type="submit" class="btn btn-warning text-dark rounded-pill px-4 fw-bold shadow-sm">บันทึกการแก้ไข</button>
-                                                            </div>
-                                                        </form>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            {% endif %}
-                                        </div>
                                     </td>
                                     <td class="text-end pe-4">
                                         <h5 class="fw-bold text-primary mb-1">฿{{ c.total_amount|floatformat:2|intcomma }}</h5>
                                         {% if c.status == 'PENDING' %}
                                             <span class="badge bg-warning text-dark rounded-pill px-3 shadow-sm mb-2"><i class="fas fa-hourglass-half me-1"></i> รอโอนเงิน</span>
-                                            <div class="mt-2">
-                                                <a href="{% url 'solar_commission_print' c.id %}" target="_blank" class="btn btn-sm btn-outline-primary rounded-pill px-3 py-1 fw-bold shadow-sm" style="font-size: 0.8rem;">
-                                                    <i class="fas fa-print me-1"></i> พิมพ์ใบเบิก (A4)
-                                                </a>
-                                            </div>
                                         {% else %}
                                             <span class="badge bg-success rounded-pill px-3 shadow-sm"><i class="fas fa-check-circle me-1"></i> โอนแล้ว</span>
                                             {% if c.transfer_slip %}
@@ -306,55 +258,40 @@
 
 <script>
     document.addEventListener("DOMContentLoaded", function() {
-        const checkAll2 = document.getElementById('checkAll2');
-        if (checkAll2) {
-            checkAll2.addEventListener('change', function() {
-                document.querySelectorAll('.chk-2').forEach(chk => chk.checked = this.checked);
-                validateForm2();
-            });
-        }
+        // ฟังก์ชันช่วยจัดการ Checkbox ย่อยและการปลดล็อกปุ่ม
+        function setupTabLogic(classId) {
+            const checkAll = document.getElementById('checkAll' + classId);
+            const form = document.querySelector('#content-' + classId + ' form');
 
-        const checkAll13 = document.getElementById('checkAll13');
-        if (checkAll13) {
-            checkAll13.addEventListener('change', function() {
-                document.querySelectorAll('.chk-13').forEach(chk => chk.checked = this.checked);
-                validateForm13();
-            });
-        }
+            if (form) {
+                const btnSubmit = form.querySelector('button[type="submit"]');
+                const checkboxes = form.querySelectorAll('.chk-' + classId);
+                const bankSelect = form.querySelector('select[name="bank_name"]');
+                const bankAcc = form.querySelector('input[name="bank_account"]');
+                const accName = form.querySelector('input[name="account_name"]');
 
-        const form2 = document.querySelector('#content-2percent form');
-        if (form2) {
-            const btnSubmit2 = form2.querySelector('button[type="submit"]');
-            const checkboxes2 = form2.querySelectorAll('.chk-2');
-            const bankSelect2 = form2.querySelector('select[name="bank_name"]');
-            const bankAcc2 = form2.querySelector('input[name="bank_account"]');
-            const accName2 = form2.querySelector('input[name="account_name"]');
+                if (checkAll) {
+                    checkAll.addEventListener('change', function() {
+                        checkboxes.forEach(chk => chk.checked = this.checked);
+                        validateForm();
+                    });
+                }
 
-            function validateForm2() {
-                let isChecked = Array.from(checkboxes2).some(chk => chk.checked);
-                let isFilled = bankSelect2.value !== "" && bankAcc2.value.trim() !== "" && accName2.value.trim() !== "";
-                btnSubmit2.disabled = !(isChecked && isFilled);
+                function validateForm() {
+                    let isChecked = Array.from(checkboxes).some(chk => chk.checked);
+                    let isFilled = bankSelect && bankSelect.value !== "" && bankAcc.value.trim() !== "" && accName.value.trim() !== "";
+                    btnSubmit.disabled = !(isChecked && isFilled);
+                }
+                form.addEventListener('change', validateForm);
+                form.addEventListener('input', validateForm);
             }
-            form2.addEventListener('change', validateForm2);
-            form2.addEventListener('input', validateForm2);
         }
 
-        const form13 = document.querySelector('#content-13percent form');
-        if (form13) {
-            const btnSubmit13 = form13.querySelector('button[type="submit"]');
-            const checkboxes13 = form13.querySelectorAll('.chk-13');
-            const bankSelect13 = form13.querySelector('select[name="bank_name"]');
-            const bankAcc13 = form13.querySelector('input[name="bank_account"]');
-            const accName13 = form13.querySelector('input[name="account_name"]');
-
-            function validateForm13() {
-                let isChecked = Array.from(checkboxes13).some(chk => chk.checked);
-                let isFilled = bankSelect13.value !== "" && bankAcc13.value.trim() !== "" && accName13.value.trim() !== "";
-                btnSubmit13.disabled = !(isChecked && isFilled);
-            }
-            form13.addEventListener('change', validateForm13);
-            form13.addEventListener('input', validateForm13);
-        }
+        // เซ็ตอัประบบให้ทั้ง 4 แท็บ
+        setupTabLogic('15');
+        setupTabLogic('4');
+        setupTabLogic('75');
+        setupTabLogic('25');
     });
 </script>
 {% endblock %}
