@@ -591,16 +591,10 @@ def materials_ready(request, pk):
     for item in job_materials:
         StockMovement.objects.create(doc=doc_out, product=item.raw_material, quantity=Decimal(str(item.quantity)), movement_type='OUT', created_by=request.user)
 
-    if order.is_onsite:
-        order.status = 'COMPLETED'
-        order.finish_date = timezone.now().date()
-        order.is_qc_passed = True
-        order.save()
-        messages.success(request, f"🚀 ตัดสต็อกสำเร็จ! (ประกอบหน้างาน) สถานะกระโดดไป 'รอจัดส่ง' ให้ขนส่งเรียบร้อยแล้ว!")
-    else:
-        order.status = 'IN_PROGRESS'
-        order.save()
-        messages.success(request, f"✅ ตัดสต็อกสำเร็จ! สถานะเปลี่ยนเป็น 'งานอยู่ระหว่างผลิต' แล้ว")
+    # 🌟 [FIXED] ยกเลิกทางลัด On-site งานทุกประเภทเมื่อเบิกของเสร็จ ต้องไปที่ "กระดานผลิต (IN_PROGRESS)" ทั้งหมด
+    order.status = 'IN_PROGRESS'
+    order.save()
+    messages.success(request, f"✅ ตัดสต็อกสำเร็จ! สถานะเปลี่ยนเป็น 'งานอยู่ระหว่างผลิต' เพื่อรอช่างและ QC ตรวจสอบแล้ว")
 
     return redirect('inventory_board')
 
@@ -1347,6 +1341,15 @@ def process_qc(request, pk):
             order.is_qc_passed = True
             order.save()
 
+            # 🌟 [NEW] บันทึกประวัติการตรวจ "ผ่าน" ลงในฐานข้อมูล เพื่อให้โชว์ในหน้า My QC Log
+            QCInspectionLog.objects.create(
+                production_order=order,
+                round_number=order.rework_count + 1,
+                inspector=getattr(request.user, 'employee', None),
+                status='PASSED',
+                comments="ผ่านการตรวจสอบเรียบร้อย"
+            )
+
             passed_files = request.FILES.getlist('passed_media')
             for f in passed_files:
                 QCPassedMedia.objects.create(
@@ -1797,6 +1800,52 @@ def print_logistics_claim(request, pk):
     amount_text = get_thai_baht_text(claim.total_amount)
     return render(request, 'manufacturing/print_logistics_claim.html', {'claim': claim, 'jobs': jobs, 'company': company, 'amount_text': amount_text})
 
+# ==========================================
+# 🌟 [NEW] หน้าต่างรวมประวัติการจัดส่งสินค้า (Master Logistics Log) 🌟
+# ==========================================
+@login_required
+def logistics_history_log(request):
+    # ดึงเฉพาะงานที่ถูกจัดส่งเรียบร้อยแล้ว หรือเสร็จสมบูรณ์แล้ว
+    orders = ProductionOrder.objects.select_related(
+        'product', 'branch', 'transporter', 'delivery_status', 'salesperson'
+    ).filter(
+        Q(delivery_status__name__in=['ส่งมอบสำเร็จ', 'ลูกค้าเซ็นรับแล้ว', 'จัดส่งเรียบร้อย']) |
+        Q(is_onsite=True, status='COMPLETED')
+    ).order_by('-delivery_date', '-finish_date', '-id')
+
+    search_q = request.GET.get('q', '')
+    search_transporter = request.GET.get('transporter', '')
+    start_date = request.GET.get('start_date', '')
+    end_date = request.GET.get('end_date', '')
+
+    if search_q:
+        orders = orders.filter(
+            Q(code__icontains=search_q) |
+            Q(customer_name__icontains=search_q) |
+            Q(product__name__icontains=search_q)
+        )
+    if search_transporter:
+        orders = orders.filter(transporter_id=search_transporter)
+    if start_date:
+        orders = orders.filter(delivery_date__gte=start_date)
+    if end_date:
+        orders = orders.filter(delivery_date__lte=end_date)
+
+    paginator = Paginator(orders, 30) # โชว์หน้าละ 30 รายการ
+    page_num = request.GET.get('page', 1)
+    page_obj = paginator.get_page(page_num)
+
+    transporters = Transporter.objects.all().order_by('name')
+
+    return render(request, 'manufacturing/logistics_history_log.html', {
+        'page_obj': page_obj,
+        'search_q': search_q,
+        'search_transporter': search_transporter,
+        'start_date': start_date,
+        'end_date': end_date,
+        'transporters': transporters,
+    })
+
 @login_required
 def logistics_claim_history(request):
     claims = LogisticsClaim.objects.select_related('transporter').prefetch_related('production_orders', 'production_orders__quotation_ref').all().order_by('-created_at')
@@ -2007,39 +2056,79 @@ def media_hub_list(request):
     })
 
 # ==========================================
-# 🌟 [NEW] ประวัติการทำงานส่วนบุคคล (Personal Logs) 🌟
+# 🌟 [UPDATED] ประวัติการทำงานส่วนบุคคล และ ศูนย์รวมประวัติสำหรับผู้บริหาร 🌟
 # ==========================================
 @login_required
 def my_production_log(request):
     emp = getattr(request.user, 'employee', None)
     team = emp.production_team if emp else None
 
-    # ดึงเฉพาะงานที่ทีมตัวเองทำ และสถานะเสร็จสมบูรณ์แล้ว
-    if team:
-        orders = ProductionOrder.objects.select_related('product', 'salesperson', 'production_team').filter(
+    # เช็คสิทธิ์ว่าเป็นผู้บริหารหรือแอดมินหรือไม่
+    is_manager = False
+    if request.user.is_superuser:
+        is_manager = True
+    elif emp:
+        rank = emp.business_rank.lower() if emp.business_rank else ""
+        if rank in ['manager', 'director', 'executive']:
+            is_manager = True
+
+    # 🌟 1. กรณีเป็นผู้บริหาร (Admin/Manager): ดึงประวัติที่เสร็จสิ้นของ "ทุกแผนก"
+    if is_manager:
+        orders = ProductionOrder.objects.select_related(
+            'product', 'salesperson', 'production_team', 'transporter', 'blueprint_approved_by'
+        ).filter(
+            # ดึงงานที่เสร็จสิ้นแล้วในมิติใดมิติหนึ่ง (ประกอบเสร็จ, ผ่าน QC, หรือส่งมอบแล้ว)
+            Q(status__in=['COMPLETED', 'CLOSED']) |
+            Q(is_qc_passed=True) |
+            Q(delivery_status__name__in=['ส่งมอบสำเร็จ', 'ลูกค้าเซ็นรับแล้ว', 'จัดส่งเรียบร้อย'])
+        ).order_by('-finish_date', '-id')[:100]
+
+    # 🌟 2. กรณีเป็นช่างทั่วไป: ดึงเฉพาะงานที่ "ทีมตัวเอง" ประกอบเสร็จ
+    elif team:
+        orders = ProductionOrder.objects.select_related(
+            'product', 'salesperson', 'production_team'
+        ).filter(
             production_team=team,
             status__in=['COMPLETED', 'CLOSED']
-        ).order_by('-finish_date', '-id')[:100] # โชว์ 100 รายการล่าสุด
+        ).order_by('-finish_date', '-id')[:100]
+
+    # 🌟 3. กรณีไม่มีสังกัดทีมและไม่ใช่ผู้บริหาร
     else:
         orders = ProductionOrder.objects.none()
 
     return render(request, 'manufacturing/my_production_log.html', {
         'orders': orders,
+        'is_manager': is_manager, # ส่งตัวแปรไปบอกหน้าเว็บว่าเป็นผู้บริหาร
     })
 
 @login_required
 def my_qc_log(request):
     emp = getattr(request.user, 'employee', None)
 
-    # ดึงประวัติจากตาราง QC ที่ตัวเองเป็นคนตรวจ (Inspector)
-    qc_logs = QCInspectionLog.objects.select_related(
-        'production_order', 'production_order__product'
-    ).filter(
-        inspector=emp
-    ).order_by('-inspected_at')[:100] # 🌟 [FIXED] แก้เป็น -inspected_at
+    # 🌟 1. เช็คสิทธิ์ว่าเป็นผู้บริหารหรือแอดมินหรือไม่
+    is_manager = False
+    if request.user.is_superuser:
+        is_manager = True
+    elif emp:
+        rank = emp.business_rank.lower() if emp.business_rank else ""
+        if rank in ['manager', 'director', 'executive']:
+            is_manager = True
+
+    # 🌟 2. ดึงประวัติแบบแยกสิทธิ์
+    if is_manager:
+        # แอดมิน/ผู้บริหาร: เห็นประวัติการตรวจของ "ทุกคน"
+        qc_logs = QCInspectionLog.objects.select_related(
+            'production_order', 'production_order__product', 'inspector'
+        ).all().order_by('-inspected_at')[:100]
+    else:
+        # พนักงานทั่วไป: เห็นเฉพาะประวัติที่ "ตัวเอง" เป็นคนตรวจ
+        qc_logs = QCInspectionLog.objects.select_related(
+            'production_order', 'production_order__product', 'inspector'
+        ).filter(inspector=emp).order_by('-inspected_at')[:100]
 
     return render(request, 'manufacturing/my_qc_log.html', {
         'qc_logs': qc_logs,
+        'is_manager': is_manager, # ส่งตัวแปรนี้ไปที่หน้าเว็บ
     })
 
 # ==========================================

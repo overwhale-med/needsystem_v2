@@ -3,8 +3,18 @@
 <div class="container-fluid py-4 px-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
-            <h4 class="fw-bold mb-1 text-dark"><i class="fas fa-search-plus text-success me-2"></i> ประวัติการตรวจงานของฉัน</h4>
-            <p class="text-muted small mb-0">รายการตรวจสอบคุณภาพที่คุณเคยประเมิน (ผู้ตรวจ: <strong class="text-success">{{ user.first_name }}</strong>)</p>
+            <!-- 🌟 เปลี่ยนชื่อหัวข้อตามสิทธิ์ -->
+            <h4 class="fw-bold mb-1 text-dark">
+                <i class="fas fa-search-plus text-success me-2"></i> 
+                {% if is_manager %}ประวัติการตรวจงานทั้งหมด (Master QC Log){% else %}ประวัติการตรวจสอบ QC{% endif %}
+            </h4>
+            <p class="text-muted small mb-0">
+                {% if is_manager %}
+                    รายการประวัติการตรวจสอบคุณภาพทั้งหมดในระบบ
+                {% else %}
+                    รายการตรวจสอบคุณภาพที่คุณเคยประเมิน (ผู้ตรวจ: <strong class="text-success">{{ user.first_name }}</strong>)
+                {% endif %}
+            </p>
         </div>
         <div>
             <a href="{% url 'qc_board' %}" class="btn btn-outline-secondary rounded-pill px-4 fw-bold shadow-sm bg-white">
@@ -19,6 +29,10 @@
                 <thead class="text-secondary small text-uppercase bg-light">
                     <tr>
                         <th class="ps-4 py-3 fw-bold">เลขที่ JOB</th>
+                        <!-- 🌟 เพิ่มคอลัมน์ผู้ตรวจ ถ้าเป็นมุมมองแอดมิน -->
+                        {% if is_manager %}
+                            <th class="py-3 fw-bold">ผู้ตรวจ (Inspector)</th>
+                        {% endif %}
                         <th class="py-3 fw-bold">วันที่และเวลาตรวจ</th>
                         <th class="py-3 fw-bold text-center">ผลการประเมิน</th>
                         <th class="py-3 fw-bold">คอมเมนต์ / สาเหตุ</th>
@@ -31,6 +45,14 @@
                         <td class="ps-4 py-3">
                             <span class="badge bg-primary fs-6 shadow-sm">{{ log.production_order.code }}</span>
                         </td>
+                        
+                        <!-- 🌟 แสดงชื่อคนตรวจ -->
+                        {% if is_manager %}
+                        <td>
+                            <div class="fw-bold text-dark"><i class="fas fa-user-check text-info me-1"></i> {{ log.inspector.first_name|default:"ไม่ระบุ" }}</div>
+                        </td>
+                        {% endif %}
+
                         <td>
                             <div class="text-dark fw-bold"><i class="far fa-clock text-secondary me-1"></i>{{ log.inspected_at|date:"d/m/Y H:i" }}</div>
                             <div class="text-muted small">รอบที่: {{ log.round_number }}</div>
@@ -55,9 +77,9 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="5" class="text-center py-5 opacity-50">
+                        <td colspan="{% if is_manager %}6{% else %}5{% endif %}" class="text-center py-5 opacity-50">
                             <i class="fas fa-tasks fa-3x text-muted mb-3"></i>
-                            <h6 class="text-muted">คุณยังไม่มีประวัติการตรวจงาน</h6>
+                            <h6 class="text-muted">ยังไม่มีประวัติการตรวจงาน</h6>
                         </td>
                     </tr>
                     {% endfor %}

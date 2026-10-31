@@ -7,6 +7,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.db.models import Q
 from django.utils import timezone
+from django.db import transaction
 
 from .models import SolarPurchaseOrder, SolarPurchaseOrderItem
 from .models import SolarPurchasePreparation, SolarPurchasePreparationItem
@@ -213,6 +214,22 @@ def solar_po_print(request, po_id):
         'company': company
     })
 
+# 🌟 [NEW] ฟังก์ชันสำหรับพิมพ์ "ใบขอเสนอราคา (RFQ)" แบบไม่มีราคา
+@login_required
+def solar_po_print_rfq(request, po_id):
+    if not is_purchasing_staff(request.user):
+        return redirect('solar_po_list')
+
+    po = get_object_or_404(SolarPurchaseOrder, id=po_id)
+
+    from master_data.models import CompanyInfo
+    company = CompanyInfo.objects.first()
+
+    return render(request, 'solar_purchasing/solar_po_rfq_print.html', {
+        'po': po,
+        'company': company
+    })
+
 # ==========================================
 # ☀️ ระบบใบเตรียมสั่งซื้อโซล่าเซลล์ (Solar PPO) - อัปเกรดตะกร้ารวม (แยกใบด้วย Snapshot)
 # ==========================================
@@ -403,6 +420,7 @@ def solar_ppo_cancel(request, pk):
 # 📦 ระบบรับสินค้าเข้าคลัง (Receive PO)
 # ==========================================
 @login_required
+@transaction.atomic  # 🌟 [NEW] เพิ่มบรรทัดนี้เพื่อสร้างตู้เซฟฐานข้อมูล
 def solar_po_receive(request, po_id):
     if not is_inventory_staff(request.user):
         messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์เข้าถึงระบบรับสินค้า (สำหรับแผนกคลังสินค้าเท่านั้น)")

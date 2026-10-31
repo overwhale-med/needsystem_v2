@@ -162,6 +162,7 @@ def verification_hub(request, task_type):
 
 # 🌟 ฟังก์ชันกดยืนยันอนุมัติและลงบันทึกบัญชีอัตโนมัติ (รองรับทั้งน็อคดาวน์และโซล่าเซลล์) 🌟
 @login_required
+@transaction.atomic
 def approve_transaction(request, task_type, item_id):
     if request.method == 'POST':
         if task_type == 'deposits':
@@ -199,8 +200,11 @@ def approve_transaction(request, task_type, item_id):
                     from sales.models import CommissionTicket
                     from decimal import Decimal
                     if qt.employee and qt.deposit_amount > 0:
-                        base_amount = qt.deposit_amount - (qt.deposit_amount * Decimal('0.10'))
-                        
+
+                        # 🚨 [FIXED] แก้ไขบั๊ก เปลี่ยนจาก deposit_amount เป็น grand_total ตามกฎของบริษัท
+                        grand_total = qt.grand_total if qt.grand_total else Decimal('0.00')
+                        base_amount = grand_total - (grand_total * Decimal('0.10'))
+
                         # 1. สร้างตั๋ว 0.5% (บริหาร)
                         if not CommissionTicket.objects.filter(quotation_ref=qt, ticket_type='0.5%').exists():
                             CommissionTicket.objects.create(
@@ -239,10 +243,8 @@ def approve_transaction(request, task_type, item_id):
                         from solar_sales.models import SolarCommissionTicket
                         from decimal import Decimal
 
-                        # 1. หาราคาขายก่อน VAT 7%
-                        total_price = inv.quotation_ref.subtotal - inv.quotation_ref.discount + inv.quotation_ref.survey_fee
-                        # สูตรถอด VAT ออกเป็นฐานสุทธิ: ยอดเต็ม / 1.07
-                        base_amount = total_price / Decimal('1.07')
+                        # 1. ฐานสุทธิสำหรับคิดคอมมิชชัน (ยอดรวมสุทธิหัก VAT)
+                        base_amount = inv.quotation_ref.grand_total - inv.quotation_ref.vat_amount
 
                         # 2. สร้างตั๋วใบที่ 1: แผนก Admin (1.5%)
                         SolarCommissionTicket.objects.get_or_create(
@@ -256,9 +258,13 @@ def approve_transaction(request, task_type, item_id):
                         SolarCommissionTicket.objects.get_or_create(
                             ticket_type='7.5%', invoice_ref=inv, defaults={'base_amount': base_amount, 'commission_amount': base_amount * Decimal('0.075')}
                         )
-                        # 5. สร้างตั๋วใบที่ 4: แผนกบริหาร (2.5%)
+                        # 5. สร้างตั๋วใบที่ 4: แผนกบริหาร (1%)
                         SolarCommissionTicket.objects.get_or_create(
-                            ticket_type='2.5%', invoice_ref=inv, defaults={'base_amount': base_amount, 'commission_amount': base_amount * Decimal('0.025')}
+                            ticket_type='1%', invoice_ref=inv, defaults={'base_amount': base_amount, 'commission_amount': base_amount * Decimal('0.01')}
+                        )
+                        # 6. สร้างตั๋วใบที่ 5: กองทุนพัฒนาโซล่าเซลล์ (1.5% ต้องเบิกร่วมกัน)
+                        SolarCommissionTicket.objects.get_or_create(
+                            ticket_type='1.5_FUND%', invoice_ref=inv, defaults={'base_amount': base_amount, 'commission_amount': base_amount * Decimal('0.015')}
                         )
                 else:
                     inv.status = 'UNPAID' # ถ้าจ่ายไม่ครบ ให้กลับไปเป็น UNPAID ทวงต่อ
@@ -402,7 +408,7 @@ def commission_recon_board(request):
         for job in jobs:
             qt = job.quotation_ref
             inv = Invoice.objects.filter(quotation_ref=qt).first() if qt else None
-            
+
             # 🌟 ดึงตั๋ว 3 ใบของน็อคดาวน์
             t05 = CommissionTicket.objects.filter(quotation_ref=qt, ticket_type='0.5%').first() if qt else None
             t2 = CommissionTicket.objects.filter(quotation_ref=qt, ticket_type='2%').first() if qt else None

@@ -26,7 +26,16 @@ class SolarPurchasePreparationAdmin(admin.ModelAdmin):
     list_display = ('code', 'created_by', 'status', 'created_at')
     search_fields = ('code',)
     list_filter = ('status', 'created_at')
-    
+
     # หากมีการผูก ManyToMany กับ SolarJob การใช้ filter_horizontal จะช่วยให้เลือกข้อมูลซ้าย-ขวาได้ง่ายขึ้น
     # แต่ถ้าไม่มีความสัมพันธ์นี้ สามารถลบบรรทัด filter_horizontal ออกได้ครับ
     filter_horizontal = ('solar_jobs',)
+
+# 🌟 จัดการตารางรายการสั่งซื้อย่อยโซล่า (เพื่อให้อ่านง่ายและค้นหาได้)
+@admin.register(SolarPurchaseOrderItem)
+class SolarPurchaseOrderItemAdmin(admin.ModelAdmin):
+    # แสดงคอลัมน์: เลขใบสั่งซื้อ, สินค้า, จำนวนสั่ง, จำนวนรับแล้ว
+    list_display = ('po', 'product', 'quantity', 'received_qty')
+
+    # เพิ่มช่องค้นหา (พิมพ์หาจากเลข PO หรือ ชื่อสินค้า ก็ได้)
+    search_fields = ('po__code', 'product__name')

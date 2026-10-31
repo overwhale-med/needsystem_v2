@@ -79,4 +79,5 @@ urlpatterns = [
     path('production/service-history/', views.service_history_list, name='service_history_list'),
     # 🌟 ฟังก์ชันตั้งเบิกค่าแรงซ่อม
     path('production/service-tickets/<int:ticket_id>/claim-labor/', views.submit_service_labor_claim, name='submit_service_labor_claim'),
+    path('logistics-history/', views.logistics_history_log, name='logistics_history_log')
 ]

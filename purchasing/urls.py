@@ -28,4 +28,5 @@ urlpatterns = [
     path('overseas-suppliers/', views.overseas_supplier_list, name='overseas_supplier_list'),
     path('overseas-suppliers/save/', views.overseas_supplier_save, name='overseas_supplier_save'),
     path('overseas-suppliers/delete/<int:pk>/', views.overseas_supplier_delete, name='overseas_supplier_delete'),
+    path('po/<int:po_id>/print-rfq/', views.po_print_rfq, name='po_print_rfq')
 ]

@@ -18,24 +18,31 @@
         <!-- 🌟 ฝั่งซ้าย: ตารางคูปองที่รอเบิก (2% และ 3%) -->
         <div class="col-lg-7">
             <div class="card border-0 shadow-sm rounded-4 mb-4">
-                <div class="card-header bg-white py-3 border-bottom d-flex align-items-center">
+                <!-- 🌟 1. ป้ายไฟยอดรวม และ 2. แท็บปุ่มกดที่ฝังชิปตัวเลข -->
+                <div class="card-header bg-white py-3 border-bottom d-flex align-items-center justify-content-between">
                     <h6 class="fw-bold mb-0 text-dark"><i class="fas fa-ticket-alt text-warning me-2"></i>ใบคุมสิทธิ์ที่พร้อมเบิก (Available Tickets)</h6>
+
+                    <!-- 🌟 [NEW] ป้ายไฟแสดงยอดรวม (มุมขวาบน) -->
+                    <div class="px-3 py-1 bg-success bg-opacity-10 border border-success border-opacity-25 rounded-pill shadow-sm">
+                        <span class="text-success small fw-bold me-2">ยอดเบิกได้รวม:</span>
+                        <span id="dynamicTotalDisplay" class="fw-bold fs-5 text-success">฿0.00</span>
+                    </div>
                 </div>
                 <div class="card-body p-0">
-                    <!-- แท็บเลือกประเภท 0.5%, 2% หรือ 2.5/3% -->
+                    <!-- แท็บเลือกประเภท (ฝังชิป data-total ไว้ในทุกปุ่ม) -->
                     <ul class="nav nav-tabs nav-fill bg-light m-0 border-0" id="commissionTabs" role="tablist">
                         <li class="nav-item" role="presentation">
-                            <button class="nav-link active fw-bold text-dark rounded-0 border-0 py-3" id="tab-05percent" data-bs-toggle="tab" data-bs-target="#content-05percent" type="button" role="tab">
+                            <button class="nav-link active fw-bold text-dark rounded-0 border-0 py-3" id="tab-05percent" data-bs-toggle="tab" data-bs-target="#content-05percent" type="button" role="tab" data-total="{{ sum_05|floatformat:2|intcomma }}">
                                 <i class="fas fa-bolt text-info me-1"></i> คอมฯ 0.5% (บริหาร) <span class="badge bg-danger ms-2">{{ tickets_05|length }}</span>
                             </button>
                         </li>
                         <li class="nav-item" role="presentation">
-                            <button class="nav-link fw-bold text-dark rounded-0 border-0 py-3" id="tab-2percent" data-bs-toggle="tab" data-bs-target="#content-2percent" type="button" role="tab">
+                            <button class="nav-link fw-bold text-dark rounded-0 border-0 py-3" id="tab-2percent" data-bs-toggle="tab" data-bs-target="#content-2percent" type="button" role="tab" data-total="{{ sum_2|floatformat:2|intcomma }}">
                                 <i class="fas fa-bolt text-warning me-1"></i> คอมฯ 2% (รับมัดจำ) <span class="badge bg-danger ms-2">{{ tickets_2|length }}</span>
                             </button>
                         </li>
                         <li class="nav-item" role="presentation">
-                            <button class="nav-link fw-bold text-dark rounded-0 border-0 py-3" id="tab-3percent" data-bs-toggle="tab" data-bs-target="#content-3percent" type="button" role="tab">
+                            <button class="nav-link fw-bold text-dark rounded-0 border-0 py-3" id="tab-3percent" data-bs-toggle="tab" data-bs-target="#content-3percent" type="button" role="tab" data-total="{{ sum_3|floatformat:2|intcomma }}">
                                 <i class="fas fa-check-double text-success me-1"></i> คอมฯ 2.5% (ปิดใบขาย) <span class="badge bg-danger ms-2">{{ tickets_3|length }}</span>
                             </button>
                         </li>
@@ -433,9 +440,33 @@
                 let isFilled = bankSelect3.value !== "" && bankAcc3.value.trim() !== "" && accName3.value.trim() !== "";
                 btnSubmit3.disabled = !(isChecked && isFilled);
             }
+            // ... (โค้ดเดิมด้านบน)
             form3.addEventListener('change', validateForm3);
             form3.addEventListener('input', validateForm3);
         }
-    });
+
+        // 🌟 [NEW] ระบบสลับตัวเลขยอดเงินมุมขวาบนเมื่อกดเปลี่ยนแท็บ 🌟
+        const totalDisplay = document.getElementById('dynamicTotalDisplay');
+        const tabButtons = document.querySelectorAll('#commissionTabs button[data-bs-toggle="tab"]');
+
+        function updateTotalDisplay(button) {
+            if (button && totalDisplay) {
+                const totalText = button.getAttribute('data-total') || '0.00';
+                totalDisplay.innerText = '฿' + totalText;
+            }
+        }
+
+        tabButtons.forEach(btn => {
+            btn.addEventListener('shown.bs.tab', function (e) {
+                updateTotalDisplay(e.target);
+            });
+        });
+
+        const activeTab = document.querySelector('#commissionTabs button.active');
+        if (activeTab) {
+            updateTotalDisplay(activeTab);
+        }
+
+    }); // 🌟 3. ปิดท้ายสุดของ DOMContentLoaded
 </script>
 {% endblock %}

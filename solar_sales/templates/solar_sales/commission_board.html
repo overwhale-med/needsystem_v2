@@ -5,25 +5,32 @@
 <div class="container-fluid py-4 px-4">
     <div class="d-flex justify-content-between align-items-end mb-4">
         <div>
-            <h4 class="fw-bold mb-1 text-dark"><i class="fas fa-hand-holding-usd text-success me-2"></i>ศูนย์ตั้งเบิกผลตอบแทน (Incentive)</h4>
+            <h4 class="fw-bold mb-1 text-dark"><i class="fas fa-hand-holding-usd text-success me-2"></i>ศูนย์ตั้งเบิกผลตอบแทน (โซล่าเซลล์)</h4>
             <p class="text-muted small mb-0">ระบบจัดการสิทธิ์และรวบรวมยอดขอเบิกค่าคอมมิชชัน แผนกโซล่าเซลล์ (หัก VAT 7% แล้ว)</p>
         </div>
     </div>
 
     <div class="row g-4">
-        <!-- 🌟 ฝั่งซ้าย: ตารางคูปองที่รอเบิก (4 กระเป๋า) -->
+        <!-- 🌟 ฝั่งซ้าย: ตารางคูปองที่รอเบิก -->
         <div class="col-lg-7">
             <div class="card border-0 shadow-sm rounded-4 mb-4">
-                <div class="card-header bg-white py-3 border-bottom d-flex align-items-center">
+                <!-- 🌟 1. ป้ายไฟยอดรวม และ 2. แท็บปุ่มกดที่ฝังชิปตัวเลข -->
+                <div class="card-header bg-white py-3 border-bottom d-flex align-items-center justify-content-between">
                     <h6 class="fw-bold mb-0 text-dark"><i class="fas fa-ticket-alt text-warning me-2"></i>ใบคุมสิทธิ์ที่พร้อมเบิก (Available Tickets)</h6>
+
+                    <!-- 🌟 [NEW] ป้ายไฟแสดงยอดรวม (มุมขวาบน) -->
+                    <div class="px-3 py-1 bg-success bg-opacity-10 border border-success border-opacity-25 rounded-pill shadow-sm">
+                        <span class="text-success small fw-bold me-2">ยอดเบิกได้รวม:</span>
+                        <span id="dynamicTotalDisplay" class="fw-bold fs-5 text-success">฿0.00</span>
+                    </div>
                 </div>
                 <div class="card-body p-0">
 
-                    <!-- แท็บเลือกกระเป๋า 4 ใบ -->
+                    <!-- แท็บเลือกกระเป๋า (ฝังชิป data-total ไว้ในทุกปุ่ม) -->
                     <ul class="nav nav-tabs nav-fill bg-light m-0 border-0" id="commissionTabs" role="tablist">
                         {% if is_admin_head or is_executive %}
                         <li class="nav-item" role="presentation">
-                            <button class="nav-link {% if not is_executive or is_admin_head %}active{% endif %} fw-bold text-dark rounded-0 border-0 py-3" id="tab-15" data-bs-toggle="tab" data-bs-target="#content-15" type="button" role="tab">
+                            <button class="nav-link {% if not is_executive or is_admin_head %}active{% endif %} fw-bold text-dark rounded-0 border-0 py-3" id="tab-15" data-bs-toggle="tab" data-bs-target="#content-15" type="button" role="tab" data-total="{{ sum_15|floatformat:2|intcomma }}">
                                 <i class="fas fa-desktop text-primary me-1"></i> Admin (1.5%) <span class="badge bg-danger ms-1">{{ tickets_15|length }}</span>
                             </button>
                         </li>
@@ -31,7 +38,7 @@
 
                         {% if is_sales or is_executive %}
                         <li class="nav-item" role="presentation">
-                            <button class="nav-link {% if is_sales and not is_admin_head and not is_executive %}active{% endif %} fw-bold text-dark rounded-0 border-0 py-3" id="tab-4" data-bs-toggle="tab" data-bs-target="#content-4" type="button" role="tab">
+                            <button class="nav-link {% if is_sales and not is_admin_head and not is_executive %}active{% endif %} fw-bold text-dark rounded-0 border-0 py-3" id="tab-4" data-bs-toggle="tab" data-bs-target="#content-4" type="button" role="tab" data-total="{{ sum_4|floatformat:2|intcomma }}">
                                 <i class="fas fa-user-tie text-success me-1"></i> Sales (4%) <span class="badge bg-danger ms-1">{{ tickets_4|length }}</span>
                             </button>
                         </li>
@@ -39,16 +46,21 @@
 
                         {% if is_tech_head or is_executive %}
                         <li class="nav-item" role="presentation">
-                            <button class="nav-link {% if is_tech_head and not is_admin_head and not is_sales and not is_executive %}active{% endif %} fw-bold text-dark rounded-0 border-0 py-3" id="tab-75" data-bs-toggle="tab" data-bs-target="#content-75" type="button" role="tab">
-                                <i class="fas fa-tools text-warning me-1"></i> Tech (7.5%) <span class="badge bg-danger ms-1">{{ tickets_75|length }}</span>
+                            <button class="nav-link {% if is_tech_head and not is_admin_head and not is_sales and not is_executive %}active{% endif %} fw-bold text-dark rounded-0 border-0 py-3" id="tab-75" data-bs-toggle="tab" data-bs-target="#content-75" type="button" role="tab" data-total="{{ sum_75|floatformat:2|intcomma }}">
+                                <i class="fas fa-tools text-warning me-1"></i> ทีมช่าง (7.5%) <span class="badge bg-danger ms-1">{{ tickets_75|length }}</span>
                             </button>
                         </li>
                         {% endif %}
 
                         {% if is_executive %}
                         <li class="nav-item" role="presentation">
-                            <button class="nav-link {% if is_executive and not is_admin_head and not is_sales and not is_tech_head %}active{% endif %} fw-bold text-dark rounded-0 border-0 py-3" id="tab-25" data-bs-toggle="tab" data-bs-target="#content-25" type="button" role="tab">
-                                <i class="fas fa-briefcase text-info me-1"></i> บริหาร (2.5%) <span class="badge bg-danger ms-1">{{ tickets_25|length }}</span>
+                            <button class="nav-link {% if is_executive and not is_admin_head and not is_sales and not is_tech_head %}active{% endif %} fw-bold text-dark rounded-0 border-0 py-3" id="tab-1" data-bs-toggle="tab" data-bs-target="#content-1" type="button" role="tab" data-total="{{ sum_1|floatformat:2|intcomma }}">
+                                <i class="fas fa-briefcase text-info me-1"></i> บริหาร (1%) <span class="badge bg-danger ms-1">{{ tickets_1|length }}</span>
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link fw-bold text-dark rounded-0 border-0 py-3" id="tab-15-fund" data-bs-toggle="tab" data-bs-target="#content-15-fund" type="button" role="tab" data-total="{{ sum_15_fund|floatformat:2|intcomma }}">
+                                <i class="fas fa-seedling text-primary me-1"></i> กองทุน (1.5%) <span class="badge bg-danger ms-1">{{ tickets_15_fund|length }}</span>
                             </button>
                         </li>
                         {% endif %}
@@ -172,25 +184,25 @@
                         </div>
                         {% endif %}
 
-                        <!-- 🎟️ กระเป๋า Executive (2.5%) -->
+                        <!-- 🎟️ กระเป๋า Executive (1%) ของใหม่! -->
                         {% if is_executive %}
-                        <div class="tab-pane fade {% if is_executive and not is_admin_head and not is_sales and not is_tech_head %}show active{% endif %}" id="content-25" role="tabpanel">
-                            <form action="{% url 'solar_commission_create_claim' '2.5%' %}" method="post">
+                        <div class="tab-pane fade {% if is_executive and not is_admin_head and not is_sales and not is_tech_head %}show active{% endif %}" id="content-1" role="tabpanel">
+                            <form action="{% url 'solar_commission_create_claim' '1%' %}" method="post">
                                 {% csrf_token %}
                                 <div class="table-responsive" style="max-height: 400px;">
                                     <table class="table table-hover align-middle mb-0">
                                         <thead class="bg-white sticky-top shadow-sm small text-secondary">
                                             <tr>
-                                                <th class="text-center" width="50"><input type="checkbox" id="checkAll25" class="form-check-input shadow-sm"></th>
+                                                <th class="text-center" width="50"><input type="checkbox" id="checkAll1" class="form-check-input shadow-sm"></th>
                                                 <th>เลขที่สิทธิ์</th>
                                                 <th>อ้างอิงเอกสาร</th>
                                                 <th class="text-end">ยอดเบิกได้ (บาท)</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {% for t in tickets_25 %}
+                                            {% for t in tickets_1 %}
                                             <tr>
-                                                <td class="text-center"><input type="checkbox" name="ticket_ids" value="{{ t.id }}" class="form-check-input chk-25"></td>
+                                                <td class="text-center"><input type="checkbox" name="ticket_ids" value="{{ t.id }}" class="form-check-input chk-1"></td>
                                                 <td><span class="badge bg-light text-dark border"><i class="fas fa-ticket-alt text-info me-1"></i>{{ t.code }}</span></td>
                                                 <td class="small fw-bold text-secondary">{{ t.invoice_ref.code|default:"-" }}</td>
                                                 <td class="text-end fw-bold text-success">฿{{ t.commission_amount|floatformat:2|intcomma }}</td>
@@ -201,7 +213,86 @@
                                         </tbody>
                                     </table>
                                 </div>
-                                {% include "solar_sales/_commission_bank_form.html" with form_class="25" btn_color="info text-white" btn_text="สร้างใบขอเบิกฝ่ายบริหาร (2.5%)" %}
+                                {% include "solar_sales/_commission_bank_form.html" with form_class="1" btn_color="info text-white" btn_text="สร้างใบขอเบิกส่วนบริหาร (1%)" %}
+                            </form>
+                        </div>
+
+                        <!-- 🎟️ กระเป๋า กองทุนพัฒนาองค์กร (1.5%) ของใหม่! มีเงื่อนไข Partner -->
+                        <div class="tab-pane fade" id="content-15-fund" role="tabpanel">
+                            <form action="{% url 'solar_commission_create_claim' '1.5_FUND%' %}" method="post">
+                                {% csrf_token %}
+                                <div class="table-responsive" style="max-height: 400px;">
+                                    <table class="table table-hover align-middle mb-0">
+                                        <thead class="bg-white sticky-top shadow-sm small text-secondary">
+                                            <tr>
+                                                <th class="text-center" width="50"><input type="checkbox" id="checkAll15Fund" class="form-check-input shadow-sm"></th>
+                                                <th>เลขที่สิทธิ์</th>
+                                                <th>อ้างอิงเอกสาร</th>
+                                                <th class="text-end">ยอดเบิกได้ (บาท)</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for t in tickets_15_fund %}
+                                            <tr>
+                                                <td class="text-center"><input type="checkbox" name="ticket_ids" value="{{ t.id }}" class="form-check-input chk-15-fund"></td>
+                                                <td><span class="badge bg-light text-dark border"><i class="fas fa-seedling text-primary me-1"></i>{{ t.code }}</span></td>
+                                                <td class="small fw-bold text-secondary">{{ t.invoice_ref.code|default:"-" }}</td>
+                                                <td class="text-end fw-bold text-success">฿{{ t.commission_amount|floatformat:2|intcomma }}</td>
+                                            </tr>
+                                            {% empty %}
+                                            <tr><td colspan="4" class="text-center py-4 text-muted">ไม่มีสิทธิ์คงค้าง</td></tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <!-- 🌟 ส่วนรับข้อมูลแบบพิเศษสำหรับกองทุนพัฒนา 🌟 -->
+                                <div class="card-footer bg-white p-3 border-top">
+                                    <div class="bg-primary bg-opacity-10 p-3 rounded-3 border border-primary border-opacity-25 mb-3 text-start">
+                                        <h6 class="fw-bold text-primary mb-2"><i class="fas fa-handshake me-2"></i>เงื่อนไขบังคับ: กองทุนพัฒนานี้ต้องเบิกร่วมกับตัวแทนแผนกอื่นเท่านั้น</h6>
+                                        <div class="row g-2 mb-3">
+                                            <div class="col-md-6">
+                                                <label class="small fw-bold text-dark mb-1">เลือกตัวแทนจากแผนก (Admin / Sales / Tech) <span class="text-danger">*</span></label>
+                                                <select name="co_claimer_id" class="form-select form-select-sm shadow-sm border-primary" required>
+                                                    <option value="">-- กรุณาเลือกผู้ร่วมรับทราบการเบิกเงิน --</option>
+                                                    {% for emp in partner_employees %}
+                                                        <option value="{{ emp.id }}">{{ emp.first_name }} {{ emp.last_name }} (แผนก: {{ emp.department.name|default:"ไม่ระบุ" }})</option>
+                                                    {% endfor %}
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                        <hr class="border-primary border-opacity-25 my-3">
+
+                                        <h6 class="fw-bold text-dark mb-2" style="font-size: 14px;"><i class="fas fa-university text-primary me-2"></i>ระบุบัญชีรับเงินกองทุน</h6>
+                                        <div class="row g-2">
+                                            <div class="col-md-4">
+                                                <select name="bank_name" class="form-select form-select-sm shadow-sm" required>
+                                                    <option value="">-- เลือกธนาคาร --</option>
+                                                    <option value="กสิกรไทย (KBANK)">กสิกรไทย (KBANK)</option>
+                                                    <option value="ไทยพาณิชย์ (SCB)">ไทยพาณิชย์ (SCB)</option>
+                                                    <option value="กรุงเทพ (BBL)">กรุงเทพ (BBL)</option>
+                                                    <option value="กรุงไทย (KTB)">กรุงไทย (KTB)</option>
+                                                    <option value="กรุงศรีอยุธยา (BAY)">กรุงศรีอยุธยา (BAY)</option>
+                                                    <option value="ทหารไทยธนชาต (TTB)">ทหารไทยธนชาต (TTB)</option>
+                                                    <option value="ออมสิน (GSB)">ออมสิน (GSB)</option>
+                                                    <option value="พร้อมเพย์ (PromptPay)">พร้อมเพย์ (PromptPay)</option>
+                                                </select>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <input type="text" name="bank_account" class="form-control form-control-sm shadow-sm" placeholder="เลขที่บัญชี / เบอร์พร้อมเพย์" required>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <input type="text" name="account_name" class="form-control form-control-sm shadow-sm" placeholder="ชื่อบัญชี (นาย/นาง/นางสาว...)" required>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="text-end">
+                                        <button type="submit" class="btn btn-primary fw-bold px-4 rounded-pill shadow-sm" disabled onclick="return confirm('ยืนยันสร้างใบเบิกกองทุน 1.5% ร่วมกับตัวแทนแผนกที่เลือก ใช่หรือไม่?');">
+                                            <i class="fas fa-file-invoice-dollar me-1"></i> สร้างใบขอเบิกกองทุน (1.5%)
+                                        </button>
+                                    </div>
+                                </div>
                             </form>
                         </div>
                         {% endif %}
@@ -211,7 +302,7 @@
             </div>
         </div>
 
-        <!-- 🌟 ฝั่งขวา: ประวัติใบตั้งเบิกที่รอโอน/โอนแล้ว (โค้ดเดิม) -->
+        <!-- 🌟 ฝั่งขวา: ประวัติใบตั้งเบิกที่รอโอน/โอนแล้ว -->
         <div class="col-lg-5">
             <div class="card border-0 shadow-sm rounded-4">
                 <div class="card-header bg-white py-3 border-bottom d-flex align-items-center">
@@ -224,9 +315,16 @@
                                 {% for c in claims %}
                                 <tr>
                                     <td class="ps-4">
-                                        <div class="fw-bold text-dark mb-1">{{ c.code }} <span class="badge bg-light text-dark border ms-1">{{ c.claim_type }}</span></div>
+                                        <div class="fw-bold text-dark mb-1">{{ c.code }} <span class="badge bg-light text-dark border ms-1">{{ c.get_claim_type_display }}</span></div>
                                         <div class="small text-muted"><i class="far fa-clock me-1"></i> {{ c.created_at|date:"d/m/Y H:i" }}</div>
                                         <div class="small text-muted mt-1"><i class="far fa-user me-1"></i> เบิกโดย: {{ c.requester.first_name|default:"-" }}</div>
+
+                                        <!-- 🌟 [NEW] แสดงชื่อ Partner กรณีเป็นกองทุนพัฒนา 🌟 -->
+                                        {% if c.claim_type == '1.5_FUND%' %}
+                                        <div class="small text-danger fw-bold mt-1 bg-danger bg-opacity-10 px-2 py-1 rounded d-inline-block">
+                                            <i class="fas fa-handshake me-1"></i> ร่วมกับ: {{ c.co_claimer.first_name|default:"-" }} ({{ c.co_claimer_department|default:"-" }})
+                                        </div>
+                                        {% endif %}
                                     </td>
                                     <td class="text-end pe-4">
                                         <h5 class="fw-bold text-primary mb-1">฿{{ c.total_amount|floatformat:2|intcomma }}</h5>
@@ -258,7 +356,7 @@
 
 <script>
     document.addEventListener("DOMContentLoaded", function() {
-        // ฟังก์ชันช่วยจัดการ Checkbox ย่อยและการปลดล็อกปุ่ม
+        // ฟังก์ชันจัดการแท็บทั่วไป (15, 4, 75, 1)
         function setupTabLogic(classId) {
             const checkAll = document.getElementById('checkAll' + classId);
             const form = document.querySelector('#content-' + classId + ' form');
@@ -287,11 +385,62 @@
             }
         }
 
-        // เซ็ตอัประบบให้ทั้ง 4 แท็บ
+        // เซ็ตอัปแท็บปกติ
         setupTabLogic('15');
         setupTabLogic('4');
         setupTabLogic('75');
-        setupTabLogic('25');
-    });
+        setupTabLogic('1');
+
+        // 🌟 [NEW] ฟังก์ชันจัดการแท็บกองทุน (บังคับกรอก Partner)
+        const formFund = document.querySelector('#content-15-fund form');
+        if (formFund) {
+            const btnSubmitFund = formFund.querySelector('button[type="submit"]');
+            const checkboxesFund = formFund.querySelectorAll('.chk-15-fund');
+            const bankSelectFund = formFund.querySelector('select[name="bank_name"]');
+            const bankAccFund = formFund.querySelector('input[name="bank_account"]');
+            const accNameFund = formFund.querySelector('input[name="account_name"]');
+            const partnerSelect = formFund.querySelector('select[name="co_claimer_id"]'); // กล่องเลือก Partner
+
+            const checkAllFund = document.getElementById('checkAll15Fund');
+            if (checkAllFund) {
+                checkAllFund.addEventListener('change', function() {
+                    checkboxesFund.forEach(chk => chk.checked = this.checked);
+                    validateFormFund();
+                });
+            }
+
+            function validateFormFund() {
+                let isChecked = Array.from(checkboxesFund).some(chk => chk.checked);
+                let isFilled = bankSelectFund.value !== "" && bankAccFund.value.trim() !== "" && accNameFund.value.trim() !== "";
+                let hasPartner = partnerSelect.value !== ""; // 🌟 เช็กว่าต้องเลือก Partner ด้วย
+                btnSubmitFund.disabled = !(isChecked && isFilled && hasPartner);
+            }
+            formFund.addEventListener('change', validateFormFund);
+            formFund.addEventListener('input', validateFormFund);
+        } // 🌟 1. นี่คือปีกกาปิดของ if (formFund) ครับ
+
+        // 🌟 2. ให้ย้ายโค้ดเซ็นเซอร์มาวางไว้ตรงนี้ (นอกปีกกานั้น) ครับ 🌟
+        const totalDisplay = document.getElementById('dynamicTotalDisplay');
+        const tabButtons = document.querySelectorAll('#commissionTabs button[data-bs-toggle="tab"]');
+
+        function updateTotalDisplay(button) {
+            if (button && totalDisplay) {
+                const totalText = button.getAttribute('data-total') || '0.00';
+                totalDisplay.innerText = '฿' + totalText;
+            }
+        }
+
+        tabButtons.forEach(btn => {
+            btn.addEventListener('shown.bs.tab', function (e) {
+                updateTotalDisplay(e.target);
+            });
+        });
+
+        const activeTab = document.querySelector('#commissionTabs button.active');
+        if (activeTab) {
+            updateTotalDisplay(activeTab);
+        }
+
+    }); // 🌟 3. แล้วค่อยปิดท้ายสุดด้วยปีกกานี้ของ DOMContentLoaded ครับ
 </script>
 {% endblock %}

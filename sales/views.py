@@ -390,6 +390,7 @@ def sales_hub(request):
     })
 
 @login_required
+@transaction.atomic
 def record_deposit(request, qt_id):
     qt = get_object_or_404(Quotation, pk=qt_id)
     if request.method == 'POST':
@@ -738,6 +739,7 @@ def sales_timeline(request):
     })
 
 @login_required
+@transaction.atomic
 def convert_quote_to_invoice(request, qt_id):
     qt = get_object_or_404(Quotation, pk=qt_id)
     new_code = get_next_document_number()
@@ -810,6 +812,7 @@ def pos_home(request):
 
 @csrf_exempt
 @login_required
+@transaction.atomic
 def pos_checkout(request):
     if request.method == 'POST':
         try:
@@ -1814,6 +1817,7 @@ def deposit_list(request):
     })
 
 @login_required
+@transaction.atomic
 def verify_deposit(request, deposit_id): # 🌟 รับ id ของตารางมัดจำมาแทน
     deposit = get_object_or_404(QuotationDeposit, pk=deposit_id)
     deposit.is_verified = True
@@ -1824,9 +1828,12 @@ def verify_deposit(request, deposit_id): # 🌟 รับ id ของตาร�
     qt.is_deposit_verified = True
     qt.save()
 
-    # 🌟 AUTOMATION: สร้างตั๋วคอมมิชชัน 0.5% และ 2% (บ้านน็อคดาวน์) จากยอดมัดจำใบนี้ 🌟
+    # 🌟 AUTOMATION: สร้างตั๋วคอมมิชชัน 0.5% และ 2% (บ้านน็อคดาวน์) 🌟
     if qt.employee and deposit.amount > 0:
-        base_amount = qt.grand_total - (qt.grand_total * Decimal('0.10'))
+
+        # 🚨 [FIXED] บังคับดึง "ยอดรวมสินค้าทั้งหมด (grand_total)" มาใช้เป็นฐานคำนวณ ห้ามใช้ยอดมัดจำเด็ดขาด!
+        grand_total = qt.grand_total if qt.grand_total else Decimal('0.00')
+        base_amount = grand_total - (grand_total * Decimal('0.10'))
 
         # 1. เช็คและสร้างตั๋ว 2%
         if not CommissionTicket.objects.filter(quotation_ref=qt, ticket_type='2%').exists():
@@ -1835,7 +1842,7 @@ def verify_deposit(request, deposit_id): # 🌟 รับ id ของตาร�
                 ticket_type='2%', quotation_ref=qt, base_amount=base_amount, commission_amount=comm_amount_2
             )
 
-        # 2. เช็คและสร้างตั๋ว 0.5% (ใหม่)
+        # 2. เช็คและสร้างตั๋ว 0.5%
         if not CommissionTicket.objects.filter(quotation_ref=qt, ticket_type='0.5%').exists():
             comm_amount_05 = base_amount * Decimal('0.005') # คูณ 0.5%
             CommissionTicket.objects.create(
@@ -2232,6 +2239,11 @@ def commission_board(request):
     # 🌟 5. แสดงผลแค่ 10 รายการล่าสุด (ตัด Paginator ออก) 🌟
     claims_list = claims_qs[:10]
 
+    # 🌟 [NEW] 6. ให้สมองกลช่วยคำนวณยอดเงินรวมของตั๋วแต่ละประเภทเตรียมไว้
+    sum_05 = sum(t.commission_amount for t in tickets_05)
+    sum_2 = sum(t.commission_amount for t in tickets_2)
+    sum_3 = sum(t.commission_amount for t in tickets_3)
+
     return render(request, 'sales/commission_board.html', {
         'tickets_05': tickets_05,
         'tickets_2': tickets_2,
@@ -2239,6 +2251,11 @@ def commission_board(request):
         'claims': claims_list,
         'search_query': search_query,
         'is_manager_view': is_manager_view,
+
+        # 🌟 [NEW] แพ็คกล่องยอดเงินรวม ส่งขึ้นรถไปให้หน้าเว็บ
+        'sum_05': sum_05,
+        'sum_2': sum_2,
+        'sum_3': sum_3,
     })
 
 # ==========================================
@@ -2763,6 +2780,7 @@ def service_ticket_list(request):
     })
 
 @login_required
+@transaction.atomic
 def service_ticket_create(request):
     if request.method == 'POST':
         job_id = request.POST.get('job_id')

@@ -20,7 +20,7 @@ from django.http import HttpResponse, JsonResponse
 from django.utils.dateparse import parse_date
 from django.core.paginator import Paginator
 from django.db.models import Q
-from hr.models import Department
+from hr.models import Department, Employee
 import datetime
 import pytz
 from django.views.decorators.csrf import csrf_exempt
@@ -30,6 +30,7 @@ import base64
 
 # 🌟 [FIXED] เพิ่มบรรทัดนี้เข้ามา เพื่อให้ระบบรู้จักคำสั่ง timezone 🌟
 from django.utils import timezone
+from django.db import transaction
 
 # ==========================================
 # 📊 Dashboards & Lists
@@ -489,6 +490,7 @@ def solar_invoice_print(request, inv_id):
 
 
 @login_required
+@transaction.atomic
 def solar_record_deposit(request, qt_id):
     qt = get_object_or_404(SolarQuotation, pk=qt_id)
     if request.method == 'POST':
@@ -547,6 +549,7 @@ def solar_record_deposit(request, qt_id):
     return redirect('solar_quotation_list')
 
 @login_required
+@transaction.atomic
 def solar_verify_deposit(request, qt_id):
     qt = get_object_or_404(SolarQuotation, pk=qt_id)
     qt.is_deposit_verified = True
@@ -782,6 +785,7 @@ def solar_invoice_record_payment(request, inv_id):
 # 🌟 ฟังก์ชันสำหรับปุ่ม "เปิดบิลขาย" (Invoice Creation & Auto-Archive) 🌟
 # ------------------------------------------
 @login_required
+@transaction.atomic
 def solar_quotation_create_invoice(request, qt_id):
     qt = get_object_or_404(SolarQuotation, pk=qt_id)
 
@@ -1134,6 +1138,7 @@ def solar_expense_list(request):
     })
 
 @login_required
+@transaction.atomic
 def solar_expense_create(request, job_id=None):
     if job_id and str(job_id) != '0':
         job = get_object_or_404(SolarSurveyJob, pk=job_id)
@@ -1249,16 +1254,19 @@ def solar_commission_board(request):
         if 'ขาย' in dept_name or 'sales' in dept_name:
             is_sales = True
 
-    # 🌟 2. ดึงข้อมูลตั๋วที่พร้อมเบิก (แยก 4 กระเป๋า) 🌟
-    tickets_15 = SolarCommissionTicket.objects.filter(ticket_type='1.5%', status='AVAILABLE').order_by('created_at')
-    tickets_75 = SolarCommissionTicket.objects.filter(ticket_type='7.5%', status='AVAILABLE').order_by('created_at')
-    tickets_25 = SolarCommissionTicket.objects.filter(ticket_type='2.5%', status='AVAILABLE').order_by('created_at')
+    # 🌟 2. ดึงข้อมูลตั๋วที่พร้อมเบิก (อัปเดตใหม่ แยก 5 กระเป๋า) 🌟
+    tickets_15_admin = SolarCommissionTicket.objects.filter(ticket_type='1.5%', status='AVAILABLE').order_by('created_at')
+    tickets_75_tech = SolarCommissionTicket.objects.filter(ticket_type='7.5%', status='AVAILABLE').order_by('created_at')
+
+    # 🌟 [NEW] กระเป๋าใหม่ 2 ใบของผู้บริหาร (1% และ กองทุน 1.5%)
+    tickets_1_exec = SolarCommissionTicket.objects.filter(ticket_type='1%', status='AVAILABLE').order_by('created_at')
+    tickets_15_fund = SolarCommissionTicket.objects.filter(ticket_type='1.5_FUND%', status='AVAILABLE').order_by('created_at')
 
     # สำหรับเซลส์ ดึงเฉพาะงานของตัวเอง (แต่ถ้าเป็นผู้บริหารให้เห็นของเซลส์ทุกคนเพื่อตรวจ)
     if is_executive or is_admin_head or is_tech_head:
-        tickets_4 = SolarCommissionTicket.objects.filter(ticket_type='4%', status='AVAILABLE').order_by('created_at')
+        tickets_4_sales = SolarCommissionTicket.objects.filter(ticket_type='4%', status='AVAILABLE').order_by('created_at')
     else:
-        tickets_4 = SolarCommissionTicket.objects.filter(ticket_type='4%', status='AVAILABLE', invoice_ref__quotation_ref__employee=current_emp).order_by('created_at')
+        tickets_4_sales = SolarCommissionTicket.objects.filter(ticket_type='4%', status='AVAILABLE', invoice_ref__quotation_ref__employee=current_emp).order_by('created_at')
 
     # 🌟 3. ดึงประวัติใบเบิก 🌟
     if is_executive:
@@ -1266,52 +1274,103 @@ def solar_commission_board(request):
     else:
         claims = SolarCommissionClaim.objects.filter(requester=current_emp).order_by('-created_at')
 
+    # 🌟 [NEW] 4. ดึงรายชื่อพนักงานจากแผนกอื่น เพื่อให้ผู้บริหารเลือกมาเป็น Partner เบิกกองทุน
+    # ดึงเฉพาะ Admin, Sales, Tech
+    partner_employees = Employee.objects.filter(
+        Q(department__name__icontains='admin') | Q(department__name__icontains='แอดมิน') |
+        Q(department__name__icontains='sales') | Q(department__name__icontains='ขาย') |
+        Q(department__name__icontains='tech') | Q(department__name__icontains='ช่าง')
+    ).exclude(id=current_emp.id if current_emp else 0).order_by('department__name', 'first_name')
+
+    # 🌟 [NEW] 5. ให้สมองกลช่วยคำนวณยอดเงินรวมของตั๋วแต่ละแผนกเตรียมไว้
+    sum_15 = sum(t.commission_amount for t in tickets_15_admin)
+    sum_4 = sum(t.commission_amount for t in tickets_4_sales)
+    sum_75 = sum(t.commission_amount for t in tickets_75_tech)
+    sum_1 = sum(t.commission_amount for t in tickets_1_exec)
+    sum_15_fund = sum(t.commission_amount for t in tickets_15_fund)
+
     return render(request, 'solar_sales/commission_board.html', {
-        'tickets_15': tickets_15,
-        'tickets_25': tickets_25,
-        'tickets_4': tickets_4,
-        'tickets_75': tickets_75,
+        'tickets_15': tickets_15_admin,
+        'tickets_4': tickets_4_sales,
+        'tickets_75': tickets_75_tech,
+        'tickets_1': tickets_1_exec,
+        'tickets_15_fund': tickets_15_fund,
+        'partner_employees': partner_employees,
         'claims': claims,
         'is_executive': is_executive,
         'is_admin_head': is_admin_head,
         'is_tech_head': is_tech_head,
         'is_sales': is_sales,
+
+        # 🌟 [NEW] แพ็คกล่องยอดเงินรวมทั้ง 5 ก้อน ส่งขึ้นรถไปให้หน้าเว็บ
+        'sum_15': sum_15,
+        'sum_4': sum_4,
+        'sum_75': sum_75,
+        'sum_1': sum_1,
+        'sum_15_fund': sum_15_fund,
     })
 
 @login_required
+@transaction.atomic
 def solar_commission_create_claim(request, claim_type):
     if request.method == 'POST':
         ticket_ids = request.POST.getlist('ticket_ids')
 
-        # 🌟 รับค่า 3 อย่างจากหน้าเว็บ
+        # รับค่า 3 อย่างจากหน้าเว็บ
         bank_name = request.POST.get('bank_name', '')
         bank_account = request.POST.get('bank_account', '')
-        account_name = request.POST.get('account_name', '') # 🌟 [NEW] รับค่าชื่อบัญชี
+        account_name = request.POST.get('account_name', '')
+
+        # 🌟 [NEW] รับค่า Partner กรณีเบิกกองทุน
+        partner_id = request.POST.get('co_claimer_id')
 
         if not ticket_ids:
             messages.error(request, "❌ กรุณาเลือกใบคุมสิทธิ์อย่างน้อย 1 ใบก่อนกดตั้งเบิกครับ")
+            return redirect('solar_commission_board')
+
+        # 🌟 [NEW] เช็กความปลอดภัย: ถ้าเป็นกองทุนพัฒนา 1.5% ต้องมี Partner เท่านั้น!
+        if claim_type == '1.5_FUND%' and not partner_id:
+            messages.error(request, "❌ ไม่อนุญาตให้เบิกกองทุน: คุณต้องเลือกตัวแทนจากแผนกอื่นมาร่วมรับทราบด้วยครับ")
             return redirect('solar_commission_board')
 
         tickets = SolarCommissionTicket.objects.filter(id__in=ticket_ids, status='AVAILABLE', ticket_type=claim_type)
         if tickets.exists():
             total_amt = sum(t.commission_amount for t in tickets)
 
-            # 🌟 บันทึกข้อมูลลง Database
+            # ค้นหาตัวตนของ Partner (ถ้ามีการเลือกมา)
+            partner_obj = None
+            partner_dept_name = None
+            if partner_id:
+                partner_obj = Employee.objects.filter(id=partner_id).first()
+                if partner_obj and partner_obj.department:
+                    partner_dept_name = partner_obj.department.name
+
+            # บันทึกข้อมูลลง Database
             claim = SolarCommissionClaim.objects.create(
                 claim_type=claim_type,
                 requester=getattr(request.user, 'employee', None),
                 total_amount=total_amt,
                 bank_name=bank_name,
                 bank_account=bank_account,
-                account_name=account_name # 🌟 [NEW] บันทึกชื่อบัญชี
+                account_name=account_name,
+
+                # 🌟 บันทึกคนร่วมเบิก (ถ้ามี)
+                co_claimer=partner_obj,
+                co_claimer_department=partner_dept_name
             )
 
             tickets.update(status='CLAIMING', claim_ref=claim)
-            messages.success(request, f"✅ สร้างใบตั้งเบิก {claim.code} (ประเภท {claim_type}) ยอด {total_amt:,.2f} บาท สำเร็จ! ส่งให้บัญชีแล้ว")
+
+            # เปลี่ยนข้อความแจ้งเตือนให้ชัดเจนขึ้น
+            if claim_type == '1.5_FUND%':
+                messages.success(request, f"🤝 สร้างใบเบิกกองทุน {claim.code} ร่วมกับ {partner_obj.first_name} สำเร็จ! ยอด {total_amt:,.2f} บาท")
+            else:
+                messages.success(request, f"✅ สร้างใบตั้งเบิก {claim.code} (ประเภท {claim_type}) ยอด {total_amt:,.2f} บาท สำเร็จ! ส่งให้บัญชีแล้ว")
 
     return redirect('solar_commission_board')
 
 @login_required
+@transaction.atomic
 def solar_commission_pay(request, claim_id):
     claim = get_object_or_404(SolarCommissionClaim, id=claim_id)
     if request.method == 'POST':

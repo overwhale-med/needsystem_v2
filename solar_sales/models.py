@@ -313,20 +313,25 @@ class SolarExpenseSlip(models.Model):
 # 💸 4. ระบบเบิกผลตอบแทนโซล่าเซลล์ (Incentive & Commission)
 # ==========================================
 class SolarCommissionClaim(models.Model):
-    # 🌟 [FIXED] เปลี่ยนประเภทการเบิกเป็น 4 ส่วนใหม่
+    # 🌟 [FIXED] เปลี่ยนประเภทการเบิก แยกบริหาร(1%) และ กองทุนพัฒนา(1.5%)
     CLAIM_TYPES = [
         ('1.5%', '1.5% (Admin)'),
-        ('2.5%', '2.5% (Executive)'),
+        ('1%', '1% (Executive)'),               # 🌟 ของใหม่: ผู้บริหารเบิกเดี่ยว
+        ('1.5_FUND%', '1.5% (กองทุนพัฒนา)'),      # 🌟 ของใหม่: กองทุนต้องเบิกร่วมกัน (ใช้คีย์ 1.5_FUND% เพื่อไม่ให้ซ้ำกับ Admin)
         ('4%', '4% (Sales)'),
         ('7.5%', '7.5% (Tech)')
     ]
     STATUS_CHOICES = [('PENDING', 'รอโอนเงิน'), ('PAID', 'โอนเงินแล้ว')]
 
     code = models.CharField(max_length=20, unique=True, verbose_name="เลขที่ใบเบิกผลตอบแทน")
-    claim_type = models.CharField(max_length=10, choices=CLAIM_TYPES, verbose_name="ประเภทการเบิก")
+    claim_type = models.CharField(max_length=15, choices=CLAIM_TYPES, verbose_name="ประเภทการเบิก")
     requester = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, verbose_name="ผู้ทำรายการเบิก")
+
+    # 🌟 [NEW] ฟิลด์ใหม่สำหรับเก็บข้อมูล "พยาน/ผู้ร่วมเบิก" เฉพาะกรณีกองทุนพัฒนา 🌟
+    co_claimer = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, blank=True, related_name='co_claimed_solar_funds', verbose_name="ผู้ร่วมเบิก (Partner)")
+    co_claimer_department = models.CharField(max_length=100, blank=True, null=True, verbose_name="แผนกของผู้ร่วมเบิก")
+
     total_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name="ยอดเงินรวม")
-    # 🌟 [NEW] เพิ่ม 2 บรรทัดนี้ เพื่อเก็บข้อมูลธนาคารของใบเบิกแต่ละใบ 🌟
     bank_name = models.CharField(max_length=100, blank=True, null=True, verbose_name="ธนาคารที่รับเงิน")
     bank_account = models.CharField(max_length=50, blank=True, null=True, verbose_name="เลขที่บัญชี")
     account_name = models.CharField(max_length=150, blank=True, null=True, verbose_name="ชื่อบัญชีธนาคาร")
@@ -340,9 +345,11 @@ class SolarCommissionClaim(models.Model):
         if not self.code:
             now = timezone.now()
             thai_year = (now.year + 543) % 100
-            # 🌟 [FIXED] แยกรหัส Prefix ตามประเภทใหม่
+
+            # 🌟 [FIXED] อัปเดต Prefix ให้รองรับตัวใหม่
             if self.claim_type == '1.5%': prefix = f"R15-SOL-{thai_year:02d}{now.strftime('%m')}"
-            elif self.claim_type == '2.5%': prefix = f"R25-SOL-{thai_year:02d}{now.strftime('%m')}"
+            elif self.claim_type == '1%': prefix = f"R1-SOL-{thai_year:02d}{now.strftime('%m')}"
+            elif self.claim_type == '1.5_FUND%': prefix = f"RF15-SOL-{thai_year:02d}{now.strftime('%m')}"
             elif self.claim_type == '4%': prefix = f"R4-SOL-{thai_year:02d}{now.strftime('%m')}"
             else: prefix = f"R75-SOL-{thai_year:02d}{now.strftime('%m')}"
 
@@ -355,17 +362,18 @@ class SolarCommissionClaim(models.Model):
         return self.code
 
 class SolarCommissionTicket(models.Model):
-    # 🌟 [FIXED] เปลี่ยนประเภทสิทธิ์เป็น 4 ส่วนใหม่
+    # 🌟 [FIXED] อัปเดตประเภทตั๋วให้ตรงกัน
     TICKET_TYPES = [
         ('1.5%', '1.5% (Admin)'),
-        ('2.5%', '2.5% (Executive)'),
+        ('1%', '1% (Executive)'),
+        ('1.5_FUND%', '1.5% (กองทุนพัฒนา)'),
         ('4%', '4% (Sales)'),
         ('7.5%', '7.5% (Tech)')
     ]
     STATUS_CHOICES = [('AVAILABLE', 'พร้อมเบิก'), ('CLAIMING', 'กำลังตั้งเบิก'), ('PAID', 'จ่ายแล้ว')]
 
     code = models.CharField(max_length=20, unique=True, verbose_name="เลขที่ใบคุมสิทธิ์")
-    ticket_type = models.CharField(max_length=10, choices=TICKET_TYPES, verbose_name="ประเภทสิทธิ์")
+    ticket_type = models.CharField(max_length=15, choices=TICKET_TYPES, verbose_name="ประเภทสิทธิ์")
 
     quotation_ref = models.ForeignKey('SolarQuotation', on_delete=models.CASCADE, null=True, blank=True, verbose_name="อ้างอิงใบเสนอราคา")
     invoice_ref = models.ForeignKey('SolarInvoice', on_delete=models.CASCADE, null=True, blank=True, verbose_name="อ้างอิงใบแจ้งหนี้")
@@ -382,9 +390,11 @@ class SolarCommissionTicket(models.Model):
         if not self.code:
             now = timezone.now()
             thai_year = (now.year + 543) % 100
-            # 🌟 [FIXED] แยกรหัส Prefix ตามประเภทใหม่
+
+            # 🌟 [FIXED] อัปเดต Prefix ให้รองรับตัวใหม่
             if self.ticket_type == '1.5%': prefix = f"C15-SOL-{thai_year:02d}{now.strftime('%m')}"
-            elif self.ticket_type == '2.5%': prefix = f"C25-SOL-{thai_year:02d}{now.strftime('%m')}"
+            elif self.ticket_type == '1%': prefix = f"C1-SOL-{thai_year:02d}{now.strftime('%m')}"
+            elif self.ticket_type == '1.5_FUND%': prefix = f"CF15-SOL-{thai_year:02d}{now.strftime('%m')}"
             elif self.ticket_type == '4%': prefix = f"C4-SOL-{thai_year:02d}{now.strftime('%m')}"
             else: prefix = f"C75-SOL-{thai_year:02d}{now.strftime('%m')}"
 
