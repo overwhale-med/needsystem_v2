@@ -30,7 +30,7 @@
                 </div>
                 <div class="card-body p-0">
                     <ul class="nav nav-tabs nav-fill bg-light m-0 border-0" id="commissionTabs" role="tablist">
-                        <!-- 🚨 ซ่อนแท็บ 0.5% ให้เห็นเฉพาะผู้จัดการ/แอดมิน -->
+                        <!-- 🌟 แท็บ 0.5% (เห็นเฉพาะผู้จัดการแผนกและแอดมิน) -->
                         {% if is_manager_view or request.user.is_superuser %}
                         <li class="nav-item" role="presentation">
                             <button class="nav-link active fw-bold text-dark rounded-0 border-0 py-3" id="tab-05percent" data-bs-toggle="tab" data-bs-target="#content-05percent" type="button" role="tab" data-total="{{ sum_05|floatformat:2|intcomma }}">
@@ -39,9 +39,11 @@
                         </li>
                         {% endif %}
 
+                        <!-- 🚨 ซ่อนแท็บ 2% และ 2.5% จากผู้จัดการแผนก (ให้เห็นเฉพาะ แอดมิน, หัวหน้าสาขา, และเซลส์) -->
+                        {% if not is_manager_view or request.user.is_superuser %}
                         <li class="nav-item" role="presentation">
-                            <!-- 🌟 ถ้าไม่ใช่ผู้จัดการ ให้แท็บ 2% เป็นแท็บแรกสุดแทน -->
-                            <button class="nav-link {% if not is_manager_view %}active{% endif %} fw-bold text-dark rounded-0 border-0 py-3" id="tab-2percent" data-bs-toggle="tab" data-bs-target="#content-2percent" type="button" role="tab" data-total="{{ sum_2|floatformat:2|intcomma }}">
+                            <!-- ถ้าไม่ใช่แอดมินหรือผู้จัดการ ให้แท็บ 2% เป็นแท็บแรก (Active) อัตโนมัติ -->
+                            <button class="nav-link {% if not is_manager_view and not request.user.is_superuser %}active{% endif %} fw-bold text-dark rounded-0 border-0 py-3" id="tab-2percent" data-bs-toggle="tab" data-bs-target="#content-2percent" type="button" role="tab" data-total="{{ sum_2|floatformat:2|intcomma }}">
                                 <i class="fas fa-bolt text-warning me-1"></i> คอมฯ 2% (รับมัดจำ) <span class="badge bg-danger ms-2">{{ tickets_2|length }}</span>
                             </button>
                         </li>
@@ -50,6 +52,7 @@
                                 <i class="fas fa-check-double text-success me-1"></i> คอมฯ 2.5% (ปิดใบขาย) <span class="badge bg-danger ms-2">{{ tickets_3|length }}</span>
                             </button>
                         </li>
+                        {% endif %}
                     </ul>
 
                     <div class="tab-content" id="commissionTabsContent">
@@ -119,6 +122,7 @@
                         </div>
                         {% endif %}
 
+                        {% if not is_manager_view or request.user.is_superuser %}
                         <!-- 🎟️ ตาราง 2% -->
                         <div class="tab-pane fade {% if not is_manager_view %}show active{% endif %}" id="content-2percent" role="tabpanel">
                             <form action="{% url 'commission_create_claim' '2%' %}" method="post">
@@ -275,6 +279,7 @@
                                 {% endif %}
                             </form>
                         </div>
+                        {% endif %}
                     </div>
                 </div>
             </div>

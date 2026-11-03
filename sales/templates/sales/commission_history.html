@@ -30,20 +30,6 @@
                     <input type="text" name="q" class="form-control form-control-sm shadow-sm" placeholder="เช่น REQ..." value="{{ search_query }}">
                 </div>
                 <div class="col-md-2">
-                    <label class="form-label small fw-bold text-muted mb-1">พนักงาน / สาขา</label>
-                    <input type="text" name="emp" class="form-control form-control-sm shadow-sm" placeholder="พิมพ์ชื่อเซลส์..." value="{{ emp_search }}">
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label small fw-bold text-muted mb-1">ประเภท</label>
-                    <select name="type" class="form-select form-select-sm shadow-sm">
-                        <option value="">-- ทั้งหมด --</option>
-                        <option value="0.5%" {% if claim_type == '0.5%' %}selected{% endif %}>โควตา 0.5%</option>
-                        <option value="2%" {% if claim_type == '2%' %}selected{% endif %}>โควตา 2%</option>
-                        <option value="2.5%" {% if claim_type == '2.5%' %}selected{% endif %}>โควตา 2.5%</option>
-                        <option value="3%" {% if claim_type == '3%' %}selected{% endif %}>โควตา 3%</option>
-                    </select>
-                </div>
-                <div class="col-md-2">
                     <label class="form-label small fw-bold text-muted mb-1">สถานะ</label>
                     <select name="status" class="form-select form-select-sm shadow-sm">
                         <option value="">-- ทั้งหมด --</option>
@@ -75,11 +61,11 @@
                             <th class="ps-4 py-3">วันที่ตั้งเบิก</th>
                             <th class="py-3">รายละเอียดใบเบิก</th>
                             <th class="py-3">ผู้ขอเบิก (สาขา)</th>
-                            <th class="py-3">บัญชีรับเงินก้อน</th>
+                            <th class="py-3">บัญชีธนาคาร</th>
                             <th class="text-end py-3">ยอดสุทธิ (บาท)</th>
-                            <th class="text-center py-3">สถานะเงินก้อน</th>
+                            <th class="text-center py-3">สถานะการเบิก</th>
                             <!-- 🌟 [NEW] เพิ่มคอลัมน์จัดการสำหรับหัวหน้า -->
-                            {% if is_supervisor_view or is_manager_view %}
+                            {% if is_supervisor_view %}
                             <th class="text-center py-3">จัดการ (จัดสรรเงิน)</th>
                             {% endif %}
                             <th class="text-center py-3">พิมพ์</th>
@@ -116,9 +102,9 @@
                                     </div>
                                 {% endif %}
                             </td>
-                            
+
                             <!-- 🌟 [NEW] ปุ่มจัดสรรเงิน 🌟 -->
-                            {% if is_supervisor_view or is_manager_view %}
+                            {% if is_supervisor_view %}
                             <td class="text-center">
                                 {% if c.allocations.exists %}
                                     <button class="btn btn-sm btn-outline-success rounded-pill shadow-sm fw-bold px-3" data-bs-toggle="modal" data-bs-target="#allocateModal-{{ c.id }}">
@@ -131,7 +117,9 @@
                                 {% endif %}
                             </td>
                             {% endif %}
-                            
+
+                            <td class="text-center">
+
                             <td class="text-center">
                                 <a href="{% url 'print_commission_claim' c.id %}" target="_blank" class="btn btn-sm btn-outline-dark rounded-circle shadow-sm" title="พิมพ์ A4"><i class="fas fa-print"></i></a>
                             </td>
@@ -163,98 +151,111 @@
         </div>
     </div>
 </div>
-
 <!-- ========================================== -->
-<!-- 🌟 [NEW] Modals สำหรับจัดสรรเงิน 3 รูปแบบ 🌟 -->
+<!-- 🌟 [NEW] Modals สำหรับจัดสรรเงิน 3 รูปแบบ (เฉพาะหัวหน้าสาขา) 🌟 -->
 <!-- ========================================== -->
-{% if is_supervisor_view or is_manager_view %}
+{% if is_supervisor_view %}
 {% for c in page_obj %}
 <div class="modal fade" id="allocateModal-{{ c.id }}" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg">
         <form method="POST" action="{% url 'commission_allocate' c.id %}" class="w-100">
             {% csrf_token %}
-            <!-- Input ลับสำหรับเก็บบอกสมองหลังบ้านว่าหัวหน้าเลือกแท็บไหน -->
             <input type="hidden" name="allocation_mode" id="mode_{{ c.id }}" value="MANUAL">
-            
+            <!-- ซ่อนยอดเต็มไว้ให้สมองกล JS ดึงไปคำนวณ -->
+            <input type="hidden" id="total_amount_{{ c.id }}" value="{{ c.total_amount }}">
+
             <div class="modal-content rounded-4 border-0 shadow-lg">
                 <div class="modal-header bg-primary border-0 py-3">
                     <h5 class="modal-title fw-bold text-white"><i class="fas fa-coins me-2"></i> จัดสรรผลตอบแทน: {{ c.code }}</h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body p-0 bg-light">
-                    
+
                     <div class="bg-white p-3 border-bottom text-center">
                         <span class="text-muted small">ยอดเบิกสุทธิของใบนี้</span>
-                        <h3 class="fw-bold text-success mb-0">฿{{ c.total_amount|floatformat:2|intcomma }}</h3>
+                        <h3 class="fw-bold text-dark mb-0">฿{{ c.total_amount|floatformat:2|intcomma }}</h3>
+
+                        <!-- 🌟 เพิ่มแถบแสดงยอดคงเหลือแบบเรียลไทม์ 🌟 -->
+                        <div class="mt-2">
+                            <span class="badge bg-light text-secondary border px-3 py-2 shadow-sm" style="font-size: 0.85rem;">
+                                ยอดคงเหลือ: <span id="balance_{{ c.id }}" class="fw-bold text-success fs-6 ms-1">฿{{ c.total_amount|floatformat:2|intcomma }}</span>
+                            </span>
+                        </div>
+
                         {% if c.allocations.exists %}
                             <span class="badge bg-warning text-dark mt-2"><i class="fas fa-exclamation-circle"></i> บิลนี้เคยจัดสรรเงินไปแล้ว หากบันทึกใหม่ ระบบจะล้างค่าเดิมทิ้ง</span>
                         {% endif %}
                     </div>
 
-                    <!-- แท็บเลือก 3 รูปแบบ -->
+                    {% with saved_method=c.allocations.first.method|default:'MANUAL' %}
                     <ul class="nav nav-tabs nav-fill allocation-tab pt-3 px-3 border-bottom-0" role="tablist">
                         <li class="nav-item" role="presentation">
-                            <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab_manual_{{ c.id }}" type="button" onclick="document.getElementById('mode_{{ c.id }}').value='MANUAL'">1. กรอกยอดเงินเอง</button>
+                            <!-- 🌟 เปลี่ยน onclick ไปเรียกใช้ฟังก์ชัน switchTabAndClear 🌟 -->
+                            <button class="nav-link {% if saved_method == 'MANUAL' %}active{% endif %}" data-bs-toggle="tab" data-bs-target="#tab_manual_{{ c.id }}" type="button" onclick="switchTabAndClear('{{ c.id }}', 'MANUAL');">1. กรอกยอดเงินเอง</button>
                         </li>
                         <li class="nav-item" role="presentation">
-                            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab_pct_claim_{{ c.id }}" type="button" onclick="document.getElementById('mode_{{ c.id }}').value='PERCENT_CLAIM'">2. หัก % จากยอดเบิก</button>
+                            <!-- 🌟 เปลี่ยน onclick ไปเรียกใช้ฟังก์ชัน switchTabAndClear 🌟 -->
+                            <button class="nav-link {% if saved_method == 'PERCENT_CLAIM' %}active{% endif %}" data-bs-toggle="tab" data-bs-target="#tab_pct_claim_{{ c.id }}" type="button" onclick="switchTabAndClear('{{ c.id }}', 'PERCENT_CLAIM');">2. หัก % จากยอดเบิก</button>
                         </li>
                         <li class="nav-item" role="presentation">
-                            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab_pct_sales_{{ c.id }}" type="button" onclick="document.getElementById('mode_{{ c.id }}').value='PERCENT_SALES'">3. หัก % รายบิล</button>
+                            <!-- 🌟 เปลี่ยน onclick ไปเรียกใช้ฟังก์ชัน switchTabAndClear 🌟 -->
+                            <button class="nav-link {% if saved_method == 'PERCENT_SALES' %}active{% endif %}" data-bs-toggle="tab" data-bs-target="#tab_pct_sales_{{ c.id }}" type="button" onclick="switchTabAndClear('{{ c.id }}', 'PERCENT_SALES');">3. หัก % รายบิล</button>
                         </li>
                     </ul>
 
                     <div class="tab-content bg-white p-4">
-                        
-                        <!-- 📌 รูปแบบที่ 1: กรอกเงินเอง -->
-                        <div class="tab-pane fade show active" id="tab_manual_{{ c.id }}">
-                            <div class="alert alert-info small"><i class="fas fa-info-circle me-1"></i> กรอกจำนวนเงินให้แต่ละคน ยอดที่เหลือระบบอนุญาตให้ปัดเข้ากองกลางสาขาได้ครับ</div>
+
+                        <!-- แท็บที่ 1: กรอกยอดเงินเอง -->
+                        <div class="tab-pane fade {% if saved_method == 'MANUAL' %}show active{% endif %}" id="tab_manual_{{ c.id }}">
+                            <div class="alert alert-info small"><i class="fas fa-info-circle me-1"></i> กรอกจำนวนเงินให้แต่ละคน ยอดที่เหลือปัดเข้ากองกลางสาขาได้ครับ</div>
                             <table class="table table-bordered allocation-table mb-0">
                                 <thead class="bg-light text-secondary small text-center">
                                     <tr><th class="text-start">ชื่อผู้รับเงิน</th><th width="200">จำนวนเงิน (บาท)</th></tr>
                                 </thead>
                                 <tbody>
                                     <tr>
-                                        <td class="fw-bold text-primary"><i class="fas fa-piggy-bank me-2"></i>เงินกองกลางสาขา (Branch Fund)</td>
-                                        <td><input type="number" step="0.01" name="amount_fund" class="form-control form-control-sm text-end" placeholder="0.00"></td>
+                                        <td class="fw-bold text-primary"><i class="fas fa-piggy-bank me-2"></i>เงินกองกลางสาขา</td>
+                                        <!-- 🌟 เปลี่ยน type="text" และเพิ่มคลาส format-currency 🌟 -->
+                                        <td><input type="text" name="amount_fund" class="form-control form-control-sm text-end calc-input format-currency" data-calc-type="manual" data-claim-id="{{ c.id }}" value="{% for a in c.allocations.all %}{% if not a.employee and not a.ticket and a.method == 'MANUAL' %}{{ a.amount|floatformat:2|intcomma }}{% endif %}{% endfor %}" placeholder="0.00" autocomplete="off"></td>
                                     </tr>
                                     {% for emp in team_members %}
                                     <tr>
                                         <td><i class="fas fa-user text-muted me-2"></i>{{ emp.first_name }} {{ emp.last_name }}</td>
-                                        <td><input type="number" step="0.01" name="amount_emp_{{ emp.id }}" class="form-control form-control-sm text-end" placeholder="0.00"></td>
+                                        <!-- 🌟 เปลี่ยน type="text" และเพิ่มคลาส format-currency 🌟 -->
+                                        <td><input type="text" name="amount_emp_{{ emp.id }}" class="form-control form-control-sm text-end calc-input format-currency" data-calc-type="manual" data-claim-id="{{ c.id }}" value="{% for a in c.allocations.all %}{% if a.employee.id == emp.id and not a.ticket and a.method == 'MANUAL' %}{{ a.amount|floatformat:2|intcomma }}{% endif %}{% endfor %}" placeholder="0.00" autocomplete="off"></td>
                                     </tr>
-                                    {% empty %}
-                                    <tr><td colspan="2" class="text-center text-muted">ไม่พบพนักงานในสาขา</td></tr>
                                     {% endfor %}
                                 </tbody>
                             </table>
                         </div>
 
-                        <!-- 📌 รูปแบบที่ 2: % จากยอดเบิกรวม -->
-                        <div class="tab-pane fade" id="tab_pct_claim_{{ c.id }}">
-                            <div class="alert alert-warning small text-dark"><i class="fas fa-exclamation-triangle me-1"></i> กรอกเปอร์เซ็นต์ที่ต้องการแบ่งให้แต่ละคน (ระบบจะนำไปคูณกับยอดเบิก {{ c.total_amount|floatformat:2|intcomma }} บาท) **ผลรวมทั้งหมดควรได้ 100% พอดีครับ**</div>
+                        <!-- แท็บที่ 2: หัก % จากยอดเบิกสุทธิ -->
+                        <div class="tab-pane fade {% if saved_method == 'PERCENT_CLAIM' %}show active{% endif %}" id="tab_pct_claim_{{ c.id }}">
+                            <div class="alert alert-warning small text-dark"><i class="fas fa-exclamation-triangle me-1"></i> ระบบจะนำไปคูณกับยอดเบิก {{ c.total_amount|floatformat:2|intcomma }} บาท (ผลรวมควรได้ 100%)</div>
                             <table class="table table-bordered allocation-table mb-0">
                                 <thead class="bg-light text-secondary small text-center">
-                                    <tr><th class="text-start">ชื่อผู้รับเงิน</th><th width="150">สัดส่วน (%)</th></tr>
+                                    <tr><th class="text-start">ชื่อผู้รับเงิน</th><th width="250">สัดส่วน (%) และยอดเงินที่ได้</th></tr>
                                 </thead>
                                 <tbody>
                                     <tr>
-                                        <td class="fw-bold text-primary"><i class="fas fa-piggy-bank me-2"></i>เงินกองกลางสาขา (Branch Fund)</td>
-                                        <td>
-                                            <div class="input-group input-group-sm">
-                                                <input type="number" step="0.01" name="pct_fund" class="form-control text-end" placeholder="0">
+                                        <td class="fw-bold text-primary"><i class="fas fa-piggy-bank me-2"></i>เงินกองกลางสาขา</td>
+                                        <td class="d-flex align-items-center justify-content-end border-0">
+                                            <div class="input-group input-group-sm" style="width: 100px;">
+                                                <input type="number" step="0.01" name="pct_fund" class="form-control text-end calc-input" data-calc-type="percent_claim" data-claim-id="{{ c.id }}" data-total="{{ c.total_amount }}" value="{% for a in c.allocations.all %}{% if not a.employee and not a.ticket and a.method == 'PERCENT_CLAIM' %}{{ a.percentage_used|stringformat:'.2f' }}{% endif %}{% endfor %}" placeholder="0">
                                                 <span class="input-group-text bg-light">%</span>
                                             </div>
+                                            <span class="calc-result text-success fw-bold ms-3" style="width: 80px; text-align: right;">฿0.00</span>
                                         </td>
                                     </tr>
                                     {% for emp in team_members %}
                                     <tr>
                                         <td><i class="fas fa-user text-muted me-2"></i>{{ emp.first_name }} {{ emp.last_name }}</td>
-                                        <td>
-                                            <div class="input-group input-group-sm">
-                                                <input type="number" step="0.01" name="pct_emp_{{ emp.id }}" class="form-control text-end" placeholder="0">
+                                        <td class="d-flex align-items-center justify-content-end border-0">
+                                            <div class="input-group input-group-sm" style="width: 100px;">
+                                                <input type="number" step="0.01" name="pct_emp_{{ emp.id }}" class="form-control text-end calc-input" data-calc-type="percent_claim" data-claim-id="{{ c.id }}" data-total="{{ c.total_amount }}" value="{% for a in c.allocations.all %}{% if a.employee.id == emp.id and not a.ticket and a.method == 'PERCENT_CLAIM' %}{{ a.percentage_used|stringformat:'.2f' }}{% endif %}{% endfor %}" placeholder="0">
                                                 <span class="input-group-text bg-light">%</span>
                                             </div>
+                                            <span class="calc-result text-success fw-bold ms-3" style="width: 80px; text-align: right;">฿0.00</span>
                                         </td>
                                     </tr>
                                     {% endfor %}
@@ -262,31 +263,45 @@
                             </table>
                         </div>
 
-                        <!-- 📌 รูปแบบที่ 3: % รายบิล (กางตั๋ว) -->
-                        <div class="tab-pane fade" id="tab_pct_sales_{{ c.id }}">
-                            <div class="alert alert-success small"><i class="fas fa-clipboard-list me-1"></i> ระบบได้กางตั๋วที่มัดรวมอยู่ในใบเบิกนี้ออกมาให้แล้วครับ กรุณากรอก % ให้แต่ละคน (ระบบจะคำนวณจากยอดฐานหัก 10% ของบิลนั้นๆ)</div>
-                            
+                        <!-- แท็บที่ 3: หัก % จากรายบิล -->
+                        <div class="tab-pane fade {% if saved_method == 'PERCENT_SALES' %}show active{% endif %}" id="tab_pct_sales_{{ c.id }}">
+                            <div class="alert alert-success small"><i class="fas fa-clipboard-list me-1"></i> ระบบคำนวณจากยอดฐานหัก 10% ของตั๋วแต่ละบิล</div>
                             <div style="max-height: 400px; overflow-y: auto; overflow-x: hidden;">
                                 {% for t in c.tickets.all %}
                                 <div class="card border border-success border-opacity-25 mb-3 shadow-sm">
                                     <div class="card-header bg-success bg-opacity-10 py-2 d-flex justify-content-between align-items-center">
-                                        <div class="fw-bold text-dark small"><i class="fas fa-ticket-alt text-success me-1"></i> {{ t.code }} <span class="text-muted fw-normal ms-2">(อ้างอิง: {{ t.quotation_ref.code|default:"ไม่มีอ้างอิง" }})</span></div>
-                                        <div class="badge bg-success">ฐานยอดขายสุทธิ: ฿{{ t.base_amount|floatformat:2|intcomma }}</div>
+                                        <div class="fw-bold text-dark small"><i class="fas fa-ticket-alt text-success me-1"></i> {{ t.code }} <span class="text-muted fw-normal ms-2">({{ t.quotation_ref.code|default:"-" }})</span></div>
+                                        <!-- 🌟 ป้ายแสดงฐานยอดขายที่ใช้คำนวณ 🌟 -->
+                                        <div class="badge bg-success shadow-sm">ฐานคำนวณ (หัก 10%): ฿{{ t.base_amount|floatformat:2|intcomma }}</div>
                                     </div>
                                     <div class="card-body p-0">
                                         <table class="table table-borderless table-sm mb-0">
                                             <tbody>
                                                 <tr class="border-bottom">
-                                                    <td class="ps-3 py-2 small fw-bold text-primary">เงินกองกลางสาขา</td>
-                                                    <td width="120" class="pe-3 py-2">
-                                                        <div class="input-group input-group-sm"><input type="number" step="0.01" name="ticket_{{ t.id }}_fund" class="form-control text-end" placeholder="0"><span class="input-group-text">%</span></div>
+                                                    <td class="ps-3 py-2 small fw-bold text-primary align-middle">เงินกองกลางสาขา</td>
+                                                    <td width="200" class="pe-3 py-2">
+                                                        <div class="d-flex align-items-center justify-content-end">
+                                                            <div class="input-group input-group-sm" style="width: 90px;">
+                                                                <!-- 🌟 เปลี่ยน data-total กลับเป็น t.base_amount เพื่อให้ตัวคูณเป็นฐานยอดขาย 116,100 🌟 -->
+                                                                <input type="number" step="0.01" name="ticket_{{ t.id }}_fund" class="form-control text-end calc-input" data-calc-type="percent_sales" data-claim-id="{{ c.id }}" data-total="{{ t.base_amount }}" value="{% for a in c.allocations.all %}{% if not a.employee and a.ticket.id == t.id and a.method == 'PERCENT_SALES' %}{{ a.percentage_used|stringformat:'.2f' }}{% endif %}{% endfor %}" placeholder="0">
+                                                                <span class="input-group-text bg-light">%</span>
+                                                            </div>
+                                                            <span class="calc-result text-success fw-bold ms-2" style="width: 70px; text-align: right; font-size: 0.8rem;">฿0.00</span>
+                                                        </div>
                                                     </td>
                                                 </tr>
                                                 {% for emp in team_members %}
                                                 <tr class="border-bottom">
-                                                    <td class="ps-3 py-2 small text-dark">{{ emp.first_name }}</td>
-                                                    <td width="120" class="pe-3 py-2">
-                                                        <div class="input-group input-group-sm"><input type="number" step="0.01" name="ticket_{{ t.id }}_emp_{{ emp.id }}" class="form-control text-end" placeholder="0"><span class="input-group-text">%</span></div>
+                                                    <td class="ps-3 py-2 small text-dark align-middle">{{ emp.first_name }}</td>
+                                                    <td width="200" class="pe-3 py-2">
+                                                        <div class="d-flex align-items-center justify-content-end">
+                                                            <div class="input-group input-group-sm" style="width: 90px;">
+                                                                <!-- 🌟 เปลี่ยน data-total กลับเป็น t.base_amount เพื่อให้ตัวคูณเป็นฐานยอดขาย 116,100 🌟 -->
+                                                                <input type="number" step="0.01" name="ticket_{{ t.id }}_emp_{{ emp.id }}" class="form-control text-end calc-input" data-calc-type="percent_sales" data-claim-id="{{ c.id }}" data-total="{{ t.base_amount }}" value="{% for a in c.allocations.all %}{% if a.employee.id == emp.id and a.ticket.id == t.id and a.method == 'PERCENT_SALES' %}{{ a.percentage_used|stringformat:'.2f' }}{% endif %}{% endfor %}" placeholder="0">
+                                                                <span class="input-group-text bg-light">%</span>
+                                                            </div>
+                                                            <span class="calc-result text-success fw-bold ms-2" style="width: 70px; text-align: right; font-size: 0.8rem;">฿0.00</span>
+                                                        </div>
                                                     </td>
                                                 </tr>
                                                 {% endfor %}
@@ -295,16 +310,16 @@
                                     </div>
                                 </div>
                                 {% empty %}
-                                <p class="text-center text-muted small my-3">ไม่พบตั๋วรายบิลในใบเบิกนี้</p>
+                                <p class="text-center text-muted small my-3">ไม่พบตั๋วรายบิล</p>
                                 {% endfor %}
                             </div>
                         </div>
-
                     </div>
+                    {% endwith %}
                 </div>
                 <div class="modal-footer border-0 bg-light py-3 rounded-bottom-4">
                     <button type="button" class="btn btn-secondary rounded-pill px-4 fw-bold" data-bs-dismiss="modal">ยกเลิก</button>
-                    <button type="submit" class="btn btn-primary rounded-pill px-5 fw-bold shadow-sm" onclick="return confirm('ยืนยันการจัดสรรเงินรูปแบบนี้ใช่หรือไม่? (สามารถกลับมาแก้ไขได้ก่อนเงินจะโอน)');"><i class="fas fa-save me-2"></i> บันทึกการจัดสรรเงิน</button>
+                    <button type="submit" class="btn btn-primary rounded-pill px-5 fw-bold shadow-sm" onclick="return confirm('ยืนยันการจัดสรรเงินรูปแบบนี้ใช่หรือไม่?');"><i class="fas fa-save me-2"></i> บันทึกการจัดสรรเงิน</button>
                 </div>
             </div>
         </form>
@@ -313,9 +328,7 @@
 {% endfor %}
 {% endif %}
 <!-- ========================================== -->
-
 {% endblock %}
-
 {% block scripts %}
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="https://cdn.jsdelivr.net/momentjs/latest/moment.min.js"></script>
@@ -351,6 +364,122 @@ $(document).ready(function() {
         }
     }, cb);
     cb(start, end);
+});
+// 🌟 ฟังก์ชันคำนวณยอดเงินแบบเรียลไทม์ 🌟
+function updateCalculations(claimId) {
+    const modal = document.getElementById('allocateModal-' + claimId);
+    if (!modal) return;
+
+    const mode = document.getElementById('mode_' + claimId).value;
+    const totalClaimAmount = parseFloat(document.getElementById('total_amount_' + claimId).value);
+    let totalAllocated = 0;
+
+    let activeInputs = [];
+    if (mode === 'MANUAL') {
+        activeInputs = modal.querySelectorAll('#tab_manual_' + claimId + ' .calc-input');
+        activeInputs.forEach(input => {
+            // 🌟 ถอดลูกน้ำออกก่อนเอาไปบวกเลข
+            totalAllocated += parseFloat(input.value.replace(/,/g, '')) || 0;
+        });
+    } else if (mode === 'PERCENT_CLAIM') {
+        activeInputs = modal.querySelectorAll('#tab_pct_claim_' + claimId + ' .calc-input');
+        activeInputs.forEach(input => {
+            const pct = parseFloat(input.value.replace(/,/g, '')) || 0;
+            const base = parseFloat(input.dataset.total) || 0;
+            const amt = (pct / 100) * base;
+            totalAllocated += amt;
+            const resultSpan = input.closest('td').querySelector('.calc-result');
+            if(resultSpan) resultSpan.innerText = '฿' + amt.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        });
+    } else if (mode === 'PERCENT_SALES') {
+        activeInputs = modal.querySelectorAll('#tab_pct_sales_' + claimId + ' .calc-input');
+        activeInputs.forEach(input => {
+            const pct = parseFloat(input.value.replace(/,/g, '')) || 0;
+            const base = parseFloat(input.dataset.total) || 0;
+            const amt = (pct / 100) * base;
+            totalAllocated += amt;
+            const resultSpan = input.closest('td').querySelector('.calc-result');
+            if(resultSpan) resultSpan.innerText = '฿' + amt.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        });
+    }
+
+    const balance = totalClaimAmount - totalAllocated;
+    const balanceEl = document.getElementById('balance_' + claimId);
+    if (balanceEl) {
+        balanceEl.innerText = '฿' + balance.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        if (balance === 0) {
+            balanceEl.className = 'fw-bold text-success fs-6 ms-1';
+        } else if (balance < 0) {
+            balanceEl.className = 'fw-bold text-danger fs-6 ms-1';
+        } else {
+            balanceEl.className = 'fw-bold text-warning fs-6 ms-1';
+        }
+    }
+}
+// 🌟 ฟังก์ชันสับสวิตช์แท็บพร้อมล้างข้อมูลช่องอื่นๆ ทิ้ง 🌟
+function switchTabAndClear(claimId, newMode) {
+    // 1. เปลี่ยนโหมดเป้าหมายที่ซ่อนอยู่
+    document.getElementById('mode_' + claimId).value = newMode;
+
+    const modal = document.getElementById('allocateModal-' + claimId);
+    if (modal) {
+        // 2. ควานหากล่องกรอกตัวเลขทั้งหมดในหน้าต่างนี้
+        const allInputs = modal.querySelectorAll('.calc-input');
+
+        allInputs.forEach(input => {
+            // เช็คว่ากล่องนี้ "ไม่ได้" อยู่ในโหมดที่เราเพิ่งกดเลือกใช่หรือไม่?
+            if (input.dataset.calcType !== newMode.toLowerCase()) {
+                // ถ้าไม่ใช่ ให้ลบตัวเลขทิ้งเป็นช่องว่าง
+                input.value = '';
+
+                // ถ้ามีช่องผลลัพธ์สีเขียวด้านหลัง ให้รีเซ็ตกลับเป็น ฿0.00 ด้วย
+                const resultSpan = input.closest('td').querySelector('.calc-result');
+                if (resultSpan) {
+                    resultSpan.innerText = '฿0.00';
+                }
+            }
+        });
+    }
+
+    // 3. สั่งให้คำนวณยอดคงเหลือด้านบนสุดใหม่อีกครั้ง (จะได้คืนเงินที่เคยหักไปกลับมา)
+    updateCalculations(claimId);
+}
+$(document).ready(function() {
+    document.querySelectorAll('.calc-input').forEach(input => {
+        input.addEventListener('input', function() { updateCalculations(this.dataset.claimId); });
+    });
+
+    $('.modal').on('shown.bs.modal', function (e) {
+        const claimId = e.target.id.replace('allocateModal-', '');
+        updateCalculations(claimId);
+    });
+
+    // 🌟 ระบบจัดรูปแบบตัวเลข (ลูกน้ำ และจุดทศนิยม) 🌟
+    document.querySelectorAll('.format-currency').forEach(input => {
+        // ตอนเอาเมาส์จิ้มช่อง (Focus) -> ซ่อนลูกน้ำให้พิมพ์ง่ายๆ
+        input.addEventListener('focus', function() {
+            if (this.value) {
+                let val = this.value.replace(/,/g, '');
+                if (val === '0.00' || val === '0') {
+                    this.value = '';
+                } else {
+                    this.value = val;
+                }
+            }
+        });
+        // ตอนเอาเมาส์คลิกออก (Blur) -> เติมลูกน้ำและ .00 กลับเข้าไปสวยๆ
+        input.addEventListener('blur', function() {
+            if (this.value.trim() !== '') {
+                let val = parseFloat(this.value.replace(/,/g, ''));
+                if (!isNaN(val)) {
+                    this.value = val.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                } else {
+                    this.value = '';
+                }
+            }
+            updateCalculations(this.dataset.claimId);
+        });
+    });
 });
 </script>
 {% endblock %}

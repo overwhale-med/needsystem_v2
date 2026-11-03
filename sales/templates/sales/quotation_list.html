@@ -107,8 +107,8 @@
                             </div>
                         </div>
 
-                        <!-- 2. สาขา -->
-                        {% if is_manager or is_supervisor %}
+                        <!-- 2. สาขา (ผู้จัดการ) / พนักงานขาย (หัวหน้าสาขา) -->
+                        {% if is_manager %}
                         <div class="col-12 col-xl">
                             <div class="input-group bg-light rounded-pill overflow-hidden border">
                                 <span class="input-group-text bg-transparent border-0 ps-3"><i class="fas fa-map-marker-alt text-muted"></i></span>
@@ -116,6 +116,18 @@
                                     <option value="" {% if not branch_filter %}selected{% endif %}>ทุกสาขา</option>
                                     {% for dept in departments %}
                                         <option value="{{ dept.id }}" {% if branch_filter == dept.id|stringformat:"s" %}selected{% endif %}>{{ dept.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        {% elif is_supervisor %}
+                        <div class="col-12 col-xl">
+                            <div class="input-group bg-light rounded-pill overflow-hidden border">
+                                <span class="input-group-text bg-transparent border-0 ps-3"><i class="fas fa-user-tie text-muted"></i></span>
+                                <select name="emp" class="form-select bg-transparent border-0 shadow-none px-2" style="font-size: 0.85rem; cursor: pointer;">
+                                    <option value="" {% if not emp_filter %}selected{% endif %}>ทุกพนักงานขาย</option>
+                                    {% for emp in team_members %}
+                                        <option value="{{ emp.id }}" {% if emp_filter == emp.id|stringformat:"s" %}selected{% endif %}>{{ emp.first_name }} {{ emp.last_name }}</option>
                                     {% endfor %}
                                 </select>
                             </div>
@@ -132,6 +144,10 @@
                                     <option value="APPROVED" {% if status_filter == 'APPROVED' %}selected{% endif %}>อนุมัติแล้ว</option>
                                     <option value="PENDING_CLOSING" {% if status_filter == 'PENDING_CLOSING' %}selected{% endif %}>รอรับมัดจำ</option>
                                     <option value="PENDING_VERIFY" {% if status_filter == 'PENDING_VERIFY' %}selected{% endif %}>รอบัญชีตรวจสอบ</option>
+
+                                    <!-- 🌟 เพิ่มตัวเลือกนี้เข้าไป -->
+                                    <option value="PIPELINE" {% if status_filter == 'PIPELINE' %}selected{% endif %}>ระหว่างผลิต</option>
+
                                     <option value="READY" {% if status_filter == 'READY' %}selected{% endif %}>พร้อมส่งงานผลิต</option>
                                     <option value="IN_PRODUCTION" {% if status_filter == 'IN_PRODUCTION' %}selected{% endif %}>กำลังดำเนินการผลิต</option>
                                     <option value="CONVERTED" {% if status_filter == 'CONVERTED' %}selected{% endif %}>เปิดบิลแล้ว</option>
@@ -197,12 +213,25 @@
                     <table class="table table-hover align-middle mb-0 border-0">
                         <thead class="text-secondary small text-uppercase" style="background-color: #f8f9fc; border-bottom: 2px solid #eef2f7;">
                             <tr>
-                                <th class="ps-4 py-3 fw-bold" style="width: 18%;">เลขที่เอกสาร/ชื่อลูกค้า</th>
-                                <th class="py-3 fw-bold" style="width: 15%;">พนักงานขาย / สาขา</th>
-                                <th class="py-3 fw-bold" style="width: 18%;">สถานะ/ขั้นตอนการผลิต</th>
-                                <th class="text-center py-3 fw-bold" style="width: 11%;">ยอดรับเงินมัดจำ</th>
-                                <th class="text-center py-3 fw-bold" style="width: 11%;">ชำระตามงวด</th>
-                                <th class="text-end py-3 fw-bold" style="width: 13%;">ยอดสุทธิ (บาท)</th>
+                                <!-- 🌟 ปรับลดจาก 18% เป็น 16% -->
+                                <th class="ps-4 py-3 fw-bold" style="width: 16%;">เลขที่เอกสาร/ชื่อลูกค้า</th>
+
+                                <!-- 🌟 ปรับลดจาก 15% เป็น 14% -->
+                                <th class="py-3 fw-bold" style="width: 14%;">พนักงานขาย / สาขา</th>
+
+                                <!-- 🌟 [ขยายช่องนี้] ปรับจาก 18% เป็น 24% เพื่อไม่ให้ป้ายตกลงมา -->
+                                <th class="py-3 fw-bold" style="width: 24%;">สถานะ/ขั้นตอนการผลิต</th>
+
+                                <!-- 🌟 ปรับลดจาก 11% เป็น 10% -->
+                                <th class="text-center py-3 fw-bold" style="width: 10%;">ยอดรับเงินมัดจำ</th>
+
+                                <!-- 🌟 ปรับลดจาก 11% เป็น 10% -->
+                                <th class="text-center py-3 fw-bold" style="width: 10%;">ชำระตามงวด</th>
+
+                                <!-- 🌟 ปรับลดจาก 13% เป็น 12% -->
+                                <th class="text-end py-3 fw-bold" style="width: 12%;">ยอดสุทธิ (บาท)</th>
+
+                                <!-- 🌟 คงเดิม 14% เพื่อให้ปุ่มยังเรียงสวยงาม -->
                                 <th class="text-center py-3 fw-bold" style="width: 14%;">จัดการ</th>
                             </tr>
                         </thead>
@@ -554,9 +583,11 @@
 
                                         {% if qt.status != 'CANCELLED' %}
 
-                                            {% if is_manager and qt.status == 'DRAFT' %}
+                                            <!-- 🌟 [UPDATED] เพิ่มสิทธิ์ is_supervisor ให้สามารถกดอนุมัติได้ -->
+                                            {% if qt.status == 'DRAFT' %}
+                                                {% if is_manager or is_supervisor %}
                                                 <a href="{% url 'quotation_approve' qt.id %}" class="btn btn-success btn-primary-action rounded-pill text-white shadow-sm" onclick="return confirm('ยืนยันการอนุมัติเอกสารนี้?');"><i class="fas fa-check-circle me-1"></i> อนุมัติ</a>
-
+                                                {% endif %}
                                             {% elif qt.status == 'APPROVED' and not qt.is_deposit_paid %}
                                                 <button class="btn btn-warning btn-primary-action rounded-pill text-dark shadow-sm" data-bs-toggle="modal" data-bs-target="#depositModal{{ qt.id }}"><i class="fas fa-hand-holding-usd me-1"></i> รับมัดจำแรก</button>
 
@@ -628,12 +659,15 @@
                                         </div>
                                     </div>
 
-                                    {% if qt.status != 'CANCELLED' and is_manager and qt.status == 'DRAFT' %}
+                                    <!-- 🌟 [UPDATED] เพิ่มสิทธิ์ is_supervisor ให้สามารถกดดูตัวอย่างก่อนอนุมัติได้ -->
+                                    {% if qt.status == 'DRAFT' %}
+                                        {% if is_manager or is_supervisor %}
                                         <div class="d-flex justify-content-center mt-2">
                                             <a href="{% url 'quotation_print' qt.id %}" target="_blank" class="btn btn-outline-info btn-sm rounded-pill w-100" style="font-size: 0.75rem; border-color: #0dcaf0; color: #0dcaf0; font-weight: 600; max-width: 150px;">
                                                 <i class="fas fa-search me-1"></i> แสดงตัวอย่าง
                                             </a>
                                         </div>
+                                        {% endif %}
                                     {% endif %}
 
                                 </td>
@@ -754,11 +788,11 @@
                     <nav>
                         <ul class="pagination pagination-sm shadow-sm mb-0">
                             {% if page_obj.has_previous %}
-                            <li class="page-item"><a class="page-link border-0 text-muted" href="?page={{ page_obj.previous_page_number }}&q={{ search_query|default:'' }}&status={{ status_filter|default:'' }}&prod_status={{ prod_status_filter|default:'' }}&deliv_status={{ deliv_status_filter|default:'' }}&start_date={{ date_start|default:'' }}&end_date={{ date_end|default:'' }}&branch={{ branch_filter|default:'' }}"><i class="fas fa-chevron-left"></i></a></li>
+                            <li class="page-item"><a class="page-link border-0 text-muted" href="?page={{ page_obj.previous_page_number }}&q={{ search_query|default:'' }}&status={{ status_filter|default:'' }}&prod_status={{ prod_status_filter|default:'' }}&deliv_status={{ deliv_status_filter|default:'' }}&start_date={{ date_start|default:'' }}&end_date={{ date_end|default:'' }}&branch={{ branch_filter|default:'' }}&emp={{ emp_filter|default:'' }}"><i class="fas fa-chevron-left"></i></a></li>
                             {% endif %}
                             <li class="page-item disabled"><span class="page-link border-0 text-dark fw-bold px-3">หน้า {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span></li>
                             {% if page_obj.has_next %}
-                            <li class="page-item"><a class="page-link border-0 text-muted" href="?page={{ page_obj.next_page_number }}&q={{ search_query|default:'' }}&status={{ status_filter|default:'' }}&prod_status={{ prod_status_filter|default:'' }}&deliv_status={{ deliv_status_filter|default:'' }}&start_date={{ date_start|default:'' }}&end_date={{ date_end|default:'' }}&branch={{ branch_filter|default:'' }}"><i class="fas fa-chevron-right"></i></a></li>
+                            <li class="page-item"><a class="page-link border-0 text-muted" href="?page={{ page_obj.next_page_number }}&q={{ search_query|default:'' }}&status={{ status_filter|default:'' }}&prod_status={{ prod_status_filter|default:'' }}&deliv_status={{ deliv_status_filter|default:'' }}&start_date={{ date_start|default:'' }}&end_date={{ date_end|default:'' }}&branch={{ branch_filter|default:'' }}&emp={{ emp_filter|default:'' }}"><i class="fas fa-chevron-right"></i></a></li>
                             {% endif %}
                         </ul>
                     </nav>
