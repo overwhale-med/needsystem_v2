@@ -6,7 +6,8 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from .models import (
     SolarJob, SolarExpense, SubcontractorTeam, SolarJobBOM,
-    SolarSurveyClaim, SolarInstallClaim, SolarAdvanceLaborClaim, SolarOtherExpense
+    SolarSurveyClaim, SolarInstallClaim, SolarAdvanceLaborClaim, SolarOtherExpense,
+    SolarServiceCategory, SolarServiceTicket, SolarServiceTicketMedia, SolarServiceLaborClaim
 )
 from .forms import SolarJobForm, SolarBOMFormSet, SolarExpenseForm
 from master_data.models import Customer
@@ -559,3 +560,171 @@ def solar_master_job_report(request):
     return render(request, 'solar_jobs/solar_master_job_report.html', {
         'page_obj': page_obj, 'search_query': search_query
     })
+
+# ==========================================
+# 🌟 [NEW] ระบบกระดานแจ้งซ่อมโซล่าเซลล์ (Solar Service Board) 🌟
+# ==========================================
+@login_required
+def solar_service_board(request):
+    if not is_center_staff(request.user):
+        messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์เข้าถึงกระดานแจ้งซ่อมโซล่าเซลล์")
+        return redirect('solar_center_dashboard')
+
+    # ดึงตั๋วแจ้งซ่อมที่ยังไม่ถูกซ่อน (ไม่ได้เป็น CLOSED หรือ CANCELLED)
+    tickets = SolarServiceTicket.objects.exclude(status__in=['CLOSED', 'CANCELLED']).order_by('-urgency', '-created_at')
+    teams = SubcontractorTeam.objects.filter(is_active=True)
+    categories = SolarServiceCategory.objects.filter(is_active=True)
+
+    return render(request, 'solar_jobs/service_board.html', {
+        'tickets': tickets,
+        'teams': teams,
+        'categories': categories
+    })
+
+@login_required
+def process_solar_service_ticket(request, ticket_id):
+    if not is_center_staff(request.user):
+        return redirect('solar_center_dashboard')
+
+    ticket = get_object_or_404(SolarServiceTicket, id=ticket_id)
+
+    if request.method == 'POST':
+        # อัปเดตสถานะและข้อมูลทั่วไป
+        ticket.status = request.POST.get('status', ticket.status)
+        team_id = request.POST.get('technician_team')
+        if team_id:
+            ticket.technician_team_id = team_id
+
+        appointment = request.POST.get('appointment_date')
+        if appointment:
+            ticket.appointment_date = appointment
+
+        # เก็บรูปภาพ/วิดีโอ (รองรับการอัปโหลดทีละหลายไฟล์)
+        for f in request.FILES.getlist('media_before'):
+            SolarServiceTicketMedia.objects.create(ticket=ticket, media_type='BEFORE', file=f)
+
+        for f in request.FILES.getlist('media_after'):
+            SolarServiceTicketMedia.objects.create(ticket=ticket, media_type='AFTER', file=f)
+
+        # ถ้าซ่อมเสร็จ ให้ประทับเวลา
+        if ticket.status == 'COMPLETED' and not ticket.completed_at:
+            ticket.completed_at = timezone.now()
+
+        ticket.save()
+        messages.success(request, f"✅ อัปเดตตั๋วแจ้งซ่อม {ticket.code} เรียบร้อยแล้ว")
+        return redirect('solar_service_board')
+
+    # กรณีเข้ามาดูรายละเอียด (เพื่อประเมิน หรือดูประวัติ)
+    return render(request, 'solar_jobs/service_ticket_process.html', {'ticket': ticket})
+
+@login_required
+def solar_service_history_list(request):
+    if not is_center_staff(request.user):
+        return redirect('solar_center_dashboard')
+
+    # ดึงเฉพาะงานที่ปิดไปแล้วมาดูย้อนหลัง
+    tickets = SolarServiceTicket.objects.filter(status__in=['CLOSED', 'COMPLETED', 'CANCELLED']).order_by('-created_at')
+
+    paginator = Paginator(tickets, 20)
+    page_obj = paginator.get_page(request.GET.get('page'))
+
+    return render(request, 'solar_jobs/service_history.html', {'page_obj': page_obj})
+
+@login_required
+def submit_solar_service_labor_claim(request, ticket_id):
+    if not is_center_staff(request.user):
+        return redirect('solar_center_dashboard')
+
+    ticket = get_object_or_404(SolarServiceTicket, id=ticket_id)
+
+    if request.method == 'POST':
+        amount = request.POST.get('amount', 0)
+        technician_name = request.POST.get('technician_name', '')
+        slip_image = request.FILES.get('slip_image')
+
+        SolarServiceLaborClaim.objects.create(
+            service_ticket=ticket,
+            requester=getattr(request.user, 'employee', None),
+            technician_name=technician_name,
+            amount=amount,
+            slip_image=slip_image
+        )
+        messages.success(request, f"✅ ตั้งเบิกค่าแรงซ่อมโซล่าสำหรับงาน {ticket.code} เรียบร้อยแล้ว")
+
+    return redirect('solar_service_board')
+
+# ==========================================
+# 🌟 [NEW] ศูนย์รวมแฟ้มภาพ (Solar Media Hub) 🌟
+# ==========================================
+
+@login_required
+def solar_media_hub_list(request):
+    if not is_center_staff(request.user):
+        messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์เข้าถึงศูนย์รวมแฟ้มภาพ")
+        return redirect('solar_center_dashboard')
+
+    # ดึงใบสั่งงานทั้งหมดมาเรียง
+    jobs = SolarJob.objects.select_related('customer', 'quotation_ref').order_by('-created_at')
+
+    # ระบบค้นหา (ค้นได้ทั้งเลข JOB, เลขใบเสนอราคา, และชื่อลูกค้า)
+    search_query = request.GET.get('q', '').strip()
+    if search_query:
+        jobs = jobs.filter(
+            Q(code__icontains=search_query) |
+            Q(quotation_ref__code__icontains=search_query) |
+            Q(customer__name__icontains=search_query)
+        )
+
+    paginator = Paginator(jobs, 20)
+    page_obj = paginator.get_page(request.GET.get('page'))
+
+    return render(request, 'solar_jobs/media_hub_list.html', {
+        'page_obj': page_obj,
+        'search_query': search_query
+    })
+
+@login_required
+def solar_media_hub_detail(request, job_id):
+    if not is_center_staff(request.user):
+        return redirect('solar_center_dashboard')
+
+    job = get_object_or_404(SolarJob, id=job_id)
+
+    # 📸 1. ดึงภาพสำรวจหน้างาน (Survey)
+    # ต้องเชื่อมสะพาน: JOB -> Quotation -> Survey Job -> รูปภาพ
+    survey_images = []
+    if job.quotation_ref and hasattr(job.quotation_ref, 'survey_ref') and job.quotation_ref.survey_ref:
+        survey_images = job.quotation_ref.survey_ref.images.all().order_by('-uploaded_at')
+
+    # 📸 2. ดึงภาพผลงานติดตั้ง (Installation)
+    # ดึงตรงๆ จากตะกร้าใหม่ที่เราเพิ่งสร้างเมื่อกี้
+    install_images = job.installation_media.all().order_by('-uploaded_at')
+
+    # 📸 3. ดึงประวัติและภาพการแจ้งซ่อม (After-Sales)
+    # ดึงตั๋วซ่อมทุกใบที่ผูกกับ JOB นี้ พร้อมโหลดรูปภาพมาด้วยเลย
+    service_tickets = job.service_tickets.prefetch_related('media_files').all().order_by('created_at')
+
+    return render(request, 'solar_jobs/media_hub_detail.html', {
+        'job': job,
+        'survey_images': survey_images,
+        'install_images': install_images,
+        'service_tickets': service_tickets
+    })
+
+@login_required
+def solar_media_hub_upload(request, job_id):
+    if request.method == 'POST':
+        job = get_object_or_404(SolarJob, id=job_id)
+        from .models import SolarJobMedia
+        desc = request.POST.get('description', '')
+
+        files = request.FILES.getlist('install_images')
+        for f in files:
+            SolarJobMedia.objects.create(
+                job=job,
+                image=f,
+                description=desc,
+                uploaded_by=getattr(request.user, 'employee', None)
+            )
+        messages.success(request, f"✅ อัปโหลดรูปผลงานติดตั้งจำนวน {len(files)} รูป เรียบร้อยแล้ว")
+    return redirect('solar_media_hub_detail', job_id=job_id)

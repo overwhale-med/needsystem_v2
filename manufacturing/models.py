@@ -249,7 +249,7 @@ class ProductionOrder(models.Model):
     is_onsite = models.BooleanField(default=False, verbose_name="งานประกอบหน้างาน (On-site)")
 
     delivery_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, verbose_name="ค่าจ้างขนส่ง (สำหรับงานนี้)")
-    proof_of_delivery = models.ImageField(upload_to='delivery_proofs/%Y/%m/', null=True, blank=True, verbose_name="รูปถ่ายใบส่งมอบสินค้า")
+    #proof_of_delivery = models.ImageField(upload_to='delivery_proofs/%Y/%m/', null=True, blank=True, verbose_name="รูปถ่ายใบส่งมอบสินค้า")
     logistics_claim = models.ForeignKey('LogisticsClaim', on_delete=models.SET_NULL, null=True, blank=True, related_name='production_orders', verbose_name="ใบตั้งเบิกค่ารถขนส่ง")
 
     class Meta:
@@ -612,6 +612,21 @@ class QCReceiptDoc(models.Model):
         super().save(*args, **kwargs)
 
 # ==========================================
+# 🌟 [NEW] ตาราง: หมวดหมู่ปัญหาแจ้งซ่อม (แยกให้แอดมินจัดการเอง)
+# ==========================================
+class ServiceCategory(models.Model):
+    name = models.CharField(max_length=100, unique=True, verbose_name="ชื่อหมวดหมู่ปัญหา")
+    description = models.TextField(blank=True, verbose_name="คำอธิบายเพิ่มเติม (ถ้ามี)")
+    is_active = models.BooleanField(default=True, verbose_name="สถานะใช้งาน")
+
+    class Meta:
+        verbose_name = "หมวดหมู่ปัญหาแจ้งซ่อม"
+        verbose_name_plural = "หมวดหมู่ปัญหาแจ้งซ่อม"
+
+    def __str__(self):
+        return self.name
+
+# ==========================================
 # 🌟 [NEW] ระบบแจ้งซ่อมและบริการหลังการขาย (After-Sales / Service Ticket) 🌟
 # ==========================================
 class ServiceTicket(models.Model):
@@ -624,15 +639,6 @@ class ServiceTicket(models.Model):
         ('CANCELLED', 'ยกเลิกการแจ้งซ่อม')
     ]
 
-    CATEGORY_CHOICES = [
-        ('ROOF', 'หลังคารั่วซึม'),
-        ('ELEC', 'ระบบไฟฟ้า'),
-        ('PLUM', 'ระบบประปา / ห้องน้ำ'),
-        ('PAINT', 'สีหลุดร่อน / รอยร้าว'),
-        ('STRUCT', 'โครงสร้าง / พื้น / ผนัง'),
-        ('OTHER', 'อื่นๆ')
-    ]
-
     URGENCY_CHOICES = [
         ('NORMAL', 'ปกติ (ตามคิว)'),
         ('URGENT', 'ด่วนมาก (ฉุกเฉิน)')
@@ -641,8 +647,7 @@ class ServiceTicket(models.Model):
     code = models.CharField(max_length=20, unique=True, verbose_name="เลขที่ใบแจ้งซ่อม")
     production_order = models.ForeignKey(ProductionOrder, on_delete=models.CASCADE, related_name='service_tickets', verbose_name="อ้างอิงใบสั่งผลิตเดิม (JOB)")
     salesperson = models.ForeignKey('hr.Employee', on_delete=models.SET_NULL, null=True, related_name='created_tickets', verbose_name="เซลส์ผู้รับเรื่อง")
-
-    issue_category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='OTHER', verbose_name="หมวดหมู่ปัญหา")
+    issue_category = models.ForeignKey(ServiceCategory, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="หมวดหมู่ปัญหา")
     description = models.TextField(verbose_name="รายละเอียดอาการเสีย")
     urgency = models.CharField(max_length=10, choices=URGENCY_CHOICES, default='NORMAL', verbose_name="ความเร่งด่วน")
     # 🌟 ข้อมูลติดต่อเพิ่มเติมหน้างาน
@@ -694,5 +699,20 @@ class ServiceTicketMedia(models.Model):
     uploaded_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        verbose_name = "สื่อแจ้งซ่อม"
-        verbose_name_plural = "สื่อแจ้งซ่อม"
+        verbose_name = "สื่อ - แจ้งซ่อม"
+        verbose_name_plural = "สื่อ - แจ้งซ่อม"
+
+# ==========================================
+# 🌟 [NEW] ตารางย่อย: คลังรูปและวิดีโอ "การจัดส่งสินค้า" 🌟
+# ==========================================
+class DeliveryMedia(models.Model):
+    production_order = models.ForeignKey(ProductionOrder, related_name='delivery_media', on_delete=models.CASCADE, verbose_name="อ้างอิงใบสั่งผลิต")
+    file = models.FileField(upload_to='delivery_media/%Y/%m/', verbose_name="ไฟล์รูปรถขนส่ง/ใบส่งมอบ")
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "สื่อ - จัดส่งสินค้า"
+        verbose_name_plural = "สื่อ - จัดส่งสินค้า"
+
+    def __str__(self):
+        return f"จัดส่ง - {self.production_order.code}"

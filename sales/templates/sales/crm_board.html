@@ -1,5 +1,8 @@
 {% extends 'core/base.html' %}
 {% block content %}
+<style>
+    .navbar-nav { display: none !important; }
+</style>
 
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
@@ -23,15 +26,15 @@
             <p class="text-muted small mb-0">บันทึกข้อมูลลูกค้าติดต่อใหม่ และติดตามสถานะการเจรจา (Leads) | <span class="badge bg-secondary">{{ scope_title }}</span></p>
         </div>
         <div class="d-flex gap-2">
-            <a href="{% url 'sales_dashboard' %}" class="btn btn-outline-dark rounded-pill px-4 fw-bold shadow-sm bg-white">
-                <i class="fas fa-chart-pie me-1"></i> กลับ Dashboard
-            </a>
             <a href="{% url 'appointment_board_global' %}" class="btn btn-outline-primary rounded-pill px-4 fw-bold shadow-sm bg-white">
                 <i class="fas fa-calendar-check me-1"></i> ดูตารางนัดหมายทั้งหมด
             </a>
             <button class="btn btn-info text-white rounded-pill px-4 fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#createLeadModal">
                 <i class="fas fa-user-plus me-1"></i> เพิ่มลูกค้าติดต่อใหม่
             </button>
+            <a href="{% url 'sales_dashboard' %}" class="btn btn-outline-dark rounded-pill px-4 fw-bold shadow-sm bg-white">
+                <i class="fas fa-arrow-left me-2"></i> กลับ Dashboard
+            </a>
         </div>
     </div>
 
@@ -110,7 +113,7 @@
                             {% endif %}
                         </td>
                         <td class="small text-muted text-truncate" style="max-width: 250px;" title="{{ lead.requirements }}">{{ lead.requirements|default:"-" }}</td>
-                        
+
                         <td class="text-center">
                             <div class="fw-bold small text-dark">{{ lead.employee.first_name|default:"ไม่ระบุ" }}</div>
                             <div class="text-muted" style="font-size: 0.6rem;">{{ lead.employee.department.name|default:"-" }}</div>
@@ -243,7 +246,7 @@
                 </tbody>
             </table>
         </div>
-        
+
         {% if leads.has_other_pages %}
         <div class="card-footer bg-white border-0 py-3">
             <nav>
@@ -307,13 +310,13 @@
 <script>
     document.addEventListener("DOMContentLoaded", function() {
         flatpickr(".datepicker", { dateFormat: "Y-m-d", altInput: true, altFormat: "d/m/Y", allowInput: true });
-        flatpickr(".datetimepicker", { 
-            enableTime: true, 
-            time_24hr: true, 
-            dateFormat: "Y-m-d H:i", 
-            altInput: true, 
-            altFormat: "d/m/Y เวลา H:i น.", 
-            allowInput: true 
+        flatpickr(".datetimepicker", {
+            enableTime: true,
+            time_24hr: true,
+            dateFormat: "Y-m-d H:i",
+            altInput: true,
+            altFormat: "d/m/Y เวลา H:i น.",
+            allowInput: true
         });
     });
 </script>

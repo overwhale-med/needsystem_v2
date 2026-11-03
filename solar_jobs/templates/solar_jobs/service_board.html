@@ -1,0 +1,189 @@
+{% extends 'core/base.html' %}
+{% load humanize %}
+
+{% block content %}
+<style>
+    body { background-color: #f8f9fa; }
+    .btn-gold { background: linear-gradient(135deg, #d4af37 0%, #aa8c2c 100%); color: #ffffff !important; border: none; }
+    .btn-gold:hover { background: linear-gradient(135deg, #aa8c2c 0%, #8c7324 100%); transform: translateY(-2px); box-shadow: 0 4px 8px rgba(212, 175, 55, 0.3) !important; }
+
+    .kanban-board { display: flex; overflow-x: auto; padding-bottom: 20px; gap: 20px; align-items: flex-start; min-height: 70vh; }
+    .kanban-column { background-color: #f4f5f7; border-radius: 12px; flex: 1; min-width: 320px; display: flex; flex-direction: column; border: 1px solid #e1e4e8; }
+    .kanban-header { padding: 15px 20px; border-bottom: 2px solid transparent; font-weight: 700; color: #333; display: flex; justify-content: space-between; align-items: center; }
+    .kanban-cards { padding: 15px; flex-grow: 1; min-height: 150px; display: flex; flex-direction: column; gap: 15px; }
+
+    .kanban-card {
+        background-color: #ffffff; border-radius: 12px; padding: 15px;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.03); border: 1px solid #eaedf0;
+        border-left: 5px solid #ccc; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .kanban-card:hover { transform: translateY(-3px); box-shadow: 0 8px 15px rgba(0,0,0,0.08); }
+
+    .border-pending { border-left-color: #dc3545; }
+    .border-approval { border-left-color: #ffc107; }
+    .border-progress { border-left-color: #0d6efd; }
+    .border-completed { border-left-color: #198754; }
+
+    .kanban-board::-webkit-scrollbar { height: 8px; }
+    .kanban-board::-webkit-scrollbar-thumb { background-color: #ccc; border-radius: 4px; }
+    .info-box { background-color: #f8f9fa; border: 1px solid #f0f2f5; border-radius: 8px; padding: 10px; margin-bottom: 12px; }
+    
+    .blink_me { animation: blinker 1.5s linear infinite; }
+    @keyframes blinker { 50% { opacity: 0.5; } }
+</style>
+
+<div class="container-fluid py-4 px-4">
+    <div class="d-flex justify-content-between align-items-end mb-4">
+        <div>
+            <h4 class="fw-bold mb-1 text-dark">
+                <i class="fas fa-tools text-gold me-2" style="color: #c5a059;"></i>กระดานคิวงานแจ้งซ่อมโซล่าเซลล์ (After-Sales)
+            </h4>
+            <p class="text-muted small mb-0">ประเมินราคา, นัดหมายช่าง, และอัปเดตสถานะงานซ่อม</p>
+        </div>
+        <div>
+            <a href="{% url 'solar_service_history_list' %}" class="btn btn-outline-secondary rounded-pill px-4 fw-bold shadow-sm">
+                <i class="fas fa-history me-1"></i> ประวัติงานซ่อมที่ปิดจ๊อบแล้ว
+            </a>
+        </div>
+    </div>
+
+    <div class="kanban-board">
+        <!-- คอลัมน์ที่ 1: รอประเมิน/รอคอนเฟิร์ม -->
+        <div class="kanban-column">
+            <div class="kanban-header" style="border-top: 4px solid #dc3545; border-top-left-radius: 12px; border-top-right-radius: 12px;">
+                <span><i class="fas fa-inbox text-danger me-2"></i>1. รอจัดคิว / รอประเมิน</span>
+            </div>
+            <div class="kanban-cards">
+                {% for t in tickets %}
+                    {% if t.status == 'PENDING' or t.status == 'WAITING_APPROVAL' %}
+                        <div class="kanban-card {% if t.status == 'WAITING_APPROVAL' %}border-approval{% else %}border-pending{% endif %}" data-bs-toggle="modal" data-bs-target="#ticketModal-{{ t.id }}">
+                            
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <div>
+                                    {% if t.status == 'WAITING_APPROVAL' %}
+                                        <span class="badge bg-warning text-dark shadow-sm blink_me"><i class="fas fa-hourglass-half"></i> รอเซลส์คอนเฟิร์มราคา</span>
+                                    {% else %}
+                                        <span class="badge bg-danger shadow-sm"><i class="fas fa-exclamation-circle"></i> แจ้งซ่อมใหม่</span>
+                                    {% endif %}
+                                </div>
+                                {% if t.urgency == 'URGENT' %}
+                                    <span class="badge bg-warning text-dark shadow-sm"><i class="fas fa-exclamation-triangle"></i> ด่วน</span>
+                                {% endif %}
+                            </div>
+
+                            <div class="fw-bold text-dark fs-6">{{ t.job.customer.name }}</div>
+                            <div class="text-primary small text-truncate mb-2" style="font-size: 0.75rem;"><i class="fas fa-link me-1"></i>อ้างอิง: {{ t.job.code }}</div>
+
+                            <div class="info-box {% if t.status == 'WAITING_APPROVAL' %}bg-warning bg-opacity-10 border-warning border-opacity-25{% endif %}">
+                                <div class="small text-danger mb-1 text-truncate" title="{{ t.description }}">
+                                    <i class="fas fa-tools text-danger me-2" style="width:14px;"></i><strong>ปัญหา:</strong> {{ t.issue_category.name|default:"ทั่วไป" }}
+                                </div>
+                                <div class="small text-muted mb-1 text-truncate ms-4">- {{ t.description }}</div>
+                                <div class="small text-dark mb-1 text-truncate"><i class="fas fa-map-marker-alt text-danger me-2" style="width:14px;"></i><strong>พิกัด:</strong> {{ t.customer_location|default:"ไม่ระบุ" }}</div>
+                                <div class="small text-dark text-truncate"><i class="fas fa-user-tie text-muted me-2" style="width:14px;"></i><strong>เซลส์:</strong> {{ t.salesperson.first_name|default:"-" }}</div>
+                            </div>
+
+                            <div class="d-flex justify-content-between border-top pt-2 mt-2">
+                                <span class="badge bg-light text-dark border small">{{ t.code }}</span>
+                                {% if t.is_warranty %}
+                                    <span class="badge bg-success small"><i class="fas fa-shield-alt"></i> ในประกัน</span>
+                                {% else %}
+                                    <span class="badge bg-secondary small">นอกประกัน</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- คอลัมน์ที่ 2: กำลังดำเนินการ (นัดช่างแล้ว) -->
+        <div class="kanban-column">
+            <div class="kanban-header" style="border-top: 4px solid #0d6efd; border-top-left-radius: 12px; border-top-right-radius: 12px;">
+                <span><i class="fas fa-truck-pickup text-primary me-2"></i>2. นัดหมายช่างแล้ว</span>
+            </div>
+            <div class="kanban-cards">
+                {% for t in tickets %}
+                    {% if t.status == 'IN_PROGRESS' %}
+                        <div class="kanban-card border-progress" data-bs-toggle="modal" data-bs-target="#ticketModal-{{ t.id }}">
+                            
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <div>
+                                    <span class="badge bg-primary shadow-sm"><i class="fas fa-hard-hat"></i> คิวซ่อม: {{ t.appointment_date|date:"d/m/Y"|default:"ยังไม่ระบุ" }}</span>
+                                </div>
+                                {% if t.urgency == 'URGENT' %}
+                                    <span class="badge bg-warning text-dark shadow-sm"><i class="fas fa-exclamation-triangle"></i> ด่วน</span>
+                                {% endif %}
+                            </div>
+
+                            <div class="fw-bold text-dark fs-6">{{ t.job.customer.name }}</div>
+                            <div class="text-primary small text-truncate mb-2" style="font-size: 0.75rem;"><i class="fas fa-link me-1"></i>อ้างอิง: {{ t.job.code }}</div>
+
+                            <div class="info-box">
+                                <div class="small text-primary mb-1 text-truncate">
+                                    <i class="fas fa-users-cog text-primary me-2" style="width:14px;"></i><strong>ทีมเข้าซ่อม:</strong> {{ t.technician_team.name|default:"-" }}
+                                </div>
+                                <div class="small text-dark mb-1 text-truncate"><i class="fas fa-tools text-danger me-2" style="width:14px;"></i><strong>ปัญหา:</strong> {{ t.issue_category.name|default:"ทั่วไป" }}</div>
+                                <div class="small text-dark text-truncate"><i class="fas fa-phone-alt text-success me-2" style="width:14px;"></i><strong>โทร:</strong> {{ t.customer_phone|default:"-" }}</div>
+                            </div>
+
+                            <div class="d-flex justify-content-between border-top pt-2 mt-2">
+                                <span class="badge bg-light text-dark border small">{{ t.code }}</span>
+                                {% if t.is_warranty %}
+                                    <span class="badge bg-success small"><i class="fas fa-shield-alt"></i> ในประกัน</span>
+                                {% else %}
+                                    <span class="badge bg-secondary small">นอกประกัน</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- คอลัมน์ที่ 3: ซ่อมเสร็จสิ้น -->
+        <div class="kanban-column">
+            <div class="kanban-header" style="border-top: 4px solid #198754; border-top-left-radius: 12px; border-top-right-radius: 12px;">
+                <span><i class="fas fa-check-circle text-success me-2"></i>3. ซ่อมเสร็จเรียบร้อย</span>
+            </div>
+            <div class="kanban-cards">
+                {% for t in tickets %}
+                    {% if t.status == 'COMPLETED' %}
+                        <div class="kanban-card border-completed" data-bs-toggle="modal" data-bs-target="#ticketModal-{{ t.id }}">
+                            
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <div>
+                                    <span class="badge bg-success shadow-sm"><i class="fas fa-flag-checkered"></i> รอปิดจ๊อบ</span>
+                                </div>
+                            </div>
+
+                            <div class="fw-bold text-dark fs-6">{{ t.job.customer.name }}</div>
+                            <div class="text-primary small text-truncate mb-2" style="font-size: 0.75rem;"><i class="fas fa-link me-1"></i>อ้างอิง: {{ t.job.code }}</div>
+
+                            <div class="info-box border-success border-opacity-25 bg-success bg-opacity-10">
+                                <div class="small text-dark mb-1 text-truncate"><i class="fas fa-users-cog text-success me-2" style="width:14px;"></i><strong>ทีมที่เข้าซ่อม:</strong> {{ t.technician_team.name|default:"-" }}</div>
+                                <div class="small text-dark text-truncate"><i class="far fa-calendar-check text-success me-2" style="width:14px;"></i><strong>เสร็จเมื่อ:</strong> {{ t.completed_at|date:"d/m/Y"|default:"-" }}</div>
+                            </div>
+
+                            <div class="d-flex justify-content-between border-top pt-2 mt-2">
+                                <span class="badge bg-light text-dark border small">{{ t.code }}</span>
+                                {% if t.is_warranty %}
+                                    <span class="badge bg-success small"><i class="fas fa-shield-alt"></i> ในประกัน</span>
+                                {% else %}
+                                    <span class="badge bg-secondary small">นอกประกัน</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ================= Modals แผงควบคุมช่างโซล่าเซลล์ ================= -->
+{% for t in tickets %}
+    {% include "solar_jobs/_solar_service_modal.html" %}
+{% endfor %}
+
+{% endblock %}

@@ -1,13 +1,16 @@
 {% extends 'core/base.html' %}
 
 {% block content %}
+<style>
+    .navbar-nav { display: none !important; }
+</style>
 <div class="container-xxl py-4 px-4">
-    
+
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
             <h3 class="fw-bold text-dark mb-1"><i class="fas fa-users text-primary me-2"></i>ฐานข้อมูลลูกค้า</h3>
             <p class="text-muted small mb-0">
-                ทั้งหมด <span class="fw-bold text-primary">{{ customers.paginator.count }}</span> รายการ 
+                ทั้งหมด <span class="fw-bold text-primary">{{ customers.paginator.count }}</span> รายการ
             </p>
         </div>
         <div class="d-flex gap-2">
@@ -15,7 +18,7 @@
                 <i class="fas fa-plus me-2"></i>เพิ่มลูกค้าใหม่
             </a>
             <a href="{% url 'sales_dashboard' %}" class="btn btn-light border shadow-sm rounded-pill px-4 fw-bold text-secondary">
-                <i class="fas fa-arrow-left me-2"></i>กลับหน้า Sales Overview
+                <i class="fas fa-arrow-left me-2"></i>กลับ Dashboard
             </a>
         </div>
     </div>
@@ -25,8 +28,8 @@
             <form method="GET">
                 <div class="input-group">
                     <span class="input-group-text bg-white border-end-0 ps-3"><i class="fas fa-search text-muted"></i></span>
-                    <input type="text" name="search" class="form-control border-start-0 ps-2" 
-                           placeholder="ค้นหาชื่อ, รหัส หรือเบอร์โทร..." 
+                    <input type="text" name="search" class="form-control border-start-0 ps-2"
+                           placeholder="ค้นหาชื่อ, รหัส หรือเบอร์โทร..."
                            value="{{ search }}">
                     <button class="btn btn-secondary px-4 fw-bold" type="submit">ค้นหา</button>
                 </div>
@@ -75,7 +78,7 @@
                                     <a href="{% url 'customer_edit' customer.pk %}" class="btn btn-warning btn-sm text-dark mx-1 rounded shadow-sm" title="แก้ไข">
                                         <i class="fas fa-pen"></i>
                                     </a>
-                                    <a href="{% url 'customer_delete' customer.pk %}" class="btn btn-danger btn-sm text-white mx-1 rounded shadow-sm" 
+                                    <a href="{% url 'customer_delete' customer.pk %}" class="btn btn-danger btn-sm text-white mx-1 rounded shadow-sm"
                                        onclick="return confirm('ยืนยันลบลูกค้า {{ customer.name }}?');" title="ลบ">
                                         <i class="fas fa-trash"></i>
                                     </a>
@@ -94,7 +97,7 @@
                 </table>
             </div>
         </div>
-        
+
         {% if customers.has_other_pages %}
         <div class="card-footer bg-white py-3 border-top-0 d-flex justify-content-center">
             <nav>

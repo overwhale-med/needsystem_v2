@@ -1,6 +1,9 @@
 {% extends 'core/base.html' %}
 
 {% block content %}
+<style>
+    .navbar-nav { display: none !important; }
+</style>
 <div class="container py-5">
 
     <div class="row justify-content-center">
@@ -12,7 +15,6 @@
                 </h3>
                 <nav aria-label="breadcrumb">
                     <ol class="breadcrumb mb-0 small">
-                        <li class="breadcrumb-item"><a href="{% url 'customer_list' %}" class="text-decoration-none text-muted">ฐานข้อมูลลูกค้า</a></li>
                         <li class="breadcrumb-item active" aria-current="page">{{ title }}</li>
                     </ol>
                 </nav>
@@ -21,7 +23,8 @@
             <div class="card shadow-sm border-0 rounded-4">
                 <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
                     <span class="fw-bold text-primary"><i class="fas fa-info-circle me-2"></i>กรอกข้อมูลลูกค้า</span>
-                    <a href="{% url 'customer_list' %}" class="btn btn-light btn-sm rounded-pill text-muted">
+                    <!-- 🌟 [FIXED] เปลี่ยนลิงก์ยกเลิก ให้วิ่งกลับไปหน้า Dashboard -->
+                    <a href="{% url 'sales_dashboard' %}" class="btn btn-light btn-sm rounded-pill text-muted fw-bold shadow-sm">
                         <i class="fas fa-times me-1"></i> ยกเลิก
                     </a>
                 </div>
@@ -216,7 +219,7 @@
         function loadAmphures(provId, selectedAmp = null, nextTam = null) {
             ampSelect.innerHTML = '<option value="">-- เลือกอำเภอ --</option>';
             tamSelect.innerHTML = '<option value="">-- เลือกตำบล --</option>';
-            
+
             fetch(`{% url 'get_amphures' %}?province_id=${provId}`)
                 .then(r => r.json())
                 .then(data => {
@@ -240,7 +243,7 @@
         // ฟังก์ชันโหลดตำบล
         function loadTambons(ampId, selectedTam = null) {
             tamSelect.innerHTML = '<option value="">-- เลือกตำบล --</option>';
-            
+
             fetch(`{% url 'get_tambons' %}?amphure_id=${ampId}`)
                 .then(r => r.json())
                 .then(data => {
@@ -281,7 +284,7 @@
             const opt = this.options[this.selectedIndex];
             if(opt.dataset.zip) zipInput.value = opt.dataset.zip;
         });
-        
+
         // Init Map Link
         updateMapLink(document.getElementById('input_location').value);
     });

@@ -4,7 +4,9 @@ from .models import (
     MfgBranch, Salesperson, ProductionStatus, ProductionTeam,
     DeliveryStatus, Transporter, QCInspectionLog, BlueprintClaim,
     BlueprintLog, BlueprintClaimSplit, LogisticsClaim,
-    QCReceiptDoc, QCPassedMedia, QCFailedMedia, MasterExpenseClaim
+    QCReceiptDoc, QCPassedMedia, QCFailedMedia, MasterExpenseClaim,
+    ServiceTicketMedia, DeliveryMedia,
+    ServiceTicket, ServiceLaborClaim, ServiceCategory
 )
 
 class ProductionOrderMaterialInline(admin.TabularInline):
@@ -42,6 +44,8 @@ admin.site.register(BlueprintLog)
 admin.site.register(BlueprintClaimSplit)
 admin.site.register(QCPassedMedia)
 admin.site.register(QCFailedMedia)
+admin.site.register(ServiceTicketMedia)
+admin.site.register(DeliveryMedia)
 
 # ==========================================
 # 🌟 ส่วนการจัดการระบบขนส่ง (Logistics) 🌟
@@ -78,3 +82,25 @@ class MasterExpenseClaimAdmin(admin.ModelAdmin):
     list_display = ('code', 'requester', 'total_amount', 'status', 'created_at')
     search_fields = ('code', 'requester__first_name')
     list_filter = ('status',)
+
+# ==========================================
+# 🌟 ส่วนการจัดการระบบแจ้งซ่อม (After-Sales Service) 🌟
+# ==========================================
+@admin.register(ServiceCategory)
+class ServiceCategoryAdmin(admin.ModelAdmin):
+    list_display = ('name', 'is_active')
+    list_filter = ('is_active',)
+    search_fields = ('name',)
+
+@admin.register(ServiceTicket)
+class ServiceTicketAdmin(admin.ModelAdmin):
+    list_display = ('code', 'production_order', 'salesperson', 'issue_category', 'status', 'created_at')
+    list_filter = ('status', 'issue_category', 'urgency', 'is_warranty')
+    search_fields = ('code', 'production_order__customer_name', 'customer_phone')
+    readonly_fields = ('created_at', 'updated_at')
+
+@admin.register(ServiceLaborClaim)
+class ServiceLaborClaimAdmin(admin.ModelAdmin):
+    list_display = ('code', 'service_ticket', 'technician_name', 'amount', 'status')
+    list_filter = ('status',)
+    search_fields = ('code', 'technician_name', 'service_ticket__code')

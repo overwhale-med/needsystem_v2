@@ -2,6 +2,9 @@
 {% load humanize %}
 
 {% block content %}
+<style>
+    .navbar-nav { display: none !important; }
+</style>
 <div class="container-xxl py-4 px-4">
 
     {% if qt.status != 'DRAFT' %}

@@ -1,0 +1,448 @@
+{% load humanize %}
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ยืนยันใบเสนอราคา {{ qt.code }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        :root { --primary-dark: #1a1a1a; --border-color: #000; }
+        body { font-family: 'Sarabun', sans-serif; background: #525659; color: #000; font-size: 14px; line-height: 1.3; overflow-x: hidden; }
+
+        /* 🌟 คอนเทนเนอร์สำหรับย่อส่วนหน้า A4 ให้พอดีมือถือ 🌟 */
+        .zoom-wrapper { width: 100%; overflow-x: hidden; background: #525659; padding-top: 20px; display: flex; justify-content: center; margin-bottom: 80px; }
+
+        /* 🌟 รูปแบบกระดาษ A4 ต้นฉบับ 🌟 */
+        .page { width: 800px; height: 1131px; padding: 40px 50px; background: white; position: relative; box-shadow: 0 10px 30px rgba(0,0,0,0.3); transform-origin: top center; flex-shrink: 0; }
+
+        .header-section { padding-bottom: 10px; border-bottom: 2px solid #000; margin-bottom: 15px; }
+        .company-title { font-size: 20px; font-weight: 700; color: #000; line-height: 1.1; margin-bottom: 2px; }
+        .company-subtitle { font-size: 13px; color: #555; font-weight: 500; margin-bottom: 4px; }
+        .company-details { font-size: 13px; color: #333; line-height: 1.4; }
+        .doc-title { font-size: 28px; font-weight: 700; color: var(--primary-dark); text-align: right; line-height: 1; margin-top: 5px; }
+        .doc-subtitle { font-size: 11px; color: #777; text-align: right; letter-spacing: 2px; text-transform: uppercase; font-weight: 600; margin-bottom: 8px; }
+        .doc-no-group { text-align: right; margin-top: 5px; }
+        .doc-no-label { font-size: 10px; color: #666; font-weight: 600; text-transform: uppercase; }
+        .doc-no-value { font-size: 16px; font-weight: 700; color: #000; }
+        .customer-divider { border-top: 1px solid #000; margin: 12px 0; opacity: 1; }
+        .info-group-label { font-size: 11px; color: #666; font-weight: 700; text-transform: uppercase; margin-bottom: 4px; }
+        .customer-name { font-size: 16px; font-weight: 700; color: #000; margin-bottom: 2px; }
+        .customer-addr { font-size: 14px; line-height: 1.3; margin-bottom: 4px; }
+        .ref-table { width: 100%; }
+        .ref-table td { padding: 1px 0; font-size: 13px; vertical-align: top; }
+        .ref-label { color: #555; width: 90px; font-weight: 500; }
+        .ref-value { font-weight: 600; text-align: right; color: #000; }
+        .premium-table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
+        .premium-table th { background-color: #f4f4f4; color: #000; font-weight: 700; text-transform: uppercase; font-size: 12px; padding: 8px; border-top: 1px solid #000; border-bottom: 1px solid #000; text-align: center; }
+        .premium-table td { padding: 6px 8px; border-bottom: 1px solid #eee; vertical-align: top; font-size: 13px; }
+        .total-table { width: 100%; }
+        .total-table td { padding: 3px 0; }
+        .total-label { text-align: right; padding-right: 15px; color: #555; font-size: 13px; }
+        .total-value { text-align: right; font-weight: 600; width: 120px; font-size: 14px; }
+        .grand-total-row td { padding-top: 8px; padding-bottom: 8px; font-size: 18px; font-weight: 700; color: #000; }
+        .payment-box { font-size: 13px; line-height: 1.4; color: #333; }
+        .note-box { font-size: 12px; color: #555; line-height: 1.3; }
+
+        .signature-section { margin-top: 40px; }
+        .sig-box { text-align: center; position: relative; height: 140px; padding: 0 10px; }
+        .sig-line { border-bottom: 1px dotted #000; width: 90%; margin: 0 auto 5px; position: absolute; bottom: 50px; left: 0; right: 0; }
+        .sig-role { font-size: 11px; font-weight: 700; position: absolute; bottom: 30px; left: 0; right: 0; }
+        .sig-name { font-size: 11px; position: absolute; bottom: 15px; left: 0; right: 0; }
+        .sig-date { font-size: 10px; color: #666; position: absolute; bottom: 0; left: 0; right: 0; }
+        .sig-img { position: absolute; bottom: 65px; left: 50%; transform: translateX(-50%); height: 60px; width: auto; object-fit: contain; z-index: 5; }
+        .seal-img { position: absolute; bottom: 65px; left: 50%; transform: translateX(-50%) rotate(-15deg); width: 85px; opacity: 0.8; pointer-events: none; z-index: 10; }
+
+        /* 🌟 องค์ประกอบสำหรับระบบเซ็นออนไลน์ 🌟 */
+        .fixed-bottom-bar { position: fixed; bottom: 0; left: 0; right: 0; background: white; padding: 15px 20px; box-shadow: 0 -5px 20px rgba(0,0,0,0.15); z-index: 1000; }
+        .btn-sign-trigger { animation: pulse 2s infinite; }
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.7); } 70% { box-shadow: 0 0 0 15px rgba(255, 193, 7, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 193, 7, 0); } }
+
+        /* 🌟 Pop-up ลายเซ็น 🌟 */
+        .sig-modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 2000; display: flex; align-items: center; justify-content: center; padding: 15px; backdrop-filter: blur(5px); opacity: 0; visibility: hidden; transition: all 0.3s ease; }
+        .sig-modal-overlay.active { opacity: 1; visibility: visible; }
+        .sig-modal-content { background: white; width: 100%; max-width: 500px; padding: 20px; border-radius: 20px; box-shadow: 0 15px 35px rgba(0,0,0,0.3); transform: translateY(20px); transition: all 0.3s ease; }
+        .sig-modal-overlay.active .sig-modal-content { transform: translateY(0); }
+        .signature-pad { border: 2px dashed #ced4da; border-radius: 12px; width: 100%; height: 250px; background-color: #f8f9fa; touch-action: none; cursor: crosshair; }
+
+        .success-banner { background: #198754; color: white; padding: 15px; text-align: center; font-weight: bold; position: sticky; top: 0; z-index: 500; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+    </style>
+</head>
+<body>
+
+    {% if qt.customer_signature %}
+    <div class="success-banner">
+        <i class="fas fa-check-circle me-2 fs-5"></i> เอกสารฉบับนี้ถูกลงนามยืนยันโดยลูกค้าเรียบร้อยแล้ว
+    </div>
+    {% endif %}
+
+    <!-- 🌟 กระดาษ A4 ที่จะถูกย่อส่วนอัตโนมัติ 🌟 -->
+    <div class="zoom-wrapper" id="zoom-wrapper">
+        <div class="page" id="a4-page">
+
+            <!-- (โครงสร้าง A4 เดิมทั้งหมด) -->
+            <div class="header-section">
+                <div class="row align-items-start">
+                    <div class="col-7">
+                        <div class="d-flex align-items-center mb-2">
+                            {% if company.logo %} <img src="{{ company.logo.url }}" style="height: 55px; margin-right: 12px;" alt="Logo"> {% endif %}
+                            <div>
+                                <div class="company-title">{{ company.name_th|default:"บริษัท นีด ช็อปปิ้ง จำกัด" }}</div>
+                                <div class="company-subtitle">{{ company.name_en|default:"NEED SHOPPING CO., LTD." }}</div>
+                            </div>
+                        </div>
+                        <div class="company-details ps-1">
+                            {{ company.address|default:"10/10 หมู่ 10 ตำบลบางพระ อำเภอศรีราชา จังหวัดชลบุรี 20110" }}<br>
+                            <strong>โทร:</strong> {{ company.phone|default:"033 166 699" }} &nbsp;|&nbsp; <strong>เลขผู้เสียภาษี:</strong> {{ company.tax_id|default:"0205563029342" }}
+                        </div>
+                    </div>
+                    <div class="col-5">
+                        <div class="doc-title">ใบเสนอราคา</div>
+                        <div class="doc-subtitle">QUOTATION</div>
+                        <div class="doc-no-group mt-3">
+                            <div class="doc-no-label">เลขที่เอกสาร / QUOTATION NO.</div>
+                            <div class="doc-no-value">{{ qt.code }}</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="customer-divider"></div>
+                <div class="row">
+                    <div class="col-7 pe-4 border-end border-secondary">
+                        <div class="info-group-label"><i class="fas fa-address-book me-1"></i> ลูกค้า / CUSTOMER</div>
+                        <div class="customer-name">{{ qt.customer_name }}</div>
+                        <div class="customer-addr">{{ qt.customer_address|default:"-" }}</div>
+                        <div class="customer-meta mt-1">
+                            <strong>โทร:</strong> {{ qt.customer_phone|default:"-" }} &nbsp;&nbsp;<strong>เลขผู้เสียภาษี:</strong> {{ qt.customer_tax_id|default:"-" }}
+                        </div>
+                    </div>
+                    <div class="col-5 ps-4">
+                        <div class="info-group-label">ข้อมูลอ้างอิง / REFERENCE</div>
+                        <table class="ref-table">
+                            <tr><td class="ref-label">รหัสลูกค้า:</td><td class="ref-value">{{ qt.customer_code|default:"Walk-in" }}</td></tr>
+                            <tr><td class="ref-label">วันที่:</td><td class="ref-value">{{ qt.date|date:"d/m/Y" }}</td></tr>
+                            <tr><td class="ref-label">ยืนยันราคาถึง:</td><td class="ref-value">{{ qt.valid_until|date:"d/m/Y" }}</td></tr>
+                            <tr>
+                                <td class="ref-label">พนักงานขาย:</td>
+                                <td class="ref-value">
+                                    {{ qt.employee.first_name|default:"-" }}
+                                    {% if qt.employee.department %}/ {{ qt.employee.department.name }}{% endif %}
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div style="min-height: 380px;">
+                <table class="premium-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 5%;">ลำดับ</th>
+                            <th style="width: 50%; text-align: left;">รายการสินค้า / DESCRIPTION</th>
+                            <th style="width: 10%;">จำนวน</th>
+                            <th style="width: 15%; text-align: right;">ราคาต่อหน่วย</th>
+                            <th style="width: 20%; text-align: right;">จำนวนเงิน</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in qt.items.all %}
+                        <tr>
+                            <td class="text-center text-muted">{{ forloop.counter }}</td>
+                            <td>
+                                <div class="fw-bold text-dark">{{ item.item_name }}</div>
+                                {% if item.description %}<div class="small text-muted" style="font-size: 11px;">{{ item.description }}</div>{% endif %}
+                            </td>
+                            <td class="text-center fw-bold">{{ item.quantity }}</td>
+                            <td class="text-end">{{ item.unit_price|floatformat:2|intcomma }}</td>
+                            <td class="text-end fw-bold">{{ item.amount|floatformat:2|intcomma }}</td>
+                        </tr>
+                        {% endfor %}
+
+                        {% for u in qt.upsales.all %}
+                        <tr>
+                            <td class="text-center text-muted">{{ qt.items.all|length|add:forloop.counter }}</td>
+                            <td>
+                                <span class="fw-bold text-dark">{{ u.description }}</span>
+                            </td>
+                            <td class="text-center fw-bold">{{ u.quantity|floatformat:0 }}</td>
+                            <td class="text-end">{{ u.unit_price|floatformat:2|intcomma }}</td>
+                            <td class="text-end fw-bold">{{ u.total_price|floatformat:2|intcomma }}</td>
+                        </tr>
+                        {% endfor %}
+
+                        {% for i in "1234" %}<tr><td colspan="5" style="height: 25px;"></td></tr>{% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="row">
+                <div class="col-7 pe-5">
+                    <div class="py-2 px-3 mb-3 bg-light border text-center fw-bold text-dark rounded" style="font-size: 14px;">( <span id="baht-text">...</span> )</div>
+                    <div class="payment-box mb-3">
+                        <div class="fw-bold mb-1" style="font-size: 12px; text-transform: uppercase;">ข้อมูลการโอนเงิน (Bank Account):</div>
+                        <div class="ps-2 border-start border-3 border-dark">
+                            ธนาคาร: <strong>กสิกรไทย (KBANK)</strong><br>
+                            ชื่อบัญชี: <strong>บริษัท นีด ช็อปปิ้ง จำกัด</strong><br>
+                            เลขบัญชี: <strong>075-3-824782</strong>
+                        </div>
+                    </div>
+
+                    <div class="note-box mb-2"><strong>เงื่อนไขการชำระเงิน:</strong><br>{{ qt.payment_terms|default:"-ชำระเงินมัดจำ 50% ของยอดรวมเพื่อยืนยันการสั่งซื้อ ส่วนที่เหลือชำระก่อนการจัดส่ง"|linebreaksbr }}</div>
+                    <div class="note-box"><strong>หมายเหตุ:</strong><br>{{ qt.note|default:"-ไม่มี-"|linebreaksbr }}</div>
+                </div>
+
+                <div class="col-5">
+                    <table class="total-table">
+                        <tr><td class="total-label">รวมราคาสินค้า</td><td class="total-value">{{ item_total|floatformat:2|intcomma }}</td></tr>
+                        {% if qt.discount > 0 %}<tr><td class="total-label text-danger">หักส่วนลด</td><td class="total-value text-danger">-{{ qt.discount|floatformat:2|intcomma }}</td></tr>{% endif %}
+                        {% if qt.shipping_cost > 0 %}<tr><td class="total-label">ค่าขนส่ง</td><td class="total-value">{{ qt.shipping_cost|floatformat:2|intcomma }}</td></tr>{% endif %}
+                        <tr><td class="total-label">ราคาก่อนภาษี</td><td class="total-value">{{ qt.subtotal|floatformat:2|intcomma }}</td></tr>
+                        <tr><td class="total-label">VAT 7%</td><td class="total-value">{{ qt.tax_amount|floatformat:2|intcomma }}</td></tr>
+                        <tr class="grand-total-row"><td class="total-label" style="border-top: 1px solid #000; padding-top: 10px;">ยอดรวมสุทธิ</td><td class="total-value" style="border-top: 1px solid #000; padding-top: 10px;">{{ qt.grand_total|floatformat:2|intcomma }}</td></tr>
+                        <tr><td></td><td><div style="border-bottom: 3px double #000; margin-top: 2px;"></div></td></tr>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 🌟 โซนลายเซ็น (ปรับให้รองรับการแตะเพื่อเซ็น) 🌟 -->
+            <div class="row signature-section">
+                <div class="col-4 position-relative">
+                    <div class="sig-box">
+                        {% if qt.customer_signature %}
+                            <!-- กรณีเซ็นแล้ว แสดงรูปลายเซ็น -->
+                            <img src="{{ qt.customer_signature.url }}" class="sig-img" style="bottom: 45px;">
+                            <div class="sig-line"></div>
+                            <div class="sig-role">ผู้สั่งซื้อ (Buyer)</div>
+                            <div class="sig-name">({{ qt.customer_name|default:"ไม่ระบุชื่อ" }})</div>
+                            <div class="sig-date">วันที่ {{ qt.signature_date|date:"d/m/Y" }}</div>
+                        {% else %}
+                            <!-- กรณียังไม่เซ็น แสดงปุ่มแตะเพื่อเซ็น -->
+                            <img id="preview-sig" src="" class="sig-img d-none" style="bottom: 45px;">
+                            <button type="button" id="open-modal-btn" class="btn btn-warning btn-sm fw-bold position-absolute shadow text-dark btn-sign-trigger" style="bottom: 45px; left: 50%; transform: translateX(-50%); z-index: 20; width: 140px; border-radius: 20px;">
+                                <i class="fas fa-pen-nib me-1"></i> แตะเพื่อเซ็นชื่อ
+                            </button>
+                            <div class="sig-line"></div>
+                            <div class="sig-role">ผู้สั่งซื้อ (Buyer)</div>
+                            <div class="sig-name" id="sig-name-display">................................................</div>
+                            <div class="sig-date" id="sig-date-display">วันที่ ........./........./.............</div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="col-4">
+                    <div class="sig-box">
+                        {% if qt.employee and qt.employee.signature %}
+                            <img src="{{ qt.employee.signature.url }}" class="sig-img">
+                        {% endif %}
+                        <div class="sig-line"></div>
+                        <div class="sig-role">ผู้จัดทำ (Prepared By)</div>
+                        <div class="sig-name">({{ qt.employee.first_name }} {{ qt.employee.last_name }})</div>
+                        <div class="sig-date">วันที่ {{ qt.created_at|date:"d/m/Y" }}</div>
+                    </div>
+                </div>
+
+                <div class="col-4 position-relative">
+                    <div class="sig-box">
+                        {% if qt.status == 'APPROVED' and company.seal %}
+                            <img src="{{ company.seal.url }}" class="seal-img">
+                        {% endif %}
+                        {% if qt.status == 'APPROVED' and qt.approved_by and qt.approved_by.signature %}
+                            <img src="{{ qt.approved_by.signature.url }}" class="sig-img">
+                        {% endif %}
+                        <div class="sig-line"></div>
+                        <div class="sig-role">ผู้อนุมัติ (Authorized By)</div>
+                        {% if qt.status == 'APPROVED' %}
+                            <div class="sig-name">({{ qt.approved_by.first_name }} {{ qt.approved_by.last_name }})</div>
+                            <div class="sig-date">วันที่ {{ qt.approved_at|date:"d/m/Y" }}</div>
+                        {% else %}
+                            <div class="sig-name">(................................................)</div>
+                            <div class="sig-date">(รอการอนุมัติ)</div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 🌟 Pop-up วาดลายเซ็น (Modal) 🌟 -->
+    {% if not qt.customer_signature %}
+    <div id="signature-modal" class="sig-modal-overlay">
+        <div class="sig-modal-content">
+            <h5 class="fw-bold text-center mb-3"><i class="fas fa-pen-nib text-primary me-2"></i>ลงลายมือชื่อ</h5>
+            <div class="text-center text-muted small mb-2">ใช้นิ้วหรือปากกาวาดลงในกรอบด้านล่าง</div>
+            <div class="position-relative mb-3">
+                <canvas id="signature-pad" class="signature-pad"></canvas>
+                <button id="clear-pad-btn" class="btn btn-sm btn-light border position-absolute shadow-sm" style="top: 10px; right: 10px; z-index: 50;">
+                    <i class="fas fa-eraser me-1"></i> ลบใหม่
+                </button>
+            </div>
+            <div class="d-flex gap-2">
+                <button id="close-modal-btn" class="btn btn-light border flex-fill fw-bold rounded-pill">ยกเลิก</button>
+                <button id="apply-sig-btn" class="btn btn-warning flex-fill fw-bold rounded-pill text-dark shadow-sm">นำไปวางบนเอกสาร</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 🌟 แถบเมนูด้านล่างสุด (Sticky Bottom) 🌟 -->
+    <div class="fixed-bottom-bar text-center">
+        <div class="small text-muted mb-2 fw-bold" id="status-hint">กรุณาแตะปุ่มสีเหลืองเพื่อเซ็นชื่อลงในเอกสาร</div>
+        <button id="submit-doc-btn" class="btn btn-primary btn-lg w-100 fw-bold rounded-pill shadow-sm" disabled>
+            <i class="fas fa-paper-plane me-2"></i> ยืนยันการสั่งซื้อ
+        </button>
+    </div>
+    {% endif %}
+
+    <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.0.0/dist/signature_pad.umd.min.js"></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            // 🌟 1. แปลงตัวเลขเป็นภาษาไทย
+            const num = {{ qt.grand_total }};
+            document.getElementById('baht-text').innerText = ThaiBaht(num);
+
+            // 🌟 2. ระบบ Auto-Scale กระดาษ A4 ให้พอดีจอมือถือ
+            function scaleA4Page() {
+                var wrapper = document.getElementById('zoom-wrapper');
+                var page = document.getElementById('a4-page');
+                var availableWidth = window.innerWidth;
+
+                // ถ้าจอมือถือเล็กกว่า 820px ให้ทำการย่อส่วน (Scale)
+                if (availableWidth < 820) {
+                    var scaleRatio = (availableWidth - 20) / 800; // ลบขอบซ้ายขวา 20px
+                    page.style.transform = 'scale(' + scaleRatio + ')';
+                    // ปรับความสูงของ wrapper ให้พอดีกับกระดาษที่ถูกย่อ
+                    wrapper.style.height = (1131 * scaleRatio) + 'px';
+                } else {
+                    page.style.transform = 'scale(1)';
+                    wrapper.style.height = '1131px';
+                }
+            }
+            window.addEventListener('resize', scaleA4Page);
+            scaleA4Page();
+
+            // 🌟 3. ระบบวาดลายเซ็น (Signature Pad)
+            {% if not qt.customer_signature %}
+            var canvas = document.getElementById('signature-pad');
+            var signaturePad = new SignaturePad(canvas, {
+                backgroundColor: 'rgba(255, 255, 255, 0)', // ต้องโปร่งใส (0) เพื่อไม่ให้เซฟพื้นหลังไปทับเส้นประ
+                penColor: 'rgb(0, 0, 0)'
+            });
+            var signatureDataToSave = null;
+
+            // ปรับขนาด Canvas ให้ชัดแจ๋วบนมือถือ
+            function resizeCanvas() {
+                var ratio =  Math.max(window.devicePixelRatio || 1, 1);
+                canvas.width = canvas.offsetWidth * ratio;
+                canvas.height = canvas.offsetHeight * ratio;
+                canvas.getContext("2d").scale(ratio, ratio);
+                signaturePad.clear();
+            }
+
+            // เปิด Modal
+            document.getElementById('open-modal-btn').addEventListener('click', function() {
+                document.getElementById('signature-modal').classList.add('active');
+                resizeCanvas(); // Resize ตอนที่ Modal แสดงแล้วเท่านั้น ถึงจะได้ขนาดที่แท้จริง
+            });
+
+            // ปิด Modal
+            document.getElementById('close-modal-btn').addEventListener('click', function() {
+                document.getElementById('signature-modal').classList.remove('active');
+            });
+
+            // ปุ่มลบลายเซ็น
+            document.getElementById('clear-pad-btn').addEventListener('click', function() {
+                signaturePad.clear();
+            });
+
+            // ปุ่มนำลายเซ็นไปวางบนกระดาษ
+            document.getElementById('apply-sig-btn').addEventListener('click', function() {
+                if (signaturePad.isEmpty()) {
+                    alert("กรุณาเซ็นชื่อก่อนครับ");
+                    return;
+                }
+                // ดึงรูปออกมา
+                signatureDataToSave = signaturePad.toDataURL("image/png");
+
+                // เอารูปไปแปะทับเส้นประ
+                document.getElementById('preview-sig').src = signatureDataToSave;
+                document.getElementById('preview-sig').classList.remove('d-none');
+                document.getElementById('open-modal-btn').classList.add('d-none'); // ซ่อนปุ่มเหลือง
+
+                // ใส่ชื่อและวันที่
+                document.getElementById('sig-name-display').innerText = '({{ qt.customer_name|default:"ไม่ระบุชื่อ" }})';
+                let today = new Date();
+                document.getElementById('sig-date-display').innerText = `วันที่ ${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth() + 1).padStart(2, '0')}/${today.getFullYear() + 543}`;
+
+                // ปิด Modal และปลดล็อกปุ่มยืนยัน
+                document.getElementById('signature-modal').classList.remove('active');
+                document.getElementById('submit-doc-btn').disabled = false;
+                document.getElementById('status-hint').innerText = "✅ เอกสารพร้อมส่งแล้ว กรุณากดปุ่มสีน้ำเงินด้านล่าง";
+                document.getElementById('status-hint').classList.replace('text-muted', 'text-success');
+            });
+
+            // 🌟 4. ปุ่มส่งข้อมูลเข้าหลังบ้าน (Submit)
+            document.getElementById('submit-doc-btn').addEventListener('click', function() {
+                if (!signatureDataToSave) return;
+
+                var btn = this;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> กำลังบันทึกเอกสาร...';
+                btn.disabled = true;
+
+                fetch(window.location.href, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ signature_data: signatureDataToSave })
+                }).then(response => response.json()).then(data => {
+                    if(data.success) {
+                        window.location.reload(); // รีโหลดหน้าเพื่อโชว์แบนเนอร์สีเขียว
+                    } else {
+                        alert("เกิดข้อผิดพลาด: " + data.error);
+                        btn.innerHTML = '<i class="fas fa-paper-plane me-2"></i> ยืนยันการสั่งซื้อ';
+                        btn.disabled = false;
+                    }
+                }).catch(err => {
+                    alert("เกิดข้อผิดพลาดในการเชื่อมต่อ");
+                    btn.innerHTML = '<i class="fas fa-paper-plane me-2"></i> ยืนยันการสั่งซื้อ';
+                    btn.disabled = false;
+                });
+            });
+            {% endif %}
+        });
+
+        function ThaiBaht(number) {
+            const num = parseFloat(number).toFixed(2);
+            if (parseFloat(num) === 0) return "ศูนย์บาทถ้วน";
+            const bahtText = ["ศูนย์", "หนึ่ง", "สอง", "สาม", "สี่", "ห้า", "หก", "เจ็ด", "แปด", "เก้า"];
+            const unitText = ["", "สิบ", "ร้อย", "พัน", "หมื่น", "แสน", "ล้าน"];
+            let [integer, fraction] = num.split(".");
+            let text = "";
+            for (let i = 0; i < integer.length; i++) {
+                let digit = parseInt(integer.charAt(i));
+                let unit = unitText[(integer.length - 1 - i) % 7];
+                if (digit !== 0) {
+                    if (i === integer.length - 1 && digit === 1 && integer.length > 1) text += "เอ็ด";
+                    else if (i === integer.length - 2 && digit === 2) text += "ยี่";
+                    else if (i === integer.length - 2 && digit === 1) text += "";
+                    else text += bahtText[digit];
+                    text += unit;
+                }
+            }
+            text += "บาท";
+            if (parseInt(fraction) === 0) text += "ถ้วน";
+            else {
+                if (fraction.length === 2) {
+                    let d1 = parseInt(fraction.charAt(0)), d2 = parseInt(fraction.charAt(1));
+                    if (d1 !== 0) { if (d1 === 1) text += ""; else if (d1 === 2) text += "ยี่";
+                    else text += bahtText[d1]; text += "สิบ"; }
+                    if (d2 !== 0) { if (d2 === 1 && d1 !== 0) text += "เอ็ด";
+                    else text += bahtText[d2]; }
+                    text += "สตางค์";
+                }
+            }
+            return text;
+        }
+    </script>
+</body>
+</html>

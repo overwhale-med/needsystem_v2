@@ -43,6 +43,9 @@ urlpatterns = [
     path('surveys/', views.solar_survey_list, name='solar_survey_list'),
     path('surveys/create/', views.solar_survey_create, name='solar_survey_create'),
     path('surveys/<int:job_id>/', views.solar_survey_detail, name='solar_survey_detail'),
+    # 🌟 [NEW] เส้นทางสำหรับ Flow CRM ใบงานสำรวจ -> ใบเสนอราคา
+    path('surveys/<int:job_id>/update-tech/', views.solar_survey_update_tech, name='solar_survey_update_tech'),
+    path('surveys/<int:job_id>/generate-quote/', views.solar_survey_generate_quote, name='solar_survey_generate_quote'),
 
     path('expenses/', views.solar_expense_list, name='solar_expense_list'),
     # ช่างสามารถกดเบิกเงินโดยอ้างอิงจากใบงานได้

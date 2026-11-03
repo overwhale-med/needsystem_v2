@@ -1,4 +1,4 @@
-from django.shortcuts import render
+from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required
 from django.db.models import Sum, F
 import datetime
@@ -10,21 +10,30 @@ from purchasing.models import PurchaseOrder
 from accounting.models import Income, Expense
 
 # 🌟 [FIXED] แก้ชื่อ Model เป็น SolarSurveyJob ให้ตรงกับในฐานข้อมูล
-from solar_sales.models import SolarSurveyJob 
+from solar_sales.models import SolarSurveyJob
 
 @login_required
 def dashboard(request):
+    # 🌟 [NEW] ระบบสับรางอัตโนมัติ (Smart Redirect) 🌟
+    # 1. ดึงป้ายชื่อกลุ่มทั้งหมดของคนที่ล็อกอินมาดู
+    user_group_names = request.user.groups.values_list('name', flat=True)
+
+    # 2. ถ้านายสถานีเห็นป้ายฝ่ายขาย ให้เตะขึ้นรถด่วนไปหน้า Sales Dashboard ทันที!
+    if 'Knockdown_Sales_Team' in user_group_names or 'Solar_Sales_Team' in user_group_names:
+        return redirect('sales_dashboard')
+
+    # --- โค้ดเดิมของหน้าหลักจะทำงานต่อจากบรรทัดนี้ลงไป (สำหรับแผนกอื่น) ---
     today = datetime.date.today()
-    
+
     # 1. ยอดขายวันนี้
     sales_today = POSOrder.objects.filter(created_at__date=today).aggregate(Sum('total_amount'))['total_amount__sum'] or 0
-    
+
     # 2. สินค้าใกล้หมด
     low_stock_count = Product.objects.filter(stock_qty__lte=F('min_level'), is_active=True).count()
-    
+
     # 3. PO รอรับของ
     pending_po_count = PurchaseOrder.objects.filter(status='ORDERED').count()
-    
+
     # 4. การเงินเดือนนี้
     current_month = today.month
     current_year = today.year
@@ -37,22 +46,22 @@ def dashboard(request):
     # 🌟 5. Logic เช็กสิทธิ์ฝ่ายบัญชี (อ่านจากโปรไฟล์พนักงาน) 🌟
     is_accounting = False
     is_accounting_manager = False
-    
+
     # ตัวแปรเก็บจำนวนใบงานของช่างโซล่า
-    pending_solar_surveys = 0 
-    
+    pending_solar_surveys = 0
+
     if hasattr(request.user, 'employee') and request.user.employee:
         emp = request.user.employee
         dept_name = emp.department.name if emp.department else ''
         rank = emp.business_rank if emp.business_rank else ''
-        
+
         # เช็กว่าเป็นพนักงานบัญชีหรือไม่
         if 'บัญชี' in dept_name or 'Accounting' in dept_name:
             is_accounting = True
             # เช็กว่าเป็นระดับหัวหน้าหรือไม่
             if rank in ['Manager', 'Executive', 'Director', 'ผู้จัดการ']:
                 is_accounting_manager = True
-                
+
         # 🌟 [FIXED] เช็กว่าเป็นทีมช่างโซล่า และดึงงานด้วย Model ที่ถูกต้อง (สถานะ COMPLETED)
         if 'ช่าง' in dept_name or 'ผลิต' in dept_name or 'โซล่า' in dept_name:
             pending_solar_surveys = SolarSurveyJob.objects.filter(surveyor=emp).exclude(status='COMPLETED').count()

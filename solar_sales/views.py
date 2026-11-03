@@ -1115,6 +1115,122 @@ def solar_survey_detail(request, job_id):
 
     return render(request, 'solar_sales/survey_detail.html', {'job': job})
 
+# ==========================================
+# 🌟 [NEW] ฟังก์ชันสำหรับ Flow งานเซลส์: อัปเดตข้อมูลเทคนิค & อัปโหลดรูปหน้างาน
+# ==========================================
+@login_required
+def solar_survey_update_tech(request, job_id):
+    job = get_object_or_404(SolarSurveyJob, pk=job_id)
+
+    if request.method == 'POST':
+        # 1. รับค่าข้อมูลทางเทคนิคหน้างาน
+        job.avg_electric_bill = request.POST.get('avg_electric_bill') or None
+        job.electric_phase = request.POST.get('electric_phase')
+        job.roof_type = request.POST.get('roof_type')
+        job.cable_distance = request.POST.get('cable_distance')
+        job.has_wifi = request.POST.get('has_wifi') == 'on'
+
+        package_id = request.POST.get('recommended_package')
+        if package_id:
+            job.recommended_package_id = package_id
+
+        # 2. ถ้าระบุว่าสำรวจเสร็จสิ้น ให้ประทับเวลาและเปลี่ยนสถานะ
+        is_completed = request.POST.get('mark_as_completed') == 'on'
+        if is_completed:
+            job.status = 'COMPLETED'
+            job.completed_at = timezone.now()
+
+        job.save()
+
+        # 3. จัดการรูปภาพหน้างาน (รองรับการอัปโหลดหลายไฟล์พร้อมกัน)
+        from .models import SolarSurveyImage
+        files = request.FILES.getlist('survey_images')
+        for f in files:
+            SolarSurveyImage.objects.create(
+                survey_job=job,
+                image=f,
+                description="อัปโหลดจากหน้างานโดยเซลส์"
+            )
+
+        if is_completed:
+            messages.success(request, f"🎉 สำรวจหน้างานเสร็จสิ้น! ส่งเรื่อง {job.code} กลับไปให้แอดมินออกใบเสนอราคาแล้วครับ")
+            return redirect('solar_survey_list')
+        else:
+            messages.success(request, "✅ บันทึกข้อมูลทางเทคนิคและรูปภาพหน้างานเรียบร้อยแล้ว")
+            return redirect('solar_survey_detail', job_id=job.id)
+
+    return redirect('solar_survey_list')
+
+# ==========================================
+# 🌟 [NEW] ฟังก์ชันสำหรับแอดมิน: แปลงใบสำรวจ -> ใบเสนอราคา
+# ==========================================
+@login_required
+def solar_survey_generate_quote(request, job_id):
+    job = get_object_or_404(SolarSurveyJob, pk=job_id)
+
+    # ดักเช็คว่าห้ามสร้างซ้ำ
+    if hasattr(job, 'quotation_generated'):
+        messages.warning(request, f"⚠️ ใบสำรวจนี้มีการสร้างใบเสนอราคาไปแล้ว ({job.quotation_generated.code})")
+        return redirect('solar_survey_detail', job_id=job.id)
+
+    # ดักสิทธิ์ว่าต้องเป็นแอดมินหรือหัวหน้าเท่านั้น
+    current_emp = getattr(request.user, 'employee', None)
+    is_admin = request.user.is_superuser
+    if current_emp and not is_admin:
+        rank = current_emp.business_rank.lower() if current_emp.business_rank else ""
+        if rank in ['manager', 'director'] or 'admin' in getattr(current_emp.department, 'name', '').lower() or 'แอดมิน' in getattr(current_emp.department, 'name', ''):
+            is_admin = True
+
+    if not is_admin:
+        messages.error(request, "❌ เฉพาะแอดมินหรือผู้บริหารเท่านั้นที่สามารถแปลงใบเสนอราคาได้")
+        return redirect('solar_survey_detail', job_id=job.id)
+
+    # 🚀 เริ่มการแปลงร่าง
+    with transaction.atomic():
+        # 1. สร้างลูกค้า Walk-in ให้เป็นลูกค้าระบบ (ถ้ายังไม่มี)
+        customer = job.customer
+        if not customer and job.walkin_name:
+            customer = SolarCustomer.objects.create(
+                name=job.walkin_name,
+                phone=job.walkin_phone,
+                address=job.survey_address,
+                contact_person="ดึงข้อมูลจากใบสำรวจ (Walk-in)"
+            )
+            job.customer = customer
+            job.save()
+
+        # 2. สร้างใบเสนอราคา (Draft) ผูกกับลูกค้าและใบสำรวจ
+        new_qt = SolarQuotation.objects.create(
+            customer=customer,
+            employee=job.surveyor, # ให้เครดิตเซลส์คนที่ไปลงพื้นที่
+            survey_ref=job,        # เชื่อมสะพานหากัน
+            status='DRAFT',
+            note=f"📌 สร้างอัตโนมัติจากใบงานสำรวจหน้างาน: {job.code}\nประเภทหลังคา: {job.get_roof_type_display() if job.roof_type else '-'}\nค่าไฟเฉลี่ย: {job.avg_electric_bill or '-'} บาท\nระบบไฟ: {job.get_electric_phase_display() if job.electric_phase else '-'}"
+        )
+
+        # 3. ถ้าเซลส์แนะนำแพ็กเกจมา ให้ยัดแพ็กเกจนั้นใส่ใบเสนอราคาให้เลย
+        if job.recommended_package:
+            SolarQuotationItem.objects.create(
+                quotation=new_qt,
+                product=job.recommended_package,
+                item_name=job.recommended_package.name,
+                quantity=1,
+                unit_price=job.recommended_package.sell_price,
+                amount=job.recommended_package.sell_price
+            )
+            # สั่งคำนวณยอดรวมใหม่
+            subtotal = job.recommended_package.sell_price
+            new_qt.subtotal = subtotal
+            new_qt.grand_total = subtotal
+            new_qt.save()
+
+        # 4. เปลี่ยนสถานะใบสำรวจเป็น ออกบิลแล้ว
+        job.status = 'QUOTED'
+        job.save()
+
+    messages.success(request, f"✨ สุดยอด! แปลงใบงานสำรวจเป็นใบเสนอราคา {new_qt.code} สำเร็จแล้วครับ")
+    return redirect('solar_quotation_edit', qt_id=new_qt.id)
+
 @login_required
 def solar_expense_list(request):
     expenses = SolarExpenseClaim.objects.all().order_by('-created_at')

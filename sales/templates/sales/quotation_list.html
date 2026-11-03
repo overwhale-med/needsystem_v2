@@ -2,6 +2,9 @@
 {% load humanize %}
 
 {% block content %}
+<style>
+    .navbar-nav { display: none !important; }
+</style>
 <script type="text/javascript" src="https://cdn.jsdelivr.net/jquery/latest/jquery.min.js"></script>
 <script type="text/javascript" src="https://cdn.jsdelivr.net/momentjs/latest/moment.min.js"></script>
 <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.min.js"></script>
@@ -83,11 +86,11 @@
                     <p class="text-muted small mb-0">ระบบจัดการงานขายแผนกบ้านน็อคดาวน์</p>
                 </div>
                 <div class="d-flex gap-2">
-                    <a href="{% url 'sales_dashboard' %}" class="btn btn-light border shadow-sm rounded-pill px-4 fw-bold text-muted d-flex align-items-center">
-                        <i class="fas fa-arrow-left me-2"></i> Dashboard
-                    </a>
                     <a href="{% url 'quotation_create' %}" class="btn btn-primary shadow-sm rounded-pill px-4 fw-bold d-flex align-items-center" onclick="disableCreateBtn(this);">
                         <span id="createBtnText"><i class="fas fa-plus me-2"></i> สร้างใบเสนอราคา</span>
+                    </a>
+                    <a href="{% url 'sales_dashboard' %}" class="btn btn-light border shadow-sm rounded-pill px-4 fw-bold text-muted d-flex align-items-center">
+                        <i class="fas fa-arrow-left me-2"></i> กลับ Dashboard
                     </a>
                 </div>
             </div>

@@ -70,7 +70,7 @@
                         <a class="nav-link" href="/"><i class="fas fa-home me-1"></i> หน้าหลัก</a>
                     </li>
 
-                    {% if request.user.is_superuser or request.user.groups.all.0.name == "Sales_Team" or request.user.groups.all.0.name == "Sales" or request.user.groups.all.0.name == "Executive" %}
+                    {% if request.user.is_superuser or request.user.groups.all.0.name == "Knockdown_Sales_Team" or request.user.groups.all.0.name == "Executive" %}
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" id="salesDropdown" role="button" data-bs-toggle="dropdown">
                             <i class="fas fa-store me-1"></i> ระบบขาย
@@ -173,6 +173,7 @@
                     {% endif %}
                     {% endwith %}
 
+                    {% if request.user.is_superuser or request.user.groups.all.0.name == "Solar_Sales_Team" or request.user.groups.all.0.name == "Executive" %}
                     <!-- 🌟 ระบบโซล่าเซลล์ -->
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle fw-bold text-dark" href="#" id="solarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
@@ -252,8 +253,23 @@
                                     <i class="fas fa-hand-holding-usd text-success me-2" style="width: 20px; text-align: center;"></i> ศูนย์เบิกผลตอบแทนโซล่าเซลล์
                                 </a>
                             </li>
+                            <!-- 🌟 [NEW] เมนูกระดานแจ้งซ่อมโซล่าเซลล์ 🌟 -->
+                            <li><hr class="dropdown-divider opacity-25"></li>
+                            <li>
+                                <a class="dropdown-item py-2 fw-bold text-danger" href="{% url 'solar_service_board' %}">
+                                    <i class="fas fa-tools text-danger me-2" style="width: 20px; text-align: center;"></i> กระดานคิวงานแจ้งซ่อม (After-Sales)
+                                </a>
+                            </li>
+                            <!-- 🌟 [NEW] เมนูศูนย์รวมแฟ้มภาพโซล่าเซลล์ 🌟 -->
+                            <li><hr class="dropdown-divider opacity-25"></li>
+                            <li>
+                                <a class="dropdown-item py-2 fw-bold text-primary" href="{% url 'solar_media_hub_list' %}">
+                                    <i class="fas fa-photo-video text-primary me-2" style="width: 20px; text-align: center;"></i> ศูนย์รวมแฟ้มภาพ (Media Hub)
+                                </a>
+                            </li>
                         </ul>
                     </li>
+                    {% endif %}  <!-- 🌟 [NEW] เพิ่มโค้ดปิดล็อกสิทธิ์เมนูโซล่าเซลล์ตรงนี้ -->
 
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" id="hrDropdown" role="button" data-bs-toggle="dropdown">
@@ -276,13 +292,24 @@
                 </ul>
 
                 <!-- 🌟 แสดง User และปุ่มออกจากระบบ -->
-                <div class="d-flex align-items-center">
-                    <span class="me-3 d-none d-md-inline nav-user">
-                        <i class="far fa-user-circle me-1"></i> {{ user.first_name|default:user.username }}
+                <!-- เติมคลาส ms-auto เพื่อดันกล่องนี้ไปชิดขวาสุดเสมอ -->
+                <div class="d-flex align-items-center ms-auto">
+                    <span class="me-3 d-none d-md-inline nav-user d-flex align-items-center">
+
+                        <!-- 🌟 ระบบเช็กรูปโปรไฟล์พนักงาน -->
+                        {% if user.employee and user.employee.photo %}
+                            <img src="{{ user.employee.photo.url }}" class="rounded-circle me-2" style="width: 30px; height: 30px; object-fit: cover; border: 2px solid #c5a059;">
+                        {% else %}
+                            <i class="far fa-user-circle me-2 fs-5 text-muted"></i>
+                        {% endif %}
+
+                        <!-- ชื่อพนักงาน -->
+                        {{ user.first_name|default:user.username }}
                     </span>
-                    <form action="{% url 'logout' %}" method="post" class="d-inline">
+
+                    <form action="{% url 'logout' %}" method="post" class="d-inline mb-0">
                         {% csrf_token %}
-                        <button type="submit" class="btn btn-sm btn-logout rounded-pill px-3">ออกจากระบบ</button>
+                        <button type="submit" class="btn btn-sm btn-logout rounded-pill px-3 fw-bold"><i class="fas fa-sign-out-alt me-1"></i> ออกจากระบบ</button>
                     </form>
                 </div>
             </div>

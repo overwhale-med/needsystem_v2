@@ -70,7 +70,8 @@ class SolarQuotation(models.Model):
 
     customer = models.ForeignKey(SolarCustomer, on_delete=models.SET_NULL, null=True, blank=True)
     employee = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, verbose_name="พนักงานขาย")
-
+    # 🌟 [NEW] เชื่อมโยงกับใบงานสำรวจ (แอดมินจะได้รู้ว่าดึงข้อมูลมาจากใบงานไหน)
+    survey_ref = models.OneToOneField('SolarSurveyJob', on_delete=models.SET_NULL, null=True, blank=True, related_name='quotation_generated', verbose_name="อ้างอิงจากใบงานสำรวจ")
     subtotal = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="รวมราคาสินค้า")
     discount = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="หักส่วนลด")
     survey_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="ค่าสำรวจหน้างาน / ค่าจัดส่ง")
@@ -227,26 +228,55 @@ class SolarInvoice(models.Model):
 # ==========================================
 class SolarSurveyJob(models.Model):
     STATUS_CHOICES = [
-        ('PENDING', 'รอลงพื้นที่'),
-        ('IN_PROGRESS', 'กำลังดำเนินการ'),
-        ('COMPLETED', 'สำรวจเสร็จสิ้น'),
-        ('CANCELLED', 'ยกเลิก')
+        ('PENDING', 'รอแอดมินจ่ายงาน'),
+        ('ASSIGNED', 'เซลส์รับงาน/รอลงพื้นที่'),
+        ('COMPLETED', 'สำรวจเสร็จสิ้น (รอออกใบเสนอราคา)'),
+        ('QUOTED', 'ออกใบเสนอราคาแล้ว (ปิดจ๊อบสำรวจ)'),
+        ('REJECTED', 'ลูกค้าปฏิเสธ/ปิดการขายไม่ได้'),
+        ('CANCELLED', 'ยกเลิกใบงาน')
     ]
+
+    ROOF_CHOICES = [
+        ('METAL_SHEET', 'เมทัลชีท (Metal Sheet)'),
+        ('CPAC', 'กระเบื้องซีแพค (CPAC)'),
+        ('DECK', 'ดาดฟ้าปูน / พื้นเรียบ'),
+        ('DOUBLE_CORRUGATED', 'กระเบื้องลอนคู่'),
+        ('OTHER', 'อื่นๆ (ระบุในหมายเหตุ)')
+    ]
+
+    PHASE_CHOICES = [
+        ('1_PHASE', 'ไฟ 1 เฟส (220V)'),
+        ('3_PHASE', 'ไฟ 3 เฟส (380V)')
+    ]
+
     code = models.CharField(max_length=20, unique=True, verbose_name="เลขที่ใบงานสำรวจ")
 
-    # 🌟 [FIXED] เปลี่ยนให้ลูกค้าระบบเป็นค่าว่างได้ เผื่อกรณีพิมพ์ชื่อเอง (Walk-in) 🌟
-    customer = models.ForeignKey(SolarCustomer, on_delete=models.CASCADE, null=True, blank=True, verbose_name="ลูกค้า")
-
-    # 🌟 [NEW] เพิ่ม 2 ฟิลด์ใหม่สำหรับเก็บข้อมูลลูกค้า Walk-in 🌟
+    # 1. ข้อมูลลูกค้าเบื้องต้น (Admin กรอก)
+    customer = models.ForeignKey(SolarCustomer, on_delete=models.CASCADE, null=True, blank=True, verbose_name="ลูกค้า (ในระบบ)")
     walkin_name = models.CharField(max_length=200, blank=True, null=True, verbose_name="ชื่อลูกค้า (Walk-in)")
     walkin_phone = models.CharField(max_length=50, blank=True, null=True, verbose_name="เบอร์ติดต่อ (Walk-in)")
+    survey_address = models.TextField(blank=True, null=True, verbose_name="ที่อยู่/พิกัดหน้างาน")
 
+    # 2. ข้อมูลการนัดหมาย (Admin กรอก)
     appointment_date = models.DateTimeField(verbose_name="วันเวลานัดหมาย")
     assigned_by = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, related_name='solar_survey_assigned', verbose_name="ผู้มอบหมาย (Admin)")
-    surveyor = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, related_name='solar_survey_tasks', verbose_name="ผู้สำรวจ (ช่าง)")
+    surveyor = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, related_name='solar_survey_tasks', verbose_name="ผู้สำรวจ (Sales)")
+
+    # 🌟 [NEW] 3. ข้อมูลทางเทคนิคหน้างาน (Sales ลงพื้นที่กรอกกลับมา) 🌟
+    avg_electric_bill = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, verbose_name="ค่าไฟเฉลี่ยต่อเดือน (บาท)")
+    electric_phase = models.CharField(max_length=20, choices=PHASE_CHOICES, null=True, blank=True, verbose_name="ระบบไฟฟ้าเดิม")
+    roof_type = models.CharField(max_length=30, choices=ROOF_CHOICES, null=True, blank=True, verbose_name="ประเภทหลังคา")
+    cable_distance = models.CharField(max_length=100, blank=True, null=True, verbose_name="ระยะสายไฟ (แผง->ตู้->เมนบ้าน)")
+    has_wifi = models.BooleanField(default=False, verbose_name="มี WiFi หน้างาน (สำหรับแอป)")
+
+    # แพ็กเกจที่เซลส์แนะนำให้ลูกค้า
+    recommended_package = models.ForeignKey(SolarProduct, on_delete=models.SET_NULL, null=True, blank=True, limit_choices_to={'product_type': 'FG'}, verbose_name="แพ็กเกจที่แนะนำ")
+
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING', verbose_name="สถานะงาน")
-    note = models.TextField(blank=True, null=True, verbose_name="รายละเอียด/หมายเหตุ")
+    note = models.TextField(blank=True, null=True, verbose_name="รายละเอียดเพิ่มเติม / สรุปจากเซลส์")
+
     created_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(null=True, blank=True, verbose_name="เวลาที่สำรวจเสร็จ")
 
     def save(self, *args, **kwargs):
         if not self.code:
@@ -260,6 +290,19 @@ class SolarSurveyJob(models.Model):
 
     def __str__(self):
         return self.code
+
+# ==========================================
+# 🌟 [NEW] ตารางย่อย: คลังรูปถ่ายหน้างานสำรวจ (Survey Images) 🌟
+# ==========================================
+class SolarSurveyImage(models.Model):
+    survey_job = models.ForeignKey(SolarSurveyJob, related_name='images', on_delete=models.CASCADE)
+    image = models.ImageField(upload_to='solar_survey_images/%Y/%m/', verbose_name="รูปถ่ายหน้างาน (บิลค่าไฟ/หลังคา/เบรกเกอร์)")
+    description = models.CharField(max_length=255, blank=True, null=True, verbose_name="คำอธิบายรูป (เช่น บิลค่าไฟ)")
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "รูปถ่ายหน้างานสำรวจ"
+        verbose_name_plural = "รูปถ่ายหน้างานสำรวจ"
 
 class SolarSurveyItem(models.Model):
     job = models.ForeignKey(SolarSurveyJob, related_name='items', on_delete=models.CASCADE)

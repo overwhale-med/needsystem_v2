@@ -18,6 +18,13 @@
         <div>
             <a href="{% url 'solar_quotation_list' %}" class="btn btn-light border shadow-sm rounded-pill px-3 btn-sm fw-bold"><i class="fas fa-chevron-left me-1"></i> กลับ</a>
 
+            <!-- 🌟 [NEW] ปุ่มวาร์ปไปดูรูปหน้างาน (ถ้ามีการเปิด JOB ไปแล้ว) -->
+            {% if qt.center_jobs.first %}
+            <a href="{% url 'solar_media_hub_detail' qt.center_jobs.first.id %}" target="_blank" class="btn btn-outline-primary shadow-sm rounded-pill px-3 ms-2 btn-sm fw-bold">
+                <i class="fas fa-photo-video me-1"></i> ดูรูปผลงานติดตั้ง
+            </a>
+            {% endif %}
+
             <!-- 🌟 ปุ่มส่งงานเข้า Center (จะแสดงเมื่อเอกสารอนุมัติแล้วเท่านั้น) -->
             {% if qt.status == 'APPROVED' %}
             <a href="{% url 'solar_quotation_send_to_center' qt.id %}" class="btn btn-warning shadow-sm rounded-pill px-4 ms-2 btn-sm fw-bold text-dark" onclick="return confirm('ยืนยันการส่งงาน {{ qt.code }} เข้า Center เพื่อเริ่มงานใช่หรือไม่?');">

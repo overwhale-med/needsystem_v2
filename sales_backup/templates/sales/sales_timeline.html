@@ -1,0 +1,272 @@
+{% extends 'core/base.html' %}
+{% load humanize %}
+
+{% block content %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<style>
+    .text-strong { color: #1e2b3c !important; }
+    .text-medium { color: #596573 !important; }
+
+    .smart-eta-card {
+        background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+        border-left: 6px solid #0d6efd;
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .smart-eta-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.08) !important;
+    }
+
+    .chart-container {
+        position: relative;
+        height: 350px;
+        width: 100%;
+    }
+
+    .date-input-seamless {
+        background: transparent;
+        border: none;
+        border-bottom: 2px dashed #0d6efd;
+        border-radius: 0;
+        font-size: 1.15rem;
+        font-weight: bold;
+        color: #0d6efd;
+        width: 150px;
+        text-align: center;
+        padding: 0;
+        cursor: pointer;
+    }
+    .date-input-seamless:focus { outline: none; box-shadow: none; border-color: #ffc107; color: #ffc107; }
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="https://npmcdn.com/flatpickr/dist/l10n/th.js"></script>
+
+<div class="container-fluid py-4 px-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h3 class="fw-bold text-strong mb-1"><i class="fas fa-chart-pie text-primary me-2"></i>Dashboard: สรุปงานผลิตและจัดส่ง</h3>
+            <p class="text-medium small mb-0">ประเมินวันจัดส่งอัตโนมัติ และเช็กประสิทธิภาพโรงงานแบบ Real-time</p>
+        </div>
+        <a href="{% url 'sales_dashboard' %}" class="btn btn-outline-secondary rounded-pill px-4 bg-white shadow-sm fw-bold">
+            <i class="fas fa-arrow-left me-1"></i> หน้า Dashboard
+        </a>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow-sm border-0 rounded-4 smart-eta-card p-4">
+                <div class="row align-items-center">
+                    <div class="col-md-7 border-end-md mb-3 mb-md-0">
+                        <div class="d-flex align-items-center">
+                            <div class="bg-primary bg-opacity-10 text-primary p-3 rounded-circle me-4">
+                                <i class="fas fa-calendar-check fa-2x"></i>
+                            </div>
+                            <div>
+                                <p class="text-muted fw-bold mb-1"><i class="fas fa-info-circle me-1"></i> ระบบคำนวณวันส่งมอบอัตโนมัติ (คำนวณจากโควตาโรงงาน)</p>
+
+                                <form id="etaForm" method="GET" class="d-inline-flex align-items-center">
+                                    <input type="hidden" name="filter_date" value="{{ filter_date|date:'Y-m-d' }}">
+                                    <h5 class="fw-bold text-dark mb-0 me-2">หากลูกค้ายืนยันและชำระมัดจำวันที่:</h5>
+                                    <input type="text" class="date-input-seamless datepicker" name="deposit_date" value="{{ calc_deposit_date|date:'Y-m-d' }}" onchange="document.getElementById('etaForm').submit();" title="คลิกเพื่อเปลี่ยนวันที่">
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-5 text-center text-md-end ps-md-4">
+                        <p class="text-muted fw-bold mb-1">คาดว่าจะสามารถจัดส่งได้ประมาณวันที่:</p>
+                        <h2 class="fw-bold text-primary mb-0 d-inline-block border-bottom border-primary border-3 pb-1">
+                            {{ smart_eta_date|date:"d M Y" }}
+                        </h2>
+                        <div class="mt-3 text-danger small bg-danger bg-opacity-10 p-2 rounded-3 text-start text-md-center">
+                            <i class="fas fa-exclamation-triangle me-1"></i> <strong>หมายเหตุ:</strong> วันที่จัดส่งสินค้าอาจมีความคลาดเคลื่อนจากปริมาณออเดอร์ใหม่ที่เพิ่มขึ้นในอนาคต
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-xl-6">
+            <div class="card shadow-sm border-0 rounded-4 h-100">
+                <div class="card-header bg-white border-0 py-3 rounded-top-4 d-flex justify-content-between align-items-center">
+                    <h5 class="fw-bold text-strong m-0"><i class="fas fa-chart-bar text-success me-2"></i>เปรียบเทียบ ยอดสั่งผลิต vs จัดส่ง</h5>
+                </div>
+                <div class="card-body p-4">
+                    <div class="chart-container">
+                        <canvas id="chartPerformance"></canvas>
+                    </div>
+                    <p class="text-center text-muted small mt-3 mb-0">
+                        <i class="fas fa-lightbulb text-warning"></i>
+                        <span class="text-primary fw-bold">น้ำเงิน:</span> ยอดสั่งผลิตทั้งหมด |
+                        <span class="text-danger fw-bold">แดง:</span> ผลิตเสร็จ (ค้างส่ง) <span class="text-decoration-underline" style="cursor: pointer;" title="กดที่แท่งสีแดงเพื่อดูงาน">👉กดดูได้</span> |
+                        <span class="text-success fw-bold">เขียว:</span> ส่งเรียบร้อยแล้ว
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-6">
+            <div class="card shadow-sm border-0 rounded-4 h-100">
+                <div class="card-header bg-white border-0 py-3 rounded-top-4 d-flex flex-wrap justify-content-between align-items-center">
+                    <h5 class="fw-bold text-strong m-0"><i class="fas fa-industry text-warning me-2"></i>ปริมาณงานสั่งผลิต แยกตามโรงงาน</h5>
+
+                    <form id="chartFilterForm" method="GET" class="d-flex align-items-center mt-2 mt-md-0">
+                        <input type="hidden" name="deposit_date" value="{{ calc_deposit_date|date:'Y-m-d' }}">
+                        <span class="small fw-bold text-muted me-2">รอบสัปดาห์:</span>
+                        <div class="input-group input-group-sm w-auto shadow-sm rounded-pill overflow-hidden border">
+                            <span class="input-group-text bg-white border-0"><i class="far fa-calendar-alt text-primary"></i></span>
+                            <input type="text" class="form-control border-0 fw-bold text-dark datepicker" name="filter_date" value="{{ filter_date|date:'Y-m-d' }}" onchange="document.getElementById('chartFilterForm').submit();" style="width: 110px; cursor: pointer; text-align: center;">
+                        </div>
+                    </form>
+                </div>
+                <div class="card-body p-4">
+                    <div class="text-center mb-3">
+                        <span class="badge bg-light text-dark border px-3 py-2 fs-6 shadow-sm">ข้อมูลประจำสัปดาห์: <span class="text-primary">{{ filter_week_display }}</span></span>
+                    </div>
+                    <div class="chart-container" style="height: 290px;">
+                        <canvas id="chartWorkload"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+
+    // เปิดใช้งานปฏิทินภาษาไทย
+    flatpickr(".datepicker", {
+        dateFormat: "Y-m-d",
+        altInput: true,
+        altFormat: "d/m/Y",
+        locale: "th",
+        allowInput: true
+    });
+
+    // สมัครใช้งานปลั๊กอิน DataLabels ให้ตัวเลขโชว์บนกราฟ
+    Chart.register(ChartDataLabels);
+
+    const labelsDisplay = JSON.parse('{{ chart_labels_display_json|safe }}');
+    const weekStarts = JSON.parse('{{ chart_week_starts_json|safe }}');
+    const weekEnds = JSON.parse('{{ chart_week_ends_json|safe }}');
+
+    const orderedData = JSON.parse('{{ chart1_ordered_json|safe }}');
+    const pendingData = JSON.parse('{{ chart1_pending_json|safe }}');
+    const deliveredData = JSON.parse('{{ chart1_delivered_json|safe }}');
+
+    const branchLabels = JSON.parse('{{ chart2_labels_json|safe }}');
+    const branchData = JSON.parse('{{ chart2_data_json|safe }}');
+    const branchColors = JSON.parse('{{ chart2_colors_json|safe }}');
+
+    // ----------------------------------------
+    // สร้างกราฟที่ 1 (สั่งผลิต vs ค้างส่ง vs จัดส่ง)
+    // ----------------------------------------
+    const ctx1 = document.getElementById('chartPerformance').getContext('2d');
+    new Chart(ctx1, {
+        type: 'bar',
+        data: {
+            labels: labelsDisplay,
+            datasets: [
+                {
+                    label: 'ยอดสั่งผลิตทั้งหมด (หลัง)',
+                    data: orderedData,
+                    backgroundColor: '#0d6efd', // น้ำเงิน
+                    borderRadius: 4,
+                },
+                {
+                    label: 'ผลิตเสร็จ (ค้างส่ง)',
+                    data: pendingData,
+                    backgroundColor: '#dc3545', // แดง
+                    borderRadius: 4,
+                },
+                {
+                    label: 'จัดส่งแล้ว (ปิดจ๊อบ)',
+                    data: deliveredData,
+                    backgroundColor: '#198754', // เขียว
+                    borderRadius: 4,
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            // 🌟 ทำให้กราฟคลิกได้ และมี Effect เปลี่ยนเมาส์ 🌟
+            onClick: (e, elements) => {
+                if (elements.length > 0) {
+                    const datasetIndex = elements[0].datasetIndex;
+                    const index = elements[0].index;
+
+                    // ถ้าผู้ใช้คลิกที่แท่งที่ 1 (คือแท่งสีแดง ค้างส่ง)
+                    if (datasetIndex === 1) {
+                        const sDate = weekStarts[index];
+                        const eDate = weekEnds[index];
+                        // เปิดหน้ากระดาน พร้อมยัด Filter ให้เรียบร้อย
+                        const url = `{% url 'production_list' %}?status=COMPLETED&start_date=${sDate}&end_date=${eDate}`;
+                        window.open(url, '_blank');
+                    }
+                }
+            },
+            onHover: (e, elements) => {
+                // เปลี่ยนเคอร์เซอร์เป็นรูปมือ เฉพาะตอนชี้แท่งสีแดง
+                e.native.target.style.cursor = (elements.length > 0 && elements[0].datasetIndex === 1) ? 'pointer' : 'default';
+            },
+            plugins: {
+                legend: { position: 'top', labels: { font: { family: "'Sarabun', sans-serif", size: 13 } } },
+                datalabels: {
+                    color: '#fff',
+                    font: { weight: 'bold', family: "'Sarabun', sans-serif" },
+                    formatter: function(value) { return value > 0 ? value : ''; },
+                    anchor: 'end',
+                    align: 'bottom' // ตัวเลขอยู่ด้านบนสุดด้านในแท่ง
+                }
+            },
+            scales: {
+                y: { beginAtZero: true, ticks: { stepSize: 1, font: { family: "'Sarabun', sans-serif" } } },
+                x: { ticks: { font: { family: "'Sarabun', sans-serif", size: 11 } } }
+            }
+        }
+    });
+
+    // ----------------------------------------
+    // สร้างกราฟที่ 2 (ยอดสั่งผลิตแยกตามสาขา) - แสดงเฉพาะ 1 สัปดาห์
+    // ----------------------------------------
+    const ctx2 = document.getElementById('chartWorkload').getContext('2d');
+    new Chart(ctx2, {
+        type: 'bar',
+        data: {
+            labels: branchLabels,
+            datasets: [{
+                label: 'ยอดสั่งผลิต (หลัง)',
+                data: branchData,
+                backgroundColor: branchColors,
+                borderRadius: 4,
+                barPercentage: 0.6 // ปรับให้แท่งไม่อ้วนเกินไป
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false }, // ซ่อน Legend เพราะแกน X บอกชื่ออยู่แล้ว
+                datalabels: {
+                    color: '#fff',
+                    font: { weight: 'bold', family: "'Sarabun', sans-serif", size: 14 },
+                    formatter: function(value) { return value > 0 ? value : ''; },
+                    anchor: 'end',
+                    align: 'bottom'
+                }
+            },
+            scales: {
+                x: { ticks: { font: { family: "'Sarabun', sans-serif", weight: 'bold' } } },
+                y: { beginAtZero: true, ticks: { stepSize: 1, font: { family: "'Sarabun', sans-serif" } } }
+            }
+        }
+    });
+});
+</script>
+{% endblock %}

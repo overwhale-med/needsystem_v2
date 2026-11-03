@@ -31,7 +31,6 @@
             <p class="text-muted mb-0">รหัสเอกสารอ้างอิง: <span class="badge bg-primary rounded-pill px-2">{{ order.code }}</span> | ลูกค้า: <strong>{{ order.customer_name|default:"-" }}</strong></p>
         </div>
         <div>
-            <!-- ปุ่มปิดแท็บ/กลับหน้าเดิม -->
             <button onclick="window.close();" class="btn btn-outline-secondary rounded-pill px-4 fw-bold shadow-sm">
                 <i class="fas fa-times me-1"></i> ปิดหน้าต่างนี้
             </button>
@@ -40,7 +39,6 @@
 
     <div class="card border-0 shadow-sm rounded-4 mb-4">
         <div class="card-header bg-white p-3 border-bottom">
-            <!-- 🌟 แท็บเมนู (แบ่งหมวดหมู่ชัดเจน) 🌟 -->
             <ul class="nav nav-pills" id="mediaTabs" role="tablist">
                 <li class="nav-item" role="presentation">
                     <button class="nav-link active" id="passed-tab" data-bs-toggle="pill" data-bs-target="#passed" type="button" role="tab">
@@ -57,7 +55,6 @@
                         <i class="fas fa-tools text-warning me-1"></i> รูปภาพแจ้งซ่อม (ก่อนและหลังการซ่อม)
                     </button>
                 </li>
-                <!-- 🌟 [NEW] แท็บที่ 4: รูปจากแผนกขนส่ง 🌟 -->
                 <li class="nav-item" role="presentation">
                     <button class="nav-link" id="delivery-tab" data-bs-toggle="pill" data-bs-target="#delivery" type="button" role="tab">
                         <i class="fas fa-truck text-info me-1"></i> รูปภาพการจัดส่งสินค้า
@@ -77,7 +74,6 @@
                             <div class="col-6 col-md-4 col-lg-3 col-xl-2">
                                 <a href="{{ media.file.url }}" target="_blank" class="text-decoration-none">
                                     <div class="card media-card position-relative">
-                                        <!-- ตรวจสอบนามสกุลไฟล์คร่าวๆ เพื่อโชว์ไอคอนวิดีโอ -->
                                         {% if ".mp4" in media.file.url|lower or ".mov" in media.file.url|lower %}
                                             <div class="bg-dark d-flex align-items-center justify-content-center" style="height: 180px;">
                                                 <i class="fas fa-video fa-3x text-muted"></i>
@@ -120,15 +116,12 @@
                                         <p class="mb-3 text-dark fw-bold"><i class="fas fa-comment-dots me-1 text-danger"></i> ข้อความจาก QC: <span class="fw-normal">{{ log.comments|default:"ไม่มีคอมเมนต์ระบุไว้" }}</span></p>
 
                                         <div class="row g-2">
-                                            <!-- รูปจากระบบเก่า -->
                                             {% if log.defect_image_1 %}
                                                 <div class="col-auto"><a href="{{ log.defect_image_1.url }}" target="_blank" class="btn btn-sm btn-danger rounded-pill"><i class="fas fa-image me-1"></i>รูปที่ 1 (ระบบเก่า)</a></div>
                                             {% endif %}
                                             {% if log.defect_image_2 %}
                                                 <div class="col-auto"><a href="{{ log.defect_image_2.url }}" target="_blank" class="btn btn-sm btn-danger rounded-pill"><i class="fas fa-image me-1"></i>รูปที่ 2 (ระบบเก่า)</a></div>
                                             {% endif %}
-
-                                            <!-- รูปจากระบบใหม่ (ดึงผ่าน related_name="failed_media") -->
                                             {% for media in log.failed_media.all %}
                                                 <div class="col-auto"><a href="{{ media.file.url }}" target="_blank" class="btn btn-sm btn-outline-danger bg-white rounded-pill fw-bold"><i class="fas fa-file-alt me-1"></i>ไฟล์ตำหนิ {{ forloop.counter }}</a></div>
                                             {% endfor %}
@@ -228,35 +221,38 @@
                     {% endif %}
                 </div>
 
-                <!-- 🔵 TAB 4: รูปจากแผนกขนส่ง (Logistics) 🔵 -->
+                <!-- 🔵 [อัปเดตใหม่] TAB 4: รูปจากแผนกขนส่ง (Logistics) 🔵 -->
                 <div class="tab-pane fade" id="delivery" role="tabpanel">
-                    <!-- ตรวจสอบว่าระบบมีรูป proof_of_delivery หรือไม่ -->
-                    {% if order.proof_of_delivery %}
-                        <div class="row justify-content-center">
-                            <div class="col-md-6 col-lg-4">
-                                <div class="card border-0 shadow-sm rounded-4 overflow-hidden text-center">
-                                    <div class="bg-info bg-opacity-10 p-3 border-bottom border-info border-opacity-25">
-                                        <h6 class="mb-0 fw-bold text-info"><i class="fas fa-file-signature me-1"></i> หลักฐานการส่งมอบ / ลายเซ็นลูกค้า</h6>
+                    <!-- ตรวจสอบรูปภาพจากตารางใหม่ delivery_media -->
+                    {% if order.delivery_media.all %}
+                        <div class="row g-3">
+                            {% for media in order.delivery_media.all %}
+                            <div class="col-6 col-md-4 col-lg-3 col-xl-2">
+                                <a href="{{ media.file.url }}" target="_blank" class="text-decoration-none">
+                                    <div class="card media-card position-relative">
+                                        <!-- รองรับไฟล์วิดีโอเผื่ออนาคต -->
+                                        {% if ".mp4" in media.file.url|lower or ".mov" in media.file.url|lower %}
+                                            <div class="bg-dark d-flex align-items-center justify-content-center" style="height: 180px;">
+                                                <i class="fas fa-video fa-3x text-muted"></i>
+                                            </div>
+                                            <div class="media-overlay"><i class="fas fa-play-circle play-icon"></i></div>
+                                        {% else %}
+                                            <img src="{{ media.file.url }}" class="media-img" alt="Delivery Media">
+                                            <div class="media-overlay"><i class="fas fa-search-plus play-icon"></i></div>
+                                        {% endif %}
+                                        <div class="card-footer bg-info bg-opacity-10 py-2 text-center border-top-0 border-info border-opacity-25">
+                                            <small class="text-info fw-bold"><i class="fas fa-truck"></i> รูปจัดส่ง/ส่งมอบ</small>
+                                        </div>
                                     </div>
-                                    <div class="p-3 bg-white">
-                                        <!-- แสดงรูปภาพ พร้อมลิงก์ให้กดขยาย -->
-                                        <a href="{{ order.proof_of_delivery.url }}" target="_blank">
-                                            <img src="{{ order.proof_of_delivery.url }}" class="img-fluid rounded-3 shadow-sm border" style="max-height: 400px; object-fit: contain;">
-                                        </a>
-                                    </div>
-                                    <div class="card-footer bg-light border-0 py-3">
-                                        <small class="text-muted"><i class="fas fa-truck me-1"></i> จัดส่งโดย: <strong>{{ order.transporter.name|default:"-" }}</strong></small><br>
-                                        <small class="text-muted"><i class="far fa-calendar-check me-1"></i> วันที่จัดส่ง: <strong>{{ order.delivery_date|date:"d/m/Y"|default:"-" }}</strong></small>
-                                    </div>
-                                </div>
+                                </a>
                             </div>
+                            {% endfor %}
                         </div>
                     {% else %}
-                        <!-- กรณีที่ยังไม่ได้อัปโหลดรูปลงในระบบ -->
                         <div class="text-center py-5 opacity-50">
                             <i class="fas fa-truck-loading fa-4x text-muted mb-3"></i>
-                            <h5 class="text-muted fw-bold">ยังไม่มีรูปการส่งมอบสินค้า</h5>
-                            <p class="small">แผนกจัดส่งยังไม่ได้แนบหลักฐาน (Proof of Delivery) สำหรับบ้านหลังนี้</p>
+                            <h5 class="text-muted fw-bold">ยังไม่มีรูปการจัดส่งสินค้า</h5>
+                            <p class="small">แผนกจัดส่งยังไม่ได้แนบหลักฐานสำหรับบ้านหลังนี้</p>
                         </div>
                     {% endif %}
                 </div>

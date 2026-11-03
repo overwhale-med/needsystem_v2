@@ -69,7 +69,7 @@ urlpatterns = [
     path('ajax/add-transporter-full/', views.ajax_add_transporter_full, name='ajax_add_transporter_full'),
     path('ajax/get-fg-by-category/', views.ajax_get_fg_by_category, name='ajax_get_fg_by_category'),
     path('bom/import/', views.import_bom_excel, name='import_bom_excel'),
-    path('bom/import/template/', views.download_bom_template, name='download_bom_template'), # 🌟 เส้นทางสำหรับดาวน์โหลดไฟล์แม่แบบ
+    path('bom/import/template/', views.download_bom_template, name='download_bom_template'),
     path('ajax/search-raw-material/', views.ajax_search_raw_material, name='ajax_search_raw_material'),
     path('production/logistics-claim/<int:claim_id>/pay/', views.pay_logistics_claim, name='pay_logistics_claim'),
     # 🌟 [NEW] กระดานแจ้งซ่อมและบริการ (สำหรับช่าง) 🌟

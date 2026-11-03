@@ -1,0 +1,70 @@
+{% extends 'core/base.html' %}
+{% block content %}
+<div class="container-fluid py-4 px-4">
+    <div class="d-flex justify-content-between align-items-end mb-4">
+        <div>
+            <h4 class="fw-bold mb-1 text-dark"><i class="fas fa-history text-secondary me-2"></i>ประวัติงานซ่อมที่ปิดจ๊อบแล้ว (Solar After-Sales)</h4>
+            <p class="text-muted small mb-0">รายการแจ้งซ่อมโซล่าเซลล์ที่ดำเนินการเสร็จสิ้นหรือถูกยกเลิก</p>
+        </div>
+        <div>
+            <a href="{% url 'solar_service_board' %}" class="btn btn-outline-primary rounded-pill px-4 fw-bold shadow-sm">
+                <i class="fas fa-arrow-left me-1"></i> กลับไปกระดานแจ้งซ่อม
+            </a>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="bg-light text-secondary small border-bottom">
+                    <tr>
+                        <th class="ps-4 py-3">เลขที่แจ้งซ่อม / วันที่เปิด</th>
+                        <th class="py-3">อ้างอิง JOB / ลูกค้า</th>
+                        <th class="py-3">ปัญหาที่แจ้ง</th>
+                        <th class="py-3">ทีมที่เข้าซ่อม</th>
+                        <th class="py-3">สถานะ / วันที่ปิดงาน</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for t in page_obj %}
+                    <tr class="border-bottom">
+                        <td class="ps-4 py-3">
+                            <div class="fw-bold text-dark">{{ t.code }}</div>
+                            <div class="small text-muted mt-1"><i class="far fa-calendar-plus me-1"></i> {{ t.created_at|date:"d/m/Y H:i" }}</div>
+                        </td>
+                        <td class="py-3">
+                            <div class="fw-bold text-primary"><a href="{% url 'solar_job_manage' t.job.id %}" target="_blank" class="text-decoration-none"><i class="fas fa-external-link-alt me-1 small"></i>{{ t.job.code }}</a></div>
+                            <div class="small text-dark mt-1"><i class="fas fa-user-circle text-muted me-1"></i> {{ t.job.customer.name }}</div>
+                        </td>
+                        <td class="py-3">
+                            <div class="fw-bold text-danger mb-1"><i class="fas fa-tools me-1"></i> {{ t.issue_category.name|default:"ทั่วไป" }}</div>
+                            <div class="small text-muted text-truncate" style="max-width: 200px;" title="{{ t.description }}">- {{ t.description }}</div>
+                        </td>
+                        <td class="py-3">
+                            <div class="small text-dark fw-bold"><i class="fas fa-users-cog text-secondary me-1"></i> {{ t.technician_team.name|default:"ไม่ระบุ" }}</div>
+                        </td>
+                        <td class="py-3">
+                            {% if t.status == 'CLOSED' %}
+                                <span class="badge bg-success rounded-pill px-3 shadow-sm mb-1"><i class="fas fa-check-double me-1"></i> ปิดจ๊อบสมบูรณ์</span>
+                            {% elif t.status == 'COMPLETED' %}
+                                <span class="badge bg-primary rounded-pill px-3 shadow-sm mb-1"><i class="fas fa-check-circle me-1"></i> ซ่อมเสร็จสิ้น (รอเคลียร์)</span>
+                            {% elif t.status == 'CANCELLED' %}
+                                <span class="badge bg-secondary rounded-pill px-3 shadow-sm mb-1"><i class="fas fa-times me-1"></i> ยกเลิก</span>
+                            {% endif %}
+                            <div class="small text-muted mt-1"><i class="far fa-calendar-check me-1"></i> {{ t.completed_at|date:"d/m/Y"|default:"-" }}</div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="text-center py-5 text-muted">
+                            <i class="fas fa-folder-open fs-2 text-muted opacity-50 mb-2"></i>
+                            <div>ยังไม่มีประวัติงานซ่อมที่ปิดจ๊อบแล้ว</div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
