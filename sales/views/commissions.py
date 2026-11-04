@@ -125,9 +125,12 @@ def commission_history_list(request):
     if not end_date or end_date == 'None': end_date = today_bkk.strftime('%Y-%m-%d')
 
     if is_manager_view:
-        claims_qs = CommissionClaim.objects.all().select_related('requester', 'requester__department').prefetch_related('tickets', 'allocations').order_by('-created_at')
+        if request.user.is_superuser:
+            claims_qs = CommissionClaim.objects.all().select_related('requester', 'requester__department').prefetch_related('tickets', 'tickets__quotation_ref', 'tickets__quotation_ref__invoice', 'allocations').order_by('-created_at')
+        else:
+            claims_qs = CommissionClaim.objects.filter(requester=current_emp).select_related('requester', 'requester__department').prefetch_related('tickets', 'tickets__quotation_ref', 'tickets__quotation_ref__invoice', 'allocations').order_by('-created_at')
     else:
-        claims_qs = CommissionClaim.objects.filter(requester=current_emp).select_related('requester', 'requester__department').prefetch_related('tickets', 'allocations').order_by('-created_at')
+        claims_qs = CommissionClaim.objects.filter(requester=current_emp).select_related('requester', 'requester__department').prefetch_related('tickets', 'tickets__quotation_ref', 'tickets__quotation_ref__invoice', 'allocations').order_by('-created_at')
 
     if search_query: claims_qs = claims_qs.filter(code__icontains=search_query)
     if emp_search: claims_qs = claims_qs.filter(Q(requester__first_name__icontains=emp_search) | Q(requester__department__name__icontains=emp_search))
@@ -145,6 +148,12 @@ def commission_history_list(request):
 
     paginator = Paginator(claims_qs.distinct(), 20)
     page_obj = paginator.get_page(request.GET.get('page'))
+
+    # 🌟 [NEW] คำนวณยอด และเช็คว่ามีรายการรอจ่ายหรือไม่
+    for claim in page_obj:
+        claim.paid_total = sum(a.amount for a in claim.allocations.all() if a.status == 'PAID')
+        claim.remaining_balance = claim.total_amount - claim.paid_total
+        claim.has_pending = any(a.status == 'PENDING' for a in claim.allocations.all())
 
     return render(request, 'sales/commission_history.html', {
         'page_obj': page_obj, 'search_query': search_query, 'emp_search': emp_search,
@@ -186,8 +195,13 @@ def knockdown_commission_pay(request, claim_id):
         claim.status = 'PAID'
         claim.paid_at = timezone.now()
         claim.save()
+
+        # 🌟 อัปเดตเฉพาะตั๋ว (Tickets) ป้องกันการเอาตั๋วมาเบิกซ้ำ
         claim.tickets.update(status='PAID')
-        claim.allocations.update(status='PAID')
+
+        # 🌟 [FIX] ลบคำสั่ง claim.allocations.update(status='PAID') ทิ้งแล้วครับ
+        # เพื่อปล่อยให้เงินจัดสรร (Allocations) เป็นสถานะ PENDING รอหัวหน้าสาขากดปุ่มสีเหลืองจ่ายเอง!
+
         messages.success(request, f"✅ บัญชีทำรายการโอนเงินค่าคอมมิชชันน็อคดาวน์ {claim.code} สำเร็จ!")
     return redirect('accounting_verification_hub', task_type='knockdown_commissions')
 
@@ -214,7 +228,8 @@ def commission_allocate(request, claim_id):
     if request.method == 'POST':
         mode = request.POST.get('allocation_mode')
         dept = current_emp.department if current_emp else None
-        claim.allocations.all().delete()
+        # 🌟 [FIX] ลบเฉพาะข้อมูลที่ยังไม่ได้จ่ายเงิน (PENDING) เท่านั้น เพื่อปกป้องประวัติการจ่ายจริง
+        claim.allocations.filter(status='PENDING').delete()
 
         if mode == 'MANUAL':
             for key, val in request.POST.items():
@@ -222,11 +237,11 @@ def commission_allocate(request, claim_id):
                     emp_id = key.split('_')[-1]
                     amount = Decimal(val.replace(',', ''))
                     if amount > 0:
-                        CommissionAllocation.objects.create(claim=claim, employee_id=emp_id, amount=amount, method='MANUAL', status=claim.status, created_by=current_emp)
+                        CommissionAllocation.objects.create(claim=claim, employee_id=emp_id, amount=amount, method='MANUAL', status='PENDING', created_by=current_emp)
             fund_amt = request.POST.get('amount_fund', '0').strip()
             if fund_amt:
                 f_amt = Decimal(fund_amt.replace(',', ''))
-                if f_amt > 0: CommissionAllocation.objects.create(claim=claim, department=dept, amount=f_amt, method='MANUAL', status=claim.status, created_by=current_emp)
+                if f_amt > 0: CommissionAllocation.objects.create(claim=claim, department=dept, amount=f_amt, method='MANUAL', status='PENDING', created_by=current_emp)
         elif mode == 'PERCENT_CLAIM':
             claim_total = claim.total_amount
             for key, val in request.POST.items():
@@ -234,11 +249,11 @@ def commission_allocate(request, claim_id):
                     emp_id = key.split('_')[-1]
                     pct = Decimal(val)
                     if pct > 0:
-                        CommissionAllocation.objects.create(claim=claim, employee_id=emp_id, amount=(claim_total * (pct / Decimal('100'))).quantize(Decimal('0.00'), rounding=ROUND_DOWN), method='PERCENT_CLAIM', percentage_used=pct, status=claim.status, created_by=current_emp)
+                        CommissionAllocation.objects.create(claim=claim, employee_id=emp_id, amount=(claim_total * (pct / Decimal('100'))).quantize(Decimal('0.00'), rounding=ROUND_DOWN), method='PERCENT_CLAIM', percentage_used=pct, status='PENDING', created_by=current_emp)
             fund_pct = request.POST.get('pct_fund', '0').strip()
             if fund_pct:
                 f_pct = Decimal(fund_pct)
-                if f_pct > 0: CommissionAllocation.objects.create(claim=claim, department=dept, amount=(claim_total * (f_pct / Decimal('100'))).quantize(Decimal('0.00'), rounding=ROUND_DOWN), method='PERCENT_CLAIM', percentage_used=f_pct, status=claim.status, created_by=current_emp)
+                if f_pct > 0: CommissionAllocation.objects.create(claim=claim, department=dept, amount=(claim_total * (f_pct / Decimal('100'))).quantize(Decimal('0.00'), rounding=ROUND_DOWN), method='PERCENT_CLAIM', percentage_used=f_pct, status='PENDING', created_by=current_emp)
         elif mode == 'PERCENT_SALES':
             for t in claim.tickets.all():
                 base_amt = t.base_amount
@@ -246,11 +261,11 @@ def commission_allocate(request, claim_id):
                     if key.startswith(f'ticket_{t.id}_emp_') and val.strip():
                         emp_id = key.split('_')[-1]
                         pct = Decimal(val)
-                        if pct > 0: CommissionAllocation.objects.create(claim=claim, ticket=t, employee_id=emp_id, amount=(base_amt * (pct / Decimal('100'))).quantize(Decimal('0.00'), rounding=ROUND_DOWN), method='PERCENT_SALES', percentage_used=pct, status=claim.status, created_by=current_emp)
+                        if pct > 0: CommissionAllocation.objects.create(claim=claim, ticket=t, employee_id=emp_id, amount=(base_amt * (pct / Decimal('100'))).quantize(Decimal('0.00'), rounding=ROUND_DOWN), method='PERCENT_SALES', percentage_used=pct, status='PENDING', created_by=current_emp)
                 fund_pct = request.POST.get(f'ticket_{t.id}_fund', '0').strip()
                 if fund_pct:
                     f_pct = Decimal(fund_pct)
-                    if f_pct > 0: CommissionAllocation.objects.create(claim=claim, ticket=t, department=dept, amount=(base_amt * (f_pct / Decimal('100'))).quantize(Decimal('0.00'), rounding=ROUND_DOWN), method='PERCENT_SALES', percentage_used=f_pct, status=claim.status, created_by=current_emp)
+                    if f_pct > 0: CommissionAllocation.objects.create(claim=claim, ticket=t, department=dept, amount=(base_amt * (f_pct / Decimal('100'))).quantize(Decimal('0.00'), rounding=ROUND_DOWN), method='PERCENT_SALES', percentage_used=f_pct, status='PENDING', created_by=current_emp)
 
         messages.success(request, f"✅ จัดสรรผลตอบแทนสำหรับใบเบิก {claim.code} สำเร็จ! ลูกทีมสามารถเห็นยอดเงินใน Dashboard ได้แล้ว")
     return redirect('commission_history_list')
@@ -267,13 +282,39 @@ def commission_history_personal(request):
         rank = current_emp.business_rank.lower() if current_emp.business_rank else ""
         if rank in ['manager', 'director', 'supervisor']: is_supervisor_view = True
 
-    allocations = CommissionAllocation.objects.filter(employee=current_emp).select_related('claim', 'created_by', 'ticket', 'ticket__quotation_ref').order_by('-created_at')
+    # 🌟 [NEW] 1. ดึงค่าวันที่เริ่มต้น-สิ้นสุด จากช่องค้นหา
+    tz_bkk = pytz.timezone('Asia/Bangkok')
+    today_bkk = timezone.now().astimezone(tz_bkk).date()
+    start_date = request.GET.get('start_date')
+    end_date = request.GET.get('end_date')
+
+    # 🌟 [NEW] 2. ตั้งค่าเริ่มต้นให้โชว์ย้อนหลัง 30 วัน ถ้าไม่ได้กดค้นหา (กันข้อมูลล้นจอ)
+    if not start_date or start_date == 'None': start_date = (today_bkk - timedelta(days=29)).strftime('%Y-%m-%d')
+    if not end_date or end_date == 'None': end_date = today_bkk.strftime('%Y-%m-%d')
+
+    # 🌟 3. ดึงข้อมูลดิบทั้งหมดมาก่อน (แพ็กข้อมูลตั๋วและบิลย่อยมาให้พร้อมโชว์ใน Pop-up)
+    allocations = CommissionAllocation.objects.filter(employee=current_emp).select_related('claim', 'created_by', 'ticket', 'ticket__quotation_ref').prefetch_related('claim__tickets', 'claim__tickets__quotation_ref', 'claim__tickets__quotation_ref__invoice').order_by('-created_at')
+
+    fund_allocations = CommissionAllocation.objects.none()
+    if is_supervisor_view and current_emp.department:
+        fund_allocations = CommissionAllocation.objects.filter(department=current_emp.department, status='PAID')
+
+    # 🌟 [NEW] 4. กรองข้อมูลเฉพาะที่อยู่ในช่วง "วันที่จัดสรร" ที่เลือก
+    try:
+        s_date = parse_date(start_date)
+        e_date = parse_date(end_date)
+        if s_date and e_date:
+            start_dt = tz_bkk.localize(datetime.datetime.combine(s_date, datetime.time.min))
+            end_dt = tz_bkk.localize(datetime.datetime.combine(e_date, datetime.time.max))
+            allocations = allocations.filter(created_at__gte=start_dt, created_at__lte=end_dt)
+            fund_allocations = fund_allocations.filter(created_at__gte=start_dt, created_at__lte=end_dt)
+    except Exception:
+        pass
+
+    # 🌟 5. คำนวณยอดเงินรวม (กล่องสีเขียวและเหลือง) จากข้อมูลที่โดนกรองวันที่แล้ว
     pending_total = allocations.filter(status='PENDING').aggregate(Sum('amount'))['amount__sum'] or 0
     paid_total = allocations.filter(status='PAID').aggregate(Sum('amount'))['amount__sum'] or 0
-
-    branch_fund_total = 0
-    if is_supervisor_view and current_emp.department:
-        branch_fund_total = CommissionAllocation.objects.filter(department=current_emp.department, status='PAID').aggregate(Sum('amount'))['amount__sum'] or 0
+    branch_fund_total = fund_allocations.aggregate(Sum('amount'))['amount__sum'] or 0
 
     paginator = Paginator(allocations, 20)
     page_obj = paginator.get_page(request.GET.get('page'))
@@ -281,4 +322,44 @@ def commission_history_personal(request):
     return render(request, 'sales/commission_history_personal.html', {
         'page_obj': page_obj, 'pending_total': pending_total, 'paid_total': paid_total,
         'branch_fund_total': branch_fund_total, 'is_supervisor_view': is_supervisor_view,
+        'start_date': start_date, 'end_date': end_date, # 🌟 ส่งค่าวันที่กลับไปแสดงที่หน้าเว็บ
     })
+
+@login_required
+def supervisor_pay_allocation(request, alloc_id):
+    if not is_sales_authorized(request.user): return redirect('dashboard')
+    alloc = get_object_or_404(CommissionAllocation, id=alloc_id)
+
+    # ตรวจสอบสิทธิ์ (ต้องเป็นคนจัดสรร หรือ superuser เท่านั้น)
+    current_emp = getattr(request.user, 'employee', None)
+    if alloc.created_by != current_emp and not request.user.is_superuser:
+        messages.error(request, "❌ คุณไม่มีสิทธิ์ยืนยันการจ่ายเงินรายการนี้")
+        return redirect('commission_history_list')
+
+    # สั่งอัปเดตสถานะเป็นโอนแล้ว
+    alloc.status = 'PAID'
+    alloc.save()
+    messages.success(request, f"✅ ยืนยันการโอนเงินค่าคอมมิชชันให้ลูกทีมเรียบร้อยแล้ว!")
+    return redirect('commission_history_list')
+
+@login_required
+def supervisor_delete_allocation(request, alloc_id):
+    if not is_sales_authorized(request.user): return redirect('dashboard')
+    alloc = get_object_or_404(CommissionAllocation, id=alloc_id)
+
+    # 1. ตรวจสอบสิทธิ์ (ต้องเป็นคนจัดสรร หรือ superuser เท่านั้น)
+    current_emp = getattr(request.user, 'employee', None)
+    if alloc.created_by != current_emp and not request.user.is_superuser:
+        messages.error(request, "❌ คุณไม่มีสิทธิ์ลบรายการจัดสรรเงินนี้")
+        return redirect('commission_history_list')
+
+    # 2. ป้องกันความผิดพลาด (ลบได้เฉพาะรายการที่ยังไม่ได้จ่ายเงินเท่านั้น)
+    if alloc.status != 'PENDING':
+        messages.error(request, "❌ ไม่สามารถลบได้ เนื่องจากรายการนี้โอนเงินสำเร็จและถูกล็อกข้อมูลแล้ว")
+        return redirect('commission_history_list')
+
+    # 3. สั่งลบข้อมูลทิ้ง
+    deleted_amount = alloc.amount
+    alloc.delete()
+    messages.success(request, f"🗑️ ยกเลิกและลบยอดเงินจัดสรร {deleted_amount:,.2f} บาท คืนกลับไปที่ยอดคงเหลือเรียบร้อยแล้ว!")
+    return redirect('commission_history_list')

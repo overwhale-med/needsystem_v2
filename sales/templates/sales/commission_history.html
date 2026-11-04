@@ -8,6 +8,9 @@
     .allocation-tab .nav-link { color: #6c757d; font-weight: bold; border-radius: 8px 8px 0 0; }
     .allocation-tab .nav-link.active { background-color: #f8f9fa; color: #0d6efd; border-bottom: 3px solid #0d6efd; }
     .allocation-table td { vertical-align: middle; }
+    /* 🌟 ลูกเล่นไฟกะพริบเตือนหัวหน้า 🌟 */
+    @keyframes heartbeat { 0% { transform: scale(1); } 50% { transform: scale(1.03); } 100% { transform: scale(1); } }
+    .heartbeat-animation { animation: heartbeat 1.5s infinite; }
 </style>
 <div class="container-fluid py-4 px-4">
     <!-- Header -->
@@ -67,6 +70,7 @@
                             <!-- 🌟 [NEW] เพิ่มคอลัมน์จัดการสำหรับหัวหน้า -->
                             {% if is_supervisor_view %}
                             <th class="text-center py-3">จัดการ (จัดสรรเงิน)</th>
+                            <th class="text-center py-3">สถานะการจ่าย</th>
                             {% endif %}
                             <th class="text-center py-3">พิมพ์</th>
                         </tr>
@@ -79,8 +83,56 @@
                                 <div class="small text-muted ms-4">{{ c.created_at|date:"H:i น." }}</div>
                             </td>
                             <td>
-                                <div class="fw-bold text-dark fs-6">{{ c.code }}</div>
-                                <span class="badge {% if c.claim_type == '2%' %}bg-warning text-dark{% else %}bg-success{% endif %} border mt-1 shadow-sm">โควตา {{ c.claim_type }}</span>
+                                <!-- 🌟 ตัวหนังสือที่คลิกได้ -->
+                                <a href="#" class="fw-bold text-primary fs-6 text-decoration-none hover-scale d-inline-block" data-bs-toggle="modal" data-bs-target="#claimListModal{{ c.id }}" title="คลิกเพื่อดูรายละเอียดบิล">
+                                    {{ c.code }} <i class="fas fa-search-plus ms-1 small"></i>
+                                </a>
+                                <div class="mt-1">
+                                    <span class="badge {% if c.claim_type == '2%' %}bg-warning text-dark{% else %}bg-success{% endif %} border shadow-sm">โควตา {{ c.claim_type }}</span>
+                                </div>
+
+                                <!-- 🌟 [NEW] หน้าต่าง Modal ซ่อนไว้ รอเด้งตอนกดคลิก 🌟 -->
+                                <div class="modal fade" id="claimListModal{{ c.id }}" tabindex="-1" aria-hidden="true">
+                                    <div class="modal-dialog modal-dialog-centered modal-sm">
+                                        <div class="modal-content border-0 rounded-4 shadow-lg">
+                                            <div class="modal-header bg-light border-0">
+                                                <h6 class="modal-title fw-bold text-dark"><i class="fas fa-file-invoice text-primary me-2"></i>แหล่งที่มาของยอดเงิน</h6>
+                                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                            </div>
+                                            <div class="modal-body p-3 text-start bg-white" style="max-height: 60vh; overflow-y: auto;">
+                                                <div class="text-muted small mb-2">อ้างอิงใบเบิกหลัก: <strong>{{ c.code }}</strong></div>
+                                                <div class="mb-3">
+                                                    <span class="badge bg-secondary bg-opacity-10 text-secondary border rounded-pill px-2 py-1" style="font-size: 0.7rem;">
+                                                        <i class="fas fa-list me-1"></i> ประกอบด้วยบิลย่อย {{ c.tickets.count }} รายการ
+                                                    </span>
+                                                </div>
+
+                                                <ul class="list-group list-group-flush border-top pt-2">
+                                                    {% for t in c.tickets.all %}
+                                                        <li class="list-group-item px-0 py-2 border-bottom-0 border-light">
+                                                            <div class="d-flex justify-content-between align-items-center">
+                                                                <div class="fw-bold text-dark" style="font-size: 0.85rem;">
+                                                                    <i class="fas fa-check-circle text-success me-2 small"></i>{{ t.quotation_ref.code }}
+                                                                </div>
+                                                                {% if t.quotation_ref.invoice %}
+                                                                    <span class="badge bg-info bg-opacity-10 text-info border border-info shadow-sm" style="font-size: 0.7rem;" title="เปิดบิลแล้ว">
+                                                                        {{ t.quotation_ref.invoice.code }}
+                                                                    </span>
+                                                                {% else %}
+                                                                    <span class="badge bg-light text-muted border shadow-sm" style="font-size: 0.65rem;">รอเปิดบิล</span>
+                                                                {% endif %}
+                                                            </div>
+                                                        </li>
+                                                    {% endfor %}
+                                                </ul>
+                                            </div>
+                                            <div class="modal-footer border-0 bg-light p-2 justify-content-center">
+                                                <button type="button" class="btn btn-sm btn-secondary rounded-pill px-4" data-bs-dismiss="modal">ปิดหน้าต่าง</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- 🌟 สิ้นสุดหน้าต่าง Modal -->
                             </td>
                             <td>
                                 <div class="fw-bold text-dark"><i class="fas fa-user-tie text-muted me-2"></i>{{ c.requester.first_name|default:"-" }}</div>
@@ -103,7 +155,7 @@
                                 {% endif %}
                             </td>
 
-                            <!-- 🌟 [NEW] ปุ่มจัดสรรเงิน 🌟 -->
+                            <!-- 🌟 ปุ่มจัดสรรเงิน 🌟 -->
                             {% if is_supervisor_view %}
                             <td class="text-center">
                                 {% if c.allocations.exists %}
@@ -116,9 +168,20 @@
                                     </button>
                                 {% endif %}
                             </td>
-                            {% endif %}
-
+                            <!-- 🌟 [NEW] คอลัมน์สถานะการจ่าย (ไฟจราจรเตือนหัวหน้า) 🌟 -->
                             <td class="text-center">
+                                {% if not c.allocations.exists %}
+                                    <span class="text-muted small fw-bold">-</span>
+                                {% elif c.has_pending %}
+                                <!-- 🌟 เติมคำสั่งเปิดหน้าต่าง (data-bs-toggle) และทำเมาส์เป็นรูปนิ้วชี้ (cursor: pointer) 🌟 -->
+                                <span class="badge bg-warning text-dark rounded-pill shadow-sm py-2 px-3 heartbeat-animation" style="cursor: pointer;" data-bs-toggle="modal" data-bs-target="#allocateModal-{{ c.id }}" title="คลิกเพื่อเปิดหน้าต่างโอนเงิน">
+                                    <i class="fas fa-exclamation-triangle me-1"></i> มีรายการรอจ่าย <i class="fas fa-hand-pointer ms-1 opacity-75"></i>
+                                </span>
+                                {% else %}
+                                    <span class="badge bg-success rounded-pill shadow-sm py-2 px-3"><i class="fas fa-check-circle me-1"></i> จ่ายครบแล้ว</span>
+                                {% endif %}
+                            </td>
+                            {% endif %}
 
                             <td class="text-center">
                                 <a href="{% url 'print_commission_claim' c.id %}" target="_blank" class="btn btn-sm btn-outline-dark rounded-circle shadow-sm" title="พิมพ์ A4"><i class="fas fa-print"></i></a>
@@ -160,9 +223,10 @@
     <div class="modal-dialog modal-dialog-centered modal-lg">
         <form method="POST" action="{% url 'commission_allocate' c.id %}" class="w-100">
             {% csrf_token %}
-            <input type="hidden" name="allocation_mode" id="mode_{{ c.id }}" value="MANUAL">
+            <!-- 🌟 สั่งให้สมองกลจำค่าเริ่มต้นให้ตรงกับแท็บที่เปิดอยู่ 🌟 -->
+            <input type="hidden" name="allocation_mode" id="mode_{{ c.id }}" value="{{ c.allocations.first.method|default:'MANUAL' }}">
             <!-- ซ่อนยอดเต็มไว้ให้สมองกล JS ดึงไปคำนวณ -->
-            <input type="hidden" id="total_amount_{{ c.id }}" value="{{ c.total_amount }}">
+            <input type="hidden" id="total_amount_{{ c.id }}" value="{{ c.remaining_balance|stringformat:'.2f' }}">
 
             <div class="modal-content rounded-4 border-0 shadow-lg">
                 <div class="modal-header bg-primary border-0 py-3">
@@ -172,18 +236,73 @@
                 <div class="modal-body p-0 bg-light">
 
                     <div class="bg-white p-3 border-bottom text-center">
-                        <span class="text-muted small">ยอดเบิกสุทธิของใบนี้</span>
-                        <h3 class="fw-bold text-dark mb-0">฿{{ c.total_amount|floatformat:2|intcomma }}</h3>
+                        <div class="row align-items-center justify-content-center g-3 mb-2">
+                            <div class="col-4">
+                                <span class="text-muted small">คอมมิชชั่นที่เบิก</span>
+                                <h5 class="fw-bold text-dark mb-0">฿&nbsp;&nbsp;{{ c.total_amount|floatformat:2|intcomma }}</h5>
+                            </div>
+                            <div class="col-4 border-start border-end">
+                                <span class="text-muted small">จ่ายแล้ว (PAID)</span>
+                                <h5 class="fw-bold text-success mb-0">฿&nbsp;&nbsp;{{ c.paid_total|floatformat:2|intcomma }}</h5>
+                            </div>
+                            <div class="col-4">
+                                <span class="text-muted small">คงเหลือจัดสรรได้</span>
+                                <h5 class="fw-bold text-primary mb-0">฿&nbsp;&nbsp;{{ c.remaining_balance|floatformat:2|intcomma }}</h5>
+                            </div>
+                        </div>
 
-                        <!-- 🌟 เพิ่มแถบแสดงยอดคงเหลือแบบเรียลไทม์ 🌟 -->
+                        <!-- 🌟 เปลี่ยนค่าซ่อนให้ JS ใช้ยอดคงเหลือ (หักจ่ายแล้ว) ไปเป็นตัวตั้งต้นคำนวณ -->
+                        <input type="hidden" id="total_amount_{{ c.id }}" value="{{ c.remaining_balance|stringformat:'.2f' }}">
+
                         <div class="mt-2">
                             <span class="badge bg-light text-secondary border px-3 py-2 shadow-sm" style="font-size: 0.85rem;">
-                                ยอดคงเหลือ: <span id="balance_{{ c.id }}" class="fw-bold text-success fs-6 ms-1">฿{{ c.total_amount|floatformat:2|intcomma }}</span>
+                                คอมมิชชั่นที่เหลือ: <span id="balance_{{ c.id }}" class="fw-bold text-success fs-6 ms-1">฿&nbsp;&nbsp;{{ c.remaining_balance|floatformat:2|intcomma }}</span>
                             </span>
                         </div>
 
-                        {% if c.allocations.exists %}
-                            <span class="badge bg-warning text-dark mt-2"><i class="fas fa-exclamation-circle"></i> บิลนี้เคยจัดสรรเงินไปแล้ว หากบันทึกใหม่ ระบบจะล้างค่าเดิมทิ้ง</span>
+                        <!-- 🌟 โซนโชว์ประวัติคนที่รับเงินไปแล้ว (โชว์เมื่อมียอด PAID) 🌟 -->
+                        {% if c.paid_total %}
+                            <!-- 🌟 เปลี่ยนโครงสร้างกล่องใหม่ ไม่ใช้คำว่า alert เพื่อหลบระบบซ่อนข้อความอัตโนมัติ 🌟 -->
+                            <div class="p-3 mt-3 mb-0 text-start small border border-success border-opacity-25 rounded-3 bg-success bg-opacity-10 shadow-sm">
+                                <i class="fas fa-check-circle text-success me-1"></i> <strong class="text-success">ประวัติจ่ายเงินสำเร็จ:</strong>
+                                <ul class="mb-0 mt-2 ps-3 text-dark">
+                                {% for a in c.allocations.all %}
+                                    {% if a.status == 'PAID' %}
+                                        <li>
+                                            {% if a.employee %}คุณ{{ a.employee.first_name }}{% else %}เงินกองกลางสาขา{% endif %}
+                                            <span class="fw-bold text-success ms-2">฿&nbsp;&nbsp;{{ a.amount|floatformat:2|intcomma }}</span>
+                                        </li>
+                                    {% endif %}
+                                {% endfor %}
+                                </ul>
+                            </div>
+                        {% endif %}
+                        <!-- 🌟 [NEW] โซนโชว์รายการที่รอโอนเงิน พร้อมปุ่มให้หัวหน้ากดจ่าย 🌟 -->
+                        {% if c.has_pending %}
+                            <div class="p-3 mt-3 mb-0 text-start small border border-warning border-opacity-50 rounded-3 bg-warning bg-opacity-10 shadow-sm">
+                                <i class="fas fa-hourglass-half text-warning me-1"></i> <strong class="text-dark">รายการรอโอนเงินให้ลูกทีม:</strong>
+                                <ul class="mb-0 mt-2 ps-0 list-unstyled">
+                                {% for a in c.allocations.all %}
+                                    {% if a.status == 'PENDING' %}
+                                        <li class="d-flex justify-content-between align-items-center border-bottom border-warning border-opacity-25 py-2">
+                                            <div>
+                                                {% if a.employee %}คุณ{{ a.employee.first_name }}{% else %}เงินกองกลางสาขา{% endif %}
+                                                <span class="fw-bold text-dark ms-2">฿&nbsp;&nbsp;{{ a.amount|floatformat:2|intcomma }}</span>
+                                            </div>
+                                            <!-- 🌟 กลุ่มปุ่มจัดการ (จ่ายเงิน / ลบ) 🌟 -->
+                                            <div class="d-flex gap-2">
+                                                <a href="{% url 'supervisor_pay_allocation' a.id %}" class="btn btn-sm btn-warning rounded-pill px-3 shadow-sm fw-bold" onclick="return confirm('ยืนยันว่าคุณได้โอนเงินก้อนนี้เรียบร้อยแล้วใช่หรือไม่? (การกระทำนี้จะล็อกข้อมูลถาวร)');">
+                                                    <i class="fas fa-hand-holding-usd me-1"></i> จ่ายเงิน
+                                                </a>
+                                                <a href="{% url 'supervisor_delete_allocation' a.id %}" class="btn btn-sm btn-outline-danger rounded-pill px-3 shadow-sm fw-bold bg-white" onclick="return confirm('ต้องการลบยอดเงินจัดสรรก้อนนี้ คืนกลับไปที่ยอดคงเหลือ ใช่หรือไม่?');">
+                                                    <i class="fas fa-trash-alt me-1"></i> ลบ
+                                                </a>
+                                            </div>
+                                        </li>
+                                    {% endif %}
+                                {% endfor %}
+                                </ul>
+                            </div>
                         {% endif %}
                     </div>
 
@@ -191,23 +310,22 @@
                     <ul class="nav nav-tabs nav-fill allocation-tab pt-3 px-3 border-bottom-0" role="tablist">
                         <li class="nav-item" role="presentation">
                             <!-- 🌟 เปลี่ยน onclick ไปเรียกใช้ฟังก์ชัน switchTabAndClear 🌟 -->
-                            <button class="nav-link {% if saved_method == 'MANUAL' %}active{% endif %}" data-bs-toggle="tab" data-bs-target="#tab_manual_{{ c.id }}" type="button" onclick="switchTabAndClear('{{ c.id }}', 'MANUAL');">1. กรอกยอดเงินเอง</button>
+                            <button class="nav-link {% if saved_method == 'MANUAL' %}active{% endif %}" data-bs-toggle="tab" data-bs-target="#tab_manual_{{ c.id }}" type="button" onclick="switchTabAndClear('{{ c.id }}', 'MANUAL');">1. ระบุจำนวนเงิน</button>
                         </li>
                         <li class="nav-item" role="presentation">
                             <!-- 🌟 เปลี่ยน onclick ไปเรียกใช้ฟังก์ชัน switchTabAndClear 🌟 -->
-                            <button class="nav-link {% if saved_method == 'PERCENT_CLAIM' %}active{% endif %}" data-bs-toggle="tab" data-bs-target="#tab_pct_claim_{{ c.id }}" type="button" onclick="switchTabAndClear('{{ c.id }}', 'PERCENT_CLAIM');">2. หัก % จากยอดเบิก</button>
+                            <button class="nav-link {% if saved_method == 'PERCENT_CLAIM' %}active{% endif %}" data-bs-toggle="tab" data-bs-target="#tab_pct_claim_{{ c.id }}" type="button" onclick="switchTabAndClear('{{ c.id }}', 'PERCENT_CLAIM');">2. คำนวน(%)จากคอมฯรวม</button>
                         </li>
                         <li class="nav-item" role="presentation">
                             <!-- 🌟 เปลี่ยน onclick ไปเรียกใช้ฟังก์ชัน switchTabAndClear 🌟 -->
-                            <button class="nav-link {% if saved_method == 'PERCENT_SALES' %}active{% endif %}" data-bs-toggle="tab" data-bs-target="#tab_pct_sales_{{ c.id }}" type="button" onclick="switchTabAndClear('{{ c.id }}', 'PERCENT_SALES');">3. หัก % รายบิล</button>
+                            <button class="nav-link {% if saved_method == 'PERCENT_SALES' %}active{% endif %}" data-bs-toggle="tab" data-bs-target="#tab_pct_sales_{{ c.id }}" type="button" onclick="switchTabAndClear('{{ c.id }}', 'PERCENT_SALES');">3. คำนวน(%)จากยอดขาย</button>
                         </li>
                     </ul>
 
                     <div class="tab-content bg-white p-4">
-
                         <!-- แท็บที่ 1: กรอกยอดเงินเอง -->
                         <div class="tab-pane fade {% if saved_method == 'MANUAL' %}show active{% endif %}" id="tab_manual_{{ c.id }}">
-                            <div class="alert alert-info small"><i class="fas fa-info-circle me-1"></i> กรอกจำนวนเงินให้แต่ละคน ยอดที่เหลือปัดเข้ากองกลางสาขาได้ครับ</div>
+                            <div class="alert alert-info small"><i class="fas fa-info-circle me-1"></i> กรอกจำนวนเงินให้แต่ละคน (ระบบจะแสดงเฉพาะรายชื่อที่ยังไม่ได้จ่ายเงิน)</div>
                             <table class="table table-bordered allocation-table mb-0">
                                 <thead class="bg-light text-secondary small text-center">
                                     <tr><th class="text-start">ชื่อผู้รับเงิน</th><th width="200">จำนวนเงิน (บาท)</th></tr>
@@ -215,14 +333,12 @@
                                 <tbody>
                                     <tr>
                                         <td class="fw-bold text-primary"><i class="fas fa-piggy-bank me-2"></i>เงินกองกลางสาขา</td>
-                                        <!-- 🌟 เปลี่ยน type="text" และเพิ่มคลาส format-currency 🌟 -->
-                                        <td><input type="text" name="amount_fund" class="form-control form-control-sm text-end calc-input format-currency" data-calc-type="manual" data-claim-id="{{ c.id }}" value="{% for a in c.allocations.all %}{% if not a.employee and not a.ticket and a.method == 'MANUAL' %}{{ a.amount|floatformat:2|intcomma }}{% endif %}{% endfor %}" placeholder="0.00" autocomplete="off"></td>
+                                        <td><input type="text" name="amount_fund" class="form-control form-control-sm text-end calc-input format-currency" data-calc-type="manual" data-claim-id="{{ c.id }}" value="{% for a in c.allocations.all %}{% if not a.employee and not a.ticket and a.method == 'MANUAL' and a.status == 'PENDING' %}{{ a.amount|floatformat:2|intcomma }}{% endif %}{% endfor %}" placeholder="0.00" autocomplete="off"></td>
                                     </tr>
                                     {% for emp in team_members %}
                                     <tr>
                                         <td><i class="fas fa-user text-muted me-2"></i>{{ emp.first_name }} {{ emp.last_name }}</td>
-                                        <!-- 🌟 เปลี่ยน type="text" และเพิ่มคลาส format-currency 🌟 -->
-                                        <td><input type="text" name="amount_emp_{{ emp.id }}" class="form-control form-control-sm text-end calc-input format-currency" data-calc-type="manual" data-claim-id="{{ c.id }}" value="{% for a in c.allocations.all %}{% if a.employee.id == emp.id and not a.ticket and a.method == 'MANUAL' %}{{ a.amount|floatformat:2|intcomma }}{% endif %}{% endfor %}" placeholder="0.00" autocomplete="off"></td>
+                                        <td><input type="text" name="amount_emp_{{ emp.id }}" class="form-control form-control-sm text-end calc-input format-currency" data-calc-type="manual" data-claim-id="{{ c.id }}" value="{% for a in c.allocations.all %}{% if a.employee.id == emp.id and not a.ticket and a.method == 'MANUAL' and a.status == 'PENDING' %}{{ a.amount|floatformat:2|intcomma }}{% endif %}{% endfor %}" placeholder="0.00" autocomplete="off"></td>
                                     </tr>
                                     {% endfor %}
                                 </tbody>
@@ -241,10 +357,10 @@
                                         <td class="fw-bold text-primary"><i class="fas fa-piggy-bank me-2"></i>เงินกองกลางสาขา</td>
                                         <td class="d-flex align-items-center justify-content-end border-0">
                                             <div class="input-group input-group-sm" style="width: 100px;">
-                                                <input type="number" step="0.01" name="pct_fund" class="form-control text-end calc-input" data-calc-type="percent_claim" data-claim-id="{{ c.id }}" data-total="{{ c.total_amount }}" value="{% for a in c.allocations.all %}{% if not a.employee and not a.ticket and a.method == 'PERCENT_CLAIM' %}{{ a.percentage_used|stringformat:'.2f' }}{% endif %}{% endfor %}" placeholder="0">
+                                                <input type="number" step="0.01" name="pct_fund" class="form-control text-end calc-input" data-calc-type="percent_claim" data-claim-id="{{ c.id }}" data-total="{{ c.total_amount }}" value="{% for a in c.allocations.all %}{% if not a.employee and not a.ticket and a.method == 'PERCENT_CLAIM' and a.status == 'PENDING' %}{{ a.percentage_used|stringformat:'.2f' }}{% endif %}{% endfor %}" placeholder="0">
                                                 <span class="input-group-text bg-light">%</span>
                                             </div>
-                                            <span class="calc-result text-success fw-bold ms-3" style="width: 80px; text-align: right;">฿0.00</span>
+                                            <span class="calc-result text-success fw-bold ms-3" style="width: 90px; text-align: right;">฿&nbsp;&nbsp;0.00</span>
                                         </td>
                                     </tr>
                                     {% for emp in team_members %}
@@ -252,10 +368,10 @@
                                         <td><i class="fas fa-user text-muted me-2"></i>{{ emp.first_name }} {{ emp.last_name }}</td>
                                         <td class="d-flex align-items-center justify-content-end border-0">
                                             <div class="input-group input-group-sm" style="width: 100px;">
-                                                <input type="number" step="0.01" name="pct_emp_{{ emp.id }}" class="form-control text-end calc-input" data-calc-type="percent_claim" data-claim-id="{{ c.id }}" data-total="{{ c.total_amount }}" value="{% for a in c.allocations.all %}{% if a.employee.id == emp.id and not a.ticket and a.method == 'PERCENT_CLAIM' %}{{ a.percentage_used|stringformat:'.2f' }}{% endif %}{% endfor %}" placeholder="0">
+                                                <input type="number" step="0.01" name="pct_emp_{{ emp.id }}" class="form-control text-end calc-input" data-calc-type="percent_claim" data-claim-id="{{ c.id }}" data-total="{{ c.total_amount }}" value="{% for a in c.allocations.all %}{% if a.employee.id == emp.id and not a.ticket and a.method == 'PERCENT_CLAIM' and a.status == 'PENDING' %}{{ a.percentage_used|stringformat:'.2f' }}{% endif %}{% endfor %}" placeholder="0">
                                                 <span class="input-group-text bg-light">%</span>
                                             </div>
-                                            <span class="calc-result text-success fw-bold ms-3" style="width: 80px; text-align: right;">฿0.00</span>
+                                            <span class="calc-result text-success fw-bold ms-3" style="width: 90px; text-align: right;">฿&nbsp;&nbsp;0.00</span>
                                         </td>
                                     </tr>
                                     {% endfor %}
@@ -271,8 +387,7 @@
                                 <div class="card border border-success border-opacity-25 mb-3 shadow-sm">
                                     <div class="card-header bg-success bg-opacity-10 py-2 d-flex justify-content-between align-items-center">
                                         <div class="fw-bold text-dark small"><i class="fas fa-ticket-alt text-success me-1"></i> {{ t.code }} <span class="text-muted fw-normal ms-2">({{ t.quotation_ref.code|default:"-" }})</span></div>
-                                        <!-- 🌟 ป้ายแสดงฐานยอดขายที่ใช้คำนวณ 🌟 -->
-                                        <div class="badge bg-success shadow-sm">ฐานคำนวณ (หัก 10%): ฿{{ t.base_amount|floatformat:2|intcomma }}</div>
+                                        <div class="badge bg-success shadow-sm">ฐานคำนวณ (หัก 10%): ฿&nbsp;&nbsp;{{ t.base_amount|floatformat:2|intcomma }}</div>
                                     </div>
                                     <div class="card-body p-0">
                                         <table class="table table-borderless table-sm mb-0">
@@ -282,11 +397,10 @@
                                                     <td width="200" class="pe-3 py-2">
                                                         <div class="d-flex align-items-center justify-content-end">
                                                             <div class="input-group input-group-sm" style="width: 90px;">
-                                                                <!-- 🌟 เปลี่ยน data-total กลับเป็น t.base_amount เพื่อให้ตัวคูณเป็นฐานยอดขาย 116,100 🌟 -->
-                                                                <input type="number" step="0.01" name="ticket_{{ t.id }}_fund" class="form-control text-end calc-input" data-calc-type="percent_sales" data-claim-id="{{ c.id }}" data-total="{{ t.base_amount }}" value="{% for a in c.allocations.all %}{% if not a.employee and a.ticket.id == t.id and a.method == 'PERCENT_SALES' %}{{ a.percentage_used|stringformat:'.2f' }}{% endif %}{% endfor %}" placeholder="0">
+                                                                <input type="number" step="0.01" name="ticket_{{ t.id }}_fund" class="form-control text-end calc-input" data-calc-type="percent_sales" data-claim-id="{{ c.id }}" data-total="{{ t.base_amount }}" value="{% for a in c.allocations.all %}{% if not a.employee and a.ticket.id == t.id and a.method == 'PERCENT_SALES' and a.status == 'PENDING' %}{{ a.percentage_used|stringformat:'.2f' }}{% endif %}{% endfor %}" placeholder="0">
                                                                 <span class="input-group-text bg-light">%</span>
                                                             </div>
-                                                            <span class="calc-result text-success fw-bold ms-2" style="width: 70px; text-align: right; font-size: 0.8rem;">฿0.00</span>
+                                                            <span class="calc-result text-success fw-bold ms-2" style="width: 80px; text-align: right; font-size: 0.8rem;">฿&nbsp;&nbsp;0.00</span>
                                                         </div>
                                                     </td>
                                                 </tr>
@@ -296,11 +410,10 @@
                                                     <td width="200" class="pe-3 py-2">
                                                         <div class="d-flex align-items-center justify-content-end">
                                                             <div class="input-group input-group-sm" style="width: 90px;">
-                                                                <!-- 🌟 เปลี่ยน data-total กลับเป็น t.base_amount เพื่อให้ตัวคูณเป็นฐานยอดขาย 116,100 🌟 -->
-                                                                <input type="number" step="0.01" name="ticket_{{ t.id }}_emp_{{ emp.id }}" class="form-control text-end calc-input" data-calc-type="percent_sales" data-claim-id="{{ c.id }}" data-total="{{ t.base_amount }}" value="{% for a in c.allocations.all %}{% if a.employee.id == emp.id and a.ticket.id == t.id and a.method == 'PERCENT_SALES' %}{{ a.percentage_used|stringformat:'.2f' }}{% endif %}{% endfor %}" placeholder="0">
+                                                                <input type="number" step="0.01" name="ticket_{{ t.id }}_emp_{{ emp.id }}" class="form-control text-end calc-input" data-calc-type="percent_sales" data-claim-id="{{ c.id }}" data-total="{{ t.base_amount }}" value="{% for a in c.allocations.all %}{% if a.employee.id == emp.id and a.ticket.id == t.id and a.method == 'PERCENT_SALES' and a.status == 'PENDING' %}{{ a.percentage_used|stringformat:'.2f' }}{% endif %}{% endfor %}" placeholder="0">
                                                                 <span class="input-group-text bg-light">%</span>
                                                             </div>
-                                                            <span class="calc-result text-success fw-bold ms-2" style="width: 70px; text-align: right; font-size: 0.8rem;">฿0.00</span>
+                                                            <span class="calc-result text-success fw-bold ms-2" style="width: 80px; text-align: right; font-size: 0.8rem;">฿&nbsp;&nbsp;0.00</span>
                                                         </div>
                                                     </td>
                                                 </tr>
@@ -371,77 +484,61 @@ function updateCalculations(claimId) {
     if (!modal) return;
 
     const mode = document.getElementById('mode_' + claimId).value;
-    const totalClaimAmount = parseFloat(document.getElementById('total_amount_' + claimId).value);
+    const availableBalance = parseFloat(document.getElementById('total_amount_' + claimId).value); // เปลี่ยนเป็นอ่านยอดคงเหลือตั้งต้น
     let totalAllocated = 0;
 
     let activeInputs = [];
     if (mode === 'MANUAL') {
         activeInputs = modal.querySelectorAll('#tab_manual_' + claimId + ' .calc-input');
         activeInputs.forEach(input => {
-            // 🌟 ถอดลูกน้ำออกก่อนเอาไปบวกเลข
             totalAllocated += parseFloat(input.value.replace(/,/g, '')) || 0;
         });
-    } else if (mode === 'PERCENT_CLAIM') {
-        activeInputs = modal.querySelectorAll('#tab_pct_claim_' + claimId + ' .calc-input');
+    } else if (mode === 'PERCENT_CLAIM' || mode === 'PERCENT_SALES') {
+        const tabId = mode === 'PERCENT_CLAIM' ? '#tab_pct_claim_' : '#tab_pct_sales_';
+        activeInputs = modal.querySelectorAll(tabId + claimId + ' .calc-input');
         activeInputs.forEach(input => {
             const pct = parseFloat(input.value.replace(/,/g, '')) || 0;
             const base = parseFloat(input.dataset.total) || 0;
             const amt = (pct / 100) * base;
             totalAllocated += amt;
             const resultSpan = input.closest('td').querySelector('.calc-result');
-            if(resultSpan) resultSpan.innerText = '฿' + amt.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-        });
-    } else if (mode === 'PERCENT_SALES') {
-        activeInputs = modal.querySelectorAll('#tab_pct_sales_' + claimId + ' .calc-input');
-        activeInputs.forEach(input => {
-            const pct = parseFloat(input.value.replace(/,/g, '')) || 0;
-            const base = parseFloat(input.dataset.total) || 0;
-            const amt = (pct / 100) * base;
-            totalAllocated += amt;
-            const resultSpan = input.closest('td').querySelector('.calc-result');
-            if(resultSpan) resultSpan.innerText = '฿' + amt.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            // 🌟 แทรก 2 เคาะในผลลัพธ์ย่อย
+            if(resultSpan) resultSpan.innerHTML = '฿&nbsp;&nbsp;' + amt.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
         });
     }
 
-    const balance = totalClaimAmount - totalAllocated;
+    const currentBalance = availableBalance - totalAllocated;
     const balanceEl = document.getElementById('balance_' + claimId);
     if (balanceEl) {
-        balanceEl.innerText = '฿' + balance.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-        if (balance === 0) {
+        // 🌟 แทรก 2 เคาะในยอดคงเหลือเรียลไทม์
+        balanceEl.innerHTML = '฿&nbsp;&nbsp;' + currentBalance.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        if (currentBalance === 0) {
             balanceEl.className = 'fw-bold text-success fs-6 ms-1';
-        } else if (balance < 0) {
+        } else if (currentBalance < 0) {
             balanceEl.className = 'fw-bold text-danger fs-6 ms-1';
         } else {
             balanceEl.className = 'fw-bold text-warning fs-6 ms-1';
         }
     }
 }
+
 // 🌟 ฟังก์ชันสับสวิตช์แท็บพร้อมล้างข้อมูลช่องอื่นๆ ทิ้ง 🌟
 function switchTabAndClear(claimId, newMode) {
-    // 1. เปลี่ยนโหมดเป้าหมายที่ซ่อนอยู่
     document.getElementById('mode_' + claimId).value = newMode;
-
     const modal = document.getElementById('allocateModal-' + claimId);
     if (modal) {
-        // 2. ควานหากล่องกรอกตัวเลขทั้งหมดในหน้าต่างนี้
         const allInputs = modal.querySelectorAll('.calc-input');
-
         allInputs.forEach(input => {
-            // เช็คว่ากล่องนี้ "ไม่ได้" อยู่ในโหมดที่เราเพิ่งกดเลือกใช่หรือไม่?
             if (input.dataset.calcType !== newMode.toLowerCase()) {
-                // ถ้าไม่ใช่ ให้ลบตัวเลขทิ้งเป็นช่องว่าง
                 input.value = '';
-
-                // ถ้ามีช่องผลลัพธ์สีเขียวด้านหลัง ให้รีเซ็ตกลับเป็น ฿0.00 ด้วย
                 const resultSpan = input.closest('td').querySelector('.calc-result');
+                // 🌟 แทรก 2 เคาะตอนล้างค่า
                 if (resultSpan) {
-                    resultSpan.innerText = '฿0.00';
+                    resultSpan.innerHTML = '฿&nbsp;&nbsp;0.00';
                 }
             }
         });
     }
-
-    // 3. สั่งให้คำนวณยอดคงเหลือด้านบนสุดใหม่อีกครั้ง (จะได้คืนเงินที่เคยหักไปกลับมา)
     updateCalculations(claimId);
 }
 $(document).ready(function() {
@@ -452,6 +549,26 @@ $(document).ready(function() {
     $('.modal').on('shown.bs.modal', function (e) {
         const claimId = e.target.id.replace('allocateModal-', '');
         updateCalculations(claimId);
+    });
+
+    // 🌟 [NEW] สคริปต์ "แม่บ้าน" คอยล้างข้อมูลทุกครั้งที่กดปิดหน้าต่าง 🌟
+    $('.modal').on('hidden.bs.modal', function (e) {
+        const claimId = e.target.id.replace('allocateModal-', '');
+        const form = e.target.querySelector('form');
+
+        if (form) {
+            // 1. สั่งล้างข้อมูลที่พิมพ์ค้างไว้ ให้กลับไปเป็นค่าว่าง (หรือค่าเดิมจากฐานข้อมูล)
+            form.reset();
+
+            // 2. เคลียร์ตัวเลขสีเขียวด้านหลังช่อง % ให้กลับเป็น 0.00
+            const resultSpans = e.target.querySelectorAll('.calc-result');
+            resultSpans.forEach(span => {
+                span.innerHTML = '฿&nbsp;&nbsp;0.00';
+            });
+
+            // 3. สั่งคำนวณยอดคงเหลือด้านบนใหม่ ให้ตัวเลขเด้งกลับเป็นยอดเต็ม
+            updateCalculations(claimId);
+        }
     });
 
     // 🌟 ระบบจัดรูปแบบตัวเลข (ลูกน้ำ และจุดทศนิยม) 🌟

@@ -10,7 +10,7 @@
 <div class="container-fluid py-4 px-4">
     <div class="d-flex flex-wrap justify-content-between align-items-end mb-4 gap-3">
         <div>
-            <h4 class="fw-bold mb-1 text-dark"><i class="fas fa-wallet text-success me-2"></i>ประวัติรายได้ค่าคอมมิชชัน (ส่วนตัว)</h4>
+            <h4 class="fw-bold mb-1 text-dark"><i class="fas fa-wallet text-success me-2"></i>ประวัติค่าคอมมิชชั่นรวมของพนักงานขาย</h4>
             <p class="text-muted small mb-0">ตรวจสอบประวัติการรับผลตอบแทนที่หัวหน้าสาขาจัดสรรให้</p>
         </div>
         <div>
@@ -23,13 +23,15 @@
         <!-- กล่อง 1: รอโอน (ถ้าเป็นเซลส์จะขยายเป็น 50% ถ้าเป็นหัวหน้าจะเหลือ 33%) -->
         <div class="{% if is_supervisor_view %}col-lg-4{% else %}col-lg-6{% endif %} col-md-12">
             <div class="card border-0 shadow-sm rounded-4 h-100 bg-white">
-                <div class="card-body p-4 d-flex align-items-center">
-                    <div class="bg-warning bg-opacity-10 text-warning rounded-circle d-flex align-items-center justify-content-center me-3" style="width: 60px; height: 60px; font-size: 1.5rem;">
+                <!-- 🌟 สั่งแยกฝั่งไอคอนซ้าย-ข้อความขวา 🌟 -->
+                <div class="card-body p-4 d-flex align-items-center justify-content-between">
+                    <div class="bg-warning bg-opacity-10 text-warning rounded-circle d-flex align-items-center justify-content-center flex-shrink-0" style="width: 60px; height: 60px; font-size: 1.5rem;">
                         <i class="fas fa-hourglass-half"></i>
                     </div>
-                    <div>
-                        <p class="text-muted small fw-bold mb-1">ยอดรอโอนเงิน (Pending)</p>
-                        <h4 class="fw-bold text-dark mb-0">฿{{ pending_total|floatformat:2|intcomma }}</h4>
+                    <!-- 🌟 สั่งให้ข้อความชิดขวา และเว้น 2 เคาะ 🌟 -->
+                    <div class="text-end">
+                        <p class="text-muted small fw-bold mb-1">คอมมิชชั่นรอจ่าย</p>
+                        <h4 class="fw-bold text-dark mb-0">฿&nbsp;&nbsp;{{ pending_total|floatformat:2|intcomma }}</h4>
                     </div>
                 </div>
             </div>
@@ -38,13 +40,15 @@
         <!-- กล่อง 2: โอนแล้ว -->
         <div class="{% if is_supervisor_view %}col-lg-4{% else %}col-lg-6{% endif %} col-md-12">
             <div class="card border-0 shadow-sm rounded-4 h-100" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%);">
-                <div class="card-body p-4 d-flex align-items-center">
-                    <div class="bg-white bg-opacity-25 text-white rounded-circle d-flex align-items-center justify-content-center me-3" style="width: 60px; height: 60px; font-size: 1.5rem;">
+                <!-- 🌟 สั่งแยกฝั่งไอคอนซ้าย-ข้อความขวา 🌟 -->
+                <div class="card-body p-4 d-flex align-items-center justify-content-between">
+                    <div class="bg-white bg-opacity-25 text-white rounded-circle d-flex align-items-center justify-content-center flex-shrink-0" style="width: 60px; height: 60px; font-size: 1.5rem;">
                         <i class="fas fa-check-circle"></i>
                     </div>
-                    <div>
-                        <p class="text-white text-opacity-75 small fw-bold mb-1">รับแล้วสะสม (Paid)</p>
-                        <h4 class="fw-bold text-white mb-0">฿{{ paid_total|floatformat:2|intcomma }}</h4>
+                    <!-- 🌟 สั่งให้ข้อความชิดขวา และเว้น 2 เคาะ 🌟 -->
+                    <div class="text-end">
+                        <p class="text-white text-opacity-75 small fw-bold mb-1">คอมมิชชั่นที่ได้รับรวมทั้งหมด</p>
+                        <h4 class="fw-bold text-white mb-0">฿&nbsp;&nbsp;{{ paid_total|floatformat:2|intcomma }}</h4>
                     </div>
                 </div>
             </div>
@@ -54,18 +58,38 @@
         {% if is_supervisor_view %}
         <div class="col-lg-4 col-md-12">
             <div class="card border-0 shadow-sm rounded-4 h-100 bg-white">
-                <div class="card-body p-4 d-flex align-items-center">
-                    <div class="bg-primary bg-opacity-10 text-primary rounded-circle d-flex align-items-center justify-content-center me-3" style="width: 60px; height: 60px; font-size: 1.5rem;">
+                <!-- 🌟 สั่งแยกฝั่งไอคอนซ้าย-ข้อความขวา 🌟 -->
+                <div class="card-body p-4 d-flex align-items-center justify-content-between">
+                    <div class="bg-primary bg-opacity-10 text-primary rounded-circle d-flex align-items-center justify-content-center flex-shrink-0" style="width: 60px; height: 60px; font-size: 1.5rem;">
                         <i class="fas fa-piggy-bank"></i>
                     </div>
-                    <div>
+                    <!-- 🌟 สั่งให้ข้อความชิดขวา และเว้น 2 เคาะ 🌟 -->
+                    <div class="text-end">
                         <p class="text-muted small fw-bold mb-1">ยอดเงินกองกลางสาขาปัจจุบัน</p>
-                        <h4 class="fw-bold text-primary mb-0">฿{{ branch_fund_total|floatformat:2|intcomma }}</h4>
+                        <h4 class="fw-bold text-primary mb-0">฿&nbsp;&nbsp;{{ branch_fund_total|floatformat:2|intcomma }}</h4>
                     </div>
                 </div>
             </div>
         </div>
         {% endif %}
+    </div>
+
+    <!-- 🌟 [NEW] Filter Bar 🌟 -->
+    <div class="card border-0 shadow-sm rounded-4 mb-4">
+        <div class="card-body p-3 bg-light rounded-4">
+            <form method="GET" action="{% url 'commission_history_personal' %}" class="row g-2 align-items-center justify-content-end">
+                <div class="col-md-4">
+                    <label class="form-label small fw-bold text-muted mb-1"><i class="far fa-calendar-alt me-1"></i>เลือกช่วงเวลาดูคอมมิชชั่นที่ได้รับรวมทั้งหมด</label>
+                    <input type="text" id="dateRangePicker" class="form-control form-control-sm shadow-sm text-center bg-white" readonly style="cursor: pointer;">
+                    <input type="hidden" name="start_date" id="start_date" value="{{ start_date }}">
+                    <input type="hidden" name="end_date" id="end_date" value="{{ end_date }}">
+                </div>
+                <div class="col-md-auto d-flex align-items-end gap-2">
+                    <button type="submit" class="btn btn-dark rounded-circle shadow-sm" style="width: 36px; height: 36px; padding: 0;" title="ค้นหา"><i class="fas fa-search"></i></button>
+                    <a href="{% url 'commission_history_personal' %}" class="btn btn-outline-danger rounded-circle shadow-sm" style="width: 36px; height: 36px; padding: 0; display: flex; align-items: center; justify-content: center;" title="ล้างการค้นหา"><i class="fas fa-redo"></i></a>
+                </div>
+            </form>
+        </div>
     </div>
 
     <!-- Data Table -->
@@ -75,10 +99,10 @@
                 <table class="table table-hover align-middle mb-0">
                     <thead class="bg-light border-bottom text-muted small">
                         <tr>
-                            <th class="ps-4 py-3">วันที่จัดสรร</th>
+                            <th class="ps-4 py-3">วันที่จ่ายคอมฯ</th>
                             <th class="py-3">อ้างอิงใบเบิกหลัก</th>
                             <th class="py-3">รูปแบบการคำนวณ</th>
-                            <th class="py-3">ผู้จัดสรร (หัวหน้า)</th>
+                            <th class="py-3">ผู้เบิกจ่าย</th>
                             <th class="text-end py-3">ยอดเงิน (บาท)</th>
                             <th class="text-center py-3 pe-4">สถานะ</th>
                         </tr>
@@ -91,10 +115,53 @@
                                 <div class="small text-muted ms-4">{{ a.created_at|date:"H:i น." }}</div>
                             </td>
                             <td>
-                                <div class="fw-bold text-dark fs-6">{{ a.claim.code }}</div>
-                                {% if a.ticket %}
-                                    <div class="small text-muted mt-1"><i class="fas fa-ticket-alt text-success me-1"></i>จากบิลอ้างอิง: {{ a.ticket.quotation_ref.code|default:"-" }}</div>
-                                {% endif %}
+                                <!-- 🌟 ตัวหนังสือที่คลิกได้ -->
+                                <a href="#" class="fw-bold text-primary fs-6 text-decoration-none hover-scale d-inline-block" data-bs-toggle="modal" data-bs-target="#claimModal{{ a.claim.id }}" title="คลิกเพื่อดูรายละเอียดบิล">
+                                    {{ a.claim.code }} <i class="fas fa-search-plus ms-1 small"></i>
+                                </a>
+
+                                <!-- 🌟 [NEW] หน้าต่าง Modal ซ่อนไว้ รอเด้งตอนกดคลิก 🌟 -->
+                                <div class="modal fade" id="claimModal{{ a.claim.id }}" tabindex="-1" aria-hidden="true">
+                                    <div class="modal-dialog modal-dialog-centered modal-sm">
+                                        <div class="modal-content border-0 rounded-4 shadow-lg">
+                                            <div class="modal-header bg-light border-0">
+                                                <h6 class="modal-title fw-bold text-dark"><i class="fas fa-file-invoice text-primary me-2"></i>แหล่งที่มาของยอดเงิน</h6>
+                                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                            </div>
+                                            <div class="modal-body p-3 text-start bg-white" style="max-height: 60vh; overflow-y: auto;">
+                                                <div class="text-muted small mb-2">อ้างอิงใบเบิกหลัก: <strong>{{ a.claim.code }}</strong></div>
+                                                <div class="mb-3">
+                                                    <span class="badge bg-secondary bg-opacity-10 text-secondary border rounded-pill px-2 py-1" style="font-size: 0.7rem;">
+                                                        <i class="fas fa-list me-1"></i> ประกอบด้วยบิลย่อย {{ a.claim.tickets.count }} รายการ
+                                                    </span>
+                                                </div>
+
+                                                <ul class="list-group list-group-flush border-top pt-2">
+                                                    {% for t in a.claim.tickets.all %}
+                                                        <li class="list-group-item px-0 py-2 border-bottom-0 border-light">
+                                                            <div class="d-flex justify-content-between align-items-center">
+                                                                <div class="fw-bold text-dark" style="font-size: 0.85rem;">
+                                                                    <i class="fas fa-check-circle text-success me-2 small"></i>{{ t.quotation_ref.code }}
+                                                                </div>
+                                                                {% if t.quotation_ref.invoice %}
+                                                                    <span class="badge bg-info bg-opacity-10 text-info border border-info shadow-sm" style="font-size: 0.7rem;" title="เปิดบิลแล้ว">
+                                                                        {{ t.quotation_ref.invoice.code }}
+                                                                    </span>
+                                                                {% else %}
+                                                                    <span class="badge bg-light text-muted border shadow-sm" style="font-size: 0.65rem;">รอเปิดบิล</span>
+                                                                {% endif %}
+                                                            </div>
+                                                        </li>
+                                                    {% endfor %}
+                                                </ul>
+                                            </div>
+                                            <div class="modal-footer border-0 bg-light p-2 justify-content-center">
+                                                <button type="button" class="btn btn-sm btn-secondary rounded-pill px-4" data-bs-dismiss="modal">ปิดหน้าต่าง</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- 🌟 สิ้นสุดหน้าต่าง Modal -->
                             </td>
                             <td>
                                 <span class="badge bg-light text-dark border">{{ a.get_method_display }}</span>
@@ -139,4 +206,43 @@
         </div>
     </div>
 </div>
+{% endblock %}
+<!-- 🌟 [NEW] Scripts สำหรับเรียกปฏิทิน 🌟 -->
+{% block scripts %}
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/momentjs/latest/moment.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.min.js"></script>
+<link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css" />
+
+<script>
+$(document).ready(function() {
+    var start = $('#start_date').val() ? moment($('#start_date').val(), 'YYYY-MM-DD') : moment().subtract(29, 'days');
+    var end = $('#end_date').val() ? moment($('#end_date').val(), 'YYYY-MM-DD') : moment();
+
+    function cb(start, end) {
+        $('#dateRangePicker').val(start.format('DD/MM/YYYY') + ' - ' + end.format('DD/MM/YYYY'));
+        $('#start_date').val(start.format('YYYY-MM-DD'));
+        $('#end_date').val(end.format('YYYY-MM-DD'));
+    }
+
+    $('#dateRangePicker').daterangepicker({
+        startDate: start, endDate: end, linkedCalendars: false,
+        ranges: {
+           'วันนี้': [moment(), moment()],
+           'เมื่อวาน': [moment().subtract(1, 'days'), moment().subtract(1, 'days')],
+           'ช่วง 7 วันก่อนหน้า': [moment().subtract(6, 'days'), moment()],
+           'ช่วง 30 วันก่อนหน้า': [moment().subtract(29, 'days'), moment()],
+           'เดือนนี้': [moment().startOf('month'), moment().endOf('month')],
+           '1 เดือนก่อนหน้า': [moment().subtract(1, 'month').startOf('month'), moment().subtract(1, 'month').endOf('month')]
+        },
+        locale: {
+            format: 'DD/MM/YYYY', applyLabel: "ตกลง", cancelLabel: "ยกเลิก", customRangeLabel: "กำหนดเอง",
+            daysOfWeek: ["อา.", "จ.", "อ.", "พ.", "พฤ.", "ศ.", "ส."],
+            monthNames: ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"],
+            firstDay: 1
+        }
+    }, cb);
+    cb(start, end);
+});
+</script>
 {% endblock %}

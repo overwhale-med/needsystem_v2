@@ -1,0 +1,316 @@
+{% extends 'core/base.html' %}
+{% load humanize %}
+
+{% block content %}
+<style>
+    .navbar-nav { display: none !important; }
+    .nav-tabs .nav-link { color: #6c757d; font-weight: 600; border-radius: 8px 8px 0 0; border: none; padding: 12px 24px; }
+    .nav-tabs .nav-link.active { background-color: #f8f9fa; color: #0d6efd; border-bottom: 3px solid #0d6efd; }
+    .table-hover tbody tr:hover { background-color: #f8f9fa; }
+</style>
+
+<div class="container-fluid py-4 px-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-end mb-4">
+        <div>
+            <h4 class="fw-bold mb-1 text-dark"><i class="fas fa-sitemap text-primary me-2"></i>จัดการโครงสร้างองค์กร</h4>
+            <p class="text-muted small mb-0">ระบบจัดการ แผนกหลัก แผนกย่อย และตำแหน่งงาน</p>
+        </div>
+        <div>
+            <a href="{% url 'hr_executive_dashboard' %}" class="btn btn-outline-secondary rounded-pill px-4 shadow-sm fw-bold"><i class="fas fa-arrow-left me-2"></i> กลับหน้า HR</a>
+        </div>
+    </div>
+
+    <!-- 🌟 ส่วนเนื้อหาหลัก แยกเป็น 2 แท็บ (แผนก / ตำแหน่ง) 🌟 -->
+    <ul class="nav nav-tabs border-bottom-0 mb-0" id="orgTab" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="dept-tab" data-bs-toggle="tab" data-bs-target="#dept" type="button" role="tab"><i class="fas fa-building me-2"></i>1. จัดการแผนก (Departments)</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="pos-tab" data-bs-toggle="tab" data-bs-target="#pos" type="button" role="tab"><i class="fas fa-user-tag me-2"></i>2. จัดการตำแหน่ง (Positions)</button>
+        </li>
+    </ul>
+
+    <div class="tab-content bg-white border border-top-0 rounded-bottom-4 shadow-sm p-4" id="orgTabContent">
+
+        <!-- ========================================== -->
+        <!-- 🏢 แท็บที่ 1: จัดการแผนก (Departments) -->
+        <!-- ========================================== -->
+        <div class="tab-pane fade show active" id="dept" role="tabpanel">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="fw-bold text-dark mb-0">รายชื่อแผนกทั้งหมดในระบบ</h6>
+                <button class="btn btn-primary rounded-pill px-3 shadow-sm fw-bold" data-bs-toggle="modal" data-bs-target="#addDeptModal"><i class="fas fa-plus me-1"></i> เพิ่มแผนกใหม่</button>
+            </div>
+
+            <div class="table-responsive border rounded-3">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="bg-light text-secondary small">
+                        <tr>
+                            <th class="ps-4">ชื่อแผนก (Department)</th>
+                            <th>สังกัดแผนกหลัก (Parent)</th>
+                            <th class="text-center" width="150">จัดการ</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for d in departments %}
+                        <tr>
+                            <td class="ps-4 fw-bold text-dark">{{ d.name }}</td>
+                            <td>
+                                {% if d.parent %}
+                                    <span class="badge bg-light text-dark border shadow-sm"><i class="fas fa-level-up-alt text-muted me-1"></i> {{ d.parent.name }}</span>
+                                {% else %}
+                                    <span class="badge bg-light text-muted border">แผนกหลัก (สูงสุด)</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                <button class="btn btn-sm btn-outline-warning rounded-circle shadow-sm" data-bs-toggle="modal" data-bs-target="#editDeptModal{{ d.id }}" title="แก้ไข"><i class="fas fa-pen"></i></button>
+                                <button class="btn btn-sm btn-outline-danger rounded-circle shadow-sm ms-1" data-bs-toggle="modal" data-bs-target="#deleteDeptModal{{ d.id }}" title="ลบ"><i class="fas fa-trash"></i></button>
+
+                                <!-- 🌟 ย้าย Modal แก้ไขแผนก มาซ่อนในช่อง td นี้ พร้อมใส่ text-start 🌟 -->
+                                <div class="modal fade text-start" id="editDeptModal{{ d.id }}" tabindex="-1">
+                                    <div class="modal-dialog modal-dialog-centered">
+                                        <form method="POST" action="{% url 'org_structure_settings' %}" class="modal-content border-0 rounded-4 shadow-lg">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="action" value="edit_dept">
+                                            <input type="hidden" name="dept_id" value="{{ d.id }}">
+                                            <div class="modal-header bg-warning border-0">
+                                                <h6 class="modal-title fw-bold text-dark"><i class="fas fa-pen me-2"></i>แก้ไขแผนก: {{ d.name }}</h6>
+                                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                            </div>
+                                            <div class="modal-body p-4">
+                                                <div class="mb-3">
+                                                    <label class="form-label fw-bold text-muted small">ชื่อแผนก <span class="text-danger">*</span></label>
+                                                    <input type="text" name="name" class="form-control" value="{{ d.name }}" required>
+                                                </div>
+                                                <div class="mb-0">
+                                                    <label class="form-label fw-bold text-muted small">สังกัดแผนกหลัก (เว้นว่างถ้าเป็นแผนกสูงสุด)</label>
+                                                    <select name="parent_id" class="form-select">
+                                                        <option value="">-- เป็นแผนกหลักสูงสุด --</option>
+                                                        {% for p_dept in departments %}
+                                                            {% if p_dept.id != d.id %} <!-- ป้องกันไม่ให้เลือกตัวเองเป็นแม่ -->
+                                                                <option value="{{ p_dept.id }}" {% if d.parent_id == p_dept.id %}selected{% endif %}>{{ p_dept.name }}</option>
+                                                            {% endif %}
+                                                        {% endfor %}
+                                                    </select>
+                                                </div>
+                                            </div>
+                                            <div class="modal-footer bg-light border-0">
+                                                <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">ยกเลิก</button>
+                                                <button type="submit" class="btn btn-warning fw-bold rounded-pill px-4 text-dark">บันทึกการแก้ไข</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+
+                                <!-- 🌟 ย้าย Modal ลบแผนก มาซ่อนในช่อง td นี้ 🌟 -->
+                                <div class="modal fade text-start" id="deleteDeptModal{{ d.id }}" tabindex="-1">
+                                    <div class="modal-dialog modal-dialog-centered modal-sm">
+                                        <form method="POST" action="{% url 'org_structure_settings' %}" class="modal-content border-0 rounded-4 shadow-lg text-center">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="action" value="delete_dept">
+                                            <input type="hidden" name="dept_id" value="{{ d.id }}">
+                                            <div class="modal-body p-4">
+                                                <i class="fas fa-exclamation-triangle fa-3x text-danger mb-3"></i>
+                                                <h5 class="fw-bold text-dark">ยืนยันการลบแผนก?</h5>
+                                                <p class="text-muted small mb-4">คุณต้องการลบแผนก <strong>{{ d.name }}</strong> ใช่หรือไม่?</p>
+                                                <button type="button" class="btn btn-secondary rounded-pill px-4 me-2" data-bs-dismiss="modal">ยกเลิก</button>
+                                                <button type="submit" class="btn btn-danger rounded-pill px-4 fw-bold">ลบเลย</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="3" class="text-center py-4 text-muted">ยังไม่มีข้อมูลแผนก</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- 👤 แท็บที่ 2: จัดการตำแหน่ง (Positions) -->
+        <!-- ========================================== -->
+        <div class="tab-pane fade" id="pos" role="tabpanel">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="fw-bold text-dark mb-0">รายชื่อตำแหน่งงานทั้งหมด</h6>
+                <button class="btn btn-primary rounded-pill px-3 shadow-sm fw-bold" data-bs-toggle="modal" data-bs-target="#addPosModal"><i class="fas fa-plus me-1"></i> เพิ่มตำแหน่งใหม่</button>
+            </div>
+
+            <div class="table-responsive border rounded-3">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="bg-light text-secondary small">
+                        <tr>
+                            <th class="ps-4">ชื่อตำแหน่ง (Position Title)</th>
+                            <th>สังกัดแผนก</th>
+                            <th>อำนาจการอนุมัติ</th>
+                            <th class="text-center" width="150">จัดการ</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for p in positions %}
+                        <tr>
+                            <td class="ps-4 fw-bold text-dark">{{ p.title }}</td>
+                            <td>
+                                {% if p.department %}
+                                    <span class="badge bg-light text-dark border shadow-sm"><i class="fas fa-building text-muted me-1"></i> {{ p.department.name }}</span>
+                                {% else %}
+                                    <span class="text-muted small">-</span>
+                                {% endif %}
+                            </td>
+                            <td><span class="small text-muted text-truncate d-inline-block" style="max-width: 200px;">{{ p.approval_authority|default:"-" }}</span></td>
+                            <td class="text-center">
+                                <button class="btn btn-sm btn-outline-warning rounded-circle shadow-sm" data-bs-toggle="modal" data-bs-target="#editPosModal{{ p.id }}" title="แก้ไข"><i class="fas fa-pen"></i></button>
+                                <button class="btn btn-sm btn-outline-danger rounded-circle shadow-sm ms-1" data-bs-toggle="modal" data-bs-target="#deletePosModal{{ p.id }}" title="ลบ"><i class="fas fa-trash"></i></button>
+
+                                <!-- 🌟 ย้าย Modal แก้ไขตำแหน่ง มาซ่อนในช่อง td นี้ พร้อมใส่ text-start 🌟 -->
+                                <div class="modal fade text-start" id="editPosModal{{ p.id }}" tabindex="-1">
+                                    <div class="modal-dialog modal-dialog-centered">
+                                        <form method="POST" action="{% url 'org_structure_settings' %}" class="modal-content border-0 rounded-4 shadow-lg">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="action" value="edit_pos">
+                                            <input type="hidden" name="pos_id" value="{{ p.id }}">
+                                            <div class="modal-header bg-warning border-0">
+                                                <h6 class="modal-title fw-bold text-dark"><i class="fas fa-pen me-2"></i>แก้ไขตำแหน่ง: {{ p.title }}</h6>
+                                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                            </div>
+                                            <div class="modal-body p-4">
+                                                <div class="mb-3">
+                                                    <label class="form-label fw-bold text-muted small">ชื่อตำแหน่ง <span class="text-danger">*</span></label>
+                                                    <input type="text" name="title" class="form-control" value="{{ p.title }}" required>
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label class="form-label fw-bold text-muted small">สังกัดแผนก <span class="text-danger">*</span></label>
+                                                    <select name="dept_id" class="form-select" required>
+                                                        {% for d in departments %}
+                                                            <option value="{{ d.id }}" {% if p.department_id == d.id %}selected{% endif %}>{{ d.name }}</option>
+                                                        {% endfor %}
+                                                    </select>
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label class="form-label fw-bold text-muted small">รายละเอียดงาน (Job Description)</label>
+                                                    <textarea name="description" class="form-control" rows="2">{{ p.description|default:"" }}</textarea>
+                                                </div>
+                                                <div class="mb-0">
+                                                    <label class="form-label fw-bold text-muted small">อำนาจการอนุมัติ (Approval Authority)</label>
+                                                    <textarea name="approval_authority" class="form-control" rows="2">{{ p.approval_authority|default:"" }}</textarea>
+                                                </div>
+                                            </div>
+                                            <div class="modal-footer bg-light border-0">
+                                                <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">ยกเลิก</button>
+                                                <button type="submit" class="btn btn-warning fw-bold rounded-pill px-4 text-dark">บันทึกการแก้ไข</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+
+                                <!-- 🌟 ย้าย Modal ลบตำแหน่ง มาซ่อนในช่อง td นี้ 🌟 -->
+                                <div class="modal fade text-start" id="deletePosModal{{ p.id }}" tabindex="-1">
+                                    <div class="modal-dialog modal-dialog-centered modal-sm">
+                                        <form method="POST" action="{% url 'org_structure_settings' %}" class="modal-content border-0 rounded-4 shadow-lg text-center">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="action" value="delete_pos">
+                                            <input type="hidden" name="pos_id" value="{{ p.id }}">
+                                            <div class="modal-body p-4">
+                                                <i class="fas fa-exclamation-triangle fa-3x text-danger mb-3"></i>
+                                                <h5 class="fw-bold text-dark">ยืนยันการลบตำแหน่ง?</h5>
+                                                <p class="text-muted small mb-4">คุณต้องการลบตำแหน่ง <strong>{{ p.title }}</strong> ใช่หรือไม่?</p>
+                                                <button type="button" class="btn btn-secondary rounded-pill px-4 me-2" data-bs-dismiss="modal">ยกเลิก</button>
+                                                <button type="submit" class="btn btn-danger rounded-pill px-4 fw-bold">ลบเลย</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="4" class="text-center py-4 text-muted">ยังไม่มีข้อมูลตำแหน่ง</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<!-- ========================================== -->
+<!-- 🌟 Modals สำหรับ "เพิ่มใหม่" (Add) -->
+<!-- ========================================== -->
+
+<!-- Modal เพิ่มแผนก -->
+<div class="modal fade" id="addDeptModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <form method="POST" action="{% url 'org_structure_settings' %}" class="modal-content border-0 rounded-4 shadow-lg">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="add_dept">
+            <div class="modal-header bg-primary border-0">
+                <h6 class="modal-title fw-bold text-white"><i class="fas fa-plus me-2"></i>เพิ่มแผนกใหม่</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="mb-3">
+                    <label class="form-label fw-bold text-muted small">ชื่อแผนก <span class="text-danger">*</span></label>
+                    <input type="text" name="name" class="form-control" required placeholder="เช่น ฝ่ายโซล่าเซลล์">
+                </div>
+                <div class="mb-0">
+                    <label class="form-label fw-bold text-muted small">สังกัดแผนกหลัก (เว้นว่างถ้าเป็นแผนกสูงสุด)</label>
+                    <select name="parent_id" class="form-select">
+                        <option value="">-- เป็นแผนกหลักสูงสุด --</option>
+                        {% for d in departments %}
+                            <option value="{{ d.id }}">{{ d.name }}</option>
+                        {% endfor %}
+                    </select>
+                    <div class="form-text small mt-2">💡 ทริค: ให้สร้าง "ฝ่ายโซล่าเซลล์" เป็นแผนกหลักก่อน แล้วค่อยมาสร้างแผนกย่อย (C&I) โดยเลือกให้สังกัดฝ่ายโซล่าเซลล์ครับ</div>
+                </div>
+            </div>
+            <div class="modal-footer bg-light border-0">
+                <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">ยกเลิก</button>
+                <button type="submit" class="btn btn-primary fw-bold rounded-pill px-4 shadow-sm">บันทึกข้อมูล</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal เพิ่มตำแหน่ง -->
+<div class="modal fade" id="addPosModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <form method="POST" action="{% url 'org_structure_settings' %}" class="modal-content border-0 rounded-4 shadow-lg">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="add_pos">
+            <div class="modal-header bg-primary border-0">
+                <h6 class="modal-title fw-bold text-white"><i class="fas fa-plus me-2"></i>เพิ่มตำแหน่งใหม่</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="mb-3">
+                    <label class="form-label fw-bold text-muted small">ชื่อตำแหน่ง <span class="text-danger">*</span></label>
+                    <input type="text" name="title" class="form-control" required placeholder="เช่น ผู้จัดการฝ่ายโซล่าเซลล์">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold text-muted small">สังกัดแผนก <span class="text-danger">*</span></label>
+                    <select name="dept_id" class="form-select" required>
+                        <option value="">-- เลือกแผนก --</option>
+                        {% for d in departments %}
+                            <option value="{{ d.id }}">{{ d.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold text-muted small">รายละเอียดงาน (Job Description)</label>
+                    <textarea name="description" class="form-control" rows="2" placeholder="อธิบายหน้าที่ความรับผิดชอบ..."></textarea>
+                </div>
+                <div class="mb-0">
+                    <label class="form-label fw-bold text-muted small">อำนาจการอนุมัติ (Approval Authority)</label>
+                    <textarea name="approval_authority" class="form-control" rows="2" placeholder="เช่น อนุมัติลางานพนักงาน, อนุมัติเบิกงบ..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer bg-light border-0">
+                <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">ยกเลิก</button>
+                <button type="submit" class="btn btn-primary fw-bold rounded-pill px-4 shadow-sm">บันทึกข้อมูล</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

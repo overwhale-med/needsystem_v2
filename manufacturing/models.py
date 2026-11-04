@@ -249,7 +249,7 @@ class ProductionOrder(models.Model):
     is_onsite = models.BooleanField(default=False, verbose_name="งานประกอบหน้างาน (On-site)")
 
     delivery_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, verbose_name="ค่าจ้างขนส่ง (สำหรับงานนี้)")
-    #proof_of_delivery = models.ImageField(upload_to='delivery_proofs/%Y/%m/', null=True, blank=True, verbose_name="รูปถ่ายใบส่งมอบสินค้า")
+    proof_of_delivery = models.ImageField(upload_to='delivery_proofs/%Y/%m/', null=True, blank=True, verbose_name="รูปถ่ายใบส่งมอบสินค้า")
     logistics_claim = models.ForeignKey('LogisticsClaim', on_delete=models.SET_NULL, null=True, blank=True, related_name='production_orders', verbose_name="ใบตั้งเบิกค่ารถขนส่ง")
 
     class Meta:

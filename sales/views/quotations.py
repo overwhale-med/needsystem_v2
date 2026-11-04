@@ -84,12 +84,22 @@ def quotation_list(request):
         elif status_filter == 'PENDING_VERIFY':
             queryset = queryset.filter(status='APPROVED', is_deposit_paid=True, is_deposit_verified=False).distinct()
         elif status_filter == 'PIPELINE':
-            # 🌟 ตัวกรองใหม่: ดึงทั้ง READY (รอสั่งผลิต) และ IN_PRODUCTION (กำลังผลิต)
-            queryset = queryset.filter(status='APPROVED', is_deposit_paid=True, is_deposit_verified=True).distinct()
+            # 🌟 [UPDATED] ระหว่างผลิต: รวมตั้งแต่จ่ายมัดจำ จนถึงเปิดบิลแล้ว (แต่ยังส่งไม่เสร็จ)
+            queryset = queryset.filter(
+                Q(status='APPROVED', is_deposit_paid=True, is_deposit_verified=True) |
+                Q(status='CONVERTED')
+            ).exclude(
+                production_orders__delivery_status__name__in=['ส่งมอบสำเร็จ', 'ลูกค้าเซ็นรับแล้ว', 'จัดส่งเรียบร้อย']
+            ).distinct()
         elif status_filter == 'READY':
             queryset = queryset.filter(status='APPROVED', is_deposit_paid=True, is_deposit_verified=True, production_orders__isnull=True).distinct()
         elif status_filter == 'IN_PRODUCTION':
             queryset = queryset.filter(status='APPROVED', is_deposit_paid=True, is_deposit_verified=True, production_orders__isnull=False).distinct()
+        elif status_filter == 'CLOSED':
+            # 🌟 [NEW] ปิดงานแล้ว: งานที่มีการจัดส่งมอบให้ลูกค้าเสร็จสมบูรณ์แล้ว
+            queryset = queryset.filter(
+                production_orders__delivery_status__name__in=['ส่งมอบสำเร็จ', 'ลูกค้าเซ็นรับแล้ว', 'จัดส่งเรียบร้อย']
+            ).distinct()
         else:
             queryset = queryset.filter(status=status_filter).distinct()
 
@@ -500,24 +510,27 @@ def print_deposit_contract(request, qt_id):
             rvd_code = specific_deposit.code
             rvd_date = specific_deposit.deposit_date
             rvd_method = specific_deposit.get_payment_method_display()
+            rvd_method_code = specific_deposit.payment_method # 🌟 [NEW] เพิ่มตัวแปรส่งโค้ดอังกฤษ
         except QuotationDeposit.DoesNotExist:
             deposit_amount = qt.deposit_amount if qt.deposit_amount else Decimal('0.00')
             rvd_code = f"QT-{qt.code.split('-')[-1]}"
             rvd_date = qt.deposit_date
             rvd_method = "ไม่ระบุ"
+            rvd_method_code = None # 🌟 [NEW]
     else:
-        # 🌟 [FIXED] แก้จาก qt.quotationdeposit_set.first() เป็น qt.deposits.first()
         first_dep = qt.deposits.first()
         if first_dep:
             deposit_amount = first_dep.amount
             rvd_code = first_dep.code
             rvd_date = first_dep.deposit_date
             rvd_method = first_dep.get_payment_method_display()
+            rvd_method_code = first_dep.payment_method # 🌟 [NEW] เพิ่มตัวแปรส่งโค้ดอังกฤษ
         else:
             deposit_amount = qt.deposit_amount if qt.deposit_amount else Decimal('0.00')
             rvd_code = f"QT-{qt.code.split('-')[-1]}"
             rvd_date = qt.deposit_date
             rvd_method = "ไม่ระบุ"
+            rvd_method_code = None # 🌟 [NEW]
 
     return render(request, 'sales/print_deposit_contract.html', {
         'qt': qt, 'company': company,
@@ -527,7 +540,8 @@ def print_deposit_contract(request, qt_id):
         'balance_due': balance_due,
         'balance_due_text': get_thai_baht_text(balance_due),
         'delivery_date': qt.production_orders.first().delivery_date if qt.production_orders.first() else None,
-        'rvd_code': rvd_code, 'rvd_date': rvd_date, 'rvd_method': rvd_method
+        'rvd_code': rvd_code, 'rvd_date': rvd_date, 'rvd_method': rvd_method,
+        'rvd_method_code': rvd_method_code # 🌟 [NEW] ส่งค่าไปให้หน้า HTML
     })
 
 @login_required

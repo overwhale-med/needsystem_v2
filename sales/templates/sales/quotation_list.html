@@ -86,9 +86,13 @@
                     <p class="text-muted small mb-0">ระบบจัดการงานขายแผนกบ้านน็อคดาวน์</p>
                 </div>
                 <div class="d-flex gap-2">
+                    <!-- 🌟 ซ่อนปุ่มสร้างใบเสนอราคา ถ้าคนเปิดดูคือ Manager 🌟 -->
+                    {% if not is_manager %}
                     <a href="{% url 'quotation_create' %}" class="btn btn-primary shadow-sm rounded-pill px-4 fw-bold d-flex align-items-center" onclick="disableCreateBtn(this);">
                         <span id="createBtnText"><i class="fas fa-plus me-2"></i> สร้างใบเสนอราคา</span>
                     </a>
+                    {% endif %}
+
                     <a href="{% url 'sales_dashboard' %}" class="btn btn-light border shadow-sm rounded-pill px-4 fw-bold text-muted d-flex align-items-center">
                         <i class="fas fa-arrow-left me-2"></i> กลับ Dashboard
                     </a>
@@ -144,13 +148,12 @@
                                     <option value="APPROVED" {% if status_filter == 'APPROVED' %}selected{% endif %}>อนุมัติแล้ว</option>
                                     <option value="PENDING_CLOSING" {% if status_filter == 'PENDING_CLOSING' %}selected{% endif %}>รอรับมัดจำ</option>
                                     <option value="PENDING_VERIFY" {% if status_filter == 'PENDING_VERIFY' %}selected{% endif %}>รอบัญชีตรวจสอบ</option>
-
-                                    <!-- 🌟 เพิ่มตัวเลือกนี้เข้าไป -->
                                     <option value="PIPELINE" {% if status_filter == 'PIPELINE' %}selected{% endif %}>ระหว่างผลิต</option>
-
                                     <option value="READY" {% if status_filter == 'READY' %}selected{% endif %}>พร้อมส่งงานผลิต</option>
                                     <option value="IN_PRODUCTION" {% if status_filter == 'IN_PRODUCTION' %}selected{% endif %}>กำลังดำเนินการผลิต</option>
                                     <option value="CONVERTED" {% if status_filter == 'CONVERTED' %}selected{% endif %}>เปิดบิลแล้ว</option>
+                                    <!-- 🌟 [NEW] เพิ่มสถานะ ปิดงานแล้ว เข้าไป 🌟 -->
+                                    <option value="CLOSED" {% if status_filter == 'CLOSED' %}selected{% endif %}>ปิดงานแล้ว</option>
                                     <option value="CANCELLED" {% if status_filter == 'CANCELLED' %}selected{% endif %}>ยกเลิก</option>
                                 </select>
                             </div>

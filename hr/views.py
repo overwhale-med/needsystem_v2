@@ -678,3 +678,116 @@ def api_assign_to_team(request):
         return JsonResponse({'status': 'success', 'message': msg})
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
+
+# ==========================================
+# 🌟 ระบบจัดการโครงสร้างองค์กร (Departments & Positions)
+# ==========================================
+@user_passes_test(is_hr_or_admin, login_url='/')
+def org_structure_settings(request):
+    departments = Department.objects.all().order_by('parent__name', 'name')
+    positions = Position.objects.select_related('department').order_by('department__name', 'title')
+
+    if request.method == 'POST':
+        action = request.POST.get('action')
+
+        # --- 1. โซนจัดการแผนก (Departments) ---
+        if action == 'add_dept':
+            name = request.POST.get('name')
+            parent_id = request.POST.get('parent_id')
+            if name:
+                parent = Department.objects.get(id=parent_id) if parent_id else None
+                Department.objects.create(name=name, parent=parent)
+                messages.success(request, f"✅ เพิ่มแผนก '{name}' เรียบร้อยแล้ว")
+
+        elif action == 'edit_dept':
+            dept_id = request.POST.get('dept_id')
+            name = request.POST.get('name')
+            parent_id = request.POST.get('parent_id')
+            if dept_id and name:
+                dept = get_object_or_404(Department, id=dept_id)
+                dept.name = name
+                dept.parent = Department.objects.get(id=parent_id) if parent_id else None
+                dept.save()
+                messages.success(request, f"✅ แก้ไขข้อมูลแผนก '{name}' เรียบร้อยแล้ว")
+
+        elif action == 'delete_dept':
+            dept_id = request.POST.get('dept_id')
+            dept = get_object_or_404(Department, id=dept_id)
+            if dept.employee_set.exists() or dept.sub_departments.exists():
+                messages.error(request, f"❌ ไม่สามารถลบแผนก '{dept.name}' ได้ เนื่องจากยังมีพนักงานหรือแผนกย่อยสังกัดอยู่")
+            else:
+                dept_name = dept.name
+                dept.delete()
+                messages.success(request, f"🗑️ ลบแผนก '{dept_name}' เรียบร้อยแล้ว")
+
+        # --- 2. โซนจัดการตำแหน่ง (Positions) ---
+        elif action == 'add_pos':
+            title = request.POST.get('title')
+            dept_id = request.POST.get('dept_id')
+            desc = request.POST.get('description')
+            auth = request.POST.get('approval_authority')
+            if title and dept_id:
+                dept = get_object_or_404(Department, id=dept_id)
+                Position.objects.create(title=title, department=dept, description=desc, approval_authority=auth)
+                messages.success(request, f"✅ เพิ่มตำแหน่ง '{title}' เรียบร้อยแล้ว")
+
+        elif action == 'edit_pos':
+            pos_id = request.POST.get('pos_id')
+            title = request.POST.get('title')
+            dept_id = request.POST.get('dept_id')
+            desc = request.POST.get('description')
+            auth = request.POST.get('approval_authority')
+            if pos_id and title and dept_id:
+                pos = get_object_or_404(Position, id=pos_id)
+                dept = get_object_or_404(Department, id=dept_id)
+                pos.title = title
+                pos.department = dept
+                pos.description = desc
+                pos.approval_authority = auth
+                pos.save()
+                messages.success(request, f"✅ แก้ไขตำแหน่ง '{title}' เรียบร้อยแล้ว")
+
+        elif action == 'delete_pos':
+            pos_id = request.POST.get('pos_id')
+            pos = get_object_or_404(Position, id=pos_id)
+            if pos.employee_set.exists():
+                messages.error(request, f"❌ ไม่สามารถลบตำแหน่ง '{pos.title}' ได้ เนื่องจากยังมีพนักงานใช้งานอยู่")
+            else:
+                pos_title = pos.title
+                pos.delete()
+                messages.success(request, f"🗑️ ลบตำแหน่ง '{pos_title}' เรียบร้อยแล้ว")
+
+        return redirect('org_structure_settings')
+
+    context = {
+        'departments': departments,
+        'positions': positions,
+    }
+    return render(request, 'hr/org_structure_settings.html', context)
+
+# ==========================================
+# 🌟 API สำหรับระบบ Dropdown 3 สเต็ป (ฝ่าย -> แผนก -> ตำแหน่ง)
+# ==========================================
+@user_passes_test(is_hr_or_admin, login_url='/')
+def api_get_departments(request):
+    """API ดึงรายชื่อแผนกย่อย โดยอ้างอิงจาก ฝ่าย (Parent) ที่เลือกใน Step 1"""
+    division_id = request.GET.get('division_id')
+    if division_id:
+        # ดึงเฉพาะแผนกที่มีสังกัดเป็น division_id ที่ส่งมา
+        departments = Department.objects.filter(parent_id=division_id).order_by('name')
+        data = [{'id': d.id, 'name': d.name} for d in departments]
+    else:
+        data = []
+    return JsonResponse(data, safe=False)
+
+@user_passes_test(is_hr_or_admin, login_url='/')
+def api_get_positions(request):
+    """API ดึงรายชื่อตำแหน่ง โดยอ้างอิงจาก แผนกย่อย ที่เลือกใน Step 2"""
+    department_id = request.GET.get('department_id')
+    if department_id:
+        # ดึงเฉพาะตำแหน่งที่สังกัด department_id ที่ส่งมา
+        positions = Position.objects.filter(department_id=department_id).order_by('title')
+        data = [{'id': p.id, 'title': p.title} for p in positions]
+    else:
+        data = []
+    return JsonResponse(data, safe=False)

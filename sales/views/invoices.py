@@ -240,7 +240,15 @@ def confirm_payment(request, doc_type, doc_id):
                             grand_total = obj.quotation_ref.grand_total
                             base_amount = grand_total - (grand_total * Decimal('0.10'))
                             comm_amount = base_amount * Decimal('0.025')
-                            CommissionTicket.objects.create(ticket_type='2.5%', quotation_ref=obj.quotation_ref, base_amount=base_amount, commission_amount=comm_amount)
+                            # 🌟 [FIX] ระบุสถานะ AVAILABLE และผูกรหัสใบเสร็จ (invoice_ref) ให้ชัดเจน
+                            CommissionTicket.objects.create(
+                                ticket_type='2.5%',
+                                quotation_ref=obj.quotation_ref,
+                                invoice_ref=obj,
+                                base_amount=base_amount,
+                                commission_amount=comm_amount,
+                                status='AVAILABLE'
+                            )
                 messages.success(request, f"✅ ยืนยันรับชำระเงินครบ 100% เอกสาร {obj.code} ปิดการขายเรียบร้อยแล้ว!")
             else:
                 obj.status = 'UNPAID'
@@ -504,7 +512,7 @@ def master_job_report(request):
     qt_ids = [job.quotation_ref_id for job in page_obj if job.quotation_ref_id]
     inv_dict = {inv.quotation_ref_id: inv for inv in Invoice.objects.filter(quotation_ref_id__in=qt_ids)}
     tickets = CommissionTicket.objects.filter(Q(quotation_ref_id__in=qt_ids) | Q(invoice_ref__quotation_ref_id__in=qt_ids))
-    
+
     ticket_dict_05, ticket_dict_2, ticket_dict_3 = {}, {}, {}
     for t in tickets:
         if t.ticket_type == '0.5%' and t.quotation_ref_id: ticket_dict_05.setdefault(t.quotation_ref_id, []).append(t)

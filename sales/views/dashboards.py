@@ -112,7 +112,23 @@ def api_dashboard_data(request):
     pending_approval = qt_all_qs.filter(status='DRAFT').count()
     pending_closing = qt_all_qs.filter(status='APPROVED', is_deposit_paid=False).count()
     # 🌟 นับเฉพาะที่ตรวจมัดจำแล้ว และกำลังผลิต/รอสั่งผลิต
-    in_production = qt_all_qs.filter(status='APPROVED', is_deposit_paid=True, is_deposit_verified=True).count()
+    # 🌟 [UPDATED] อัปเดตสูตรนับยอดการ์ด "ระหว่างผลิต" ให้ตรงกับหน้าตาราง (รวมงานที่เปิดบิลแต่ยังส่งไม่เสร็จ)
+    in_production = qt_all_qs.filter(
+        Q(status='APPROVED', is_deposit_paid=True, is_deposit_verified=True) | Q(status='CONVERTED')
+    ).exclude(
+        production_orders__delivery_status__name__in=['ส่งมอบสำเร็จ', 'ลูกค้าเซ็นรับแล้ว', 'จัดส่งเรียบร้อย']
+    ).distinct().count()
+
+    # 🌟 [NEW] นับงาน "รอจัดส่ง" (สั่งให้นับเฉพาะพนักงานขายทั่วไปเท่านั้น)
+    waiting_delivery_count = 0
+    if user_rank not in ['manager', 'director', 'supervisor'] and not request.user.is_superuser:
+        waiting_delivery_count = qt_all_qs.filter(
+            Q(status='APPROVED', is_deposit_paid=True, is_deposit_verified=True) | Q(status='CONVERTED')
+        ).filter(
+            Q(production_orders__status='COMPLETED') | Q(production_orders__isnull=False, status='CONVERTED')
+        ).exclude(
+            production_orders__delivery_status__name__in=['ส่งมอบสำเร็จ', 'ลูกค้าเซ็นรับแล้ว', 'จัดส่งเรียบร้อย']
+        ).distinct().count()
 
     chart_labels, chart_data, chart_title, chart_type = [], [], "", "bar"
     pos_raw = list(pos_qs_all.filter(status='PAID').values('total_amount', 'employee__department__name', 'employee__first_name'))
@@ -203,7 +219,8 @@ def api_dashboard_data(request):
         'in_production': in_production, 'chart_labels': chart_labels,
         'chart_data': chart_data, 'chart_title': chart_title,
         'chart_type': chart_type, 'scope_title': scope_title,
-        'recent_sales': recent_sales_data, 'accumulated_commission': float(accumulated_commission)
+        'recent_sales': recent_sales_data, 'accumulated_commission': float(accumulated_commission),
+        'waiting_delivery_count': waiting_delivery_count # 🌟 เพิ่มบรรทัดนี้ส่งไปบอกหน้าเว็บ
     })
 
 @login_required
