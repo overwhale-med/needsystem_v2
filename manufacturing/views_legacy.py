@@ -2332,3 +2332,66 @@ def submit_service_labor_claim(request, ticket_id):
             messages.error(request, f"❌ เกิดข้อผิดพลาด: {str(e)}")
 
     return redirect('service_history_list')
+# ==========================================
+# 🌟 [NEW] สมองกลสำหรับ Control Dashboard 🌟
+# ==========================================
+@login_required
+def control_dashboard(request):
+    # 1. เช็กสิทธิ์ว่าเป็นระดับไหน เพื่อเลือกหน้าจอ (Template) ให้ถูกต้อง
+    user_groups = list(request.user.groups.values_list('name', flat=True))
+
+    is_manager = request.user.is_superuser or 'Manager_Team' in user_groups or 'Executive' in user_groups
+    is_supervisor = 'Supervisor_Team' in user_groups
+
+    if is_manager:
+        template_name = 'dashboards/control/manager.html'
+    elif is_supervisor:
+        template_name = 'dashboards/control/supervisor.html'
+    else:
+        template_name = 'dashboards/control/staff.html'
+
+    # 2. คำนวณตัวเลข KPI ทั้ง 4 ช่องแบบ Real-time
+
+    # 🟦 KPI 1: วางแผนการผลิต (รอจัดคิว / ตรวจแบบ)
+    # นับ JOB ที่เพิ่งเข้ามาใหม่ หรือกำลังรอตรวจแบบแปลน
+    kpi1_planning = ProductionOrder.objects.filter(
+        status__in=['NEW_JOB', 'WAITING_BLUEPRINT'],
+        is_closed=False
+    ).count()
+
+    # 🟨 KPI 2: วางแผนการจัดซื้อ (รอทำ PPO สั่งซื้อวัตถุดิบ)
+    # นับ JOB ที่รอวัตถุดิบ แต่ยังไม่ได้ถูกมัดรวมไปทำใบขอซื้อ (PPO)
+    kpi2_purchasing = ProductionOrder.objects.filter(
+        status='WAITING_MATERIALS',
+        is_materials_ordered=False,
+        ppo_ref__isnull=True,
+        is_closed=False
+    ).count()
+
+    # 🟧 KPI 3: วางแผนการจัดวัตถุดิบ (รอเบิกของหน้าลาน)
+    # นับ JOB ที่รอสโตร์จัดของและตัดสต็อก (GI) ให้ช่าง
+    kpi3_inventory = ProductionOrder.objects.filter(
+        status='WAITING_INVENTORY',
+        is_closed=False
+    ).count()
+
+    # 🟩 KPI 4: วางแผนการขนส่ง (รอจัดรถ)
+    # นับ JOB ที่ผลิตเสร็จ/รอ QC/ช่างหน้างาน แต่ยังไม่มีการระบุทะเบียนรถ
+    kpi4_logistics = ProductionOrder.objects.filter(
+        Q(status='COMPLETED') | Q(status='WAITING_QC') | Q(is_onsite=True)
+    ).filter(
+        transporter__isnull=True,
+        is_closed=False
+    ).distinct().count()
+
+    # 3. ส่งข้อมูลทั้งหมดไปให้หน้าจอ HTML นำไปวาดกราฟและตัวเลข
+    context = {
+        'kpi1_planning': kpi1_planning,
+        'kpi2_purchasing': kpi2_purchasing,
+        'kpi3_inventory': kpi3_inventory,
+        'kpi4_logistics': kpi4_logistics,
+        'is_manager': is_manager,
+        'is_supervisor': is_supervisor,
+    }
+
+    return render(request, template_name, context)

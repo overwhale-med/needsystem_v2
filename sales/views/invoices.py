@@ -150,20 +150,22 @@ def invoice_list(request):
     qs_invoice = get_sales_queryset(Invoice, request.user, target_employees).prefetch_related('payment_history', 'quotation_ref__production_orders')
     qs_pos = get_sales_queryset(POSOrder, request.user, target_employees)
 
-    is_manager = request.user.is_superuser
+    is_manager = False
     is_supervisor = False
     current_emp = getattr(request.user, 'employee', None)
+    user_groups = list(request.user.groups.values_list('name', flat=True))
 
-    if current_emp:
+    # 🌟 [NEW] เช็กสิทธิ์ Manager และ บัญชี จากสวิตช์หน้าเว็บแทน
+    if request.user.is_superuser or 'Manager_Team' in user_groups or 'Executive' in user_groups or 'Accounting_Team' in user_groups:
+        is_manager = True
+    elif current_emp:
         rank = current_emp.business_rank.lower() if current_emp.business_rank else ""
-        if rank in ['manager', 'director'] or 'บัญชี' in getattr(current_emp.department, 'name', ''):
-            is_manager = True
-        elif rank == 'supervisor':
+        if rank == 'supervisor':
             is_supervisor = True
 
     if is_manager:
         departments = list(Department.objects.filter(Q(name__icontains='ทีม') | Q(name__icontains='สาขา')).order_by('name'))
-    elif is_supervisor and current_emp.department:
+    elif is_supervisor and current_emp and current_emp.department:
         departments = list(Department.objects.filter(id=current_emp.department.id))
     else:
         departments = []
@@ -240,7 +242,6 @@ def confirm_payment(request, doc_type, doc_id):
                             grand_total = obj.quotation_ref.grand_total
                             base_amount = grand_total - (grand_total * Decimal('0.10'))
                             comm_amount = base_amount * Decimal('0.025')
-                            # 🌟 [FIX] ระบุสถานะ AVAILABLE และผูกรหัสใบเสร็จ (invoice_ref) ให้ชัดเจน
                             CommissionTicket.objects.create(
                                 ticket_type='2.5%',
                                 quotation_ref=obj.quotation_ref,
@@ -411,12 +412,12 @@ def verify_deposit(request, deposit_id):
 @login_required
 def master_job_report(request):
     current_emp = getattr(request.user, 'employee', None)
-    is_authorized = request.user.is_superuser
-    if current_emp:
-        rank = current_emp.business_rank.lower() if current_emp.business_rank else ""
-        dept_name = getattr(current_emp.department, 'name', '')
-        if rank in ['manager', 'director'] or 'บัญชี' in dept_name or 'Accounting' in dept_name:
-            is_authorized = True
+    is_authorized = False
+    user_groups = list(request.user.groups.values_list('name', flat=True))
+    
+    # 🌟 [NEW] เช็กสิทธิ์ Manager และ บัญชี จากสวิตช์หน้าเว็บแทน
+    if request.user.is_superuser or 'Manager_Team' in user_groups or 'Executive' in user_groups or 'Accounting_Team' in user_groups:
+        is_authorized = True
 
     if not is_authorized:
         messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์เข้าถึงหน้า Master Job Report")

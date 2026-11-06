@@ -171,31 +171,38 @@ def get_thai_baht_text(number):
 
 def get_target_employees(user):
     current_emp = getattr(user, 'employee', None)
+    user_groups = list(user.groups.values_list('name', flat=True))
+
     if user.is_superuser: return Employee.objects.all(), "Admin View"
     elif current_emp:
-        dept_name = current_emp.department.name if current_emp.department else ""
-        if 'บัญชี' in dept_name or 'Accounting' in dept_name: return Employee.objects.all(), "Accounting View"
-        rank = current_emp.business_rank.lower() if current_emp.business_rank else ""
-        if rank in ['manager', 'director']: return Employee.objects.all(), "Manager View"
-        elif rank == 'supervisor':
+        # 🌟 เช็กสิทธิ์บัญชี และผู้บริหาร จากสวิตช์ (Group) โดยตรง
+        if 'Accounting_Team' in user_groups: return Employee.objects.all(), "Accounting View"
+        if 'Manager_Team' in user_groups or 'Executive' in user_groups or 'Executive_Team' in user_groups: return Employee.objects.all(), "Manager View"
+
+        # 🌟 [NEW] เลิกเดาคำ! เช็กสิทธิ์หัวหน้าสาขา จากสวิตช์ Supervisor_Team โดยตรง
+        if 'Supervisor_Team' in user_groups:
             if current_emp.department: return Employee.objects.filter(department=current_emp.department), f"Team {current_emp.department.name}"
             else: return Employee.objects.filter(Q(id=current_emp.id) | Q(introducer=current_emp)), "Direct Team"
         else: return Employee.objects.filter(id=current_emp.id), "Self View"
     return Employee.objects.none(), "-"
 
+
 def get_sales_queryset(model_class, user, target_employees):
     if user.is_superuser: return model_class.objects.all()
-    if hasattr(user, 'employee') and user.employee:
-        dept_name = user.employee.department.name if user.employee.department else ""
-        rank = user.employee.business_rank.lower() if user.employee.business_rank else ""
-        if 'บัญชี' in dept_name or rank in ['manager', 'director']: return model_class.objects.all()
+    user_groups = list(user.groups.values_list('name', flat=True))
+
+    # 🌟 ถ้ามีสวิตช์ระดับบริหาร ให้ดึงข้อมูลทั้งหมดของแผนกขายมาแสดงได้
+    if 'Accounting_Team' in user_groups or 'Manager_Team' in user_groups or 'Executive' in user_groups or 'Executive_Team' in user_groups:
+        return model_class.objects.all()
 
     emp_ids = list(target_employees.values_list('id', flat=True))
     return model_class.objects.filter(employee_id__in=emp_ids)
 
+
 def is_sales_authorized(user):
     if user.is_superuser: return True
-    if hasattr(user, 'employee') and user.employee:
-        dept = user.employee.department.name if user.employee.department else ''
-        if 'ขาย' in dept or 'Sales' in dept: return True
+    user_groups = list(user.groups.values_list('name', flat=True))
+    # 🌟 [NEW] เพิ่ม Supervisor_Team และ Executive_Team เข้าไปในรายชื่อกลุ่มที่ได้รับอนุญาตให้เข้าระบบขายได้
+    allowed_groups = ['Manager_Team', 'Executive', 'Executive_Team', 'Supervisor_Team', 'Knockdown_Sales_Team', 'Solar_Sales_Team', 'Accounting_Team', 'Control_Team']
+    if any(group in user_groups for group in allowed_groups): return True
     return False

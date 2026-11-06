@@ -22,6 +22,10 @@ def dashboard(request):
     if 'Knockdown_Sales_Team' in user_group_names or 'Solar_Sales_Team' in user_group_names:
         return redirect('sales_dashboard')
 
+    # 🌟 3. ถ้านายสถานีเห็นป้ายฝ่าย Control ให้เตะไปหน้า Control Dashboard ทันที!
+    if 'Control_Team' in user_group_names:
+        return redirect('control_dashboard')
+
     # --- โค้ดเดิมของหน้าหลักจะทำงานต่อจากบรรทัดนี้ลงไป (สำหรับแผนกอื่น) ---
     today = datetime.date.today()
 

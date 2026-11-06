@@ -8,6 +8,7 @@ class Department(models.Model):
     name = models.CharField(max_length=100, verbose_name="ชื่อแผนก")
     # 🌟 [NEW] เพิ่มฟิลด์ parent เพื่อทำระบบ แผนกหลัก-แผนกย่อย 🌟
     parent = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='sub_departments', verbose_name="สังกัดแผนกหลัก (ถ้ามี)")
+    code = models.CharField(max_length=10, blank=True, null=True, verbose_name="โค้ดย่อภาษาอังกฤษ (เช่น SALE, CNI)")
 
     def __str__(self):
         # ถ้ามีแผนกแม่ ให้โชว์แบบ "แผนกแม่ > แผนกลูก"
@@ -20,6 +21,7 @@ class Department(models.Model):
 class Position(models.Model):
     title = models.CharField(max_length=100, verbose_name="ชื่อตำแหน่ง")
     department = models.ForeignKey(Department, on_delete=models.SET_NULL, null=True, verbose_name="สังกัดแผนก")
+    code = models.CharField(max_length=10, blank=True, null=True, verbose_name="โค้ดย่อภาษาอังกฤษ (เช่น MGR, STAFF)")
 
     # 🌟 [NEW] เพิ่มช่องเก็บรายละเอียดงาน และ อำนาจการอนุมัติ 🌟
     description = models.TextField(blank=True, null=True, verbose_name="รายละเอียดงาน (Job Description)")

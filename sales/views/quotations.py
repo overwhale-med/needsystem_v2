@@ -39,19 +39,13 @@ def quotation_list(request):
     is_manager = False
     is_supervisor = False
     current_emp = getattr(request.user, 'employee', None)
+    user_groups = list(request.user.groups.values_list('name', flat=True))
 
-    # 🌟 เรียงลำดับสิทธิ์ใหม่: เช็ก Supervisor ก่อน ป้องกัน Admin แย่งสิทธิ์แสดงผล
-    if current_emp:
-        rank = current_emp.business_rank.lower() if current_emp.business_rank else ""
-        if rank == 'supervisor':
-            is_supervisor = True
-            is_manager = False
-        elif rank in ['manager', 'director'] or 'manager' in getattr(current_emp.position, 'title', '').lower() or 'บัญชี' in getattr(current_emp.department, 'name', ''):
-            is_manager = True
-        elif request.user.is_superuser:
-            is_manager = True
-    elif request.user.is_superuser:
+    # 🌟 [NEW] เลิกเดาคำ! เช็กสิทธิ์ Manager และ Supervisor จากสวิตช์หน้าเว็บโดยตรง
+    if request.user.is_superuser or 'Manager_Team' in user_groups or 'Executive' in user_groups or 'Accounting_Team' in user_groups:
         is_manager = True
+    elif 'Supervisor_Team' in user_groups:
+        is_supervisor = True
 
     departments = []
     team_members = []
@@ -60,7 +54,7 @@ def quotation_list(request):
         # ผู้จัดการเห็นทุกสาขา
         departments = list(Department.objects.filter(Q(name__icontains='ทีม') | Q(name__icontains='สาขา')).order_by('name'))
         for d in departments: d.name = d.name.replace('แผนก', '').strip()
-    elif is_supervisor and current_emp.department:
+    elif is_supervisor and current_emp and current_emp.department:
         # หัวหน้าสาขาให้ดึง "รายชื่อพนักงานในสาขานั้น"
         team_members = Employee.objects.filter(department=current_emp.department).order_by('first_name')
 
@@ -71,7 +65,6 @@ def quotation_list(request):
     branch_filter = request.GET.get('branch', '')
     emp_filter = request.GET.get('emp', '')
 
-    # 🌟 คืนชีพตัวกรองต่างๆ ที่หายไปกลับมา
     if branch_filter and is_manager:
         queryset = queryset.filter(employee__department_id=branch_filter)
 
@@ -84,9 +77,9 @@ def quotation_list(request):
         elif status_filter == 'PENDING_VERIFY':
             queryset = queryset.filter(status='APPROVED', is_deposit_paid=True, is_deposit_verified=False).distinct()
         elif status_filter == 'PIPELINE':
-            # 🌟 [UPDATED] ระหว่างผลิต: รวมตั้งแต่จ่ายมัดจำ จนถึงเปิดบิลแล้ว (แต่ยังส่งไม่เสร็จ)
             queryset = queryset.filter(
-                Q(status='APPROVED', is_deposit_paid=True, is_deposit_verified=True) |
+                # 🌟 [FIXED] ลบเงื่อนไข is_deposit_verified=True ออก เพื่อให้ตรงกับหน้า Dashboard
+                Q(status='APPROVED', is_deposit_paid=True) |
                 Q(status='CONVERTED')
             ).exclude(
                 production_orders__delivery_status__name__in=['ส่งมอบสำเร็จ', 'ลูกค้าเซ็นรับแล้ว', 'จัดส่งเรียบร้อย']
@@ -96,7 +89,6 @@ def quotation_list(request):
         elif status_filter == 'IN_PRODUCTION':
             queryset = queryset.filter(status='APPROVED', is_deposit_paid=True, is_deposit_verified=True, production_orders__isnull=False).distinct()
         elif status_filter == 'CLOSED':
-            # 🌟 [NEW] ปิดงานแล้ว: งานที่มีการจัดส่งมอบให้ลูกค้าเสร็จสมบูรณ์แล้ว
             queryset = queryset.filter(
                 production_orders__delivery_status__name__in=['ส่งมอบสำเร็จ', 'ลูกค้าเซ็นรับแล้ว', 'จัดส่งเรียบร้อย']
             ).distinct()
@@ -351,7 +343,10 @@ def quotation_approve(request, qt_id):
 def quotation_cancel(request, qt_id):
     qt = get_object_or_404(Quotation, pk=qt_id)
     current_emp = getattr(request.user, 'employee', None)
-    is_manager = request.user.is_superuser or request.user.groups.filter(name__icontains='Manager').exists()
+    user_groups = list(request.user.groups.values_list('name', flat=True))
+
+    # 🌟 [NEW] เช็กสิทธิ์ Manager จากสวิตช์หน้าเว็บเพื่อยกเลิกบิล
+    is_manager = request.user.is_superuser or 'Manager_Team' in user_groups or 'Executive' in user_groups
     is_owner = (qt.employee == current_emp) if current_emp else False
 
     if is_manager or is_owner:
@@ -510,13 +505,13 @@ def print_deposit_contract(request, qt_id):
             rvd_code = specific_deposit.code
             rvd_date = specific_deposit.deposit_date
             rvd_method = specific_deposit.get_payment_method_display()
-            rvd_method_code = specific_deposit.payment_method # 🌟 [NEW] เพิ่มตัวแปรส่งโค้ดอังกฤษ
+            rvd_method_code = specific_deposit.payment_method
         except QuotationDeposit.DoesNotExist:
             deposit_amount = qt.deposit_amount if qt.deposit_amount else Decimal('0.00')
             rvd_code = f"QT-{qt.code.split('-')[-1]}"
             rvd_date = qt.deposit_date
             rvd_method = "ไม่ระบุ"
-            rvd_method_code = None # 🌟 [NEW]
+            rvd_method_code = None
     else:
         first_dep = qt.deposits.first()
         if first_dep:
@@ -524,13 +519,13 @@ def print_deposit_contract(request, qt_id):
             rvd_code = first_dep.code
             rvd_date = first_dep.deposit_date
             rvd_method = first_dep.get_payment_method_display()
-            rvd_method_code = first_dep.payment_method # 🌟 [NEW] เพิ่มตัวแปรส่งโค้ดอังกฤษ
+            rvd_method_code = first_dep.payment_method
         else:
             deposit_amount = qt.deposit_amount if qt.deposit_amount else Decimal('0.00')
             rvd_code = f"QT-{qt.code.split('-')[-1]}"
             rvd_date = qt.deposit_date
             rvd_method = "ไม่ระบุ"
-            rvd_method_code = None # 🌟 [NEW]
+            rvd_method_code = None
 
     return render(request, 'sales/print_deposit_contract.html', {
         'qt': qt, 'company': company,
@@ -541,7 +536,7 @@ def print_deposit_contract(request, qt_id):
         'balance_due_text': get_thai_baht_text(balance_due),
         'delivery_date': qt.production_orders.first().delivery_date if qt.production_orders.first() else None,
         'rvd_code': rvd_code, 'rvd_date': rvd_date, 'rvd_method': rvd_method,
-        'rvd_method_code': rvd_method_code # 🌟 [NEW] ส่งค่าไปให้หน้า HTML
+        'rvd_method_code': rvd_method_code
     })
 
 @login_required

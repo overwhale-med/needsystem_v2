@@ -28,16 +28,14 @@ def commission_board(request):
     current_emp = getattr(request.user, 'employee', None)
     is_manager_view = False
     is_supervisor_view = False
+    user_groups = list(request.user.groups.values_list('name', flat=True))
 
-    if request.user.is_superuser:
+    # 🌟 [NEW] เช็กสิทธิ์ Manager จากสวิตช์หน้าเว็บแทนการดมกลิ่นชื่อแผนก "บริหาร"
+    if request.user.is_superuser or 'Manager_Team' in user_groups or 'Executive' in user_groups or 'Accounting_Team' in user_groups:
         is_manager_view = True
     elif current_emp:
         rank = current_emp.business_rank.lower() if current_emp.business_rank else ""
-        dept_name = getattr(current_emp.department, 'name', '')
-        pos_title = getattr(current_emp.position, 'title', '').lower()
-        if rank in ['manager', 'director'] or 'manager' in pos_title or 'บริหาร' in dept_name:
-            is_manager_view = True
-        elif rank == 'supervisor':
+        if rank == 'supervisor':
             is_supervisor_view = True
 
     search_query = request.GET.get('q', '').strip()
@@ -53,8 +51,8 @@ def commission_board(request):
         else:
             claims_qs = CommissionClaim.objects.filter(requester=current_emp).order_by('-created_at')
 
-    elif is_supervisor_view and current_emp.department:
-        # 2 & 3. หัวหน้าสาขา: เห็นเฉพาะ 2% และ 2.5% ของสาขาตัวเอง (ไม่มีใครเห็นนอกจากหัวหน้าสาขา และต้องจัดสรรให้พนักงานขาย)
+    elif is_supervisor_view and current_emp and current_emp.department:
+        # 2 & 3. หัวหน้าสาขา: เห็นเฉพาะ 2% และ 2.5% ของสาขาตัวเอง
         dept_emps = Employee.objects.filter(department=current_emp.department)
         tickets_05 = CommissionTicket.objects.none()
         tickets_2 = CommissionTicket.objects.filter(ticket_type='2%', status='AVAILABLE', quotation_ref__employee__in=dept_emps).select_related('quotation_ref', 'quotation_ref__employee').order_by('-created_at')
@@ -62,7 +60,7 @@ def commission_board(request):
         claims_qs = CommissionClaim.objects.filter(requester=current_emp).order_by('-created_at')
 
     else:
-        # พนักงานขายทั่วไป: ไม่มีสิทธิ์มองเห็นตั๋วตั้งเบิก (รอหัวหน้าสาขาจัดสรรให้อย่างเดียว)
+        # พนักงานขายทั่วไป
         tickets_05 = CommissionTicket.objects.none()
         tickets_2 = CommissionTicket.objects.none()
         tickets_3 = CommissionTicket.objects.none()
@@ -92,20 +90,18 @@ def commission_history_list(request):
     current_emp = getattr(request.user, 'employee', None)
     is_manager_view = False
     is_supervisor_view = False
+    user_groups = list(request.user.groups.values_list('name', flat=True))
 
-    if request.user.is_superuser:
+    # 🌟 [NEW] เช็กสิทธิ์ Manager จากสวิตช์
+    if request.user.is_superuser or 'Manager_Team' in user_groups or 'Executive' in user_groups or 'Accounting_Team' in user_groups:
         is_manager_view = True
     elif current_emp:
         rank = current_emp.business_rank.lower() if current_emp.business_rank else ""
-        dept_name = getattr(current_emp.department, 'name', '')
-        pos_title = getattr(current_emp.position, 'title', '').lower()
-        if rank in ['manager', 'director'] or 'manager' in pos_title or 'บริหาร' in dept_name:
-            is_manager_view = True
-        elif rank == 'supervisor':
+        if rank == 'supervisor':
             is_supervisor_view = True
 
     team_members = []
-    if is_supervisor_view and current_emp.department:
+    if is_supervisor_view and current_emp and current_emp.department:
         team_members = Employee.objects.filter(department=current_emp.department).order_by('first_name')
     elif is_manager_view:
         team_members = Employee.objects.all().order_by('first_name')
@@ -149,7 +145,6 @@ def commission_history_list(request):
     paginator = Paginator(claims_qs.distinct(), 20)
     page_obj = paginator.get_page(request.GET.get('page'))
 
-    # 🌟 [NEW] คำนวณยอด และเช็คว่ามีรายการรอจ่ายหรือไม่
     for claim in page_obj:
         claim.paid_total = sum(a.amount for a in claim.allocations.all() if a.status == 'PAID')
         claim.remaining_balance = claim.total_amount - claim.paid_total
@@ -195,13 +190,7 @@ def knockdown_commission_pay(request, claim_id):
         claim.status = 'PAID'
         claim.paid_at = timezone.now()
         claim.save()
-
-        # 🌟 อัปเดตเฉพาะตั๋ว (Tickets) ป้องกันการเอาตั๋วมาเบิกซ้ำ
         claim.tickets.update(status='PAID')
-
-        # 🌟 [FIX] ลบคำสั่ง claim.allocations.update(status='PAID') ทิ้งแล้วครับ
-        # เพื่อปล่อยให้เงินจัดสรร (Allocations) เป็นสถานะ PENDING รอหัวหน้าสาขากดปุ่มสีเหลืองจ่ายเอง!
-
         messages.success(request, f"✅ บัญชีทำรายการโอนเงินค่าคอมมิชชันน็อคดาวน์ {claim.code} สำเร็จ!")
     return redirect('accounting_verification_hub', task_type='knockdown_commissions')
 
@@ -228,7 +217,6 @@ def commission_allocate(request, claim_id):
     if request.method == 'POST':
         mode = request.POST.get('allocation_mode')
         dept = current_emp.department if current_emp else None
-        # 🌟 [FIX] ลบเฉพาะข้อมูลที่ยังไม่ได้จ่ายเงิน (PENDING) เท่านั้น เพื่อปกป้องประวัติการจ่ายจริง
         claim.allocations.filter(status='PENDING').delete()
 
         if mode == 'MANUAL':
@@ -277,29 +265,29 @@ def commission_history_personal(request):
     if not current_emp: return redirect('dashboard')
 
     is_supervisor_view = False
-    if request.user.is_superuser: is_supervisor_view = True
+    user_groups = list(request.user.groups.values_list('name', flat=True))
+    
+    # 🌟 [NEW] เช็กสิทธิ์ว่าใครจะเห็นยอดกองทุนสาขาบ้าง
+    if request.user.is_superuser or 'Manager_Team' in user_groups or 'Executive' in user_groups:
+        is_supervisor_view = True
     else:
         rank = current_emp.business_rank.lower() if current_emp.business_rank else ""
-        if rank in ['manager', 'director', 'supervisor']: is_supervisor_view = True
+        if rank == 'supervisor': is_supervisor_view = True
 
-    # 🌟 [NEW] 1. ดึงค่าวันที่เริ่มต้น-สิ้นสุด จากช่องค้นหา
     tz_bkk = pytz.timezone('Asia/Bangkok')
     today_bkk = timezone.now().astimezone(tz_bkk).date()
     start_date = request.GET.get('start_date')
     end_date = request.GET.get('end_date')
 
-    # 🌟 [NEW] 2. ตั้งค่าเริ่มต้นให้โชว์ย้อนหลัง 30 วัน ถ้าไม่ได้กดค้นหา (กันข้อมูลล้นจอ)
     if not start_date or start_date == 'None': start_date = (today_bkk - timedelta(days=29)).strftime('%Y-%m-%d')
     if not end_date or end_date == 'None': end_date = today_bkk.strftime('%Y-%m-%d')
 
-    # 🌟 3. ดึงข้อมูลดิบทั้งหมดมาก่อน (แพ็กข้อมูลตั๋วและบิลย่อยมาให้พร้อมโชว์ใน Pop-up)
     allocations = CommissionAllocation.objects.filter(employee=current_emp).select_related('claim', 'created_by', 'ticket', 'ticket__quotation_ref').prefetch_related('claim__tickets', 'claim__tickets__quotation_ref', 'claim__tickets__quotation_ref__invoice').order_by('-created_at')
 
     fund_allocations = CommissionAllocation.objects.none()
-    if is_supervisor_view and current_emp.department:
+    if is_supervisor_view and current_emp and current_emp.department:
         fund_allocations = CommissionAllocation.objects.filter(department=current_emp.department, status='PAID')
 
-    # 🌟 [NEW] 4. กรองข้อมูลเฉพาะที่อยู่ในช่วง "วันที่จัดสรร" ที่เลือก
     try:
         s_date = parse_date(start_date)
         e_date = parse_date(end_date)
@@ -311,7 +299,6 @@ def commission_history_personal(request):
     except Exception:
         pass
 
-    # 🌟 5. คำนวณยอดเงินรวม (กล่องสีเขียวและเหลือง) จากข้อมูลที่โดนกรองวันที่แล้ว
     pending_total = allocations.filter(status='PENDING').aggregate(Sum('amount'))['amount__sum'] or 0
     paid_total = allocations.filter(status='PAID').aggregate(Sum('amount'))['amount__sum'] or 0
     branch_fund_total = fund_allocations.aggregate(Sum('amount'))['amount__sum'] or 0
@@ -322,7 +309,7 @@ def commission_history_personal(request):
     return render(request, 'sales/commission_history_personal.html', {
         'page_obj': page_obj, 'pending_total': pending_total, 'paid_total': paid_total,
         'branch_fund_total': branch_fund_total, 'is_supervisor_view': is_supervisor_view,
-        'start_date': start_date, 'end_date': end_date, # 🌟 ส่งค่าวันที่กลับไปแสดงที่หน้าเว็บ
+        'start_date': start_date, 'end_date': end_date,
     })
 
 @login_required
@@ -330,13 +317,11 @@ def supervisor_pay_allocation(request, alloc_id):
     if not is_sales_authorized(request.user): return redirect('dashboard')
     alloc = get_object_or_404(CommissionAllocation, id=alloc_id)
 
-    # ตรวจสอบสิทธิ์ (ต้องเป็นคนจัดสรร หรือ superuser เท่านั้น)
     current_emp = getattr(request.user, 'employee', None)
     if alloc.created_by != current_emp and not request.user.is_superuser:
         messages.error(request, "❌ คุณไม่มีสิทธิ์ยืนยันการจ่ายเงินรายการนี้")
         return redirect('commission_history_list')
 
-    # สั่งอัปเดตสถานะเป็นโอนแล้ว
     alloc.status = 'PAID'
     alloc.save()
     messages.success(request, f"✅ ยืนยันการโอนเงินค่าคอมมิชชันให้ลูกทีมเรียบร้อยแล้ว!")
@@ -347,18 +332,15 @@ def supervisor_delete_allocation(request, alloc_id):
     if not is_sales_authorized(request.user): return redirect('dashboard')
     alloc = get_object_or_404(CommissionAllocation, id=alloc_id)
 
-    # 1. ตรวจสอบสิทธิ์ (ต้องเป็นคนจัดสรร หรือ superuser เท่านั้น)
     current_emp = getattr(request.user, 'employee', None)
     if alloc.created_by != current_emp and not request.user.is_superuser:
         messages.error(request, "❌ คุณไม่มีสิทธิ์ลบรายการจัดสรรเงินนี้")
         return redirect('commission_history_list')
 
-    # 2. ป้องกันความผิดพลาด (ลบได้เฉพาะรายการที่ยังไม่ได้จ่ายเงินเท่านั้น)
     if alloc.status != 'PENDING':
         messages.error(request, "❌ ไม่สามารถลบได้ เนื่องจากรายการนี้โอนเงินสำเร็จและถูกล็อกข้อมูลแล้ว")
         return redirect('commission_history_list')
 
-    # 3. สั่งลบข้อมูลทิ้ง
     deleted_amount = alloc.amount
     alloc.delete()
     messages.success(request, f"🗑️ ยกเลิกและลบยอดเงินจัดสรร {deleted_amount:,.2f} บาท คืนกลับไปที่ยอดคงเหลือเรียบร้อยแล้ว!")

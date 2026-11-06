@@ -85,7 +85,10 @@
                     <div class="card-body" id="user-account-section">
                         <div class="mb-2">
                             <label class="small fw-bold text-muted">Username</label>
-                            {{ form.username }}
+                            <div class="input-group">
+                                {{ form.username }}
+                                <button class="btn btn-outline-success fw-bold" type="button" onclick="generateAutoAccount()">AUTO</button>
+                            </div>
                         </div>
                         <div class="mb-2">
                             <label class="small fw-bold text-muted">Password</label>
@@ -377,6 +380,46 @@
                     });
                 });
             }
+        });
+    }
+    // ==========================================
+    // 🌟 ระบบสร้าง Username & Password อัตโนมัติ 🌟
+    // ==========================================
+    function generateAutoAccount() {
+        const divId = document.getElementById('id_division').value;
+        const deptId = document.getElementById('id_department').value;
+        const posId = document.getElementById('id_position').value;
+
+        // 1. ดักจับ: ถ้าเลือกแผนกไม่ครบ ให้แจ้งเตือนและหยุดทำงาน
+        if (!divId || !deptId || !posId) {
+            alert('กรุณาเลือก ฝ่าย, แผนก และ ตำแหน่ง ให้ครบทั้ง 3 ขั้นตอนก่อนกด AUTO ครับ');
+            return;
+        }
+
+        // 2. ถ้าเลือกครบแล้ว ให้วิ่งไปขอดึงข้อมูลจากหลังบ้าน
+        fetch(`{% url 'api_generate_auto_account' %}?division_id=${divId}&department_id=${deptId}&position_id=${posId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                // 3. หยอดข้อมูลลงกล่อง
+                document.getElementById('id_username').value = data.username;
+                document.getElementById('id_password').value = data.password;
+                document.getElementById('id_password').type = 'text';
+
+                // 🌟 [NEW] สร้าง Email อัตโนมัติ โดยเอา Username มาต่อด้วย @needsystem.com 🌟
+                document.getElementById('id_email').value = data.username + '@needsystem.com';
+
+                // (แถม) ทำให้ช่องกระพริบสีเขียววิ้งๆ เพื่อบอก HR ว่าสร้างเสร็จแล้ว
+                const userField = document.getElementById('id_username');
+                userField.classList.add('is-valid');
+                setTimeout(() => userField.classList.remove('is-valid'), 2000);
+            } else {
+                alert('เกิดข้อผิดพลาด: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('เกิดข้อผิดพลาดในการเชื่อมต่อระบบหลังบ้านครับ');
         });
     }
 </script>

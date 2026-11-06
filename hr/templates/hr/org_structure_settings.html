@@ -37,9 +37,16 @@
         <!-- 🏢 แท็บที่ 1: จัดการแผนก (Departments) -->
         <!-- ========================================== -->
         <div class="tab-pane fade show active" id="dept" role="tabpanel">
-            <div class="d-flex justify-content-between align-items-center mb-3">
+            <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
                 <h6 class="fw-bold text-dark mb-0">รายชื่อแผนกทั้งหมดในระบบ</h6>
-                <button class="btn btn-primary rounded-pill px-3 shadow-sm fw-bold" data-bs-toggle="modal" data-bs-target="#addDeptModal"><i class="fas fa-plus me-1"></i> เพิ่มแผนกใหม่</button>
+                <div class="d-flex gap-2 align-items-center">
+                    <!-- 🌟 [NEW] ช่องค้นหาแผนก -->
+                    <div class="input-group input-group-sm shadow-sm rounded-pill overflow-hidden" style="width: 250px;">
+                        <span class="input-group-text bg-light border-0 ps-3"><i class="fas fa-search text-muted"></i></span>
+                        <input type="text" id="searchDept" class="form-control bg-light border-0 shadow-none" placeholder="ค้นหาชื่อแผนก, โค้ดย่อ...">
+                    </div>
+                    <button class="btn btn-sm btn-primary rounded-pill px-3 shadow-sm fw-bold" data-bs-toggle="modal" data-bs-target="#addDeptModal"><i class="fas fa-plus me-1"></i> เพิ่มแผนกใหม่</button>
+                </div>
             </div>
 
             <div class="table-responsive border rounded-3">
@@ -48,6 +55,7 @@
                         <tr>
                             <th class="ps-4">ชื่อแผนก (Department)</th>
                             <th>สังกัดแผนกหลัก (Parent)</th>
+                            <th>โค้ดย่อ (Code)</th> <!-- 🌟 [NEW] แสดงโค้ดย่อในตาราง -->
                             <th class="text-center" width="150">จัดการ</th>
                         </tr>
                     </thead>
@@ -60,6 +68,15 @@
                                     <span class="badge bg-light text-dark border shadow-sm"><i class="fas fa-level-up-alt text-muted me-1"></i> {{ d.parent.name }}</span>
                                 {% else %}
                                     <span class="badge bg-light text-muted border">แผนกหลัก (สูงสุด)</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if d.code %}
+                                    <span class="badge" style="background-color: #f1f5f9; color: #0f172a; border: 1px solid #cbd5e1; font-size: 0.85rem; padding: 5px 10px; font-weight: 700; letter-spacing: 1px;">
+                                        {{ d.code }}
+                                    </span>
+                                {% else %}
+                                    <span class="text-muted small">-</span>
                                 {% endif %}
                             </td>
                             <td class="text-center">
@@ -81,6 +98,10 @@
                                                 <div class="mb-3">
                                                     <label class="form-label fw-bold text-muted small">ชื่อแผนก <span class="text-danger">*</span></label>
                                                     <input type="text" name="name" class="form-control" value="{{ d.name }}" required>
+                                                </div>
+                                                <div class="mb-3"> <!-- 🌟 [NEW] ช่องแก้โค้ดย่อแผนก -->
+                                                    <label class="form-label fw-bold text-muted small">โค้ดย่อภาษาอังกฤษ (เพื่อสร้าง Username)</label>
+                                                    <input type="text" name="code" class="form-control text-uppercase" value="{{ d.code|default:'' }}" placeholder="เช่น SALE, MK" maxlength="10">
                                                 </div>
                                                 <div class="mb-0">
                                                     <label class="form-label fw-bold text-muted small">สังกัดแผนกหลัก (เว้นว่างถ้าเป็นแผนกสูงสุด)</label>
@@ -122,7 +143,7 @@
                             </td>
                         </tr>
                         {% empty %}
-                        <tr><td colspan="3" class="text-center py-4 text-muted">ยังไม่มีข้อมูลแผนก</td></tr>
+                        <tr><td colspan="4" class="text-center py-4 text-muted">ยังไม่มีข้อมูลแผนก</td></tr>
                         {% endfor %}
                     </tbody>
                 </table>
@@ -133,9 +154,16 @@
         <!-- 👤 แท็บที่ 2: จัดการตำแหน่ง (Positions) -->
         <!-- ========================================== -->
         <div class="tab-pane fade" id="pos" role="tabpanel">
-            <div class="d-flex justify-content-between align-items-center mb-3">
+            <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
                 <h6 class="fw-bold text-dark mb-0">รายชื่อตำแหน่งงานทั้งหมด</h6>
-                <button class="btn btn-primary rounded-pill px-3 shadow-sm fw-bold" data-bs-toggle="modal" data-bs-target="#addPosModal"><i class="fas fa-plus me-1"></i> เพิ่มตำแหน่งใหม่</button>
+                <div class="d-flex gap-2 align-items-center">
+                    <!-- 🌟 [NEW] ช่องค้นหาตำแหน่ง -->
+                    <div class="input-group input-group-sm shadow-sm rounded-pill overflow-hidden" style="width: 250px;">
+                        <span class="input-group-text bg-light border-0 ps-3"><i class="fas fa-search text-muted"></i></span>
+                        <input type="text" id="searchPos" class="form-control bg-light border-0 shadow-none" placeholder="ค้นหาตำแหน่ง, แผนก, โค้ดย่อ...">
+                    </div>
+                    <button class="btn btn-sm btn-primary rounded-pill px-3 shadow-sm fw-bold" data-bs-toggle="modal" data-bs-target="#addPosModal"><i class="fas fa-plus me-1"></i> เพิ่มตำแหน่งใหม่</button>
+                </div>
             </div>
 
             <div class="table-responsive border rounded-3">
@@ -144,6 +172,7 @@
                         <tr>
                             <th class="ps-4">ชื่อตำแหน่ง (Position Title)</th>
                             <th>สังกัดแผนก</th>
+                            <th>โค้ดย่อ (Code)</th> <!-- 🌟 [NEW] แสดงโค้ดย่อในตาราง -->
                             <th>อำนาจการอนุมัติ</th>
                             <th class="text-center" width="150">จัดการ</th>
                         </tr>
@@ -155,6 +184,15 @@
                             <td>
                                 {% if p.department %}
                                     <span class="badge bg-light text-dark border shadow-sm"><i class="fas fa-building text-muted me-1"></i> {{ p.department.name }}</span>
+                                {% else %}
+                                    <span class="text-muted small">-</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if p.code %}
+                                    <span class="badge" style="background-color: #f1f5f9; color: #0f172a; border: 1px solid #cbd5e1; font-size: 0.85rem; padding: 5px 10px; font-weight: 700; letter-spacing: 1px;">
+                                        {{ p.code }}
+                                    </span>
                                 {% else %}
                                     <span class="text-muted small">-</span>
                                 {% endif %}
@@ -179,6 +217,10 @@
                                                 <div class="mb-3">
                                                     <label class="form-label fw-bold text-muted small">ชื่อตำแหน่ง <span class="text-danger">*</span></label>
                                                     <input type="text" name="title" class="form-control" value="{{ p.title }}" required>
+                                                </div>
+                                                <div class="mb-3"> <!-- 🌟 [NEW] ช่องแก้โค้ดย่อตำแหน่ง -->
+                                                    <label class="form-label fw-bold text-muted small">โค้ดย่อภาษาอังกฤษ (เพื่อสร้าง Username)</label>
+                                                    <input type="text" name="code" class="form-control text-uppercase" value="{{ p.code|default:'' }}" placeholder="เช่น MGR, STAFF" maxlength="10">
                                                 </div>
                                                 <div class="mb-3">
                                                     <label class="form-label fw-bold text-muted small">สังกัดแผนก <span class="text-danger">*</span></label>
@@ -225,7 +267,7 @@
                             </td>
                         </tr>
                         {% empty %}
-                        <tr><td colspan="4" class="text-center py-4 text-muted">ยังไม่มีข้อมูลตำแหน่ง</td></tr>
+                        <tr><td colspan="5" class="text-center py-4 text-muted">ยังไม่มีข้อมูลตำแหน่ง</td></tr>
                         {% endfor %}
                     </tbody>
                 </table>
@@ -253,6 +295,10 @@
                 <div class="mb-3">
                     <label class="form-label fw-bold text-muted small">ชื่อแผนก <span class="text-danger">*</span></label>
                     <input type="text" name="name" class="form-control" required placeholder="เช่น ฝ่ายโซล่าเซลล์">
+                </div>
+                <div class="mb-3"> <!-- 🌟 [NEW] ช่องสร้างโค้ดย่อแผนก -->
+                    <label class="form-label fw-bold text-muted small">โค้ดย่อภาษาอังกฤษ (เพื่อสร้าง Username)</label>
+                    <input type="text" name="code" class="form-control text-uppercase" placeholder="เช่น SALE, MK" maxlength="10">
                 </div>
                 <div class="mb-0">
                     <label class="form-label fw-bold text-muted small">สังกัดแผนกหลัก (เว้นว่างถ้าเป็นแผนกสูงสุด)</label>
@@ -288,6 +334,10 @@
                     <label class="form-label fw-bold text-muted small">ชื่อตำแหน่ง <span class="text-danger">*</span></label>
                     <input type="text" name="title" class="form-control" required placeholder="เช่น ผู้จัดการฝ่ายโซล่าเซลล์">
                 </div>
+                <div class="mb-3"> <!-- 🌟 [NEW] ช่องสร้างโค้ดย่อตำแหน่ง -->
+                    <label class="form-label fw-bold text-muted small">โค้ดย่อภาษาอังกฤษ (เพื่อสร้าง Username)</label>
+                    <input type="text" name="code" class="form-control text-uppercase" placeholder="เช่น MGR, STAFF" maxlength="10">
+                </div>
                 <div class="mb-3">
                     <label class="form-label fw-bold text-muted small">สังกัดแผนก <span class="text-danger">*</span></label>
                     <select name="dept_id" class="form-select" required>
@@ -313,4 +363,54 @@
         </form>
     </div>
 </div>
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        // 🌟 1. ดึงข้อมูลว่าครั้งล่าสุดผู้ใช้กดแท็บไหนไว้
+        var activeTabId = localStorage.getItem('activeOrgTab');
+        if (activeTabId) {
+            var triggerEl = document.querySelector('button[data-bs-target="' + activeTabId + '"]');
+            if (triggerEl) {
+                var tab = new bootstrap.Tab(triggerEl);
+                tab.show();
+            }
+        }
+
+        // 🌟 2. ดักจับทุกครั้งที่มีคนคลิกเปลี่ยนแท็บ ให้บันทึกค่าเก็บไว้
+        var tabElements = document.querySelectorAll('button[data-bs-toggle="tab"]');
+        tabElements.forEach(function(tabEl) {
+            tabEl.addEventListener('shown.bs.tab', function (event) {
+                var targetId = event.target.getAttribute('data-bs-target');
+                localStorage.setItem('activeOrgTab', targetId);
+            });
+        });
+
+        // 🌟 3. ระบบค้นหา Real-time (Live Search) 🌟
+        function setupLiveSearch(inputId) {
+            var searchInput = document.getElementById(inputId);
+            if (!searchInput) return;
+
+            searchInput.addEventListener('keyup', function() {
+                var searchTerm = this.value.toLowerCase();
+                var tableBody = this.closest('.tab-pane').querySelector('table tbody');
+                if (!tableBody) return;
+
+                var rows = tableBody.querySelectorAll('tr');
+                rows.forEach(function(row) {
+                    if (row.querySelector('td[colspan]')) return; // ข้ามแถวที่ไม่มีข้อมูล
+
+                    var rowText = row.textContent.toLowerCase();
+                    if (rowText.includes(searchTerm)) {
+                        row.style.display = '';
+                    } else {
+                        row.style.display = 'none';
+                    }
+                });
+            });
+        }
+
+        // เปิดใช้งานระบบค้นหาทั้ง 2 แท็บ
+        setupLiveSearch('searchDept');
+        setupLiveSearch('searchPos');
+    });
+</script>
 {% endblock %}

@@ -139,6 +139,10 @@ class BlueprintClaimSplit(models.Model):
         verbose_name = "ส่วนแบ่งใบเบิก"
         verbose_name_plural = "ส่วนแบ่งใบเบิก"
 
+    # 🌟 [NEW] เพิ่มโค้ดนี้ต่อท้าย เพื่อให้แสดงผลเป็น "เลขที่บิล - ชื่อคนรับเงิน (เปอร์เซ็นต์)"
+    def __str__(self):
+        return f"{self.claim.code} - {self.employee.first_name} ({self.percentage}%)"
+
 # ==========================================
 # 1. สูตรการผลิต (Bill of Materials - BOM)
 # ==========================================
@@ -307,6 +311,10 @@ class BlueprintLog(models.Model):
     class Meta:
         ordering = ['-created_at']
 
+    # 🌟 [NEW] เพิ่มคำสั่งบรรทัดนี้ เพื่อบอกให้แสดงผลเป็น "รหัส JOB - รายละเอียด"
+    def __str__(self):
+        return f"{self.production_order.code} - {self.action}"
+
 # ==========================================
 # 🌟 ตารางประวัติการตรวจ QC (QC Inspection Log) 🌟
 # ==========================================
@@ -326,12 +334,11 @@ class QCInspectionLog(models.Model):
         return f"QC รอบที่ {self.round_number} - {self.production_order.code}"
 
 # ==========================================
-# 🌟 [NEW] ตารางย่อย: คลังรูปและวิดีโอ "ผ่าน QC" (สำหรับเซลส์/ลูกค้า) 🌟
+# 🌟 ตารางย่อย: คลังรูปและวิดีโอ "ผ่าน QC" (สำหรับเซลส์/ลูกค้า) 🌟
 # ==========================================
 class QCPassedMedia(models.Model):
     production_order = models.ForeignKey(ProductionOrder, related_name='passed_media', on_delete=models.CASCADE)
     uploaded_by = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True)
-    # ใช้ FileField เพื่อให้รองรับทั้งรูปภาพ (JPG, PNG) และคลิปวิดีโอ (MP4)
     file = models.FileField(upload_to='qc_passed_media/%Y/%m/', verbose_name="ไฟล์รูป/คลิปที่ผ่าน QC")
     uploaded_at = models.DateTimeField(auto_now_add=True)
 
@@ -339,19 +346,25 @@ class QCPassedMedia(models.Model):
         verbose_name = "สื่อ - ตรวจผ่าน"
         verbose_name_plural = "สื่อ - ตรวจผ่าน"
 
+    # 🌟 [NEW] เพิ่มคำสั่งนี้ให้ QCPassedMedia
+    def __str__(self):
+        return f"ตรวจผ่าน: {self.production_order.code}"
+
 # ==========================================
-# 🌟 [NEW] ตารางย่อย: คลังรูปและวิดีโอ "ไม่ผ่าน/มีตำหนิ" (สำหรับช่าง) 🌟
+# 🌟 ตารางย่อย: คลังรูปและวิดีโอ "ไม่ผ่าน/มีตำหนิ" (สำหรับช่าง) 🌟
 # ==========================================
 class QCFailedMedia(models.Model):
-    # ผูกกับประวัติการตรวจ (QCInspectionLog) เพื่อให้รู้ว่ารูปนี้ถูกถ่ายตอนตีกลับ "รอบที่เท่าไหร่"
     qc_log = models.ForeignKey(QCInspectionLog, related_name='failed_media', on_delete=models.CASCADE)
-    # ใช้ FileField เพื่อให้รองรับทั้งรูปภาพ (JPG, PNG) และคลิปวิดีโอ (MP4)
     file = models.FileField(upload_to='qc_failed_media/%Y/%m/', verbose_name="ไฟล์รูป/คลิปตำหนิ")
     uploaded_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         verbose_name = "สื่อ - ตำหนิ"
         verbose_name_plural = "สื่อ - ตำหนิ"
+
+    # 🌟 [NEW] เพิ่มคำสั่งนี้ให้ QCFailedMedia
+    def __str__(self):
+        return f"ตำหนิ: {self.qc_log.production_order.code} (รอบ {self.qc_log.round_number})"
 
 # ==========================================
 # 3. รายการวัตถุดิบที่ใช้จริงต่อ 1 งาน (Job Material List)
@@ -701,6 +714,10 @@ class ServiceTicketMedia(models.Model):
     class Meta:
         verbose_name = "สื่อ - แจ้งซ่อม"
         verbose_name_plural = "สื่อ - แจ้งซ่อม"
+
+    # 🌟 [NEW] เพิ่มคำสั่งบรรทัดนี้ลงไปต่อท้ายครับ
+    def __str__(self):
+        return f"สื่อแจ้งซ่อม: {self.ticket.code} ({self.get_media_type_display()})"
 
 # ==========================================
 # 🌟 [NEW] ตารางย่อย: คลังรูปและวิดีโอ "การจัดส่งสินค้า" 🌟

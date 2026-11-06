@@ -17,7 +17,7 @@ from hr.models import Department, Employee
 from manufacturing.models import ProductionOrder, MfgBranch
 from master_data.models import CompanyInfo
 
-# Services (เรียกใช้สมองกลคำนวณที่เราแยกไว้)
+# Services
 from sales.services import is_sales_authorized, get_target_employees, get_sales_queryset, parse_thai_date
 
 @login_required
@@ -31,22 +31,19 @@ def sales_dashboard(request):
     is_manager = False
     is_supervisor = False
     current_emp = getattr(request.user, 'employee', None)
+    user_groups = list(request.user.groups.values_list('name', flat=True))
 
-    if request.user.is_superuser:
+    # 🌟 [NEW] เช็กสิทธิ์ Manager และ Supervisor จากสวิตช์คีย์การ์ด (Groups) อย่างแม่นยำ
+    if request.user.is_superuser or 'Manager_Team' in user_groups or 'Executive' in user_groups or 'Accounting_Team' in user_groups:
         is_manager = True
-    elif current_emp:
-        rank = current_emp.business_rank.lower() if current_emp.business_rank else ""
-        if rank in ['manager', 'director'] or 'manager' in getattr(current_emp.position, 'title', '').lower() or 'บัญชี' in getattr(current_emp.department, 'name', ''):
-            is_manager = True
-        elif rank == 'supervisor':
-            is_supervisor = True
+    elif 'Supervisor_Team' in user_groups:
+        is_supervisor = True
 
     team_members = []
     if is_manager:
-        # ดึงเฉพาะแผนกที่มีคำว่า "สาขา" เท่านั้น
         departments = list(Department.objects.filter(name__icontains='สาขา').order_by('name'))
         for d in departments: d.name = d.name.replace('แผนก', '').strip()
-    elif is_supervisor and current_emp.department:
+    elif is_supervisor and current_emp and current_emp.department:
         departments = []
         team_members = list(Employee.objects.filter(department=current_emp.department).order_by('first_name'))
     else:
@@ -85,12 +82,15 @@ def api_dashboard_data(request):
     branch_filter = request.GET.get('branch', '')
     emp_filter = request.GET.get('employee', '')
 
-    user_rank = emp.business_rank.lower() if (emp and emp.business_rank) else "member"
+    # 🌟 [NEW] อ่านสวิตช์ Manager และ Supervisor จาก Groups เพื่อวาดกราฟ
+    user_groups = list(request.user.groups.values_list('name', flat=True))
+    is_manager_role = request.user.is_superuser or 'Manager_Team' in user_groups or 'Executive' in user_groups or 'Accounting_Team' in user_groups
+    is_supervisor_role = 'Supervisor_Team' in user_groups
 
-    if branch_filter and (user_rank in ['manager', 'director'] or request.user.is_superuser):
+    if branch_filter and is_manager_role:
         if branch_filter != 'sum_only':
             target_employees = target_employees.filter(department_id=branch_filter)
-    elif emp_filter and user_rank == 'supervisor':
+    elif emp_filter and is_supervisor_role and not is_manager_role:
         if emp_filter not in ['sum_only', 'compare_all']:
             target_employees = target_employees.filter(id=emp_filter)
 
@@ -111,17 +111,17 @@ def api_dashboard_data(request):
     qt_all_qs = get_sales_queryset(Quotation, request.user, target_employees)
     pending_approval = qt_all_qs.filter(status='DRAFT').count()
     pending_closing = qt_all_qs.filter(status='APPROVED', is_deposit_paid=False).count()
-    # 🌟 นับเฉพาะที่ตรวจมัดจำแล้ว และกำลังผลิต/รอสั่งผลิต
-    # 🌟 [UPDATED] อัปเดตสูตรนับยอดการ์ด "ระหว่างผลิต" ให้ตรงกับหน้าตาราง (รวมงานที่เปิดบิลแต่ยังส่งไม่เสร็จ)
+
+    # 🌟 [FIXED - Option B] ลบเงื่อนไข is_deposit_verified=True ออกแล้ว
+    # ตอนนี้แค่เซลส์รับเงินมา (is_deposit_paid=True) บิลก็จะถูกนับลงช่องนี้ทันที!
     in_production = qt_all_qs.filter(
-        Q(status='APPROVED', is_deposit_paid=True, is_deposit_verified=True) | Q(status='CONVERTED')
+        Q(status='APPROVED', is_deposit_paid=True) | Q(status='CONVERTED')
     ).exclude(
         production_orders__delivery_status__name__in=['ส่งมอบสำเร็จ', 'ลูกค้าเซ็นรับแล้ว', 'จัดส่งเรียบร้อย']
     ).distinct().count()
 
-    # 🌟 [NEW] นับงาน "รอจัดส่ง" (สั่งให้นับเฉพาะพนักงานขายทั่วไปเท่านั้น)
     waiting_delivery_count = 0
-    if user_rank not in ['manager', 'director', 'supervisor'] and not request.user.is_superuser:
+    if not is_manager_role and not is_supervisor_role:
         waiting_delivery_count = qt_all_qs.filter(
             Q(status='APPROVED', is_deposit_paid=True, is_deposit_verified=True) | Q(status='CONVERTED')
         ).filter(
@@ -134,7 +134,7 @@ def api_dashboard_data(request):
     pos_raw = list(pos_qs_all.filter(status='PAID').values('total_amount', 'employee__department__name', 'employee__first_name'))
     inv_raw = list(inv_qs_all.filter(status='PAID').values('grand_total', 'employee__department__name', 'employee__first_name'))
 
-    if user_rank in ['manager', 'director'] or request.user.is_superuser:
+    if is_manager_role:
         if branch_filter == 'sum_only':
             chart_title = "ยอดขายรวมทุกสาขา"
             chart_labels = ["ยอดรวมสุทธิ"]
@@ -152,7 +152,7 @@ def api_dashboard_data(request):
             sorted_data = sorted(team_dict.items(), key=lambda x: x[1], reverse=True)
             chart_labels, chart_data = [x[0] for x in sorted_data], [x[1] for x in sorted_data]
 
-    elif user_rank == 'supervisor':
+    elif is_supervisor_role:
         if emp_filter == 'sum_only':
             dept_name = emp.department.name if (emp and emp.department) else ''
             chart_title = f"ยอดขายรวมทั้งทีม ({dept_name})"
@@ -210,7 +210,6 @@ def api_dashboard_data(request):
 
     accumulated_commission = 0
     if emp:
-        # 🌟 เปลี่ยนคำว่า 'PAID' เป็น 'PENDING' เพื่อสั่งให้ระบบไปโกยยอดเงินรอโอนมาโชว์ 🌟
         accumulated_commission = CommissionAllocation.objects.filter(employee=emp, status='PENDING').aggregate(Sum('amount'))['amount__sum'] or 0
 
     return JsonResponse({
@@ -220,7 +219,7 @@ def api_dashboard_data(request):
         'chart_data': chart_data, 'chart_title': chart_title,
         'chart_type': chart_type, 'scope_title': scope_title,
         'recent_sales': recent_sales_data, 'accumulated_commission': float(accumulated_commission),
-        'waiting_delivery_count': waiting_delivery_count # 🌟 เพิ่มบรรทัดนี้ส่งไปบอกหน้าเว็บ
+        'waiting_delivery_count': waiting_delivery_count
     })
 
 @login_required

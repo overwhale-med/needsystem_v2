@@ -7,6 +7,7 @@ from datetime import datetime, date, timedelta
 from django.contrib.auth.models import User, Group
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
+from django.utils.crypto import get_random_string
 
 from .models import Employee, Attendance, LeaveRequest, Payslip, CommissionLog, Position, Department, SalesGroup
 from .forms import LeaveRequestForm, EmployeeForm
@@ -694,19 +695,22 @@ def org_structure_settings(request):
         if action == 'add_dept':
             name = request.POST.get('name')
             parent_id = request.POST.get('parent_id')
+            code = request.POST.get('code') # 🌟 [NEW] รับค่าโค้ด
             if name:
                 parent = Department.objects.get(id=parent_id) if parent_id else None
-                Department.objects.create(name=name, parent=parent)
+                Department.objects.create(name=name, parent=parent, code=code) # 🌟 [NEW] บันทึกโค้ด
                 messages.success(request, f"✅ เพิ่มแผนก '{name}' เรียบร้อยแล้ว")
 
         elif action == 'edit_dept':
             dept_id = request.POST.get('dept_id')
             name = request.POST.get('name')
             parent_id = request.POST.get('parent_id')
+            code = request.POST.get('code') # 🌟 [NEW] รับค่าโค้ด
             if dept_id and name:
                 dept = get_object_or_404(Department, id=dept_id)
                 dept.name = name
                 dept.parent = Department.objects.get(id=parent_id) if parent_id else None
+                dept.code = code # 🌟 [NEW] อัปเดตโค้ด
                 dept.save()
                 messages.success(request, f"✅ แก้ไขข้อมูลแผนก '{name}' เรียบร้อยแล้ว")
 
@@ -726,9 +730,10 @@ def org_structure_settings(request):
             dept_id = request.POST.get('dept_id')
             desc = request.POST.get('description')
             auth = request.POST.get('approval_authority')
+            code = request.POST.get('code') # 🌟 [NEW] รับค่าโค้ด
             if title and dept_id:
                 dept = get_object_or_404(Department, id=dept_id)
-                Position.objects.create(title=title, department=dept, description=desc, approval_authority=auth)
+                Position.objects.create(title=title, department=dept, description=desc, approval_authority=auth, code=code) # 🌟 [NEW]
                 messages.success(request, f"✅ เพิ่มตำแหน่ง '{title}' เรียบร้อยแล้ว")
 
         elif action == 'edit_pos':
@@ -737,6 +742,7 @@ def org_structure_settings(request):
             dept_id = request.POST.get('dept_id')
             desc = request.POST.get('description')
             auth = request.POST.get('approval_authority')
+            code = request.POST.get('code') # 🌟 [NEW] รับค่าโค้ด
             if pos_id and title and dept_id:
                 pos = get_object_or_404(Position, id=pos_id)
                 dept = get_object_or_404(Department, id=dept_id)
@@ -744,6 +750,7 @@ def org_structure_settings(request):
                 pos.department = dept
                 pos.description = desc
                 pos.approval_authority = auth
+                pos.code = code # 🌟 [NEW] อัปเดตโค้ด
                 pos.save()
                 messages.success(request, f"✅ แก้ไขตำแหน่ง '{title}' เรียบร้อยแล้ว")
 
@@ -791,3 +798,55 @@ def api_get_positions(request):
     else:
         data = []
     return JsonResponse(data, safe=False)
+
+@user_passes_test(is_hr_or_admin, login_url='/')
+def api_generate_auto_account(request):
+    """API สำหรับสุ่มสร้าง Username และ Password อัตโนมัติจากโค้ดย่อ"""
+    division_id = request.GET.get('division_id')
+    department_id = request.GET.get('department_id')
+    position_id = request.GET.get('position_id')
+
+    if not (division_id and department_id and position_id):
+        return JsonResponse({'status': 'error', 'message': 'กรุณาเลือก ฝ่าย, แผนก และ ตำแหน่ง ให้ครบถ้วนก่อนกด AUTO'})
+
+    try:
+        div = Department.objects.get(id=division_id)
+        dept = Department.objects.get(id=department_id)
+        pos = Position.objects.get(id=position_id)
+
+        # ดึงโค้ดย่อ (ถ้าในอนาคต HR ลืมใส่โค้ดในตั้งค่า ระบบจะใช้ตัวย่อสำรอง 'div', 'dept', 'pos' กันพังครับ)
+        div_code = (div.code or 'div').lower().strip()
+        dept_code = (dept.code or 'dept').lower().strip()
+        pos_code = (pos.code or 'pos').lower().strip()
+
+        # ประกอบร่าง Prefix เช่น 'sale_korat_mgr'
+        prefix = f"{div_code}_{dept_code}_{pos_code}"
+
+        # ค้นหา Username ที่ขึ้นต้นด้วย Prefix นี้ในฐานข้อมูล
+        existing_users = User.objects.filter(username__startswith=f"{prefix}_")
+
+        max_seq = 0
+        for user in existing_users:
+            try:
+                # ดึงตัวเลขท้ายสุดมาหาค่าสูงสุด (เช่น ดึง '03' จาก 'sale_korat_mgr_03')
+                seq_str = user.username.split('_')[-1]
+                seq_num = int(seq_str)
+                if seq_num > max_seq:
+                    max_seq = seq_num
+            except ValueError:
+                pass # ถ้าตัวท้ายไม่ใช่ตัวเลข ก็ข้ามไป
+
+        # บวก 1 เพื่อรันคิวต่อไป พร้อมบังคับให้เป็นเลข 2 หลัก (เช่น 01, 02)
+        next_seq = max_seq + 1
+        new_username = f"{prefix}_{next_seq:02d}"
+
+        # สุ่มรหัสผ่าน 8 ตัวอักษร (สุ่มตัวเล็ก ตัวใหญ่ และตัวเลข)
+        new_password = get_random_string(length=8)
+
+        return JsonResponse({
+            'status': 'success',
+            'username': new_username,
+            'password': new_password
+        })
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)})

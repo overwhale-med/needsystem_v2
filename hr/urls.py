@@ -36,6 +36,7 @@ urlpatterns = [
     # 🌟 API สำหรับระบบ Dropdown 3 สเต็ป (รับพนักงานใหม่) 🌟
     path('api/get-departments/', views.api_get_departments, name='api_get_departments'),
     path('api/get-positions/', views.api_get_positions, name='api_get_positions'),
+    path('api/generate-auto-account/', views.api_generate_auto_account, name='api_generate_auto_account'),
 
     # 🌟 เส้นทางสำหรับระบบจัดการสิทธิ์ และ Profile การเข้าถึง 🌟
     path('roles/', views.role_management, name='role_management'),

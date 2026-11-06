@@ -15,7 +15,7 @@
         .navbar-custom {
             background-color: #ffffff; box-shadow: 0 4px 12px rgba(0,0,0,0.05);
             padding-top: 15px; padding-bottom: 15px;
-            z-index: 1050; /* 🌟 [NEW] เพิ่มบรรทัดนี้เพื่อให้เมนูลอยอยู่บนสุดเสมอ */
+            z-index: 1050;
         }
         .navbar-brand {
             font-weight: 800; font-size: 1.5rem;
@@ -47,10 +47,10 @@
     </style>
 </head>
 <body>
-
+    <!-- 🌟 [NEW] สร้างตัวแปรดึงชื่อกลุ่มทั้งหมดของ User มาเก็บไว้ เพื่อเช็กสิทธิ์ได้หลายกลุ่มพร้อมกันอย่างแม่นยำ -->
+    {% with user_groups_str=request.user.groups.all|stringformat:"s" %}
     <nav class="navbar navbar-expand-lg navbar-light navbar-custom sticky-top">
         <div class="container-fluid px-4">
-            <!-- 🌟 ไอคอนโลโก้ ทำหน้าที่เป็นปุ่มกลับหน้า Dashboard หลัก -->
             <a class="navbar-brand" href="/">
                 {% if company_info.navbar_image %}
                     <img src="{{ company_info.navbar_image.url }}" alt="Logo" style="height: 40px; width: auto;">
@@ -65,12 +65,12 @@
 
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav me-auto mb-2 mb-lg-0 ms-3">
-                    <!-- เมนูหน้าหลัก -->
                     <li class="nav-item">
                         <a class="nav-link" href="/"><i class="fas fa-home me-1"></i> หน้าหลัก</a>
                     </li>
 
-                    {% if request.user.is_superuser or request.user.groups.all.0.name == "Knockdown_Sales_Team" or request.user.groups.all.0.name == "Executive" %}
+                    <!-- 🌟 ระบบขาย: อนุญาตให้ Supervisor_Team เข้าได้ด้วย -->
+                    {% if request.user.is_superuser or "Knockdown_Sales_Team" in user_groups_str or "Supervisor_Team" in user_groups_str or "Executive" in user_groups_str %}
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" id="salesDropdown" role="button" data-bs-toggle="dropdown">
                             <i class="fas fa-store me-1"></i> ระบบขาย
@@ -83,11 +83,9 @@
                             <li><a class="dropdown-item" href="{% url 'deposit_list' %}"><i class="fas fa-hand-holding-usd me-2 text-info"></i> รายการใบรับเงินมัดจำ</a></li>
                             <li><a class="dropdown-item" href="{% url 'invoice_list' %}"><i class="fas fa-receipt me-2 text-success"></i> รายการใบขาย (ชำระเต็ม)</a></li>
 
-                            <!-- 🌟 [NEW] เพิ่มเมนู ศูนย์ตั้งเบิกผลตอบแทน ตรงนี้ 🌟 -->
                             <li><hr class="dropdown-divider"></li>
                             <li><a class="dropdown-item fw-bold text-success" href="{% url 'commission_board' %}"><i class="fas fa-hand-holding-usd me-2 text-success"></i> ศูนย์ตั้งเบิกผลตอบแทนบ้านน็อคดาวน์</a></li>
 
-                            <!-- 🌟 [NEW] เพิ่มเมนู ศูนย์แจ้งซ่อมและบริการ ตรงนี้ 🌟 -->
                             <li><hr class="dropdown-divider"></li>
                             <li><a class="dropdown-item fw-bold text-danger" href="{% url 'service_ticket_list' %}"><i class="fas fa-tools me-2 text-danger"></i> ศูนย์แจ้งซ่อมและบริการ (After-Sales)</a></li>
 
@@ -97,7 +95,8 @@
                     </li>
                     {% endif %}
 
-                    {% if request.user.is_superuser or request.user.groups.all.0.name == "Inventory_Team" or request.user.groups.all.0.name == "Inventory" %}
+                    <!-- คลังสินค้า -->
+                    {% if request.user.is_superuser or "Inventory_Team" in user_groups_str or "Inventory" in user_groups_str %}
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" id="inventoryDropdown" role="button" data-bs-toggle="dropdown">
                             <i class="fas fa-boxes me-1"></i> คลังสินค้า
@@ -109,7 +108,8 @@
                     </li>
                     {% endif %}
 
-                    {% if request.user.is_superuser or request.user.groups.all.0.name == "Purchasing_Team" or request.user.groups.all.0.name == "Purchasing" %}
+                    <!-- ระบบจัดซื้อ (PO) -->
+                    {% if request.user.is_superuser or "Purchasing_Team" in user_groups_str or "Purchasing" in user_groups_str %}
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" id="purchasingDropdown" role="button" data-bs-toggle="dropdown">
                             <i class="fas fa-shopping-cart me-1"></i> ระบบจัดซื้อ (PO)
@@ -122,166 +122,91 @@
                     </li>
                     {% endif %}
 
-                    {% with group_name=request.user.groups.all.0.name %}
-                    {% if request.user.is_superuser or group_name == "Executive" or group_name == "Production_Team" or group_name == "Production" or group_name == "Planner_Team" or group_name == "Blueprint_Team" or group_name == "QC_Team" or group_name == "Logistics_Team" %}
+                    <!-- ระบบผลิต -->
+                    {% if request.user.is_superuser or "Executive" in user_groups_str or "Production_Team" in user_groups_str or "Production" in user_groups_str or "Planner_Team" in user_groups_str or "Blueprint_Team" in user_groups_str or "QC_Team" in user_groups_str or "Logistics_Team" in user_groups_str %}
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" id="productionDropdown" role="button" data-bs-toggle="dropdown">
                             <i class="fas fa-industry me-1"></i> ระบบผลิต
                         </a>
                         <ul class="dropdown-menu border-0 shadow-lg">
-
-                            {% if request.user.is_superuser or group_name == "Executive" or group_name == "Planner_Team" %}
+                            {% if request.user.is_superuser or "Executive" in user_groups_str or "Planner_Team" in user_groups_str %}
                             <li><a class="dropdown-item" href="{% url 'planner_board' %}"><i class="fas fa-clipboard-list me-2 text-info"></i> กระดานวางแผนการผลิต</a></li>
                             <li><a class="dropdown-item" href="{% url 'production_list' %}"><i class="fas fa-table me-2 text-secondary"></i> กระดานควบคุมงานผลิต (ดูภาพรวม)</a></li>
-
-                            <!-- 🌟 [NEW] เพิ่มเมนู รายการควบคุมค่าใช้จ่ายตามใบงาน(JOB) ตรงนี้ 🌟 -->
                             <li><a class="dropdown-item fw-bold text-success" href="{% url 'master_job_report' %}"><i class="fas fa-file-invoice-dollar me-2 text-success"></i> รายการควบคุมค่าใช้จ่ายตามใบงาน(JOB)</a></li>
-
                             <li><hr class="dropdown-divider"></li>
                             {% endif %}
 
-                            {% if request.user.is_superuser or group_name == "Executive" or group_name == "Blueprint_Team" %}
+                            {% if request.user.is_superuser or "Executive" in user_groups_str or "Blueprint_Team" in user_groups_str %}
                             <li><a class="dropdown-item" href="{% url 'blueprint_hub' %}"><i class="fas fa-drafting-compass me-2 text-primary"></i> ศูนย์ตรวจสอบแบบแปลน (Blueprint)</a></li>
                             {% endif %}
 
-                            {% if request.user.is_superuser or group_name == "Executive" or group_name == "Production_Team" or group_name == "Production" %}
+                            {% if request.user.is_superuser or "Executive" in user_groups_str or "Production_Team" in user_groups_str or "Production" in user_groups_str %}
                             <li><a class="dropdown-item fw-bold text-dark" href="{% url 'production_head_board' %}"><i class="fas fa-hammer me-2 text-warning"></i> กระดานหัวหน้าแผนกผลิต (ช่าง)</a></li>
-                            {% endif %}
-
-                            <!-- 🌟 [NEW] เมนูกระดานคิวแจ้งซ่อม สำหรับช่าง 🌟 -->
-                            {% if request.user.is_superuser or group_name == "Executive" or group_name == "Production_Team" or group_name == "Production" %}
                             <li><a class="dropdown-item fw-bold text-danger" href="{% url 'service_board' %}"><i class="fas fa-tools me-2 text-danger"></i> กระดานคิวงานแจ้งซ่อม (After-Sales)</a></li>
-                            <!-- 🌟 [NEW] ลิงก์ไปหน้าตารางประวัติงานแจ้งซ่อม 🌟 -->
                             <li><a class="dropdown-item text-muted" href="{% url 'service_history_list' %}"><i class="fas fa-history me-2"></i> ประวัติงานแจ้งซ่อม (ดูทั้งหมด/เบิกเงิน)</a></li>
                             {% endif %}
 
-                            {% if request.user.is_superuser or group_name == "Executive" or group_name == "QC_Team" %}
+                            {% if request.user.is_superuser or "Executive" in user_groups_str or "QC_Team" in user_groups_str %}
                             <li><a class="dropdown-item fw-bold text-dark" href="{% url 'qc_board' %}"><i class="fas fa-search-plus me-2 text-success"></i> กระดานตรวจสอบคุณภาพ (QC)</a></li>
                             {% endif %}
 
-                            <!-- 🌟 [NEW] เพิ่มเมนู ศูนย์รวมแฟ้มภาพและบริการ ตรงนี้ 🌟 -->
-                            {% if request.user.is_superuser or group_name == "Executive" or group_name == "Production_Team" or group_name == "Production" or group_name == "QC_Team" %}
+                            {% if request.user.is_superuser or "Executive" in user_groups_str or "Production_Team" in user_groups_str or "Production" in user_groups_str or "QC_Team" in user_groups_str %}
                             <li><a class="dropdown-item fw-bold text-primary" href="{% url 'media_hub_list' %}"><i class="fas fa-photo-video me-2 text-primary"></i> ศูนย์รวมแฟ้มภาพ (Media Hub)</a></li>
                             {% endif %}
 
-                            {% if request.user.is_superuser or group_name == "Executive" or group_name == "Logistics_Team" %}
+                            {% if request.user.is_superuser or "Executive" in user_groups_str or "Logistics_Team" in user_groups_str %}
                             <li><a class="dropdown-item fw-bold text-danger" href="{% url 'logistics_board' %}"><i class="fas fa-truck me-2"></i> กระดานจัดส่งสินค้า (Logistics)</a></li>
                             {% endif %}
-
                         </ul>
                     </li>
                     {% endif %}
-                    {% endwith %}
 
-                    {% if request.user.is_superuser or request.user.groups.all.0.name == "Solar_Sales_Team" or request.user.groups.all.0.name == "Executive" %}
-                    <!-- 🌟 ระบบโซล่าเซลล์ -->
+                    <!-- ระบบโซล่าเซลล์ -->
+                    {% if request.user.is_superuser or "Solar_Sales_Team" in user_groups_str or "Executive" in user_groups_str %}
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle fw-bold text-dark" href="#" id="solarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                             <i class="fas fa-solar-panel text-warning me-1"></i> ระบบโซล่าเซลล์
                         </a>
                         <ul class="dropdown-menu shadow-sm border-0 rounded-4 mt-2" aria-labelledby="solarDropdown">
-                            <li>
-                                <a class="dropdown-item py-2 fw-bold text-dark" href="{% url 'solar_sales_dashboard' %}">
-                                    <i class="fas fa-chart-pie text-warning me-2" style="width: 20px;"></i> ภาพรวมโซล่า (Dashboard)
-                                </a>
-                            </li>
+                            <li><a class="dropdown-item py-2 fw-bold text-dark" href="{% url 'solar_sales_dashboard' %}"><i class="fas fa-chart-pie text-warning me-2" style="width: 20px;"></i> ภาพรวมโซล่า (Dashboard)</a></li>
                             <li><hr class="dropdown-divider opacity-25"></li>
-
-                            <li>
-                                <a class="dropdown-item py-2 fw-bold text-dark" href="{% url 'solar_customer_list' %}">
-                                    <i class="fas fa-users text-primary me-2" style="width: 20px; text-align: center;"></i> ฐานข้อมูลลูกค้า (โซล่าเซลล์)
-                                </a>
-                            </li>
+                            <li><a class="dropdown-item py-2 fw-bold text-dark" href="{% url 'solar_customer_list' %}"><i class="fas fa-users text-primary me-2" style="width: 20px; text-align: center;"></i> ฐานข้อมูลลูกค้า (โซล่าเซลล์)</a></li>
                             <li><hr class="dropdown-divider opacity-25"></li>
-
-                            <li>
-                                <a class="dropdown-item py-2 fw-bold text-secondary" href="{% url 'solar_inventory_list' %}">
-                                    <i class="fas fa-boxes text-gold me-2" style="width: 20px;"></i> คลังสินค้าโซล่าเซลล์
-                                </a>
-                            </li>
+                            <li><a class="dropdown-item py-2 fw-bold text-secondary" href="{% url 'solar_inventory_list' %}"><i class="fas fa-boxes text-gold me-2" style="width: 20px;"></i> คลังสินค้าโซล่าเซลล์</a></li>
                             <li><hr class="dropdown-divider opacity-25"></li>
-
-                            <li>
-                                <a class="dropdown-item py-2 fw-bold text-secondary" href="{% url 'solar_quotation_list' %}">
-                                    <i class="fas fa-file-signature text-primary me-2" style="width: 20px;"></i> ใบเสนอราคา (Sales)
-                                </a>
-                            </li>
-                            <li>
-                                <a class="dropdown-item py-2 fw-bold text-secondary" href="{% url 'solar_deposit_list' %}">
-                                    <i class="fas fa-hand-holding-usd text-info me-2" style="width: 20px;"></i> ใบรับเงินมัดจำ (Deposit)
-                                </a>
-                            </li>
-                            <li>
-                                <a class="dropdown-item py-2 fw-bold text-secondary" href="{% url 'solar_invoice_list' %}">
-                                    <i class="fas fa-file-invoice-dollar text-success me-2" style="width: 20px;"></i> ใบเสร็จรับเงิน (Invoice)
-                                </a>
-                            </li>
+                            <li><a class="dropdown-item py-2 fw-bold text-secondary" href="{% url 'solar_quotation_list' %}"><i class="fas fa-file-signature text-primary me-2" style="width: 20px;"></i> ใบเสนอราคา (Sales)</a></li>
+                            <li><a class="dropdown-item py-2 fw-bold text-secondary" href="{% url 'solar_deposit_list' %}"><i class="fas fa-hand-holding-usd text-info me-2" style="width: 20px;"></i> ใบรับเงินมัดจำ (Deposit)</a></li>
+                            <li><a class="dropdown-item py-2 fw-bold text-secondary" href="{% url 'solar_invoice_list' %}"><i class="fas fa-file-invoice-dollar text-success me-2" style="width: 20px;"></i> ใบเสร็จรับเงิน (Invoice)</a></li>
                             <li><hr class="dropdown-divider opacity-25"></li>
-
-                            <li>
-                                <a class="dropdown-item py-2 fw-bold text-secondary" href="{% url 'solar_po_list' %}">
-                                    <i class="fas fa-shopping-cart text-primary me-2" style="width: 20px;"></i> จัดซื้อโซล่าเซลล์
-                                </a>
-                            </li>
-                            <!-- 🌟 [NEW] เมนู 2 กระดานใหม่ของระบบโซล่าเซลล์ -->
-                            <li>
-                                <a class="dropdown-item py-2 fw-bold text-secondary" href="{% url 'solar_center_dashboard' %}">
-                                    <i class="fas fa-clipboard-list text-success me-2" style="width: 20px;"></i> กระดานวางแผนงานติดตั้ง
-                                </a>
-                            </li>
-                            <li>
-                                <a class="dropdown-item py-2 fw-bold text-secondary" href="{% url 'solar_job_overview' %}">
-                                    <i class="fas fa-table text-info me-2" style="width: 20px;"></i> กระดานควบคุมงานติดตั้ง (ภาพรวม)
-                                </a>
-                            </li>
+                            <li><a class="dropdown-item py-2 fw-bold text-secondary" href="{% url 'solar_po_list' %}"><i class="fas fa-shopping-cart text-primary me-2" style="width: 20px;"></i> จัดซื้อโซล่าเซลล์</a></li>
+                            <li><a class="dropdown-item py-2 fw-bold text-secondary" href="{% url 'solar_center_dashboard' %}"><i class="fas fa-clipboard-list text-success me-2" style="width: 20px;"></i> กระดานวางแผนงานติดตั้ง</a></li>
+                            <li><a class="dropdown-item py-2 fw-bold text-secondary" href="{% url 'solar_job_overview' %}"><i class="fas fa-table text-info me-2" style="width: 20px;"></i> กระดานควบคุมงานติดตั้ง (ภาพรวม)</a></li>
                             <li><hr class="dropdown-divider opacity-25"></li>
-                            <!-- 🌟 [NEW] เมนู ใบงานสำรวจหน้างาน และ ตั้งเบิกค่าใช้จ่าย 🌟 -->
-                            <li>
-                                <a class="dropdown-item py-2 fw-bold text-secondary" href="{% url 'solar_survey_list' %}">
-                                    <i class="fas fa-map-marked-alt text-primary me-2" style="width: 20px; text-align: center;"></i> ใบงานสำรวจ (Survey)
-                                </a>
-                            </li>
-                            <li>
-                                <a class="dropdown-item py-2 fw-bold text-secondary" href="{% url 'solar_expense_list' %}">
-                                    <i class="fas fa-file-invoice-dollar text-danger me-2" style="width: 20px; text-align: center;"></i> ตั้งเบิกค่าใช้จ่าย (Expenses)
-                                </a>
-                            </li>
-                            <!-- 🌟 [NEW] เมนูเบิกผลตอบแทน Incentive 🌟 -->
+                            <li><a class="dropdown-item py-2 fw-bold text-secondary" href="{% url 'solar_survey_list' %}"><i class="fas fa-map-marked-alt text-primary me-2" style="width: 20px; text-align: center;"></i> ใบงานสำรวจ (Survey)</a></li>
+                            <li><a class="dropdown-item py-2 fw-bold text-secondary" href="{% url 'solar_expense_list' %}"><i class="fas fa-file-invoice-dollar text-danger me-2" style="width: 20px; text-align: center;"></i> ตั้งเบิกค่าใช้จ่าย (Expenses)</a></li>
                             <li><hr class="dropdown-divider opacity-25"></li>
-                            <li>
-                                <a class="dropdown-item py-2 fw-bold text-secondary" href="{% url 'solar_commission_board' %}">
-                                    <i class="fas fa-hand-holding-usd text-success me-2" style="width: 20px; text-align: center;"></i> ศูนย์เบิกผลตอบแทนโซล่าเซลล์
-                                </a>
-                            </li>
-                            <!-- 🌟 [NEW] เมนูกระดานแจ้งซ่อมโซล่าเซลล์ 🌟 -->
+                            <li><a class="dropdown-item py-2 fw-bold text-secondary" href="{% url 'solar_commission_board' %}"><i class="fas fa-hand-holding-usd text-success me-2" style="width: 20px; text-align: center;"></i> ศูนย์เบิกผลตอบแทนโซล่าเซลล์</a></li>
                             <li><hr class="dropdown-divider opacity-25"></li>
-                            <li>
-                                <a class="dropdown-item py-2 fw-bold text-danger" href="{% url 'solar_service_board' %}">
-                                    <i class="fas fa-tools text-danger me-2" style="width: 20px; text-align: center;"></i> กระดานคิวงานแจ้งซ่อม (After-Sales)
-                                </a>
-                            </li>
-                            <!-- 🌟 [NEW] เมนูศูนย์รวมแฟ้มภาพโซล่าเซลล์ 🌟 -->
+                            <li><a class="dropdown-item py-2 fw-bold text-danger" href="{% url 'solar_service_board' %}"><i class="fas fa-tools text-danger me-2" style="width: 20px; text-align: center;"></i> กระดานคิวงานแจ้งซ่อม (After-Sales)</a></li>
                             <li><hr class="dropdown-divider opacity-25"></li>
-                            <li>
-                                <a class="dropdown-item py-2 fw-bold text-primary" href="{% url 'solar_media_hub_list' %}">
-                                    <i class="fas fa-photo-video text-primary me-2" style="width: 20px; text-align: center;"></i> ศูนย์รวมแฟ้มภาพ (Media Hub)
-                                </a>
-                            </li>
+                            <li><a class="dropdown-item py-2 fw-bold text-primary" href="{% url 'solar_media_hub_list' %}"><i class="fas fa-photo-video text-primary me-2" style="width: 20px; text-align: center;"></i> ศูนย์รวมแฟ้มภาพ (Media Hub)</a></li>
                         </ul>
                     </li>
-                    {% endif %}  <!-- 🌟 [NEW] เพิ่มโค้ดปิดล็อกสิทธิ์เมนูโซล่าเซลล์ตรงนี้ -->
+                    {% endif %}
 
+                    <!-- ระบบบุคลากร -->
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" id="hrDropdown" role="button" data-bs-toggle="dropdown">
                             <i class="fas fa-users me-1"></i> ระบบบุคลากร
                         </a>
                         <ul class="dropdown-menu">
                             <li><a class="dropdown-item" href="{% url 'employee_dashboard' %}"><i class="fas fa-id-card me-2 text-primary"></i> แดชบอร์ดพนักงาน (ฉัน)</a></li>
-                            {% if request.user.is_superuser or request.user.groups.all.0.name == "Manager_Team" or request.user.groups.all.0.name == "HR_Team" %}
+                            <!-- 🌟 อนุญาตให้ Supervisor_Team เข้ามาอนุมัติการลาลูกทีมได้ -->
+                            {% if request.user.is_superuser or "Manager_Team" in user_groups_str or "Supervisor_Team" in user_groups_str or "HR_Team" in user_groups_str %}
                             <li><hr class="dropdown-divider"></li>
                             <li><a class="dropdown-item" href="{% url 'manager_dashboard' %}"><i class="fas fa-user-tie me-2 text-warning"></i> อนุมัติการลา (หัวหน้างาน)</a></li>
                             {% endif %}
-                            {% if request.user.is_superuser or request.user.groups.all.0.name == "HR_Team" %}
+                            {% if request.user.is_superuser or "HR_Team" in user_groups_str %}
                             <li><a class="dropdown-item" href="{% url 'hr_executive_dashboard' %}"><i class="fas fa-chart-line me-2 text-danger"></i> ข้อมูลองค์กร (HR)</a></li>
                             <li><hr class="dropdown-divider"></li>
                             <li><a class="dropdown-item" href="{% url 'network_tree' %}"><i class="fas fa-chart-pie me-2 text-primary"></i> ศูนย์บัญชาการผลตอบแทน</a></li>
@@ -291,22 +216,16 @@
                     </li>
                 </ul>
 
-                <!-- 🌟 แสดง User และปุ่มออกจากระบบ -->
-                <!-- เติมคลาส ms-auto เพื่อดันกล่องนี้ไปชิดขวาสุดเสมอ -->
+                <!-- แสดง User และปุ่มออกจากระบบ -->
                 <div class="d-flex align-items-center ms-auto">
                     <span class="me-3 d-none d-md-inline nav-user d-flex align-items-center">
-
-                        <!-- 🌟 ระบบเช็กรูปโปรไฟล์พนักงาน -->
                         {% if user.employee and user.employee.photo %}
                             <img src="{{ user.employee.photo.url }}" class="rounded-circle me-2" style="width: 30px; height: 30px; object-fit: cover; border: 2px solid #c5a059;">
                         {% else %}
                             <i class="far fa-user-circle me-2 fs-5 text-muted"></i>
                         {% endif %}
-
-                        <!-- ชื่อพนักงาน -->
                         {{ user.first_name|default:user.username }}
                     </span>
-
                     <form action="{% url 'logout' %}" method="post" class="d-inline mb-0">
                         {% csrf_token %}
                         <button type="submit" class="btn btn-sm btn-logout rounded-pill px-3 fw-bold"><i class="fas fa-sign-out-alt me-1"></i> ออกจากระบบ</button>
@@ -315,6 +234,7 @@
             </div>
         </div>
     </nav>
+    {% endwith %}
 
     <div class="main-content">
         {% if messages %}
@@ -339,7 +259,6 @@
             }, 3000);
         });
     </script>
-<!-- 🌟 เปิดช่องสำหรับรับ Script เฉพาะกิจจากหน้าย่อย 🌟 -->
     {% block scripts %}{% endblock %}
 </body>
 </html>

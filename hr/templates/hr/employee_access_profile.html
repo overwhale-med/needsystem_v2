@@ -87,27 +87,63 @@
 
             <div class="col-lg-8">
 
+                <!-- 🌟 กล่องที่ 1: สิทธิ์ระดับบริหารจัดการ (Management & Supervisory Roles) 🌟 -->
+                <div class="card border-0 shadow-sm rounded-4 mb-4 border-start border-4 border-primary">
+                    <div class="card-header bg-white py-4 border-bottom">
+                        <h5 class="fw-bold m-0 text-primary"><i class="fas fa-user-shield me-2"></i>สิทธิ์ระดับบริหารจัดการ (Management Roles)</h5>
+                        <div class="alert alert-primary bg-primary bg-opacity-10 border-0 p-3 mt-3 mb-0 rounded-3 small text-dark">
+                            <i class="fas fa-lightbulb text-warning me-2 fs-5"></i><strong>คำแนะนำ:</strong> หากพนักงานตำแหน่ง ผู้จัดการ, หัวหน้าแผนก หรือ หัวหน้าสาขา <span class="text-danger fw-bold">กรุณาเปิดสวิตช์ในส่วนนี้ควบคู่กับสิทธิ์แผนกด้านล่าง</span> เพื่อปลดล็อกหน้า Dashboard สำหรับหัวหน้างานและสิทธิ์การอนุมัติต่างๆ
+                        </div>
+                    </div>
+                    <div class="card-body p-4 bg-light bg-opacity-50">
+                        <div class="row g-4">
+                            {% for group in all_groups %}
+                                <!-- คัดกรองเฉพาะกลุ่มบริหารให้มาโชว์ที่กล่องนี้ -->
+                                {% if group.name == 'Executive' or group.name == 'Executive_Team' or group.name == 'Manager_Team' or group.name == 'Supervisor_Team' %}
+                                <div class="col-md-6">
+                                    <div class="border border-primary border-opacity-25 rounded-3 p-3 d-flex justify-content-between align-items-center bg-white shadow-sm transition-all">
+                                        <div>
+                                            <h6 class="fw-bold mb-0 text-primary">{{ group.name }}</h6>
+                                            <small class="text-muted">อนุญาตสิทธิ์ระดับบริหาร</small>
+                                        </div>
+                                        <div class="form-check form-switch m-0 p-0 ps-5">
+                                            <input class="form-check-input" type="checkbox" role="switch"
+                                                   onchange="toggleGroupAccess(this, '{{ employee.user.id }}', '{{ group.id }}')"
+                                                   {% if group.id in user_groups %}checked{% endif %}>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 🌟 กล่องที่ 2: สิทธิ์แผนกปฏิบัติการ (Operational Teams) 🌟 -->
                 <div class="card border-0 shadow-sm rounded-4 mb-4">
                     <div class="card-header bg-white py-4 border-bottom">
-                        <h5 class="fw-bold m-0 text-dark"><i class="fas fa-toggle-on text-success me-2"></i>กำหนดสิทธิ์การเข้าถึงแต่ละเมนู</h5>
-                        <p class="text-muted small m-0 mt-1">เลื่อนสวิตช์เพื่อเปิด (ON) หรือปิด (OFF) การมองเห็นเมนูของพนักงานคนนี้</p>
+                        <h5 class="fw-bold m-0 text-dark"><i class="fas fa-users-cog text-success me-2"></i>สิทธิ์แผนกปฏิบัติการ (Operational Teams)</h5>
+                        <p class="text-muted small m-0 mt-1">เลื่อนสวิตช์เพื่อเปิด (ON) หรือปิด (OFF) การมองเห็นเมนูทำงานของพนักงานคนนี้</p>
                     </div>
                     <div class="card-body p-4">
                         <div class="row g-4">
                             {% for group in all_groups %}
-                            <div class="col-md-6">
-                                <div class="border rounded-3 p-3 d-flex justify-content-between align-items-center bg-light hover-shadow transition-all">
-                                    <div>
-                                        <h6 class="fw-bold mb-0 text-dark">{{ group.name }}</h6>
-                                        <small class="text-muted">อนุญาตสิทธิ์กลุ่ม {{ group.name }}</small>
-                                    </div>
-                                    <div class="form-check form-switch m-0 p-0 ps-5">
-                                        <input class="form-check-input" type="checkbox" role="switch"
-                                               onchange="toggleGroupAccess(this, '{{ employee.user.id }}', '{{ group.id }}')"
-                                               {% if group.id in user_groups %}checked{% endif %}>
+                                <!-- คัดกรองกลุ่มอื่นๆ ที่ไม่ใช่บริหาร ให้มาโชว์ที่กล่องนี้ -->
+                                {% if group.name != 'Executive' and group.name != 'Executive_Team' and group.name != 'Manager_Team' and group.name != 'Supervisor_Team' %}
+                                <div class="col-md-6">
+                                    <div class="border rounded-3 p-3 d-flex justify-content-between align-items-center bg-light hover-shadow transition-all">
+                                        <div>
+                                            <h6 class="fw-bold mb-0 text-dark">{{ group.name }}</h6>
+                                            <small class="text-muted">อนุญาตสิทธิ์กลุ่ม {{ group.name }}</small>
+                                        </div>
+                                        <div class="form-check form-switch m-0 p-0 ps-5">
+                                            <input class="form-check-input" type="checkbox" role="switch"
+                                                   onchange="toggleGroupAccess(this, '{{ employee.user.id }}', '{{ group.id }}')"
+                                                   {% if group.id in user_groups %}checked{% endif %}>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
+                                {% endif %}
                             {% endfor %}
                         </div>
                     </div>
