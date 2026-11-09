@@ -1,0 +1,136 @@
+{% extends 'core/base.html' %}
+{% load humanize %}
+
+{% block content %}
+{% if not request.user.is_superuser %}
+<style>
+    .navbar-nav { display: none !important; }
+</style>
+{% endif %}
+
+<div class="container-fluid py-4 px-4">
+    <!-- Header Section -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
+        <div>
+            <h2 class="fw-bold text-dark mb-0">
+                <i class="fas fa-pencil-ruler me-2 text-primary"></i>กระดานงานของฉัน (Blueprint Staff)
+            </h2>
+            <p class="text-muted mb-0">ดูคิวงานเขียนแบบและถอดวัสดุที่ได้รับมอบหมาย</p>
+        </div>
+    </div>
+
+    <!-- 4 KPI Cards -->
+    <div class="row g-3 mb-4">
+        <div class="col-lg-3 col-md-6 col-12">
+            <div class="card border-0 shadow-sm h-100 rounded-4 bg-white" style="border-bottom: 4px solid #3b82f6 !important;">
+                <div class="card-body p-3 d-flex justify-content-between align-items-center">
+                    <div>
+                        <small class="text-primary fw-bold text-uppercase">1. รอเขียน/แก้ไขแบบ</small>
+                        <h3 class="fw-bold mb-0 text-dark mt-1">{{ kpi_waiting_blueprint }} <small class="text-muted" style="font-size: 0.8rem;">งาน</small></h3>
+                    </div>
+                    <div class="bg-primary bg-opacity-10 text-primary rounded-circle d-flex align-items-center justify-content-center" style="width: 50px; height: 50px;">
+                        <i class="fas fa-pen-nib fs-4"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-3 col-md-6 col-12">
+            <div class="card border-0 shadow-sm h-100 rounded-4 bg-white" style="border-bottom: 4px solid #f59e0b !important;">
+                <div class="card-body p-3 d-flex justify-content-between align-items-center">
+                    <div>
+                        <small class="text-warning fw-bold text-uppercase" style="color: #d97706 !important;">2. รอถอดต้นทุน (BOM)</small>
+                        <h3 class="fw-bold mb-0 text-dark mt-1">{{ kpi_waiting_bom }} <small class="text-muted" style="font-size: 0.8rem;">งาน</small></h3>
+                    </div>
+                    <div class="bg-warning bg-opacity-10 text-warning rounded-circle d-flex align-items-center justify-content-center" style="width: 50px; height: 50px;">
+                        <i class="fas fa-calculator fs-4" style="color: #d97706;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-3 col-md-6 col-12">
+            <div class="card border-0 shadow-sm h-100 rounded-4 bg-white" style="border-bottom: 4px solid #0ea5e9 !important;">
+                <div class="card-body p-3 d-flex justify-content-between align-items-center">
+                    <div>
+                        <small class="text-info fw-bold text-uppercase">3. งานพร้อมตั้งเบิก</small>
+                        <h3 class="fw-bold mb-0 text-dark mt-1">{{ kpi_claimable }} <small class="text-muted" style="font-size: 0.8rem;">งาน</small></h3>
+                    </div>
+                    <div class="bg-info bg-opacity-10 text-info rounded-circle d-flex align-items-center justify-content-center" style="width: 50px; height: 50px;">
+                        <i class="fas fa-money-check-alt fs-4"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-3 col-md-6 col-12">
+            <div class="card border-0 shadow-sm h-100 rounded-4 bg-white" style="border-bottom: 4px solid #10b981 !important;">
+                <div class="card-body p-3 d-flex justify-content-between align-items-center">
+                    <div>
+                        <small class="text-success fw-bold text-uppercase">4. ประวัติส่งงานแล้ว</small>
+                        <h3 class="fw-bold mb-0 text-dark mt-1">{{ kpi_history }} <small class="text-muted" style="font-size: 0.8rem;">งาน</small></h3>
+                    </div>
+                    <div class="bg-success bg-opacity-10 text-success rounded-circle d-flex align-items-center justify-content-center" style="width: 50px; height: 50px;">
+                        <i class="fas fa-check-circle fs-4"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 🌟 ตารางคิวงานตะกร้ากลาง (ให้พนักงานกดรับงาน) -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm rounded-4 bg-white">
+                <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
+                    <h6 class="fw-bold mb-0 text-dark"><i class="fas fa-inbox me-2 text-primary"></i>ตะกร้างานเข้า (รอดำเนินการ: {{ pending_count }} งาน)</h6>
+                </div>
+                <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="bg-light text-secondary small text-uppercase sticky-top">
+                            <tr>
+                                <th class="ps-4">วันที่รับเรื่อง</th>
+                                <th>ชื่อลูกค้า / โปรเจกต์</th>
+                                <th>เซลส์ผู้ของาน</th>
+                                <th>สถานะปัจจุบัน</th>
+                                <th class="text-center text-primary fw-bold">พื้นที่ทำงาน</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for job in pending_jobs %}
+                            <tr>
+                                <td class="ps-4 text-muted small">{{ job.start_date|date:"d/m/Y" }}</td>
+                                <td>
+                                    <h6 class="mb-0 fw-bold text-dark">{{ job.product.name }}</h6>
+                                    <small class="text-muted"><i class="fas fa-user text-secondary me-1"></i> {{ job.customer_name|default:"-" }}</small><br>
+                                    <span class="badge bg-dark mt-1">{{ job.code }}</span>
+                                </td>
+                                <td>
+                                    <span class="fw-bold text-dark">{{ job.salesperson.name|default:"ไม่ระบุ" }}</span><br>
+                                    <small class="text-muted">({{ job.salesperson.branch.name|default:"-" }})</small>
+                                </td>
+                                <td>
+                                    {% if job.status == 'WAITING_BLUEPRINT' %}
+                                        <span class="badge bg-primary rounded-pill px-3"><i class="fas fa-pen-nib me-1"></i> รอเขียนแบบ</span>
+                                    {% else %}
+                                        <span class="badge bg-warning text-dark rounded-pill px-3"><i class="fas fa-calculator me-1"></i> รอถอดต้นทุน (BOM)</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center">
+                                    <!-- 🌟 ปุ่มพาเข้าหน้า Workspace เดิม (ดึง BOM ได้อย่างปลอดภัย) -->
+                                    <a href="{% url 'blueprint_workspace' job.id %}" class="btn btn-primary rounded-pill fw-bold shadow-sm px-4">
+                                        <i class="fas fa-tools me-1"></i> เปิดพื้นที่ทำงาน
+                                    </a>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="5" class="text-center py-5 text-muted">เก่งมาก! วันนี้คุณเคลียร์งานหมดแล้ว 🎉</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

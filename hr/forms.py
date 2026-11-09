@@ -70,6 +70,8 @@ class EmployeeForm(forms.ModelForm):
             'status': forms.Select(attrs={'class': 'form-select'}),
             'position': forms.Select(attrs={'class': 'form-select'}),
             'department': forms.Select(attrs={'class': 'form-select'}),
+            # ✅ เพิ่ม Widget ให้ช่องเลือกทีมผลิต
+            'production_team': forms.Select(attrs={'class': 'form-select border-warning shadow-sm'}),
             'start_date': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'dd/mm/yyyy', 'autocomplete': 'off'}),
             'social_security_id': forms.TextInput(attrs={'class': 'form-control', 'autocomplete': 'off'}),
             'bank_account_no': forms.TextInput(attrs={'class': 'form-control', 'autocomplete': 'off'}),

@@ -3,6 +3,9 @@ from . import views
 
 urlpatterns = [
     path('', views.sales_dashboard, name='sales_dashboard'),
+    # Dashboard สำหรับทีม Support ฝ่ายขาย
+    path('graphic/', views.graphic_dashboard, name='graphic_dashboard'),
+    path('blueprint/', views.blueprint_dashboard, name='blueprint_dashboard'),
     path('hub/', views.sales_hub, name='sales_hub'),
     path('convert-quote/<int:qt_id>/', views.convert_quote_to_invoice, name='convert_quote_to_invoice'),
 

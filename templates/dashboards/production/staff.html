@@ -1,0 +1,127 @@
+{% extends 'core/base.html' %}
+{% load humanize %}
+
+{% block content %}
+<style>
+    /* 🌟 Focus Mode: ปิดเมนูด้านบน เพื่อให้ช่างใช้งานบนมือถือได้เต็มจอ */
+    {% if not request.user.is_superuser %}
+    .navbar-nav { display: none !important; }
+    {% endif %}
+
+    .mobile-card { transition: transform 0.2s; border-left: 5px solid #0d6efd; }
+    .mobile-card:active { transform: scale(0.98); } /* เอฟเฟกต์ตอนเอานิ้วจิ้ม */
+</style>
+
+<div class="container-fluid py-3 px-3">
+    <!-- 🌟 Header -->
+    <div class="d-flex justify-content-between align-items-center mb-3 border-bottom pb-3">
+        <div>
+            <h4 class="fw-bold text-dark mb-1"><i class="fas fa-tools text-primary me-2"></i>คิวงานทีมของฉัน</h4>
+            <p class="text-muted small mb-0">ทีม: {{ request.user.employee.production_team.name|default:"ยังไม่ระบุทีม" }}</p>
+        </div>
+        <div>
+            <a href="{% url 'my_production_log' %}" class="btn btn-warning rounded-circle shadow-sm" style="width: 45px; height: 45px; display: flex; align-items: center; justify-content: center;">
+                <i class="fas fa-history text-dark"></i>
+            </a>
+        </div>
+    </div>
+
+    <!-- 🌟 รายการงาน (List View) สำหรับมือถือ -->
+    <div class="row g-3">
+        {% for order in orders %}
+            <div class="col-12">
+                <div class="card mobile-card shadow-sm border-0 rounded-4 {% if order.status == 'REWORK' %}border-danger{% endif %}">
+                    <div class="card-body p-3">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <span class="badge bg-dark fs-6 shadow-sm">{{ order.code }}</span>
+                            <!-- แจ้งเตือนถ้าโดนตีกลับ -->
+                            {% if order.status == 'REWORK' %}
+                                <span class="badge bg-danger rounded-pill px-3 py-1 animate__animated animate__pulse animate__infinite"><i class="fas fa-redo me-1"></i> ตีกลับแก้</span>
+                            {% else %}
+                                <span class="text-muted small"><i class="far fa-calendar-alt"></i> ส่ง: {{ order.delivery_date|date:"d/m" }}</span>
+                            {% endif %}
+                        </div>
+
+                        <h5 class="fw-bold text-dark mb-1">{{ order.product.name }}</h5>
+                        <div class="text-muted small mb-3"><i class="fas fa-user-circle me-1 text-secondary"></i> ลูกค้า: {{ order.customer_name|default:"-" }}</div>
+
+                        <!-- หลอดความคืบหน้า (Progress Bar) -->
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <small class="text-muted" style="font-size: 0.75rem;">เปอร์เซ็นต์งานเสร็จ</small>
+                                <small class="fw-bold {% if order.status == 'REWORK' %}text-danger{% else %}text-primary{% endif %}">{{ order.progress_percentage }}%</small>
+                            </div>
+                            <div class="progress" style="height: 8px;">
+                                <div class="progress-bar {% if order.status == 'REWORK' %}bg-danger{% else %}bg-primary{% endif %} progress-bar-striped progress-bar-animated" style="width: {{ order.progress_percentage }}%;"></div>
+                            </div>
+                        </div>
+
+                        <!-- ปุ่มใหญ่สำหรับจิ้มอัปเดตงาน -->
+                        <button type="button" class="btn btn-primary w-100 rounded-pill fw-bold shadow-sm py-2" data-bs-toggle="modal" data-bs-target="#updateModal-{{ order.id }}">
+                            <i class="fas fa-hand-pointer me-2"></i> จิ้มเพื่ออัปเดตงาน
+                        </button>
+                    </div>
+                </div>
+            </div>
+        {% empty %}
+            <div class="col-12 text-center py-5">
+                <i class="fas fa-mug-hot fa-4x text-muted opacity-25 mb-3"></i>
+                <h5 class="text-muted fw-bold">ยอดเยี่ยม! ตอนนี้คิวงานของทีมว่างครับ</h5>
+            </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- 🌟 นำ Modal อัปเดตงาน (ตัวเดิม) มาใส่ไว้ด้านล่างนี้ -->
+{% for order in orders %}
+    <div class="modal fade" id="updateModal-{{ order.id }}" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content rounded-4 border-0 shadow-lg">
+                <div class="modal-header bg-warning border-0 py-3">
+                     <h5 class="modal-title fw-bold text-dark"><i class="fas fa-edit me-2"></i> อัปเดตงาน: <span class="text-primary">{{ order.code }}</span></h5>
+                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4 bg-light">
+                    
+                    {% if order.status == 'REWORK' and order.qc_logs.last %}
+                        <div class="alert alert-danger bg-white border border-danger border-2 p-3 mb-4 rounded-3 shadow-sm">
+                            <h6 class="fw-bold text-danger mb-2"><i class="fas fa-exclamation-triangle me-1"></i> QC สั่งแก้ (รอบ {{ order.rework_count }})</h6>
+                            <p class="small text-dark mb-2">{{ order.qc_logs.last.comments|default:"ไม่มีคอมเมนต์" }}</p>
+                            <a href="{% url 'media_hub' order.id %}" target="_blank" class="btn btn-danger btn-sm w-100 rounded-pill fw-bold shadow-sm mt-2">
+                                <i class="fas fa-photo-video me-1"></i> ดูรูปปัญหา
+                            </a>
+                        </div>
+                    {% endif %}
+
+                    <form method="POST" action="{% url 'update_production_board' order.id %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="update_progress">
+                        <h6 class="fw-bold text-dark mb-3">ติ๊กส่วนที่ทำเสร็จแล้ว:</h6>
+                        
+                        <div class="bg-white p-3 rounded-3 border mb-4">
+                            {% for status in prod_statuses %}
+                            <div class="form-check mb-3">
+                                <!-- ขยายขนาด Checkbox ให้จิ้มง่าย -->
+                                <input class="form-check-input" type="checkbox" name="completed_departments" value="{{ status.id }}" id="dept_{{ order.id }}_{{ status.id }}" {% if status in order.completed_departments.all %}checked{% endif %} style="transform: scale(1.5); margin-right: 10px;">
+                                <label class="form-check-label ms-2 fw-bold text-dark fs-6" for="dept_{{ order.id }}_{{ status.id }}">{{ status.name }}</label>
+                            </div>
+                            {% endfor %}
+                        </div>
+
+                        <button type="submit" class="btn btn-warning w-100 rounded-pill py-3 fw-bold shadow-sm text-dark fs-5"><i class="fas fa-save me-2"></i> บันทึกงาน</button>
+                    </form>
+
+                    <hr class="my-4">
+
+                    <form action="{% url 'submit_to_qc' order.id %}" method="POST">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-dark w-100 fw-bold rounded-pill py-3 shadow-sm" onclick="return confirm('ส่งงานให้ QC ตรวจสอบใช่หรือไม่?');">
+                            <i class="fas fa-paper-plane me-1"></i> ส่งให้ QC ตรวจ
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endfor %}
+{% endblock %}

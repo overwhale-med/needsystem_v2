@@ -114,6 +114,11 @@
                             <div class="col-md-6"><label class="form-label fw-bold">สถานะภาพ</label>{{ form.status }}</div>
                             <div class="col-md-6"><label class="form-label fw-bold">ตำแหน่ง</label>{{ form.position }}</div>
                             <div class="col-md-6"><label class="form-label fw-bold">แผนก</label>{{ form.department }}</div>
+                            <!-- ✅ เพิ่มช่องเลือกทีมช่างผลิตตรงนี้ -->
+                            <div class="col-md-12 bg-light p-3 rounded border border-warning mt-3 mb-2">
+                                <label class="form-label fw-bold text-dark"><i class="fas fa-hard-hat text-warning me-2"></i>สังกัดทีมช่างผลิต (สำหรับพนักงานฝ่ายผลิต)</label>
+                                {{ form.production_team }}
+                            </div>
                             <div class="col-md-6"><label class="form-label fw-bold">เงินเดือน (บาท)</label>{{ form.salary }}</div>
                             <div class="col-md-6"><label class="form-label fw-bold">เริ่มงานวันที่</label>{{ form.start_date }}</div>
                             <div class="col-md-6"><label class="form-label fw-bold text-primary">เลขประกันสังคม</label>{{ form.social_security_id }}</div>
@@ -150,7 +155,7 @@
         const dateConfig = { dateFormat: "Y-m-d", altInput: true, altFormat: "d/m/Y", allowInput: true };
         flatpickr("#id_start_date", dateConfig);
         flatpickr("#id_birth_date", dateConfig);
-        
+
         const toggleUser = document.getElementById('id_create_user_account');
         const userSection = document.getElementById('user-account-section');
         if (toggleUser && userSection) {
@@ -178,7 +183,7 @@
             }
             salaryInput.value = formatMoney(salaryInput.value);
             salaryInput.addEventListener('focus', function() {
-                let val = this.value.replace(/,/g, ''); 
+                let val = this.value.replace(/,/g, '');
                 this.value = (val === '0.00' || val === '0') ? '' : val;
             });
             salaryInput.addEventListener('blur', function() {

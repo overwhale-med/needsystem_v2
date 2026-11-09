@@ -14,7 +14,7 @@ from datetime import timedelta
 # Models
 from sales.models import Quotation, POSOrder, Invoice, CommissionAllocation
 from hr.models import Department, Employee
-from manufacturing.models import ProductionOrder, MfgBranch
+from manufacturing.models import ProductionOrder, MfgBranch, BlueprintClaim
 from master_data.models import CompanyInfo
 
 # Services
@@ -329,4 +329,92 @@ def sales_timeline(request):
         'chart1_pending_json': json.dumps(chart1_pending), 'chart1_delivered_json': json.dumps(chart1_delivered),
         'chart2_labels_json': json.dumps(chart2_labels), 'chart2_data_json': json.dumps(chart2_data),
         'chart2_colors_json': json.dumps(chart2_bg_colors[:len(branches)]),
+    })
+
+# ==========================================
+# 🎨 แดชบอร์ดแผนกกราฟิกและสื่อโฆษณา (Graphic Team)
+# ==========================================
+@login_required
+def graphic_dashboard(request):
+    user_groups = list(request.user.groups.values_list('name', flat=True))
+
+    # 1. เช็กสิทธิ์ว่าเป็นระดับหัวหน้าหรือไม่
+    is_supervisor = False
+    if request.user.is_superuser or 'Executive' in user_groups or 'Manager_Team' in user_groups or 'Supervisor_Team' in user_groups:
+        is_supervisor = True
+
+    # 2. เลือกโหลดหน้าจอตามระดับสิทธิ์
+    if is_supervisor:
+        template_name = 'dashboards/graphic/supervisor.html'
+    else:
+        template_name = 'dashboards/graphic/staff.html'
+
+    # ส่งตัวแปรไปให้หน้า HTML
+    return render(request, template_name, {
+        'is_supervisor': is_supervisor
+        # หมายเหตุ: ข้อมูลคิวงานกราฟิกจะถูกเพิ่มเข้ามา หลังจากเราทำระบบ "ใบสั่งงานกราฟิก" ครับ
+    })
+
+# ==========================================
+# 📐 แดชบอร์ดแผนกออกแบบและประเมินราคา (Blueprint Team)
+# ==========================================
+from manufacturing.models import ProductionOrder, BlueprintClaim
+
+@login_required
+def blueprint_dashboard(request):
+    user_groups = list(request.user.groups.values_list('name', flat=True))
+    current_emp = getattr(request.user, 'employee', None)
+
+    # 1. เช็กสิทธิ์ว่าเป็นระดับหัวหน้าหรือไม่
+    is_supervisor = False
+    if request.user.is_superuser or 'Executive' in user_groups or 'Manager_Team' in user_groups or 'Supervisor_Team' in user_groups:
+        is_supervisor = True
+
+    # 2. ดึงข้อมูล "ตะกร้างานเข้า" (งานที่รอเขียนแบบ หรือกำลังดึง BOM)
+    pending_jobs = ProductionOrder.objects.select_related(
+        'product', 'salesperson', 'salesperson__branch'
+    ).filter(
+        status__in=['WAITING_BLUEPRINT', 'PLANNED'],
+        is_closed=False
+    ).order_by('start_date')
+
+    # 3. ดึงข้อมูล "ประวัติการอนุมัติแบบ"
+    history_jobs = ProductionOrder.objects.select_related(
+        'product', 'salesperson', 'blueprint_approved_by', 'blueprint_claim'
+    ).filter(blueprint_approved_at__isnull=False).order_by('-blueprint_approved_at')[:50]
+
+    # 4. ดึงข้อมูล "งานที่พร้อมตั้งเบิกเงิน" (เฉพาะของพนักงานคนนั้น)
+    claimable_jobs = ProductionOrder.objects.select_related(
+        'salesperson', 'quotation_ref', 'quotation_ref__invoice'
+    ).filter(
+        blueprint_approved_by=current_emp,
+        blueprint_claim__isnull=True,
+        quotation_ref__invoice__isnull=False
+    ).order_by('blueprint_approved_at')
+
+    # 5. เลือกโหลดหน้าจอตามระดับสิทธิ์
+    if is_supervisor:
+        template_name = 'dashboards/blueprint/supervisor.html'
+    else:
+        template_name = 'dashboards/blueprint/staff.html'
+
+    # ==========================================
+    # 🌟 [NEW] คำนวณตัวเลขสำหรับ 4 กล่อง KPI
+    # ==========================================
+    kpi_waiting_blueprint = pending_jobs.filter(status='WAITING_BLUEPRINT').count()
+    kpi_waiting_bom = pending_jobs.filter(status='PLANNED').count()
+    kpi_claimable = claimable_jobs.count()
+    kpi_history = history_jobs.count()
+
+    # ส่งตัวแปรทั้งหมดไปให้หน้า HTML ใช้งาน
+    return render(request, template_name, {
+        'is_supervisor': is_supervisor,
+        'pending_jobs': pending_jobs,
+        'history_jobs': history_jobs,
+        'claimable_jobs': claimable_jobs,
+        'pending_count': pending_jobs.count(),
+        'kpi_waiting_blueprint': kpi_waiting_blueprint,
+        'kpi_waiting_bom': kpi_waiting_bom,
+        'kpi_claimable': kpi_claimable,
+        'kpi_history': kpi_history,
     })

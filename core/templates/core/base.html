@@ -123,12 +123,16 @@
                     {% endif %}
 
                     <!-- ระบบผลิต -->
-                    {% if request.user.is_superuser or "Executive" in user_groups_str or "Production_Team" in user_groups_str or "Production" in user_groups_str or "Planner_Team" in user_groups_str or "Blueprint_Team" in user_groups_str or "QC_Team" in user_groups_str or "Logistics_Team" in user_groups_str %}
+                    {% if request.user.is_superuser or "Executive" in user_groups_str or "Production_Team" in user_groups_str or "Production" in user_groups_str or "Planner_Team" in user_groups_str or "Blueprint_Team" in user_groups_str or "QC_Team" in user_groups_str or "Logistics_Team" in user_groups_str or "Control_Team" in user_groups_str %}
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" id="productionDropdown" role="button" data-bs-toggle="dropdown">
                             <i class="fas fa-industry me-1"></i> ระบบผลิต
                         </a>
                         <ul class="dropdown-menu border-0 shadow-lg">
+                            {% if request.user.is_superuser or "Executive" in user_groups_str or "Control_Team" in user_groups_str %}
+                            <li><a class="dropdown-item fw-bold text-primary" style="background-color: #f8f9fa;" href="{% url 'control_dashboard' %}"><i class="fas fa-chess-board me-2 text-primary"></i> หอคอยควบคุม (Control Dashboard)</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            {% endif %}
                             {% if request.user.is_superuser or "Executive" in user_groups_str or "Planner_Team" in user_groups_str %}
                             <li><a class="dropdown-item" href="{% url 'planner_board' %}"><i class="fas fa-clipboard-list me-2 text-info"></i> กระดานวางแผนการผลิต</a></li>
                             <li><a class="dropdown-item" href="{% url 'production_list' %}"><i class="fas fa-table me-2 text-secondary"></i> กระดานควบคุมงานผลิต (ดูภาพรวม)</a></li>

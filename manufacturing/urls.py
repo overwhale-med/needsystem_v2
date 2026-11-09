@@ -7,10 +7,13 @@ urlpatterns = [
     # ==========================
     path('control/dashboard/', dashboards.control_dashboard, name='control_dashboard'),
     path('production/planner/', dashboards.planner_board, name='planner_board'),
-    path('production/head-board/', dashboards.production_head_board, name='production_head_board'),
+    path('production/head-board/', dashboards.production_dashboard, name='production_head_board'),
     path('production/qc-board/', dashboards.qc_board, name='qc_board'),
     path('production/logistics-board/', dashboards.logistics_board, name='logistics_board'),
     path('production/service-board/', dashboards.service_board, name='service_board'),
+    path('blueprint/dashboard/', dashboards.blueprint_dashboard, name='blueprint_dashboard'),
+    path('purchasing/dashboard/', dashboards.purchasing_dashboard, name='purchasing_dashboard'),
+    path('inventory/dashboard/', dashboards.inventory_dashboard, name='inventory_board'),
 
     # ==========================
     # 🏭 หมวดฝ่ายผลิตและแบบแปลน (Production)
@@ -32,7 +35,7 @@ urlpatterns = [
     path('production/my-qc-log/', production.my_qc_log, name='my_qc_log'),
     path('production/<int:pk>/add-material/', production.add_additional_material, name='add_additional_material'),
     path('production/material/<int:pk>/delete/', production.delete_production_material, name='delete_production_material'),
-    
+
     # -- แบบแปลน (Blueprint Hub) --
     path('production/blueprint-hub/', production.blueprint_hub, name='blueprint_hub'),
     path('production/blueprint-hub/<int:pk>/workspace/', production.blueprint_workspace, name='blueprint_workspace'),
@@ -46,7 +49,7 @@ urlpatterns = [
     # ==========================
     # 📦 หมวดคลังสินค้าและจัดซื้อ (Inventory & Purchasing)
     # ==========================
-    path('production/inventory/', inventory.inventory_board, name='inventory_board'),
+    # path('production/inventory/', inventory.inventory_board, name='inventory_board'),
     path('production/<int:pk>/materials-ready/', inventory.materials_ready, name='materials_ready'),
     path('prepare-purchase/', inventory.ppo_prepare, name='ppo_prepare'),
 
