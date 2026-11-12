@@ -1,0 +1,68 @@
+{% extends 'core/base.html' %}
+{% block content %}
+<div class="container-fluid py-4 px-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="fw-bold mb-1 text-dark"><i class="fas fa-history text-warning me-2"></i> ประวัติการทำงานของทีมฉัน</h4>
+            <p class="text-muted small mb-0">รายการใบสั่งผลิตที่ดำเนินการเสร็จสิ้น (ทีม: <strong class="text-warning text-darken">{{ user.employee.production_team.name|default:"ไม่ระบุทีม" }}</strong>)</p>
+        </div>
+        <div>
+            <a href="{% url 'production_head_board' %}" class="btn btn-outline-secondary rounded-pill px-4 fw-bold shadow-sm bg-white">
+                <i class="fas fa-arrow-left me-1"></i> กลับกระดานช่าง
+            </a>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm rounded-4">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="text-secondary small text-uppercase bg-light">
+                    <tr>
+                        <th class="ps-4 py-3 fw-bold">เลขที่ JOB</th>
+                        <th class="py-3 fw-bold">ลูกค้า / แบบบ้าน</th>
+                        <th class="py-3 fw-bold">วันที่เริ่ม - วันที่เสร็จ</th>
+                        <th class="text-center py-3 fw-bold">สถิติตีกลับ (Rework)</th>
+                        <th class="text-center py-3 fw-bold">แฟ้มผลงาน</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for order in orders %}
+                    <tr>
+                        <td class="ps-4 py-3">
+                            <span class="badge bg-primary fs-6 shadow-sm">{{ order.code }}</span>
+                        </td>
+                        <td>
+                            <div class="fw-bold text-dark">{{ order.customer_name|default:"-" }}</div>
+                            <div class="text-muted small"><i class="fas fa-home me-1 opacity-50"></i>{{ order.product.name }}</div>
+                        </td>
+                        <td>
+                            <div class="text-dark small"><i class="far fa-calendar-alt text-secondary me-1"></i>เริ่ม: {{ order.start_date|date:"d/m/Y" }}</div>
+                            <div class="text-success small fw-bold"><i class="far fa-calendar-check me-1"></i>เสร็จ: {{ order.finish_date|date:"d/m/Y"|default:"-" }}</div>
+                        </td>
+                        <td class="text-center">
+                            {% if order.rework_count > 0 %}
+                                <span class="badge bg-danger rounded-pill"><i class="fas fa-redo me-1"></i> {{ order.rework_count }} ครั้ง</span>
+                            {% else %}
+                                <span class="badge bg-success rounded-pill"><i class="fas fa-check me-1"></i> ผ่านฉลุย</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            <a href="{% url 'media_hub' order.id %}" target="_blank" class="btn btn-outline-primary rounded-pill fw-bold px-3 shadow-sm" style="font-size: 0.8rem;">
+                                <i class="fas fa-photo-video me-1"></i> เปิดแฟ้ม
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="text-center py-5 opacity-50">
+                            <i class="fas fa-clipboard-check fa-3x text-muted mb-3"></i>
+                            <h6 class="text-muted">ยังไม่มีประวัติการทำงานที่เสร็จสิ้น</h6>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

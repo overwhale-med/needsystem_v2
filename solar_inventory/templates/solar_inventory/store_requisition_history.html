@@ -1,0 +1,79 @@
+{% extends 'core/base.html' %}
+{% load humanize %}
+
+{% block content %}
+<div class="container py-4 mb-5">
+    <div class="d-flex justify-content-between align-items-end mb-4">
+        <div>
+            <h4 class="fw-bold mb-1 text-dark"><i class="fas fa-history text-success me-2"></i>ประวัติการเบิกจ่าย (GI History)</h4>
+            <p class="text-muted small mb-0">รายการใบตัดสต็อกและเบิกวัสดุสำหรับงานโซล่าเซลล์</p>
+        </div>
+        <a href="{% url 'store_requisition_list' %}" class="btn btn-outline-secondary rounded-pill px-4 fw-bold shadow-sm">
+            <i class="fas fa-arrow-left me-2"></i> กลับหน้ารายการขอเบิก
+        </a>
+    </div>
+
+    <div class="card border-0 shadow-sm rounded-4 bg-white overflow-hidden">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="bg-light text-secondary small text-uppercase border-bottom">
+                        <tr>
+                            <th class="ps-4 py-3 border-0">เลขที่เอกสารใบเบิก</th>
+                            <th class="py-3 border-0">อ้างอิง JOB</th>
+                            <th class="py-3 border-0">วันที่ตัดสต็อก</th>
+                            <th class="py-3 border-0">พนักงาน (สโตร์)</th>
+                            <th class="py-3 border-0">รายละเอียด</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for doc in page_obj %}
+                        <tr class="border-bottom">
+                            <td class="ps-4 py-3 fw-bold">
+                                <a href="{% url 'store_print_gi_doc' doc.doc_no %}" target="_blank" class="text-primary text-decoration-none" title="คลิกเพื่อดูรายการวัสดุ">
+                                    <i class="fas fa-file-alt me-1"></i> {{ doc.doc_no }}
+                                </a>
+                            </td>
+                            <td class="py-3 text-primary fw-bold">{{ doc.reference }}</td>
+                            <td class="py-3 text-muted"><i class="far fa-calendar-alt me-1"></i> {{ doc.created_at|date:"d/m/Y H:i" }}</td>
+                            <td class="py-3 text-dark"><i class="fas fa-user-circle text-muted me-1"></i> {{ doc.created_by.first_name|default:doc.created_by.username }}</td>
+                            <td class="py-3 text-muted small">{{ doc.description }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5" class="text-center text-muted py-5">
+                                <i class="fas fa-box-open fa-3x mb-3 opacity-25"></i><br>
+                                ไม่มีประวัติการเบิกจ่าย
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ส่วนแบ่งหน้า (Pagination) -->
+        {% if page_obj.has_other_pages %}
+        <div class="card-footer bg-white border-top py-3 d-flex justify-content-center">
+            <ul class="pagination pagination-sm mb-0">
+                {% if page_obj.has_previous %}
+                    <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}">ก่อนหน้า</a></li>
+                {% endif %}
+
+                {% for i in page_obj.paginator.page_range %}
+                    {% if page_obj.number == i %}
+                        <li class="page-item active"><span class="page-link">{{ i }}</span></li>
+                    {% else %}
+                        <li class="page-item"><a class="page-link" href="?page={{ i }}">{{ i }}</a></li>
+                    {% endif %}
+                {% endfor %}
+
+                {% if page_obj.has_next %}
+                    <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}">ถัดไป</a></li>
+                {% endif %}
+            </ul>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

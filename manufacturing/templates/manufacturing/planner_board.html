@@ -8,7 +8,12 @@
 <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css" />
 
 <style>
-    /* 🌟 สไตล์แถบค้นหาแบบแคปซูล (Pill-shaped Search Bar) 🌟 */
+    /* 🌟 Focus Mode: ซ่อนเมนูด้านบนสำหรับฝ่ายผลิตทั้งหมด (ผู้จัดการ, หัวหน้า, พนักงาน) 🌟 */
+    {% if not request.user.is_superuser and "Executive" not in request.user.groups.all.0.name %}
+    .navbar-nav { display: none !important; }
+    {% endif %}
+
+    /* 🌟 สไตล์แถบค้นหาแบบแคปซูล (Pill-shaped Search Bar) ของเดิม... 🌟 */
     .search-pill-container {
         display: flex; align-items: center; background-color: #f8f9fa; border: 1px solid #ced4da;
         border-radius: 50px; padding: 4px 8px; box-shadow: inset 0 1px 2px rgba(0,0,0,0.05);
@@ -41,17 +46,12 @@
             <p class="text-muted small mb-0">บริหารจัดการคิวงานและติดตามความคืบหน้าการผลิตแบบ Real-time</p>
         </div>
         <div class="d-flex gap-2">
-            <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary rounded-pill px-4 fw-bold shadow-sm bg-white">
-                <i class="fas fa-home me-1"></i> กลับDashboard
-            </a>
-            <a href="{% url 'production_create' %}" class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm">
-                <i class="fas fa-plus me-1"></i> สร้างJOB(ตู้พร้อมยก)
-            </a>
-            <a href="{% url 'blueprint_hub' %}" class="btn btn-warning text-dark rounded-pill px-4 fw-bold shadow-sm">
-                <i class="fas fa-drafting-compass me-1"></i> ศูนย์ตรวจสอบแบบแปลน
-            </a>
             <a href="{% url 'production_list' %}" class="btn btn-outline-secondary rounded-pill px-4 fw-bold shadow-sm bg-white">
                 <i class="fas fa-table me-1"></i> หน้าควบคุมการผลิต
+            </a>
+
+            <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary rounded-pill px-4 fw-bold shadow-sm bg-white">
+                <i class="fas fa-home me-1"></i> กลับDashboard
             </a>
         </div>
     </div>

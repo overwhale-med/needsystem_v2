@@ -7,7 +7,6 @@
             <h4 class="fw-bold mb-1 text-dark"><i class="fas fa-money-check-alt text-danger me-2"></i>รายการเบิกค่าใช้จ่าย (Expense)</h4>
             <p class="text-muted small mb-0">ระบบขออนุมัติเบิกจ่ายค่าเดินทางและค่าใช้จ่ายหน้างาน</p>
         </div>
-        <!-- 🌟 [FIXED] ซ่อนปุ่มทำเรื่องเบิกเงินจากหน้ารวม บังคับให้ช่างกดจากหน้าใบงานเท่านั้น 🌟 -->
         {% if user.is_superuser or user.groups.all.0.name == 'Executive' or user.groups.all.0.name == 'Accounting' or user.groups.all.0.name == 'Center' %}
         <a href="{% url 'solar_expense_create' 0 %}" class="btn btn-danger rounded-pill px-4 fw-bold shadow-sm">
             <i class="fas fa-plus me-2"></i>ทำเรื่องเบิกเงิน
@@ -26,7 +25,9 @@
                         <th class="py-3 border-bottom-0 text-end">ยอดเงินเบิก</th>
                         <th class="py-3 border-bottom-0">สลิป/ใบเสร็จ</th>
                         <th class="py-3 border-bottom-0">สถานะ</th>
-                        <th class="pe-4 py-3 border-bottom-0">จัดการ / ผู้อนุมัติ</th>
+                        <!-- 🌟 [UPDATE] แยกหัวข้อผู้อนุมัติ และ จัดการ ออกจากกัน 🌟 -->
+                        <th class="py-3 border-bottom-0">ผู้อนุมัติ</th>
+                        <th class="pe-4 py-3 border-bottom-0">จัดการ</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -41,52 +42,69 @@
                                 <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#slipModal{{ exp.id }}">
                                     <i class="fas fa-images me-1"></i> ดูรูป ({{ exp.slips.count }})
                                 </button>
-                            {% elif exp.slip_image %} <!-- เผื่อของเก่าที่ใช้ระบบเดิมยังค้างอยู่ -->
+                            {% elif exp.slip_image %}
                                 <a href="{{ exp.slip_image.url }}" target="_blank" class="badge bg-secondary text-decoration-none"><i class="fas fa-image me-1"></i> ดูรูป</a>
                             {% else %}
                                 -
                             {% endif %}
                         </td>
+                        
+                        <!-- 🌟 [UPDATE] คอลัมน์สถานะ 🌟 -->
                         <td>
-                            {% if exp.status == 'PENDING' %}<span class="badge bg-warning text-dark">รออนุมัติ</span>
-                            {% elif exp.status == 'APPROVED' %}<span class="badge bg-primary">อนุมัติแล้ว</span>
-                            {% elif exp.status == 'PAID' %}
-                                <span class="badge bg-success mb-1">จ่ายแล้ว</span>
-                                <!-- 🌟 [NEW] ปุ่มกดดูสลิปโอนเงิน (แสดงเฉพาะตอนจ่ายเงินและแนบสลิปแล้ว) 🌟 -->
-                                {% if exp.transfer_slip %}
-                                    <br><a href="{{ exp.transfer_slip.url }}" target="_blank" class="badge bg-success bg-opacity-75 text-decoration-none shadow-sm"><i class="fas fa-hand-holding-usd me-1"></i> สลิปเงินเข้า</a>
+                            <div class="d-flex align-items-center justify-content-center gap-2">
+                                {% if exp.status == 'PENDING' %}
+                                    <span class="badge bg-warning text-dark">รออนุมัติ</span>
+                                {% elif exp.status == 'APPROVED' %}
+                                    <span class="badge bg-primary">อนุมัติแล้ว</span>
+                                {% elif exp.status == 'PAID' %}
+                                    <span class="badge bg-success">จ่ายแล้ว</span>
+                                    {% if exp.transfer_slip %}
+                                        <!-- เปลี่ยนปุ่มเป็นรูปขนาดย่อ เมื่อกดจะแสดง Modal -->
+                                        <img src="{{ exp.transfer_slip.url }}" class="rounded shadow-sm border" style="width: 35px; height: 35px; object-fit: cover; cursor: pointer; transition: transform 0.2s;" alt="สลิปเงินเข้า" data-bs-toggle="modal" data-bs-target="#transferModal{{ exp.id }}" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'" title="คลิกเพื่อดูสลิปเงินเข้า">
+                                    {% endif %}
+                                {% else %}
+                                    <span class="badge bg-danger">ไม่อนุมัติ</span>
                                 {% endif %}
-                            {% else %}<span class="badge bg-danger">ไม่อนุมัติ</span>{% endif %}
+                            </div>
                         </td>
-                        <td class="pe-4">
-                            <!-- แสดงปุ่มอนุมัติ (ถ้ามีสิทธิ์) หรือชื่อผู้อนุมัติ -->
+
+                        <!-- 🌟 [UPDATE] แยกคอลัมน์ ผู้อนุมัติ 🌟 -->
+                        <td>
                             {% if exp.status == 'PENDING' and is_manager_or_acc %}
-                                <form method="POST" action="{% url 'solar_expense_approve' exp.id %}" class="d-inline-block me-1 mb-1">
+                                <form method="POST" action="{% url 'solar_expense_approve' exp.id %}" class="d-inline-block">
                                     {% csrf_token %}
                                     <button type="submit" class="btn btn-sm btn-success rounded-pill fw-bold" onclick="return confirm('ยืนยันการอนุมัติยอดเบิกนี้?');">อนุมัติ</button>
                                 </form>
                             {% elif exp.status != 'PENDING' %}
-                                <span class="text-muted small me-2 d-block mb-1">
+                                <span class="text-muted small fw-bold">
                                     <i class="fas fa-check-circle text-success me-1"></i>{{ exp.approver.first_name|default:"-" }}
                                 </span>
+                            {% else %}
+                                -
                             {% endif %}
+                        </td>
 
-                            <!-- 🌟 [NEW] ปุ่มพิมพ์ใบขออนุมัติเบิกเงิน (โชว์ตลอดเพื่อให้พิมพ์ได้เสมอ) 🌟 -->
-                            <a href="{% url 'solar_expense_print' exp.id %}" target="_blank" class="btn btn-sm btn-outline-secondary rounded-pill px-3 mt-1" title="พิมพ์ใบเบิกเงิน">
+                        <!-- 🌟 [UPDATE] แยกคอลัมน์ จัดการ (ปุ่มพิมพ์) 🌟 -->
+                        <td class="pe-4">
+                            <a href="{% url 'solar_expense_print' exp.id %}" target="_blank" class="btn btn-sm btn-outline-secondary rounded-pill px-3" title="พิมพ์ใบเบิกเงิน">
                                 <i class="fas fa-print"></i> พิมพ์
                             </a>
                         </td>
                     </tr>
                     {% empty %}
-                    <tr><td colspan="7" class="text-center py-5 text-muted">ยังไม่มีรายการขอเบิกค่าใช้จ่าย</td></tr>
+                    <tr><td colspan="8" class="text-center py-5 text-muted">ยังไม่มีรายการขอเบิกค่าใช้จ่าย</td></tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
     </div>
 </div>
-<!-- 🌟 Modal สำหรับสไลด์โชว์สลิป/ใบเสร็จ 🌟 -->
+
+<!-- ========================================== -->
+<!-- 🌟 ส่วนของ Modals (หน้าต่างป็อปอัปภาพ) 🌟 -->
+<!-- ========================================== -->
 {% for exp in page_obj %}
+    <!-- 1. Modal ใบเสร็จ (ของเดิม) -->
     {% if exp.slips.count > 0 %}
     <div class="modal fade" id="slipModal{{ exp.id }}" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered modal-lg">
@@ -96,7 +114,6 @@
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body p-0 bg-light">
-                    <!-- Bootstrap Carousel (ระบบสไลด์ภาพ) -->
                     <div id="carousel{{ exp.id }}" class="carousel slide" data-bs-ride="false">
                         <div class="carousel-inner text-center">
                             {% for slip in exp.slips.all %}
@@ -106,19 +123,32 @@
                                 </div>
                             {% endfor %}
                         </div>
-
-                        <!-- ปุ่มลูกศรเลื่อนซ้าย-ขวา (จะโชว์ก็ต่อเมื่อมีมากกว่า 1 รูป) -->
                         {% if exp.slips.count > 1 %}
                             <button class="carousel-control-prev" type="button" data-bs-target="#carousel{{ exp.id }}" data-bs-slide="prev">
                                 <span class="carousel-control-prev-icon bg-dark rounded-circle p-3" aria-hidden="true"></span>
-                                <span class="visually-hidden">Previous</span>
                             </button>
                             <button class="carousel-control-next" type="button" data-bs-target="#carousel{{ exp.id }}" data-bs-slide="next">
                                 <span class="carousel-control-next-icon bg-dark rounded-circle p-3" aria-hidden="true"></span>
-                                <span class="visually-hidden">Next</span>
                             </button>
                         {% endif %}
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- 🌟 [NEW] 2. Modal ดูสลิปเงินเข้า (คลิกขยายภาพ และคลิกปิดได้ทันที) 🌟 -->
+    {% if exp.transfer_slip %}
+    <div class="modal fade" id="transferModal{{ exp.id }}" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <!-- ปรับให้พื้นหลัง Modal โปร่งใส และกดคลิกที่รูปเพื่อปิดได้เลย -->
+            <div class="modal-content bg-transparent border-0 shadow-none" style="cursor: pointer;" data-bs-dismiss="modal" title="คลิกเพื่อปิดภาพ">
+                <div class="modal-header border-0 pb-0 justify-content-end">
+                    <button type="button" class="btn-close btn-close-white fs-4" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body text-center p-0 mt-2">
+                    <img src="{{ exp.transfer_slip.url }}" class="img-fluid rounded-4 shadow-lg border border-3 border-white" style="max-height: 85vh; object-fit: contain;" alt="สลิปเงินเข้า">
                 </div>
             </div>
         </div>

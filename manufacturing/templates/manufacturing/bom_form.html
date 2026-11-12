@@ -17,7 +17,7 @@
 
     <form method="POST" id="bom-form">
         {% csrf_token %}
-        
+
         <div class="card shadow-sm border-0 rounded-4 mb-4">
             <div class="card-header bg-white border-bottom py-3">
                 <h6 class="fw-bold mb-0 text-dark"><i class="fas fa-home me-2 text-warning"></i>ข้อมูลสินค้าสำเร็จรูป (FG)</h6>
@@ -43,17 +43,22 @@
         </div>
 
         <div class="card shadow-sm border-0 rounded-4 mb-4 overflow-hidden">
-            <div class="card-header bg-light border-bottom py-3">
+            <!-- 🌟 [UPDATE] จัดโครงสร้างหัวข้อตารางและป้ายแสดงยอดรวมต้นทุน -->
+            <div class="card-header bg-light border-bottom py-3 d-flex justify-content-between align-items-center">
                 <h6 class="fw-bold mb-0 text-dark"><i class="fas fa-cubes me-2"></i>รายการวัตถุดิบ (Raw Materials) ต่อ 1 หน่วยผลิต</h6>
+                <span class="badge bg-primary rounded-pill px-3 py-2 shadow-sm" id="grand-total-badge" style="font-size: 0.95rem;">ต้นทุนรวม: 0.00 บาท</span>
             </div>
             <div class="table-responsive">
                 {{ formset.management_form }}
                 <table class="table table-hover align-middle mb-0" id="items-table">
+                    <!-- 🌟 [UPDATE] ปรับขนาดคอลัมน์ใหม่ เพื่อแทรก ราคา/หน่วย และ จำนวนเงิน -->
                     <thead class="text-secondary" style="font-size: 0.85rem; text-transform: uppercase;">
                         <tr>
-                            <th class="ps-4 py-3 border-0" style="width: 60%;">วัตถุดิบ (Raw Mat)</th>
-                            <th class="py-3 border-0 text-center" style="width: 25%;">จำนวนที่ใช้ (ต่อ 1 หน่วย)</th>
-                            <th class="pe-4 py-3 border-0 text-center" style="width: 15%;">ลบ</th>
+                            <th class="ps-4 py-3 border-0" style="width: 40%;">วัตถุดิบ (Raw Mat)</th>
+                            <th class="py-3 border-0 text-end" style="width: 15%;">ราคา/หน่วย</th>
+                            <th class="py-3 border-0 text-center" style="width: 20%;">จำนวนที่ใช้</th>
+                            <th class="py-3 border-0 text-end" style="width: 15%;">จำนวนเงิน</th>
+                            <th class="pe-4 py-3 border-0 text-center" style="width: 10%;">ลบ</th>
                         </tr>
                     </thead>
                     <tbody id="formset-container">
@@ -65,7 +70,18 @@
                                     {{ item_form.raw_material }}
                                 </div>
                             </td>
+                            <!-- 🌟 [NEW] ช่องราคาต่อหน่วย -->
+                            <td class="text-end align-middle">
+                                <span class="unit-price fw-bold text-secondary" data-price="{% if item_form.instance.raw_material %}{{ item_form.instance.raw_material.cost_price|default:0 }}{% else %}0{% endif %}">
+                                    {% if item_form.instance.raw_material %}{{ item_form.instance.raw_material.cost_price|default:0|floatformat:2 }}{% else %}0.00{% endif %}
+                                </span>
+                            </td>
+                            <!-- ช่องกรอกจำนวน -->
                             <td>{{ item_form.quantity }}</td>
+                            <!-- 🌟 [NEW] ช่องรวมจำนวนเงินของบรรทัดนี้ -->
+                            <td class="text-end align-middle">
+                                <span class="row-total fw-bold text-dark">0.00</span>
+                            </td>
                             <td class="pe-4 text-center align-middle">
                                 <div class="d-none">
                                     {{ item_form.DELETE }}
@@ -94,6 +110,7 @@
     </form>
 </div>
 
+<!-- 🌟 [UPDATE] โครงสร้างบรรทัดเปล่าสำหรับกดปุ่มเพิ่มรายการ -->
 <table style="display: none;">
     <tbody id="empty-form">
         <tr class="item-row">
@@ -103,7 +120,13 @@
                     {{ formset.empty_form.raw_material }}
                 </div>
             </td>
+            <td class="text-end align-middle">
+                <span class="unit-price fw-bold text-secondary" data-price="0">0.00</span>
+            </td>
             <td>{{ formset.empty_form.quantity }}</td>
+            <td class="text-end align-middle">
+                <span class="row-total fw-bold text-dark">0.00</span>
+            </td>
             <td class="pe-4 text-center align-middle">
                 <div class="d-none">
                     {{ formset.empty_form.DELETE }}
@@ -124,9 +147,9 @@
 </style>
 
 <script>
-    // 🌟 เปลี่ยนมาใช้ $(document).ready ของ jQuery เพื่อให้ชัวร์ว่าโหลดสำเร็จ 🌟
     $(document).ready(function() {
-        
+
+        // --- 1. ระบบค้นหาวัตถุดิบด้วย Select2 ---
         function initSelect2Ajax(element) {
             $(element).select2({
                 width: '100%',
@@ -135,7 +158,7 @@
                 ajax: {
                     url: "{% url 'ajax_search_raw_material' %}",
                     dataType: 'json',
-                    delay: 250, 
+                    delay: 250,
                     data: function (params) {
                         return { q: params.term || '' };
                     },
@@ -144,50 +167,113 @@
                     },
                     cache: true
                 },
-                minimumInputLength: 0 // พิมพ์ 0 ตัวก็ให้โหลดข้อมูลมาแสดงเลย
+                minimumInputLength: 0
             });
         }
 
-        // เปิดใช้งานให้กับ Dropdown ที่มีอยู่แล้วตอนโหลดหน้าเว็บ
         $('#formset-container .target-select2-container select').each(function() {
             initSelect2Ajax(this);
         });
 
+        // --- 2. ฟังก์ชันช่วยคำนวณและฟอร์แมตตัวเลข (ใส่คอมม่าและทศนิยม 2 ตำแหน่ง) ---
+        function formatCurrency(num) {
+            return parseFloat(num).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        }
+
+        // คำนวณรายบรรทัด: ราคาต่อหน่วย x จำนวนที่ใช้ = จำนวนเงิน
+        function calculateRow(row) {
+            let price = parseFloat(row.find('.unit-price').attr('data-price')) || 0;
+            let qty = parseFloat(row.find('input[name$="-quantity"]').val()) || 0;
+            let total = price * qty;
+            row.find('.row-total').text(formatCurrency(total));
+        }
+
+        // คำนวณยอดรวมสุทธิทั้งหมด (Grand Total)
+        function calculateGrandTotal() {
+            let grandTotal = 0;
+            $('.item-row').each(function() {
+                let row = $(this);
+                let isDeleted = row.find('input[name$="-DELETE"]').prop('checked');
+                // ถ้าบรรทัดนั้นไม่ได้ถูกลบทิ้ง ให้เอามาบวก
+                if (!isDeleted && row.css('display') !== 'none') {
+                    let price = parseFloat(row.find('.unit-price').attr('data-price')) || 0;
+                    let qty = parseFloat(row.find('input[name$="-quantity"]').val()) || 0;
+                    grandTotal += (price * qty);
+                }
+            });
+            $('#grand-total-badge').text('ต้นทุนรวม: ' + formatCurrency(grandTotal) + ' บาท');
+        }
+
+        // --- 3. ดักจับเหตุการณ์การเปลี่ยนแปลงข้อมูล (Events) ---
+
+        // 3.1 ดักจับเมื่อผู้ใช้เลือกสินค้าใหม่จาก Dropdown
+        $(document).on('select2:select', '.target-select2-container select', function (e) {
+            var data = e.params.data;
+            var row = $(this).closest('.item-row');
+            // ดึงราคาที่ถูกส่งมาจากระบบหลังบ้าน
+            var costPrice = data.cost_price || 0;
+
+            row.find('.unit-price').attr('data-price', costPrice).text(formatCurrency(costPrice));
+            calculateRow(row);
+            calculateGrandTotal();
+        });
+
+        // 3.2 ดักจับเมื่อผู้ใช้กดกากบาทลบสินค้าออกจาก Dropdown
+        $(document).on('select2:clear', '.target-select2-container select', function (e) {
+            var row = $(this).closest('.item-row');
+            row.find('.unit-price').attr('data-price', 0).text('0.00');
+            calculateRow(row);
+            calculateGrandTotal();
+        });
+
+        // 3.3 ดักจับเมื่อผู้ใช้พิมพ์เปลี่ยนตัวเลขในช่อง "จำนวนที่ใช้"
+        $(document).on('input', 'input[name$="-quantity"]', function() {
+            calculateRow($(this).closest('.item-row'));
+            calculateGrandTotal();
+        });
+
+        // --- 4. คำนวณทันทีเมื่อเปิดหน้าเว็บ (เผื่อกรณีแก้ไขสูตรเก่า) ---
+        $('.item-row').each(function() {
+            if ($(this).closest('#empty-form').length === 0) {
+                // 🌟 [FIX] สั่งให้ดึงตัวเลขดิบมาเข้าเครื่องฟอร์แมตใส่ลูกน้ำ (,) กลับเข้าไปใหม่
+                let priceSpan = $(this).find('.unit-price');
+                let rawPrice = parseFloat(priceSpan.attr('data-price')) || 0;
+                priceSpan.text(formatCurrency(rawPrice));
+
+                // จากนั้นค่อยคำนวณจำนวนเงิน
+                calculateRow($(this));
+            }
+        });
+        calculateGrandTotal();
+
+        // --- 5. ระบบเพิ่ม-ลบบรรทัด ---
         const addButton = document.getElementById('add-item-btn');
         const container = document.getElementById('formset-container');
         const emptyFormTemplate = document.getElementById('empty-form').innerHTML;
         const totalFormsInput = document.getElementById('id_items-TOTAL_FORMS');
 
-        // --- ระบบเพิ่มบรรทัด ---
         addButton.addEventListener('click', function() {
             let formIdx = parseInt(totalFormsInput.value);
             let newRowHtml = emptyFormTemplate.replace(/__prefix__/g, formIdx);
-            
+
             container.insertAdjacentHTML('beforeend', newRowHtml);
             let newRow = container.lastElementChild;
-            
-            // ลบขยะของ Select2 เดิมออก (ถ้ามีติดมา)
+
             const select2Containers = newRow.querySelectorAll('.select2-container');
             select2Containers.forEach(el => el.remove());
-            
-            // เปลี่ยนเป้าหมายไปหา select ภายในบรรทัดใหม่
+
             const selectElement = newRow.querySelector('.target-select2-container select');
             if (selectElement) {
                 selectElement.classList.remove('select2-hidden-accessible');
                 selectElement.removeAttribute('data-select2-id');
                 selectElement.removeAttribute('tabindex');
                 selectElement.removeAttribute('aria-hidden');
-                
                 selectElement.innerHTML = '<option value="" selected="selected"></option>';
-                
-                // เปิดใช้งานกล่องค้นหาอัจฉริยะบนบรรทัดใหม่
                 initSelect2Ajax(selectElement);
             }
-
             totalFormsInput.value = formIdx + 1;
         });
 
-        // --- ระบบลบบรรทัดด้วยปุ่มถังขยะ ---
         document.getElementById('items-table').addEventListener('click', function(e) {
             const removeBtn = e.target.closest('.btn-remove-row');
             if (removeBtn) {
@@ -197,6 +283,9 @@
                     deleteCheckbox.checked = true;
                 }
                 row.style.display = 'none';
+
+                // 🌟 ให้ระบบคำนวณยอดรวมใหม่ทันที เมื่อมีการกดลบบรรทัด 🌟
+                calculateGrandTotal();
             }
         });
 

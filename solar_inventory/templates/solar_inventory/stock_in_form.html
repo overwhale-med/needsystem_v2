@@ -1,0 +1,75 @@
+{% extends 'core/base.html' %}
+
+{% block content %}
+<!-- นำเข้าไฟล์ CSS สำหรับ Select2 -->
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<style>
+    .select2-container .select2-selection--single { height: 38px; border: 1px solid #ced4da; border-radius: 0.375rem; }
+    .select2-container--default .select2-selection--single .select2-selection__rendered { line-height: 36px; color: #212529; }
+    .select2-container--default .select2-selection--single .select2-selection__arrow { height: 36px; }
+</style>
+
+<div class="container py-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-6">
+            <div class="card border-0 shadow-sm rounded-4 bg-white border-top border-4 border-success">
+                <div class="card-header bg-white pt-4 pb-3 border-bottom-0 text-center">
+                    <h4 class="fw-bold mb-0 text-success">
+                        <i class="fas fa-download me-2"></i>บันทึกรับเข้าคลัง (GR)
+                    </h4>
+                    <p class="text-muted small mt-2 mb-0">บันทึกความเคลื่อนไหวรับเข้าคลังสินค้าโซล่าเซลล์</p>
+                </div>
+                <div class="card-body p-4">
+                    <form method="POST">
+                        {% csrf_token %}
+                        <!-- เลือกสินค้า -->
+                        <div class="mb-3">
+                            <label class="form-label fw-bold text-dark">สินค้า / แพ็กเกจ <span class="text-danger">*</span></label>
+                            {{ form.product }}
+                            {% if form.product.errors %}<div class="text-danger small mt-1">{{ form.product.errors }}</div>{% endif %}
+                        </div>
+
+                        <!-- จำนวน -->
+                        <div class="mb-3">
+                            <label class="form-label fw-bold text-dark">จำนวน <span class="text-danger">*</span></label>
+                            {{ form.quantity }}
+                            {% if form.quantity.errors %}<div class="text-danger small mt-1">{{ form.quantity.errors }}</div>{% endif %}
+                        </div>
+
+                        <!-- อ้างอิงเอกสาร -->
+                        <div class="mb-4">
+                            <label class="form-label fw-bold text-dark">เอกสารอ้างอิง / หมายเหตุ</label>
+                            {{ form.reference_doc }}
+                            <div class="form-text">ระบุเลขที่ PO, ใบส่งของ หรือสาเหตุการรับเข้า</div>
+                            {% if form.reference_doc.errors %}<div class="text-danger small mt-1">{{ form.reference_doc.errors }}</div>{% endif %}
+                        </div>
+
+                        <hr class="text-muted mb-4">
+
+                        <!-- ปุ่มกด -->
+                        <div class="d-flex justify-content-end gap-2">
+                            <a href="{% url 'solar_document_list_in' %}" class="btn btn-light rounded-pill px-4 border fw-bold">ยกเลิก</a>
+                            <button type="submit" class="btn btn-success rounded-pill px-5 fw-bold shadow-sm">
+                                <i class="fas fa-save me-1"></i> บันทึกข้อมูล
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- นำเข้า jQuery และ Select2 JS -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script>
+    $(document).ready(function() {
+        $('#id_product').select2({
+            placeholder: "พิมพ์ค้นหารหัส หรือชื่อแพ็กเกจ/สินค้า...",
+            width: '100%',
+            language: { noResults: function() { return "ไม่พบข้อมูลที่ค้นหา"; } }
+        });
+    });
+</script>
+{% endblock %}

@@ -3,6 +3,9 @@ from . import views
 
 urlpatterns = [
     path('', views.sales_dashboard, name='sales_dashboard'),
+    # Dashboard สำหรับทีม Support ฝ่ายขาย
+    path('graphic/', views.graphic_dashboard, name='graphic_dashboard'),
+    path('blueprint/', views.blueprint_dashboard, name='blueprint_dashboard'),
     path('hub/', views.sales_hub, name='sales_hub'),
     path('convert-quote/<int:qt_id>/', views.convert_quote_to_invoice, name='convert_quote_to_invoice'),
 
@@ -51,10 +54,20 @@ urlpatterns = [
     path('quotation/<int:qt_id>/print-deposit/', views.print_deposit_contract, name='print_deposit_contract'),
     path('commissions/', views.commission_board, name='commission_board'),
     path('commissions/history/', views.commission_history_list, name='commission_history_list'),
+    path('commissions/my-history/', views.commission_history_personal, name='commission_history_personal'),
     path('commissions/claim/<str:claim_type>/', views.commission_create_claim, name='commission_create_claim'),
     path('commissions/pay/<int:claim_id>/', views.knockdown_commission_pay, name='knockdown_commission_pay'),
+    path('commissions/allocate/<int:claim_id>/', views.commission_allocate, name='commission_allocate'),
     path('commissions/print/<int:claim_id>/', views.print_commission_claim, name='print_commission_claim'),
+    path('commissions/allocate/pay/<int:alloc_id>/', views.supervisor_pay_allocation, name='supervisor_pay_allocation'),
+    path('commissions/allocate/delete/<int:alloc_id>/', views.supervisor_delete_allocation, name='supervisor_delete_allocation'),
     path('master-job-report/', views.master_job_report, name='master_job_report'),
     path('expense-cart/', views.expense_cart_view, name='expense_cart_view'),
     path('expense-cart/submit/', views.submit_expense_cart, name='submit_expense_cart'),
+    # ==========================================
+    # 🌟 [NEW] ระบบแจ้งซ่อมและบริการ (After-Sales) 🌟
+    # ==========================================
+    path('service-tickets/', views.service_ticket_list, name='service_ticket_list'),
+    path('service-tickets/create/', views.service_ticket_create, name='service_ticket_create'),
+    path('service-tickets/<int:ticket_id>/update/', views.service_ticket_update, name='service_ticket_update'),
 ]

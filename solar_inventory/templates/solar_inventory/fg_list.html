@@ -28,11 +28,12 @@
                         <th class="ps-4 py-3">รหัส / สถานะ</th>
                         <th class="py-3">ชื่อแพ็กเกจ (FG)</th>
                         <th class="py-3">หมวดหมู่</th>
-                        <th class="text-center py-3">กำไรขั้นต้น</th>
-                        <th class="text-end py-3">ราคาขาย</th>
                         <th class="text-end py-3">ต้นทุนรวม (BOM)</th>
-                        <th class="text-center py-3">คงเหลือ</th>
-                        <th class="text-end py-3">มูลค่าคงเหลือ</th>
+                        <th class="text-end py-3">ค่าบริหาร (15.5%)</th>
+                        <th class="text-end py-3">ราคาขาย</th>
+                        <th class="text-center py-3">กำไรขั้นต้น</th>
+                        <!-- 🌟 [NEW] เพิ่มหัวคอลัมน์ %กำไรขั้นต้น -->
+                        <th class="text-center py-3">%กำไรขั้นต้น</th>
                         <th class="text-center pe-4 py-3">จัดการ</th>
                     </tr>
                 </thead>
@@ -51,24 +52,24 @@
                             <div class="fw-bold text-primary">{{ item.name }}</div>
                         </td>
                         <td><span class="badge bg-light text-dark border rounded-pill px-3">{{ item.category.name|default:"-" }}</span></td>
-                        <td class="text-center">
-                            <div class="fw-bold text-success">฿{{ item.gross_profit|floatformat:2|intcomma }}</div>
-                            <small class="text-muted">({{ item.gross_margin_percent|floatformat:2 }}%)</small>
-                        </td>
-                        <td class="text-end fw-bold text-dark">฿{{ item.sell_price|floatformat:2|intcomma }}</td>
+                        <!-- 🌟 [UPDATE] ใส่ข้อมูลให้ตรงกับหัวตารางใหม่ -->
                         <td class="text-end text-danger fw-bold">฿{{ item.total_bom_cost|floatformat:2|intcomma }}</td>
-                        <td class="text-center">
-                            <span class="badge {% if item.stock_qty <= 0 %}bg-danger{% else %}bg-primary{% endif %} rounded-pill px-3 fs-6 shadow-sm">
-                                {{ item.stock_qty|floatformat:2 }}
-                            </span>
+                        <td class="text-end text-warning fw-bold">฿{{ item.management_cost|floatformat:2|intcomma }}</td>
+                        <td class="text-end fw-bold text-dark">฿{{ item.sell_price|floatformat:2|intcomma }}</td>
+                        <!-- 🌟 [UPDATE] แยกข้อมูลกำไร และ % ออกเป็น 2 คอลัมน์ -->
+                        <td class="text-center fw-bold text-success">
+                            ฿{{ item.gross_profit|floatformat:2|intcomma }}
                         </td>
-                        <td class="text-end fw-bold text-secondary">฿{{ item.total_value|floatformat:2|intcomma }}</td>
+                        <td class="text-center text-muted fw-bold">
+                            {{ item.gross_margin_percent|floatformat:2 }}%
+                        </td>
                         <td class="text-center pe-4">
                             <a href="{% url 'solar_stock_card' item.id %}" class="btn btn-sm btn-outline-info rounded-pill px-3 shadow-sm"><i class="fas fa-history me-1"></i> ประวัติ</a>
                             <a href="{% url 'solar_product_edit' item.id %}" class="btn btn-sm btn-outline-secondary rounded-pill px-3 shadow-sm"><i class="fas fa-edit me-1"></i> แก้ไข</a>
                         </td>
                     </tr>
                     {% empty %}
+                    <!-- 🌟 [UPDATE] เปลี่ยน colspan เป็น 9 -->
                     <tr><td colspan="9" class="text-center py-5 text-muted">ยังไม่มีรายการแพ็กเกจในระบบ</td></tr>
                     {% endfor %}
                 </tbody>

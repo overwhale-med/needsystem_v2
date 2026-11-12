@@ -35,14 +35,24 @@ def inventory_dashboard(request):
     low_stock_count = all_products.filter(stock_qty__lte=models.F('min_level')).count()
     pending_po_count = PurchaseOrder.objects.filter(status='APPROVED', receipt_status__in=['PENDING', 'PARTIAL']).count()
     pending_pq_count = OverseasPO.objects.filter(status__in=['FULLY_PAID', 'DEPOSITED']).count()
+
     fg_products = fg_qs.order_by('code')[:5]
     rm_products = rm_qs.order_by('code')[:5]
-    recent_docs = InventoryDoc.objects.all().order_by('-doc_no')[:10]
+
+    # 🌟 [UPDATE] แยกดึงประวัติเอกสารเป็น 2 กอง กองละ 10 รายการล่าสุด
+    recent_rm_docs = InventoryDoc.objects.filter(movements__product__product_type='RM').distinct().order_by('-doc_no')[:10]
+    recent_fg_docs = InventoryDoc.objects.filter(movements__product__product_type='FG').distinct().order_by('-doc_no')[:10]
+
     return render(request, 'inventory/dashboard.html', {
-        'fg_products': fg_products, 'rm_products': rm_products,
-        'fg_count': fg_qs.count(), 'rm_count': rm_qs.count(),
-        'low_stock_count': low_stock_count, 'recent_docs': recent_docs,
-        'pending_po_count': pending_po_count, 'pending_pq_count': pending_pq_count
+        'fg_products': fg_products,
+        'rm_products': rm_products,
+        'fg_count': fg_qs.count(),
+        'rm_count': rm_qs.count(),
+        'low_stock_count': low_stock_count,
+        'recent_rm_docs': recent_rm_docs,  # 🌟 ส่งประวัติ RM ไปหน้าเว็บ
+        'recent_fg_docs': recent_fg_docs,  # 🌟 ส่งประวัติ FG ไปหน้าเว็บ
+        'pending_po_count': pending_po_count,
+        'pending_pq_count': pending_pq_count
     })
 
 @login_required
@@ -178,7 +188,7 @@ def document_list_base(request, doc_type, title):
     if date_end: docs = docs.filter(created_at__date__lte=parse_date(date_end))
     if search_query: docs = docs.filter(Q(doc_no__icontains=search_query) | Q(reference__icontains=search_query) | Q(created_by__first_name__icontains=search_query))
 
-    # 🌟 [NEW] 2. ถ้าเป็นหน้าใบรับของ (GR) ให้ดึงข้อมูลใบรับจาก QC ผลิต (QCReceiptDoc) มาด้วย
+    # 2. ถ้าเป็นหน้าใบรับของ (GR) ให้ดึงข้อมูลใบรับจาก QC ผลิต (QCReceiptDoc) มาด้วย
     qc_docs = []
     if doc_type == 'GR':
         qc_qs = QCReceiptDoc.objects.all().order_by('-doc_no')
@@ -187,9 +197,18 @@ def document_list_base(request, doc_type, title):
         if search_query: qc_qs = qc_qs.filter(Q(doc_no__icontains=search_query) | Q(production_order__code__icontains=search_query) | Q(product__name__icontains=search_query))
         qc_docs = qc_qs
 
+    # 🌟 [NEW] 3. ถ้าเป็นหน้าใบเบิกของ (GI) ให้แยกประวัติเป็น 2 กอง (RM และ FG) เพื่อเตรียมทำแท็บ
+    gi_rm_docs = []
+    gi_fg_docs = []
+    if doc_type == 'GI':
+        gi_rm_docs = docs.filter(movements__product__product_type='RM').distinct()
+        gi_fg_docs = docs.filter(movements__product__product_type='FG').distinct()
+
     return render(request, 'inventory/document_list.html', {
         'docs': docs,
-        'qc_docs': qc_docs, # 🌟 ส่งข้อมูล QC ไปหน้าจอ
+        'qc_docs': qc_docs,
+        'gi_rm_docs': gi_rm_docs, # 🌟 ส่งข้อมูลแท็บเบิก RM ไปหน้าเว็บ
+        'gi_fg_docs': gi_fg_docs, # 🌟 ส่งข้อมูลแท็บเบิก FG ไปหน้าเว็บ
         'title': title,
         'doc_type': doc_type,
         'search_query': search_query,
@@ -391,8 +410,18 @@ def stock_in(request):
     if request.method == 'POST':
         form = StockInForm(request.POST)
         if form.is_valid():
-            doc = InventoryDoc.objects.create(doc_type='GR', reference=form.cleaned_data['doc_reference'], description=form.cleaned_data['doc_note'], created_by=request.user)
             move = form.save(commit=False)
+
+            # 🌟 [NEW] สร้างหัวเอกสารแบบแยกจังหวะ เพื่อฝังซิกแนล
+            doc = InventoryDoc(
+                doc_type='GR',
+                reference=form.cleaned_data['doc_reference'],
+                description=form.cleaned_data['doc_note'],
+                created_by=request.user
+            )
+            doc._doc_category = move.product.product_type # ส่งซิกว่าเป็น RM หรือ FG
+            doc.save()
+
             move.doc = doc; move.movement_type = 'IN'; move.created_by = request.user; move.save()
             messages.success(request, f"✅ เปิดใบรับ {doc.doc_no} สำเร็จ!")
             return redirect('inventory_dashboard')
@@ -406,7 +435,17 @@ def stock_out(request):
         if form.is_valid():
             move = form.save(commit=False)
             if move.product.stock_qty >= move.quantity:
-                doc = InventoryDoc.objects.create(doc_type='GI', reference=form.cleaned_data['doc_reference'], description=form.cleaned_data['doc_note'], created_by=request.user)
+
+                # 🌟 [NEW] สร้างหัวเอกสารแบบแยกจังหวะ เพื่อฝังซิกแนล
+                doc = InventoryDoc(
+                    doc_type='GI',
+                    reference=form.cleaned_data['doc_reference'],
+                    description=form.cleaned_data['doc_note'],
+                    created_by=request.user
+                )
+                doc._doc_category = move.product.product_type # ส่งซิกว่าเป็น RM หรือ FG
+                doc.save()
+
                 move.doc = doc; move.movement_type = 'OUT'; move.created_by = request.user; move.save()
                 messages.warning(request, f"📤 เปิดใบเบิก {doc.doc_no} สำเร็จ!")
                 return redirect('inventory_dashboard')
@@ -465,7 +504,8 @@ def po_receive_process(request, po_id):
         if not has_error and items_to_receive:
             slip_file = request.FILES.get('slip_image')
 
-            doc = InventoryDoc.objects.create(
+            # 🌟 [UPDATE] สร้างหัวเอกสารแบบแยกจังหวะ เพื่อฝังซิกแนล
+            doc = InventoryDoc(
                 doc_type='GR',
                 po_reference=po,
                 reference=reference_doc,
@@ -473,6 +513,10 @@ def po_receive_process(request, po_id):
                 created_by=request.user,
                 slip_image=slip_file
             )
+            # ดึงประเภทสินค้าจากไอเทมแรกที่รับเข้า เพื่อส่งซิกว่าเป็น RM หรือ FG
+            doc._doc_category = items_to_receive[0]['item_obj'].product.product_type
+            doc.save()
+
             for data in items_to_receive:
                 item = data['item_obj']
                 qty = data['receive_qty']
@@ -541,7 +585,21 @@ def pq_receive_process(request, pq_id):
     if request.method == 'POST':
         reference_doc = request.POST.get('reference_doc', pq.pi_number)
         note = request.POST.get('note', f'รับสินค้าจาก PQ {pq.po_number}')
-        doc = InventoryDoc.objects.create(doc_type='GR', reference=reference_doc, description=note, created_by=request.user)
+
+        # 🌟 [UPDATE] สร้างหัวเอกสารแบบแยกจังหวะ เพื่อฝังซิกแนล
+        doc = InventoryDoc(
+            doc_type='GR',
+            reference=reference_doc,
+            description=note,
+            created_by=request.user
+        )
+
+        # ดึงประเภทสินค้าจากไอเทมแรกที่มี เพื่อส่งซิก
+        first_item = pq.overseas_items.filter(product__isnull=False).first()
+        if first_item:
+            doc._doc_category = first_item.product.product_type
+        doc.save()
+
         for item in pq.overseas_items.all():
             if item.product and item.quantity > 0:
                 qty_decimal = Decimal(str(item.quantity))

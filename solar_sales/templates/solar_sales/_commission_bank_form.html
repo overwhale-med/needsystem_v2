@@ -1,0 +1,29 @@
+<div class="card-footer bg-white p-3">
+    <div class="bg-light p-3 rounded-3 border mb-3 text-start">
+        <h6 class="fw-bold text-dark mb-3" style="font-size: 14px;"><i class="fas fa-university text-primary me-2"></i>ระบุบัญชีรับเงิน (Payment Details)</h6>
+        <div class="row g-2">
+            <div class="col-md-4">
+                <select name="bank_name" class="form-select form-select-sm shadow-sm" required>
+                    <option value="">-- เลือกธนาคาร --</option>
+                    <option value="กสิกรไทย (KBANK)">กสิกรไทย (KBANK)</option>
+                    <option value="ไทยพาณิชย์ (SCB)">ไทยพาณิชย์ (SCB)</option>
+                    <option value="กรุงเทพ (BBL)">กรุงเทพ (BBL)</option>
+                    <option value="กรุงไทย (KTB)">กรุงไทย (KTB)</option>
+                    <option value="กรุงศรีอยุธยา (BAY)">กรุงศรีอยุธยา (BAY)</option>
+                    <option value="พร้อมเพย์ (PromptPay)">พร้อมเพย์ (PromptPay)</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <input type="text" name="bank_account" class="form-control form-control-sm shadow-sm" placeholder="เลขที่บัญชี / เบอร์พร้อมเพย์" required>
+            </div>
+            <div class="col-md-4">
+                <input type="text" name="account_name" class="form-control form-control-sm shadow-sm" placeholder="ชื่อบัญชี (นาย/นาง/นางสาว...)" required>
+            </div>
+        </div>
+    </div>
+    <div class="text-end">
+        <button type="submit" class="btn btn-{{ btn_color }} fw-bold px-4 rounded-pill shadow-sm" disabled>
+            <i class="fas fa-file-invoice-dollar me-1"></i> {{ btn_text }}
+        </button>
+    </div>
+</div>

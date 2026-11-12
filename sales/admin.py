@@ -1,14 +1,15 @@
 from django.contrib import admin
 from .models import (
-    POSOrder, POSOrderItem, Quotation, QuotationItem, 
-    UpsaleCategory, UpsaleCatalog, QuotationUpsale, 
-    CustomerLead, Appointment, 
-    Invoice, InvoicePayment # 🌟 นำเข้าตาราง Invoice
+    POSOrder, POSOrderItem, Quotation, QuotationItem,
+    UpsaleCategory, UpsaleCatalog, QuotationUpsale,
+    CustomerLead, Appointment,
+    Invoice, InvoicePayment,
+    CommissionTicket, CommissionClaim # 👈 เพิ่ม 2 ชื่อนี้เข้าไปครับ
 )
 
 class POSItemInline(admin.TabularInline):
     model = POSOrderItem
-    extra = 1 
+    extra = 1
     readonly_fields = ('total_price',)
 
 @admin.register(POSOrder)
@@ -77,9 +78,26 @@ class InvoicePaymentInline(admin.TabularInline):
 class InvoiceAdmin(admin.ModelAdmin):
     # 🌟 แก้ไข: เปลี่ยน customer_name เป็น customer 🌟
     list_display = ('code', 'customer', 'date', 'grand_total', 'balance_amount', 'status')
-    
+
     # 🌟 แก้ไข: เปลี่ยน customer_name เป็น customer__name เพื่อค้นหาจากชื่อลูกค้า 🌟
     search_fields = ('code', 'customer__name')
-    
+
     list_filter = ('status', 'date')
     inlines = [InvoicePaymentInline] # โชว์ประวัติการชำระเงินย่อยๆ ซ้อนอยู่ข้างในให้ด้วยค่ะ
+
+# ==========================================
+# 💸 ระบบจัดการใบเบิกผลตอบแทนและสิทธิ์คอมมิชชัน (บ้านน็อคดาวน์)
+# ==========================================
+@admin.register(CommissionClaim)
+class CommissionClaimAdmin(admin.ModelAdmin):
+    list_display = ('code', 'claim_type', 'requester', 'total_amount', 'status', 'paid_at', 'created_at')
+    list_filter = ('status', 'claim_type', 'created_at')
+    search_fields = ('code', 'requester__first_name', 'account_name')
+    ordering = ('-created_at',)
+
+@admin.register(CommissionTicket)
+class CommissionTicketAdmin(admin.ModelAdmin):
+    list_display = ('code', 'ticket_type', 'commission_amount', 'status', 'quotation_ref', 'invoice_ref', 'claim_ref')
+    list_filter = ('status', 'ticket_type', 'created_at')
+    search_fields = ('code', 'quotation_ref__code', 'invoice_ref__code', 'claim_ref__code')
+    ordering = ('-created_at',)

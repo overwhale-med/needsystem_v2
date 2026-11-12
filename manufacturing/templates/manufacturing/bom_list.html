@@ -4,15 +4,18 @@
 
 {% block content %}
 <style>
-    /* เอฟเฟกต์สีทองสำหรับปุ่มควบคุม */
-    .btn-gold-hover {
-        transition: all 0.2s ease-in-out;
-    }
+    .btn-gold-hover { transition: all 0.2s ease-in-out; }
     .btn-gold-hover:hover {
         color: #c5a059 !important;
         border-color: #c5a059 !important;
         background-color: #fffdf4 !important;
         transform: translateY(-1px);
+    }
+    /* บังคับไม่ให้ข้อความในตารางตัดบรรทัด เพื่อให้เกิด Scroll แนวนอนเมื่อจอเล็ก */
+    .table-scrollable th, .table-scrollable td {
+        white-space: nowrap;
+        vertical-align: top; /* 🌟 [FIXED] เปลี่ยนจาก middle เป็น top เพื่อให้บรรทัดแรกเสมอกัน 🌟 */
+        padding-top: 1rem; /* เพิ่มช่องว่างด้านบนนิดหน่อยให้ดูโปร่งสบายตา */
     }
 </style>
 
@@ -22,15 +25,15 @@
             <h4 class="fw-bold mb-1 text-dark">
                 <i class="fas fa-clipboard-list text-primary me-2"></i>จัดการสูตรผลิต (BOM)
             </h4>
-            <p class="text-muted small mb-0">รายการสูตรผลิตและโครงสร้างวัตถุดิบสำหรับสินค้าสำเร็จรูป (FG)</p>
+            <p class="text-muted small mb-0">รายการสูตรผลิตและโครงสร้างต้นทุน (รวมค่าใช้จ่ายส่วนเพิ่ม)</p>
         </div>
-        
+
         <div class="d-flex gap-2">
             <a href="{% url 'inventory_dashboard' %}" class="btn btn-outline-secondary rounded-pill shadow-sm px-4 fw-bold">
                 <i class="fas fa-arrow-left me-2"></i>กลับหน้าแรก
             </a>
             <a href="{% url 'import_bom_excel' %}" class="btn btn-outline-success rounded-pill shadow-sm px-4 fw-bold">
-                <i class="fas fa-file-excel me-2"></i>นำเข้าด้วย Excel
+                <i class="fas fa-file-excel me-2"></i>นำสูตรเข้า(Excel)
             </a>
             <a href="{% url 'bom_create' %}" class="btn btn-primary rounded-pill shadow-sm px-4 fw-bold">
                 <i class="fas fa-plus me-2"></i>สร้างสูตรผลิตใหม่
@@ -39,18 +42,22 @@
     </div>
 
     <div class="card shadow-sm border-0 rounded-4 overflow-hidden bg-white">
+        <!-- 🌟 เพิ่มคลาสให้ Scroll แนวนอนได้ 🌟 -->
         <div class="table-responsive">
-            <table class="table table-hover align-middle mb-0">
+            <table class="table table-hover mb-0 table-scrollable">
                 <thead class="bg-light text-secondary" style="font-size: 0.85rem; text-transform: uppercase;">
                     <tr>
-                        <th class="ps-4 py-3 border-0" style="width: 10%;">รหัสสินค้า (FG)</th>
-                        <th class="py-3 border-0" style="width: 23%;">ชื่อแบบบ้าน / สินค้า</th>
-                        <th class="py-3 border-0 text-end" style="width: 11%;">ค่าแรงประกอบ</th>
-                        <th class="py-3 border-0 text-end" style="width: 11%;">ต้นทุนวัตถุดิบ</th>
-                        <th class="py-3 border-0 text-end" style="width: 11%;">ราคาขาย</th>
-                        <th class="py-3 border-0 text-center" style="width: 11%;">จำนวนรายการ</th>
-                        <th class="py-3 border-0 text-end text-primary fw-bold" style="width: 13%;"><i class="fas fa-chart-line me-1"></i>กำไร(ประมาณ)</th>
-                        <th class="pe-4 py-3 border-0 text-center" style="width: 10%;">จัดการ</th>
+                        <th class="ps-4 py-3 border-0" style="min-width: 120px;">รหัสสินค้า</th>
+                        <th class="py-3 border-0" style="min-width: 220px;">ชื่อแบบบ้าน / สินค้า</th>
+                        <th class="py-3 border-0 text-end" style="min-width: 110px;">วัตถุดิบ (RM)</th>
+                        <th class="py-3 border-0 text-end" style="min-width: 110px;">ค่าแรงประกอบ</th>
+                        <th class="py-3 border-0 text-end" style="min-width: 120px;">ค่าบริหารขาย</th>
+                        <th class="py-3 border-0 text-end" style="min-width: 110px;">ค่าขนส่ง</th>
+                        <th class="py-3 border-0 text-end" style="min-width: 120px;">ค่าใช้จ่ายอื่นๆ</th>
+                        <th class="py-3 border-0 text-end" style="min-width: 120px;">ราคาขาย</th>
+                        <th class="py-3 border-0 text-end text-primary fw-bold" style="min-width: 130px;"><i class="fas fa-chart-line me-1"></i>กำไร(สุทธิ)</th>
+                        <th class="py-3 border-0 text-end text-success fw-bold" style="min-width: 90px;">%กำไร</th>
+                        <th class="pe-4 py-3 border-0 text-center" style="min-width: 130px;">จัดการ</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -58,64 +65,114 @@
                     <tr>
                         <td class="ps-4 fw-bold text-primary">{{ bom.product.code }}</td>
                         <td>
-                            <div class="fw-bold text-dark">{{ bom.product.name }}</div>
-                            <small class="text-muted">
-                                <i class="fas fa-tags me-1"></i>
-                                {% if bom.product.category %}{{ bom.product.category.name }}{% else %}ไม่มีหมวดหมู่{% endif %}
-                            </small>
+                            <div class="fw-bold text-dark text-truncate" style="max-width: 250px;">{{ bom.product.name }}</div>
+                            <small class="text-muted"><i class="fas fa-tags me-1"></i>{% if bom.product.category %}{{ bom.product.category.name }}{% else %}ไม่มีหมวดหมู่{% endif %}</small>
                         </td>
-                        <td class="text-end fw-bold text-info">
-                            ฿ {{ bom.labor_cost|default:"0.00"|floatformat:"2"|intcomma }}
+
+                        <!-- ต้นทุนวัตถุดิบ -->
+                        <td class="text-end fw-bold text-danger">฿ {{ bom.total_rm_cost|default:"0.00"|floatformat:"2"|intcomma }}</td>
+
+                        <!-- ค่าแรงประกอบ -->
+                        <td class="text-end fw-bold text-info">฿ {{ bom.labor_cost|default:"0.00"|floatformat:"2"|intcomma }}</td>
+
+                        <!-- ค่าบริหารขาย -->
+                        <td class="text-end text-muted">
+                            <div class="fw-bold text-dark">฿ {{ bom.calculated_sales_admin|default:"0.00"|floatformat:"2"|intcomma }}</div>
+                            <small style="font-size: 0.7rem;">{% if bom.sales_admin_type == 'PERCENT' %}({{ bom.sales_admin_value|floatformat:"2" }}%){% else %}(ยอดคงที่){% endif %}</small>
                         </td>
-                        <td class="text-end fw-bold text-danger">
-                            ฿ {{ bom.total_rm_cost|default:"0.00"|floatformat:"2"|intcomma }}
+
+                        <!-- ค่าขนส่ง -->
+                        <td class="text-end text-muted">
+                            <div class="fw-bold text-dark">฿ {{ bom.calculated_freight|default:"0.00"|floatformat:"2"|intcomma }}</div>
+                            <small style="font-size: 0.7rem;">{% if bom.freight_type == 'PERCENT' %}({{ bom.freight_value|floatformat:"2" }}%){% else %}(ยอดคงที่){% endif %}</small>
                         </td>
-                        <td class="text-end fw-bold text-success">
-                            ฿ {{ bom.product.sell_price|default:"0.00"|floatformat:"2"|intcomma }}
+
+                        <!-- ค่าใช้จ่ายอื่นๆ -->
+                        <td class="text-end text-muted">
+                            <div class="fw-bold text-dark">฿ {{ bom.calculated_misc|default:"0.00"|floatformat:"2"|intcomma }}</div>
+                            <small style="font-size: 0.7rem;">{% if bom.misc_expense_type == 'PERCENT' %}({{ bom.misc_expense_value|floatformat:"2" }}%){% else %}(ยอดคงที่){% endif %}</small>
                         </td>
-                        <td class="text-center">
-                            <span class="badge bg-warning text-dark rounded-pill px-3 py-2 shadow-sm">{{ bom.item_count }} รายการ</span>
-                        </td>
-                        <td class="text-end fw-bold {% if bom.estimated_profit < 0 %}text-danger{% else %}text-success{% endif %}">
+
+                        <!-- ราคาขาย -->
+                        <td class="text-end fw-bold text-success">฿ {{ bom.product.sell_price|default:"0.00"|floatformat:"2"|intcomma }}</td>
+
+                        <!-- กำไรสุทธิ -->
+                        <td class="text-end fw-bold {% if bom.estimated_profit < 0 %}text-danger{% else %}text-primary{% endif %}">
                             ฿ {{ bom.estimated_profit|default:"0.00"|floatformat:"2"|intcomma }}
                         </td>
+
+                        <!-- %กำไร -->
+                        <td class="text-end fw-bold {% if bom.profit_percentage < 0 %}text-danger{% else %}text-success{% endif %}">
+                            {{ bom.profit_percentage|default:"0.00"|floatformat:"2"|intcomma }}%
+                        </td>
+
                         <td class="pe-4 text-center">
                             <div class="btn-group shadow-sm rounded-pill bg-white">
-                                <button type="button" class="btn btn-sm btn-white border text-secondary btn-gold-hover" title="บันทึกค่าแรงประกอบ" data-bs-toggle="modal" data-bs-target="#laborCostModal{{ bom.pk }}">
+                                <button type="button" class="btn btn-sm btn-white border text-secondary btn-gold-hover" title="ตั้งค่าต้นทุน/ค่าใช้จ่าย" data-bs-toggle="modal" data-bs-target="#costModal{{ bom.pk }}">
                                     <i class="fas fa-coins text-warning"></i>
                                 </button>
-                                <a href="{% url 'bom_detail' bom.pk %}" class="btn btn-sm btn-white border text-primary" title="ดูรายละเอียด">
+                                <a href="{% url 'bom_detail' bom.pk %}" class="btn btn-sm btn-white border text-primary" title="ดูรายละเอียดสูตร">
                                     <i class="fas fa-search"></i>
                                 </a>
-                                <a href="{% url 'bom_edit' bom.pk %}" class="btn btn-sm btn-white border text-warning" title="แก้ไข">
+                                <a href="{% url 'bom_edit' bom.pk %}" class="btn btn-sm btn-white border text-warning" title="แก้ไขสูตร">
                                     <i class="fas fa-edit"></i>
                                 </a>
                             </div>
                         </td>
                     </tr>
 
-                    <div class="modal fade" id="laborCostModal{{ bom.pk }}" tabindex="-1" aria-hidden="true">
+                    <!-- 🌟 Modal แผงควบคุมต้นทุน 🌟 -->
+                    <div class="modal fade" id="costModal{{ bom.pk }}" tabindex="-1" aria-hidden="true">
                         <div class="modal-dialog modal-dialog-centered">
                             <div class="modal-content rounded-4 border-0 shadow">
                                 <div class="modal-header bg-light border-bottom-0 py-3">
-                                    <h5 class="modal-title fw-bold text-dark"><i class="fas fa-coins text-warning me-2"></i>บันทึกค่าแรงประกอบ</h5>
+                                    <h5 class="modal-title fw-bold text-dark"><i class="fas fa-coins text-warning me-2"></i>ตั้งค่าต้นทุนและค่าใช้จ่าย</h5>
                                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                                 </div>
                                 <form method="POST" action="{% url 'update_bom_labor_cost' bom.pk %}">
                                     {% csrf_token %}
                                     <div class="modal-body p-4 text-start">
-                                        <div class="mb-3">
+                                        <div class="mb-4">
                                             <label class="form-label text-muted small fw-bold">แบบบ้าน / สินค้าสำเร็จรูป (FG)</label>
-                                            <input type="text" class="form-control bg-white fw-bold" value="{{ bom.product.code }} - {{ bom.product.name }}" readonly>
+                                            <input type="text" class="form-control bg-light fw-bold text-dark" value="{{ bom.product.code }} - {{ bom.product.name }}" readonly>
                                         </div>
-                                        <div>
-                                            <label class="form-label text-dark small fw-bold">ระบุค่าแรงประกอบ (บาท) <span class="text-danger">*</span></label>
-                                            <input type="number" name="labor_cost" step="0.01" min="0" class="form-control form-control-lg text-end text-primary fw-bold" placeholder="0.00" value="{{ bom.labor_cost|floatformat:2 }}" onfocus="this.select()" required>
+
+                                        <label class="form-label text-dark small fw-bold">1. ค่าแรงประกอบ (บาท)</label>
+                                        <div class="input-group mb-3">
+                                            <span class="input-group-text bg-white"><i class="fas fa-hard-hat text-info"></i></span>
+                                            <input type="number" name="labor_cost" step="0.01" min="0" class="form-control text-end text-primary fw-bold" placeholder="0.00" value="{{ bom.labor_cost|floatformat:2 }}" required>
+                                        </div>
+
+                                        <label class="form-label text-dark small fw-bold">2. ค่าบริหารการขาย (คำนวณจากราคาขายหลังหัก 10%)</label>
+                                        <div class="input-group mb-3 shadow-sm rounded">
+                                            <select name="sales_admin_type" class="form-select bg-light" style="max-width: 140px;">
+                                                <option value="PERCENT" {% if bom.sales_admin_type == 'PERCENT' %}selected{% endif %}>เปอร์เซ็นต์ (%)</option>
+                                                <option value="THB" {% if bom.sales_admin_type == 'THB' %}selected{% endif %}>เป็นเงิน (บาท)</option>
+                                            </select>
+                                            <input type="number" name="sales_admin_value" step="0.01" min="0" class="form-control text-end fw-bold" value="{{ bom.sales_admin_value|floatformat:2 }}" required>
+                                        </div>
+
+                                        <label class="form-label text-dark small fw-bold">3. ค่าขนส่ง (คำนวณจากราคาขายเต็ม)</label>
+                                        <div class="input-group mb-3 shadow-sm rounded">
+                                            <select name="freight_type" class="form-select bg-light" style="max-width: 140px;">
+                                                <option value="PERCENT" {% if bom.freight_type == 'PERCENT' %}selected{% endif %}>เปอร์เซ็นต์ (%)</option>
+                                                <option value="THB" {% if bom.freight_type == 'THB' %}selected{% endif %}>เป็นเงิน (บาท)</option>
+                                            </select>
+                                            <input type="number" name="freight_value" step="0.01" min="0" class="form-control text-end fw-bold" value="{{ bom.freight_value|floatformat:2 }}" required>
+                                        </div>
+
+                                        <label class="form-label text-dark small fw-bold">4. ค่าใช้จ่ายอื่นๆ (คำนวณจากราคาขายเต็ม)</label>
+                                        <div class="input-group mb-2 shadow-sm rounded">
+                                            <select name="misc_expense_type" class="form-select bg-light" style="max-width: 140px;">
+                                                <option value="PERCENT" {% if bom.misc_expense_type == 'PERCENT' %}selected{% endif %}>เปอร์เซ็นต์ (%)</option>
+                                                <option value="THB" {% if bom.misc_expense_type == 'THB' %}selected{% endif %}>เป็นเงิน (บาท)</option>
+                                            </select>
+                                            <input type="number" name="misc_expense_value" step="0.01" min="0" class="form-control text-end fw-bold" value="{{ bom.misc_expense_value|floatformat:2 }}" required>
                                         </div>
                                     </div>
-                                    <div class="modal-footer border-top-0 bg-white py-3">
-                                        <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">ยกเลิก</button>
-                                        <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm">บันทึกข้อมูล</button>
+                                    <div class="modal-footer border-top-0 bg-light py-3">
+                                        <button type="button" class="btn btn-white border rounded-pill px-4" data-bs-dismiss="modal">ยกเลิก</button>
+                                        <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm">บันทึกข้อมูลต้นทุน</button>
                                     </div>
                                 </form>
                             </div>
@@ -123,7 +180,7 @@
                     </div>
                     {% empty %}
                     <tr>
-                        <td colspan="8" class="text-center py-5 text-muted">
+                        <td colspan="11" class="text-center py-5 text-muted">
                             <i class="fas fa-folder-open fa-3x mb-3 text-light"></i><br>
                             ยังไม่มีข้อมูลสูตรผลิตในระบบ<br>
                             <div class="d-flex justify-content-center gap-2 mt-4">

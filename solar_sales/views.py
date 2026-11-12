@@ -6,7 +6,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 
 # 🌟 [FIXED] แก้ไขบรรทัด import โมเดล ให้เหลือเฉพาะของระบบขายและปฏิบัติการ
-from .models import SolarQuotation, SolarQuotationItem, SolarInvoice, SolarSurveyJob, SolarSurveyItem, SolarExpenseClaim, SolarExpenseSlip
+from .models import SolarQuotation, SolarQuotationItem, SolarInvoice, SolarSurveyJob, SolarSurveyItem, SolarExpenseClaim, SolarExpenseSlip, SolarCustomer
 
 # 🌟 [FIXED] แก้ไขบรรทัด import ฟอร์ม ให้เหลือเฉพาะของระบบขายและปฏิบัติการ
 from .forms import SolarQuotationStep1Form, SolarSurveyJobForm, SolarExpenseClaimForm
@@ -20,7 +20,7 @@ from django.http import HttpResponse, JsonResponse
 from django.utils.dateparse import parse_date
 from django.core.paginator import Paginator
 from django.db.models import Q
-from hr.models import Department
+from hr.models import Department, Employee
 import datetime
 import pytz
 from django.views.decorators.csrf import csrf_exempt
@@ -30,6 +30,7 @@ import base64
 
 # 🌟 [FIXED] เพิ่มบรรทัดนี้เข้ามา เพื่อให้ระบบรู้จักคำสั่ง timezone 🌟
 from django.utils import timezone
+from django.db import transaction
 
 # ==========================================
 # 📊 Dashboards & Lists
@@ -489,6 +490,7 @@ def solar_invoice_print(request, inv_id):
 
 
 @login_required
+@transaction.atomic
 def solar_record_deposit(request, qt_id):
     qt = get_object_or_404(SolarQuotation, pk=qt_id)
     if request.method == 'POST':
@@ -547,6 +549,7 @@ def solar_record_deposit(request, qt_id):
     return redirect('solar_quotation_list')
 
 @login_required
+@transaction.atomic
 def solar_verify_deposit(request, qt_id):
     qt = get_object_or_404(SolarQuotation, pk=qt_id)
     qt.is_deposit_verified = True
@@ -782,6 +785,7 @@ def solar_invoice_record_payment(request, inv_id):
 # 🌟 ฟังก์ชันสำหรับปุ่ม "เปิดบิลขาย" (Invoice Creation & Auto-Archive) 🌟
 # ------------------------------------------
 @login_required
+@transaction.atomic
 def solar_quotation_create_invoice(request, qt_id):
     qt = get_object_or_404(SolarQuotation, pk=qt_id)
 
@@ -789,19 +793,16 @@ def solar_quotation_create_invoice(request, qt_id):
         messages.error(request, "❌ ไม่สามารถเปิดบิลได้ เอกสารต้องอยู่ในสถานะ 'พร้อมเปิดบิล' เท่านั้น")
         return redirect('solar_quotation_list')
 
-    # เช็คว่ามี Invoice อยู่แล้วหรือไม่ กันเหนียวไม่ให้เปิดบิลซ้ำ
     if hasattr(qt, 'solarinvoice'):
         messages.warning(request, "⚠️ ใบเสนอราคานี้มีการเปิดบิลไปแล้ว")
         return redirect('solar_quotation_list')
 
     # 1. สร้าง Invoice
-    SolarInvoice.objects.create(
+    new_inv = SolarInvoice.objects.create(
         quotation_ref=qt,
         customer=qt.customer,
         grand_total=qt.grand_total,
         balance_amount=qt.grand_total - qt.deposit_amount,
-
-        # 🌟 [FIXED] ตั้งค่าเริ่มต้นเป็น 'UNPAID' (ค้างชำระ) เพื่อให้วิ่งเข้าการ์ดติดตามหนี้ทันที
         status='UNPAID'
     )
 
@@ -809,39 +810,38 @@ def solar_quotation_create_invoice(request, qt_id):
     qt.status = 'CONVERTED'
     qt.save()
 
-    # ดึงเลข Invoice ที่เพิ่งสร้างมาใช้งาน
-    new_inv = SolarInvoice.objects.get(quotation_ref=qt)
-
-    # 🌟 [FIXED] AUTOMATION 4: ตัดสต๊อกขาย (Stock-OUT) ด้วยโมเดล SolarStockMovement 🌟
-    from solar_inventory.models import SolarStockMovement
+    # 🌟 [UPDATE] AUTOMATION: ตัดสต๊อกขาย (Stock-OUT) สร้างบิล GI
+    from solar_inventory.models import SolarStockMovement, SolarInventoryDoc
     from decimal import Decimal
 
-    # ค้นหาใบสั่งงานของ Center ที่อ้างอิงถึง Quotation นี้
     related_jobs = SolarJob.objects.filter(quotation_ref=qt, status='COMPLETED')
     for job in related_jobs:
 
-        # 🌟 4.1 ตรวจสอบว่างานนี้มีแพ็กเกจหลักให้ตัดสต๊อกหรือไม่
+        # ถ่ายเทของออกจากสต็อกเฉพาะเมื่อมีแพ็กเกจ
         if job.package_sold:
-            # เช็คจากตัวแปร stock_qty
-            if job.package_sold.stock_qty >= Decimal('1'):
-                # บันทึกประวัติเบิกออก (ขาย) 1 ชุด (ระบบจะนำไปหักสต๊อกให้อัตโนมัติ)
-                SolarStockMovement.objects.create(
-                    product=job.package_sold,
-                    movement_type='OUT',
-                    quantity=Decimal('1'),
-                    reference_doc=new_inv.code
-                )
-            else:
-                # แจ้งเตือนแอดมินเบาๆ หากไม่มีของให้ตัด
-                messages.warning(request, f"⚠️ ระบบไม่สามารถตัดสต๊อก {job.package_sold.code} ได้ เนื่องจากไม่มียอดรับเข้าก่อนหน้านี้")
 
-        # 4.2 เปลี่ยนสถานะเป็น CLOSED เพื่อซ่อนการ์ดจากหน้ากระดาน
+            # 1. สร้างหัวเอกสารเบิกออก (GI) อัตโนมัติ
+            gi_doc = SolarInventoryDoc.objects.create(
+                doc_type='GI',
+                reference=f"INV: {new_inv.code}",
+                description=f"ตัดจ่ายแพ็กเกจจากการเปิดบิลขาย ({new_inv.code})",
+                created_by=request.user
+            )
+
+            # 2. บันทึกสต็อกการ์ด (เบิกออก -1) พร้อมผูกใบ GI
+            SolarStockMovement.objects.create(
+                doc=gi_doc,
+                product=job.package_sold,
+                movement_type='OUT',
+                quantity=Decimal('1'),
+                reference_doc=new_inv.code
+            )
+
+        # เปลี่ยนสถานะงานเป็น CLOSED (จบงานบริบูรณ์)
         job.status = 'CLOSED'
         job.save()
 
-    messages.success(request, f"🎉 สร้างใบแจ้งหนี้สำหรับ {qt.code} และตัดสต๊อกแพ็กเกจสำเร็จ! (บิลถูกส่งให้บัญชีตรวจสอบ)")
-
-    # 🌟 เปลี่ยนให้เด้งไปหน้า "รายการใบแจ้งหนี้" ทันที 🌟
+    messages.success(request, f"🎉 สร้างใบแจ้งหนี้สำหรับ {qt.code} และตัดสต๊อกแพ็กเกจ (-1) สำเร็จ!")
     return redirect('solar_invoice_list')
 
 # ==========================================
@@ -1115,6 +1115,122 @@ def solar_survey_detail(request, job_id):
 
     return render(request, 'solar_sales/survey_detail.html', {'job': job})
 
+# ==========================================
+# 🌟 [NEW] ฟังก์ชันสำหรับ Flow งานเซลส์: อัปเดตข้อมูลเทคนิค & อัปโหลดรูปหน้างาน
+# ==========================================
+@login_required
+def solar_survey_update_tech(request, job_id):
+    job = get_object_or_404(SolarSurveyJob, pk=job_id)
+
+    if request.method == 'POST':
+        # 1. รับค่าข้อมูลทางเทคนิคหน้างาน
+        job.avg_electric_bill = request.POST.get('avg_electric_bill') or None
+        job.electric_phase = request.POST.get('electric_phase')
+        job.roof_type = request.POST.get('roof_type')
+        job.cable_distance = request.POST.get('cable_distance')
+        job.has_wifi = request.POST.get('has_wifi') == 'on'
+
+        package_id = request.POST.get('recommended_package')
+        if package_id:
+            job.recommended_package_id = package_id
+
+        # 2. ถ้าระบุว่าสำรวจเสร็จสิ้น ให้ประทับเวลาและเปลี่ยนสถานะ
+        is_completed = request.POST.get('mark_as_completed') == 'on'
+        if is_completed:
+            job.status = 'COMPLETED'
+            job.completed_at = timezone.now()
+
+        job.save()
+
+        # 3. จัดการรูปภาพหน้างาน (รองรับการอัปโหลดหลายไฟล์พร้อมกัน)
+        from .models import SolarSurveyImage
+        files = request.FILES.getlist('survey_images')
+        for f in files:
+            SolarSurveyImage.objects.create(
+                survey_job=job,
+                image=f,
+                description="อัปโหลดจากหน้างานโดยเซลส์"
+            )
+
+        if is_completed:
+            messages.success(request, f"🎉 สำรวจหน้างานเสร็จสิ้น! ส่งเรื่อง {job.code} กลับไปให้แอดมินออกใบเสนอราคาแล้วครับ")
+            return redirect('solar_survey_list')
+        else:
+            messages.success(request, "✅ บันทึกข้อมูลทางเทคนิคและรูปภาพหน้างานเรียบร้อยแล้ว")
+            return redirect('solar_survey_detail', job_id=job.id)
+
+    return redirect('solar_survey_list')
+
+# ==========================================
+# 🌟 [NEW] ฟังก์ชันสำหรับแอดมิน: แปลงใบสำรวจ -> ใบเสนอราคา
+# ==========================================
+@login_required
+def solar_survey_generate_quote(request, job_id):
+    job = get_object_or_404(SolarSurveyJob, pk=job_id)
+
+    # ดักเช็คว่าห้ามสร้างซ้ำ
+    if hasattr(job, 'quotation_generated'):
+        messages.warning(request, f"⚠️ ใบสำรวจนี้มีการสร้างใบเสนอราคาไปแล้ว ({job.quotation_generated.code})")
+        return redirect('solar_survey_detail', job_id=job.id)
+
+    # ดักสิทธิ์ว่าต้องเป็นแอดมินหรือหัวหน้าเท่านั้น
+    current_emp = getattr(request.user, 'employee', None)
+    is_admin = request.user.is_superuser
+    if current_emp and not is_admin:
+        rank = current_emp.business_rank.lower() if current_emp.business_rank else ""
+        if rank in ['manager', 'director'] or 'admin' in getattr(current_emp.department, 'name', '').lower() or 'แอดมิน' in getattr(current_emp.department, 'name', ''):
+            is_admin = True
+
+    if not is_admin:
+        messages.error(request, "❌ เฉพาะแอดมินหรือผู้บริหารเท่านั้นที่สามารถแปลงใบเสนอราคาได้")
+        return redirect('solar_survey_detail', job_id=job.id)
+
+    # 🚀 เริ่มการแปลงร่าง
+    with transaction.atomic():
+        # 1. สร้างลูกค้า Walk-in ให้เป็นลูกค้าระบบ (ถ้ายังไม่มี)
+        customer = job.customer
+        if not customer and job.walkin_name:
+            customer = SolarCustomer.objects.create(
+                name=job.walkin_name,
+                phone=job.walkin_phone,
+                address=job.survey_address,
+                contact_person="ดึงข้อมูลจากใบสำรวจ (Walk-in)"
+            )
+            job.customer = customer
+            job.save()
+
+        # 2. สร้างใบเสนอราคา (Draft) ผูกกับลูกค้าและใบสำรวจ
+        new_qt = SolarQuotation.objects.create(
+            customer=customer,
+            employee=job.surveyor, # ให้เครดิตเซลส์คนที่ไปลงพื้นที่
+            survey_ref=job,        # เชื่อมสะพานหากัน
+            status='DRAFT',
+            note=f"📌 สร้างอัตโนมัติจากใบงานสำรวจหน้างาน: {job.code}\nประเภทหลังคา: {job.get_roof_type_display() if job.roof_type else '-'}\nค่าไฟเฉลี่ย: {job.avg_electric_bill or '-'} บาท\nระบบไฟ: {job.get_electric_phase_display() if job.electric_phase else '-'}"
+        )
+
+        # 3. ถ้าเซลส์แนะนำแพ็กเกจมา ให้ยัดแพ็กเกจนั้นใส่ใบเสนอราคาให้เลย
+        if job.recommended_package:
+            SolarQuotationItem.objects.create(
+                quotation=new_qt,
+                product=job.recommended_package,
+                item_name=job.recommended_package.name,
+                quantity=1,
+                unit_price=job.recommended_package.sell_price,
+                amount=job.recommended_package.sell_price
+            )
+            # สั่งคำนวณยอดรวมใหม่
+            subtotal = job.recommended_package.sell_price
+            new_qt.subtotal = subtotal
+            new_qt.grand_total = subtotal
+            new_qt.save()
+
+        # 4. เปลี่ยนสถานะใบสำรวจเป็น ออกบิลแล้ว
+        job.status = 'QUOTED'
+        job.save()
+
+    messages.success(request, f"✨ สุดยอด! แปลงใบงานสำรวจเป็นใบเสนอราคา {new_qt.code} สำเร็จแล้วครับ")
+    return redirect('solar_quotation_edit', qt_id=new_qt.id)
+
 @login_required
 def solar_expense_list(request):
     expenses = SolarExpenseClaim.objects.all().order_by('-created_at')
@@ -1138,6 +1254,7 @@ def solar_expense_list(request):
     })
 
 @login_required
+@transaction.atomic
 def solar_expense_create(request, job_id=None):
     if job_id and str(job_id) != '0':
         job = get_object_or_404(SolarSurveyJob, pk=job_id)
@@ -1228,53 +1345,148 @@ from .models import SolarCommissionTicket, SolarCommissionClaim
 
 @login_required
 def solar_commission_board(request):
-    # ดึงสิทธิ์ที่ยังไม่ได้เบิกมาโชว์ให้เซลส์เลือก
-    tickets_2 = SolarCommissionTicket.objects.filter(ticket_type='2%', status='AVAILABLE').order_by('created_at')
-    tickets_13 = SolarCommissionTicket.objects.filter(ticket_type='13.5%', status='AVAILABLE').order_by('created_at')
+    current_emp = getattr(request.user, 'employee', None)
 
-    # ดึงประวัติใบเบิกที่ถูกสร้างแล้วมาแสดง
-    claims = SolarCommissionClaim.objects.all().order_by('-created_at')
+    # 🌟 1. กำหนดสิทธิ์การมองเห็น (Role-Based Access) 🌟
+    is_executive = False
+    is_admin_head = False
+    is_tech_head = False
+    is_sales = False
+
+    if request.user.is_superuser:
+        is_executive = is_admin_head = is_tech_head = is_sales = True
+    elif current_emp:
+        rank = current_emp.business_rank.lower() if current_emp.business_rank else ""
+        dept_name = getattr(current_emp.department, 'name', '').lower()
+        pos_title = getattr(current_emp.position, 'title', '').lower()
+
+        # ค้นหาคำในชื่อแผนก/ตำแหน่ง เพื่อแจกสิทธิ์
+        if rank in ['manager', 'director'] or 'บริหาร' in dept_name or 'ผู้จัดการ' in pos_title:
+            is_executive = True
+        if 'admin' in dept_name or 'แอดมิน' in dept_name:
+            is_admin_head = True
+        if 'ช่าง' in dept_name or 'tech' in dept_name:
+            is_tech_head = True
+        if 'ขาย' in dept_name or 'sales' in dept_name:
+            is_sales = True
+
+    # 🌟 2. ดึงข้อมูลตั๋วที่พร้อมเบิก (อัปเดตใหม่ แยก 5 กระเป๋า) 🌟
+    tickets_15_admin = SolarCommissionTicket.objects.filter(ticket_type='1.5%', status='AVAILABLE').order_by('created_at')
+    tickets_75_tech = SolarCommissionTicket.objects.filter(ticket_type='7.5%', status='AVAILABLE').order_by('created_at')
+
+    # 🌟 [NEW] กระเป๋าใหม่ 2 ใบของผู้บริหาร (1% และ กองทุน 1.5%)
+    tickets_1_exec = SolarCommissionTicket.objects.filter(ticket_type='1%', status='AVAILABLE').order_by('created_at')
+    tickets_15_fund = SolarCommissionTicket.objects.filter(ticket_type='1.5_FUND%', status='AVAILABLE').order_by('created_at')
+
+    # สำหรับเซลส์ ดึงเฉพาะงานของตัวเอง (แต่ถ้าเป็นผู้บริหารให้เห็นของเซลส์ทุกคนเพื่อตรวจ)
+    if is_executive or is_admin_head or is_tech_head:
+        tickets_4_sales = SolarCommissionTicket.objects.filter(ticket_type='4%', status='AVAILABLE').order_by('created_at')
+    else:
+        tickets_4_sales = SolarCommissionTicket.objects.filter(ticket_type='4%', status='AVAILABLE', invoice_ref__quotation_ref__employee=current_emp).order_by('created_at')
+
+    # 🌟 3. ดึงประวัติใบเบิก 🌟
+    if is_executive:
+        claims = SolarCommissionClaim.objects.all().order_by('-created_at')
+    else:
+        claims = SolarCommissionClaim.objects.filter(requester=current_emp).order_by('-created_at')
+
+    # 🌟 [NEW] 4. ดึงรายชื่อพนักงานจากแผนกอื่น เพื่อให้ผู้บริหารเลือกมาเป็น Partner เบิกกองทุน
+    # ดึงเฉพาะ Admin, Sales, Tech
+    partner_employees = Employee.objects.filter(
+        Q(department__name__icontains='admin') | Q(department__name__icontains='แอดมิน') |
+        Q(department__name__icontains='sales') | Q(department__name__icontains='ขาย') |
+        Q(department__name__icontains='tech') | Q(department__name__icontains='ช่าง')
+    ).exclude(id=current_emp.id if current_emp else 0).order_by('department__name', 'first_name')
+
+    # 🌟 [NEW] 5. ให้สมองกลช่วยคำนวณยอดเงินรวมของตั๋วแต่ละแผนกเตรียมไว้
+    sum_15 = sum(t.commission_amount for t in tickets_15_admin)
+    sum_4 = sum(t.commission_amount for t in tickets_4_sales)
+    sum_75 = sum(t.commission_amount for t in tickets_75_tech)
+    sum_1 = sum(t.commission_amount for t in tickets_1_exec)
+    sum_15_fund = sum(t.commission_amount for t in tickets_15_fund)
 
     return render(request, 'solar_sales/commission_board.html', {
-        'tickets_2': tickets_2,
-        'tickets_13': tickets_13,
-        'claims': claims
+        'tickets_15': tickets_15_admin,
+        'tickets_4': tickets_4_sales,
+        'tickets_75': tickets_75_tech,
+        'tickets_1': tickets_1_exec,
+        'tickets_15_fund': tickets_15_fund,
+        'partner_employees': partner_employees,
+        'claims': claims,
+        'is_executive': is_executive,
+        'is_admin_head': is_admin_head,
+        'is_tech_head': is_tech_head,
+        'is_sales': is_sales,
+
+        # 🌟 [NEW] แพ็คกล่องยอดเงินรวมทั้ง 5 ก้อน ส่งขึ้นรถไปให้หน้าเว็บ
+        'sum_15': sum_15,
+        'sum_4': sum_4,
+        'sum_75': sum_75,
+        'sum_1': sum_1,
+        'sum_15_fund': sum_15_fund,
     })
 
 @login_required
+@transaction.atomic
 def solar_commission_create_claim(request, claim_type):
     if request.method == 'POST':
         ticket_ids = request.POST.getlist('ticket_ids')
 
-        # 🌟 รับค่า 3 อย่างจากหน้าเว็บ
+        # รับค่า 3 อย่างจากหน้าเว็บ
         bank_name = request.POST.get('bank_name', '')
         bank_account = request.POST.get('bank_account', '')
-        account_name = request.POST.get('account_name', '') # 🌟 [NEW] รับค่าชื่อบัญชี
+        account_name = request.POST.get('account_name', '')
+
+        # 🌟 [NEW] รับค่า Partner กรณีเบิกกองทุน
+        partner_id = request.POST.get('co_claimer_id')
 
         if not ticket_ids:
             messages.error(request, "❌ กรุณาเลือกใบคุมสิทธิ์อย่างน้อย 1 ใบก่อนกดตั้งเบิกครับ")
+            return redirect('solar_commission_board')
+
+        # 🌟 [NEW] เช็กความปลอดภัย: ถ้าเป็นกองทุนพัฒนา 1.5% ต้องมี Partner เท่านั้น!
+        if claim_type == '1.5_FUND%' and not partner_id:
+            messages.error(request, "❌ ไม่อนุญาตให้เบิกกองทุน: คุณต้องเลือกตัวแทนจากแผนกอื่นมาร่วมรับทราบด้วยครับ")
             return redirect('solar_commission_board')
 
         tickets = SolarCommissionTicket.objects.filter(id__in=ticket_ids, status='AVAILABLE', ticket_type=claim_type)
         if tickets.exists():
             total_amt = sum(t.commission_amount for t in tickets)
 
-            # 🌟 บันทึกข้อมูลลง Database
+            # ค้นหาตัวตนของ Partner (ถ้ามีการเลือกมา)
+            partner_obj = None
+            partner_dept_name = None
+            if partner_id:
+                partner_obj = Employee.objects.filter(id=partner_id).first()
+                if partner_obj and partner_obj.department:
+                    partner_dept_name = partner_obj.department.name
+
+            # บันทึกข้อมูลลง Database
             claim = SolarCommissionClaim.objects.create(
                 claim_type=claim_type,
                 requester=getattr(request.user, 'employee', None),
                 total_amount=total_amt,
                 bank_name=bank_name,
                 bank_account=bank_account,
-                account_name=account_name # 🌟 [NEW] บันทึกชื่อบัญชี
+                account_name=account_name,
+
+                # 🌟 บันทึกคนร่วมเบิก (ถ้ามี)
+                co_claimer=partner_obj,
+                co_claimer_department=partner_dept_name
             )
 
             tickets.update(status='CLAIMING', claim_ref=claim)
-            messages.success(request, f"✅ สร้างใบตั้งเบิก {claim.code} (ประเภท {claim_type}) ยอด {total_amt:,.2f} บาท สำเร็จ! ส่งให้บัญชีแล้ว")
+
+            # เปลี่ยนข้อความแจ้งเตือนให้ชัดเจนขึ้น
+            if claim_type == '1.5_FUND%':
+                messages.success(request, f"🤝 สร้างใบเบิกกองทุน {claim.code} ร่วมกับ {partner_obj.first_name} สำเร็จ! ยอด {total_amt:,.2f} บาท")
+            else:
+                messages.success(request, f"✅ สร้างใบตั้งเบิก {claim.code} (ประเภท {claim_type}) ยอด {total_amt:,.2f} บาท สำเร็จ! ส่งให้บัญชีแล้ว")
 
     return redirect('solar_commission_board')
 
 @login_required
+@transaction.atomic
 def solar_commission_pay(request, claim_id):
     claim = get_object_or_404(SolarCommissionClaim, id=claim_id)
     if request.method == 'POST':
@@ -1322,3 +1534,96 @@ def solar_commission_edit_bank(request, claim_id):
         messages.success(request, f"✅ อัปเดตข้อมูลบัญชีรับเงินของใบเบิก {claim.code} เรียบร้อยแล้ว")
 
     return redirect('solar_commission_board')
+
+# ==========================================
+# 👥 ฟังก์ชันสำหรับจัดการลูกค้าโซล่าเซลล์ (API)
+# ==========================================
+@login_required
+def ajax_add_solar_customer(request):
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            name = data.get('name', '').strip()
+            tax_id = data.get('tax_id', '').strip()
+            phone = data.get('phone', '').strip()
+            email = data.get('email', '').strip()
+            address = data.get('address', '').strip()
+            contact_person = data.get('contact_person', '').strip()
+
+            if not name:
+                return JsonResponse({'success': False, 'error': 'กรุณาระบุชื่อลูกค้า/บริษัท'})
+
+            # บันทึกลงตารางใหม่ SolarCustomer
+            cus = SolarCustomer.objects.create(
+                name=name,
+                tax_id=tax_id,
+                phone=phone,
+                email=email,
+                address=address,
+                contact_person=contact_person
+            )
+            return JsonResponse({'success': True, 'id': cus.id, 'name': f"{cus.code} - {cus.name}"})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
+    return JsonResponse({'success': False, 'error': 'Invalid Request'})
+
+# ==========================================
+# 👥 ระบบจัดการลูกค้า (Solar Customer Management)
+# ==========================================
+from .forms import SolarCustomerForm
+
+@login_required
+def solar_customer_list(request):
+    customers = SolarCustomer.objects.all().order_by('-created_at')
+
+    # ระบบค้นหา
+    search_query = request.GET.get('q', '')
+    if search_query:
+        customers = customers.filter(
+            Q(code__icontains=search_query) |
+            Q(name__icontains=search_query) |
+            Q(phone__icontains=search_query)
+        )
+
+    paginator = Paginator(customers, 20)
+    page_obj = paginator.get_page(request.GET.get('page'))
+
+    return render(request, 'solar_sales/customer_list.html', {
+        'page_obj': page_obj,
+        'search_query': search_query
+    })
+
+@login_required
+def solar_customer_create(request):
+    if request.method == 'POST':
+        form = SolarCustomerForm(request.POST)
+        if form.is_valid():
+            cus = form.save()
+            messages.success(request, f"✅ เพิ่มรายชื่อลูกค้า {cus.name} สำเร็จ!")
+            return redirect('solar_customer_list')
+    else:
+        form = SolarCustomerForm()
+
+    return render(request, 'solar_sales/customer_form.html', {'form': form, 'title': 'เพิ่มลูกค้าใหม่ (โซล่าเซลล์)'})
+
+@login_required
+def solar_customer_edit(request, cus_id):
+    cus = get_object_or_404(SolarCustomer, pk=cus_id)
+    if request.method == 'POST':
+        form = SolarCustomerForm(request.POST, instance=cus)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f"✅ อัปเดตข้อมูลลูกค้า {cus.name} สำเร็จ!")
+            return redirect('solar_customer_list')
+    else:
+        form = SolarCustomerForm(instance=cus)
+
+    return render(request, 'solar_sales/customer_form.html', {'form': form, 'title': 'แก้ไขข้อมูลลูกค้า (โซล่าเซลล์)'})
+
+@login_required
+def solar_customer_delete(request, cus_id):
+    cus = get_object_or_404(SolarCustomer, pk=cus_id)
+    name = cus.name
+    cus.delete()
+    messages.success(request, f"🗑️ ลบข้อมูลลูกค้า {name} ออกจากระบบแล้ว")
+    return redirect('solar_customer_list')

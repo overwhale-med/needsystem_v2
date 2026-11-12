@@ -106,7 +106,7 @@
 
         <div class="keep-together">
             <p class="text-indent" style="text-align: justify;">
-                สัญญาฉบับนี้ทำขึ้นระหว่าง <strong>{{ company.name_th|default:"บริษัท นีด ช็อปปิ้ง จำกัด" }}</strong> เลขทะเบียนนิติบุคคล <strong>{{ company.tax_id|default:"0205563029342" }}</strong> ตั้งอยู่เลขที่ {{ company.address|default:"10/10 หมู่ที่ 10 ตำบลบางพระ อำเภอศรีราชา จังหวัดชลบุรี" }} โดยมี <strong>นางสาวเบญจณัฎฐ์ ชัยทัศธนโชค</strong> เป็นกรรมการผู้มีอำนาจลงนาม ซึ่งต่อไปในสัญญานี้เรียกว่า <strong>“ผู้จะขาย”</strong> ฝ่ายหนึ่ง กับ
+                สัญญาฉบับนี้ทำขึ้นระหว่าง <strong>{{ company.name_th|default:"บริษัท นีด ช็อปปิ้ง จำกัด" }}</strong> เลขทะเบียนนิติบุคคล <strong>{{ company.tax_id|default:"0205563029342" }}</strong> ตั้งอยู่เลขที่ {{ company.address|default:"10/10 หมู่ที่ 10 ตำบลบางพระ อำเภอศรีราชา จังหวัดชลบุรี" }} โดยมี <strong>{{ qt.employee.first_name|default:"........................................" }} {{ qt.employee.last_name|default:"" }}</strong> เป็นตัวแทนผู้มีอำนาจลงนาม ซึ่งต่อไปในสัญญานี้เรียกว่า <strong>“ผู้จะขาย”</strong> ฝ่ายหนึ่ง กับ
             </p>
             <p class="text-indent mb-4" style="text-align: justify;">
                 <strong>บริษัท/คุณ {{ qt.customer_name|default:"........................................................................" }}</strong>
@@ -126,11 +126,11 @@
         <div class="keep-together">
             <p class="mb-4" style="text-align: justify;">
                 <strong>ข้อ 2.</strong> ในวันทำสัญญานี้ผู้จะซื้อได้วางเงินมัดจำไว้ให้กับผู้จะขายเป็นจำนวนเงิน <strong>{{ qt.deposit_amount|floatformat:2|intcomma }}</strong> บาท <strong>(-{{ deposit_amount_text }}-)</strong>
-                {% if qt.deposit_method == 'CASH' %}
+                {% if rvd_method_code == 'CASH' %}
                     โดยชำระเป็น <strong>เงินสด</strong> ซึ่งผู้จะขายได้รับไว้แล้วในวันทำสัญญานี้ <br>
-                {% elif qt.deposit_method == 'TRANSFER' %}
+                {% elif rvd_method_code == 'TRANSFER' %}
                     โดยชำระเป็น <strong>โอนเงินเข้าบัญชีธนาคาร</strong> ซึ่งผู้จะขายได้รับไว้แล้วในวันทำสัญญานี้ <br>
-                {% elif qt.deposit_method == 'CHECK' %}
+                {% elif rvd_method_code == 'CHECK' %}
                     โดยชำระเป็น <strong>เช็คธนาคาร</strong> ........................................................... สาขา ..................................... เลขที่ .............................. ลงวันที่ .............................. ซึ่งผู้จะขายได้รับไว้แล้วในวันทำสัญญานี้ <br>
                 {% else %}
                     โดยชำระเป็น ............................................................................................................................ ซึ่งผู้จะขายได้รับไว้แล้วในวันทำสัญญานี้ <br>
@@ -202,8 +202,8 @@
                     {% endif %}
 
                     <div style="border-bottom: 1px solid #000; width: 80%; margin: 0 auto; position: relative; z-index: 3;"></div>
-                    <div class="mt-2 mb-1">( เบญจณัฎฐ์ ชัยทัศธนโชค )</div>
-                    <div class="fw-bold">ผู้จะขาย (บริษัท นีด ช็อปปิ้ง จำกัด)</div>
+                    <div class="mt-2 mb-1">( <strong>{{ qt.employee.first_name|default:"..................................................." }} {{ qt.employee.last_name|default:"" }}</strong> )</div>
+                    <div class="fw-bold">ผู้แทน/ผู้จะขาย (บริษัท นีด ช็อปปิ้ง จำกัด)</div>
                 </div>
             </div>
 

@@ -6,6 +6,7 @@ urlpatterns = [
     path('quotations/', views.solar_quotation_list, name='solar_quotation_list'),
     path('quotations/create/', views.solar_quotation_create, name='solar_quotation_create'),
     path('quotations/<int:qt_id>/', views.solar_quotation_edit, name='solar_quotation_edit'),
+    path('ajax/add-solar-customer/', views.ajax_add_solar_customer, name='ajax_add_solar_customer'),
 
     path('quotations/item/<int:item_id>/delete/', views.solar_delete_item, name='solar_delete_item'),
 
@@ -42,6 +43,9 @@ urlpatterns = [
     path('surveys/', views.solar_survey_list, name='solar_survey_list'),
     path('surveys/create/', views.solar_survey_create, name='solar_survey_create'),
     path('surveys/<int:job_id>/', views.solar_survey_detail, name='solar_survey_detail'),
+    # 🌟 [NEW] เส้นทางสำหรับ Flow CRM ใบงานสำรวจ -> ใบเสนอราคา
+    path('surveys/<int:job_id>/update-tech/', views.solar_survey_update_tech, name='solar_survey_update_tech'),
+    path('surveys/<int:job_id>/generate-quote/', views.solar_survey_generate_quote, name='solar_survey_generate_quote'),
 
     path('expenses/', views.solar_expense_list, name='solar_expense_list'),
     # ช่างสามารถกดเบิกเงินโดยอ้างอิงจากใบงานได้
@@ -58,4 +62,9 @@ urlpatterns = [
     path('commissions/claim/<int:claim_id>/print/', views.solar_commission_print, name='solar_commission_print'),
     # 🌟 [NEW] เส้นทางสำหรับบันทึกการแก้ไขข้อมูลบัญชี
     path('commissions/claim/<int:claim_id>/edit-bank/', views.solar_commission_edit_bank, name='solar_commission_edit_bank'),
+    # 👥 ระบบจัดการลูกค้า (Solar Customer)
+    path('customers/', views.solar_customer_list, name='solar_customer_list'),
+    path('customers/create/', views.solar_customer_create, name='solar_customer_create'),
+    path('customers/edit/<int:cus_id>/', views.solar_customer_edit, name='solar_customer_edit'),
+    path('customers/delete/<int:cus_id>/', views.solar_customer_delete, name='solar_customer_delete'),
 ]

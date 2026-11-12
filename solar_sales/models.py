@@ -5,8 +5,47 @@ from decimal import Decimal
 import datetime
 import secrets
 from solar_inventory.models import SolarProduct
-from master_data.models import Customer, Supplier
+from master_data.models import Supplier
 from hr.models import Employee
+
+# ==========================================
+# 📝 1. ฐานข้อมูลลูกค้าโซล่าเซลล์ (แยกจากน็อคดาวน์)
+# ==========================================
+class SolarCustomer(models.Model):
+    name = models.CharField(max_length=200, verbose_name="ชื่อ-นามสกุล / ชื่อบริษัท")
+    code = models.CharField(max_length=50, unique=True, blank=True, verbose_name="รหัสลูกค้า")
+    branch = models.CharField(max_length=100, blank=True, null=True, verbose_name="สาขา")
+    tax_id = models.CharField(max_length=20, blank=True, null=True, verbose_name="เลขประจำตัวผู้เสียภาษี")
+    phone = models.CharField(max_length=50, blank=True, null=True, verbose_name="เบอร์โทรศัพท์")
+    email = models.EmailField(blank=True, null=True, verbose_name="อีเมล")
+
+    address = models.TextField(blank=True, null=True, verbose_name="ที่อยู่ (เลขที่/หมู่บ้าน/ถนน)")
+    province = models.CharField(max_length=100, blank=True, null=True, verbose_name="จังหวัด")
+    district = models.CharField(max_length=100, blank=True, null=True, verbose_name="อำเภอ/เขต")
+    sub_district = models.CharField(max_length=100, blank=True, null=True, verbose_name="ตำบล/แขวง")
+    zip_code = models.CharField(max_length=10, blank=True, null=True, verbose_name="รหัสไปรษณีย์")
+    location = models.URLField(max_length=500, blank=True, null=True, verbose_name="พิกัด GPS")
+    is_active = models.BooleanField(default=True, verbose_name="สถานะใช้งาน")
+
+    contact_person = models.CharField(max_length=100, blank=True, null=True, verbose_name="ชื่อผู้ติดต่อประสานงาน")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def save(self, *args, **kwargs):
+        if not self.code:
+            today = datetime.date.today()
+            thai_year = (today.year + 543) % 100
+            prefix = f"CUS-SOL-{thai_year:02d}{today.strftime('%m')}-"
+            last_customer = SolarCustomer.objects.filter(code__startswith=prefix).order_by('code').last()
+            seq = int(last_customer.code.split('-')[-1]) + 1 if last_customer else 1
+            self.code = f"{prefix}{seq:03d}"
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.code} - {self.name}"
+
+    class Meta:
+        verbose_name = "รายชื่อลูกค้า (โซล่าเซลล์)"
+        verbose_name_plural = "รายชื่อลูกค้า (โซล่าเซลล์)"
 
 # ==========================================
 # 📝 2. ระบบขายโซล่าเซลล์ (Solar Sales)
@@ -29,9 +68,10 @@ class SolarQuotation(models.Model):
 
     valid_until = models.DateField(null=True, blank=True, verbose_name="ยืนยันราคาถึงวันที่ (dd/mm/yyyy)")
 
-    customer = models.ForeignKey(Customer, on_delete=models.SET_NULL, null=True, blank=True)
+    customer = models.ForeignKey(SolarCustomer, on_delete=models.SET_NULL, null=True, blank=True)
     employee = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, verbose_name="พนักงานขาย")
-
+    # 🌟 [NEW] เชื่อมโยงกับใบงานสำรวจ (แอดมินจะได้รู้ว่าดึงข้อมูลมาจากใบงานไหน)
+    survey_ref = models.OneToOneField('SolarSurveyJob', on_delete=models.SET_NULL, null=True, blank=True, related_name='quotation_generated', verbose_name="อ้างอิงจากใบงานสำรวจ")
     subtotal = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="รวมราคาสินค้า")
     discount = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="หักส่วนลด")
     survey_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="ค่าสำรวจหน้างาน / ค่าจัดส่ง")
@@ -162,7 +202,7 @@ class SolarInvoice(models.Model):
     code = models.CharField(max_length=20, unique=True, verbose_name="เลขที่ใบเสร็จโซล่า")
     quotation_ref = models.OneToOneField(SolarQuotation, on_delete=models.SET_NULL, null=True, blank=True)
     date = models.DateField(default=timezone.now, verbose_name="วันที่เอกสาร (dd/mm/yyyy)")
-    customer = models.ForeignKey(Customer, on_delete=models.SET_NULL, null=True)
+    customer = models.ForeignKey(SolarCustomer, on_delete=models.SET_NULL, null=True)
     grand_total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     balance_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='UNPAID')
@@ -188,26 +228,55 @@ class SolarInvoice(models.Model):
 # ==========================================
 class SolarSurveyJob(models.Model):
     STATUS_CHOICES = [
-        ('PENDING', 'รอลงพื้นที่'),
-        ('IN_PROGRESS', 'กำลังดำเนินการ'),
-        ('COMPLETED', 'สำรวจเสร็จสิ้น'),
-        ('CANCELLED', 'ยกเลิก')
+        ('PENDING', 'รอแอดมินจ่ายงาน'),
+        ('ASSIGNED', 'เซลส์รับงาน/รอลงพื้นที่'),
+        ('COMPLETED', 'สำรวจเสร็จสิ้น (รอออกใบเสนอราคา)'),
+        ('QUOTED', 'ออกใบเสนอราคาแล้ว (ปิดจ๊อบสำรวจ)'),
+        ('REJECTED', 'ลูกค้าปฏิเสธ/ปิดการขายไม่ได้'),
+        ('CANCELLED', 'ยกเลิกใบงาน')
     ]
+
+    ROOF_CHOICES = [
+        ('METAL_SHEET', 'เมทัลชีท (Metal Sheet)'),
+        ('CPAC', 'กระเบื้องซีแพค (CPAC)'),
+        ('DECK', 'ดาดฟ้าปูน / พื้นเรียบ'),
+        ('DOUBLE_CORRUGATED', 'กระเบื้องลอนคู่'),
+        ('OTHER', 'อื่นๆ (ระบุในหมายเหตุ)')
+    ]
+
+    PHASE_CHOICES = [
+        ('1_PHASE', 'ไฟ 1 เฟส (220V)'),
+        ('3_PHASE', 'ไฟ 3 เฟส (380V)')
+    ]
+
     code = models.CharField(max_length=20, unique=True, verbose_name="เลขที่ใบงานสำรวจ")
 
-    # 🌟 [FIXED] เปลี่ยนให้ลูกค้าระบบเป็นค่าว่างได้ เผื่อกรณีพิมพ์ชื่อเอง (Walk-in) 🌟
-    customer = models.ForeignKey(Customer, on_delete=models.CASCADE, null=True, blank=True, verbose_name="ลูกค้า")
-
-    # 🌟 [NEW] เพิ่ม 2 ฟิลด์ใหม่สำหรับเก็บข้อมูลลูกค้า Walk-in 🌟
+    # 1. ข้อมูลลูกค้าเบื้องต้น (Admin กรอก)
+    customer = models.ForeignKey(SolarCustomer, on_delete=models.CASCADE, null=True, blank=True, verbose_name="ลูกค้า (ในระบบ)")
     walkin_name = models.CharField(max_length=200, blank=True, null=True, verbose_name="ชื่อลูกค้า (Walk-in)")
     walkin_phone = models.CharField(max_length=50, blank=True, null=True, verbose_name="เบอร์ติดต่อ (Walk-in)")
+    survey_address = models.TextField(blank=True, null=True, verbose_name="ที่อยู่/พิกัดหน้างาน")
 
+    # 2. ข้อมูลการนัดหมาย (Admin กรอก)
     appointment_date = models.DateTimeField(verbose_name="วันเวลานัดหมาย")
     assigned_by = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, related_name='solar_survey_assigned', verbose_name="ผู้มอบหมาย (Admin)")
-    surveyor = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, related_name='solar_survey_tasks', verbose_name="ผู้สำรวจ (ช่าง)")
+    surveyor = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, related_name='solar_survey_tasks', verbose_name="ผู้สำรวจ (Sales)")
+
+    # 🌟 [NEW] 3. ข้อมูลทางเทคนิคหน้างาน (Sales ลงพื้นที่กรอกกลับมา) 🌟
+    avg_electric_bill = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, verbose_name="ค่าไฟเฉลี่ยต่อเดือน (บาท)")
+    electric_phase = models.CharField(max_length=20, choices=PHASE_CHOICES, null=True, blank=True, verbose_name="ระบบไฟฟ้าเดิม")
+    roof_type = models.CharField(max_length=30, choices=ROOF_CHOICES, null=True, blank=True, verbose_name="ประเภทหลังคา")
+    cable_distance = models.CharField(max_length=100, blank=True, null=True, verbose_name="ระยะสายไฟ (แผง->ตู้->เมนบ้าน)")
+    has_wifi = models.BooleanField(default=False, verbose_name="มี WiFi หน้างาน (สำหรับแอป)")
+
+    # แพ็กเกจที่เซลส์แนะนำให้ลูกค้า
+    recommended_package = models.ForeignKey(SolarProduct, on_delete=models.SET_NULL, null=True, blank=True, limit_choices_to={'product_type': 'FG'}, verbose_name="แพ็กเกจที่แนะนำ")
+
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING', verbose_name="สถานะงาน")
-    note = models.TextField(blank=True, null=True, verbose_name="รายละเอียด/หมายเหตุ")
+    note = models.TextField(blank=True, null=True, verbose_name="รายละเอียดเพิ่มเติม / สรุปจากเซลส์")
+
     created_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(null=True, blank=True, verbose_name="เวลาที่สำรวจเสร็จ")
 
     def save(self, *args, **kwargs):
         if not self.code:
@@ -221,6 +290,19 @@ class SolarSurveyJob(models.Model):
 
     def __str__(self):
         return self.code
+
+# ==========================================
+# 🌟 [NEW] ตารางย่อย: คลังรูปถ่ายหน้างานสำรวจ (Survey Images) 🌟
+# ==========================================
+class SolarSurveyImage(models.Model):
+    survey_job = models.ForeignKey(SolarSurveyJob, related_name='images', on_delete=models.CASCADE)
+    image = models.ImageField(upload_to='solar_survey_images/%Y/%m/', verbose_name="รูปถ่ายหน้างาน (บิลค่าไฟ/หลังคา/เบรกเกอร์)")
+    description = models.CharField(max_length=255, blank=True, null=True, verbose_name="คำอธิบายรูป (เช่น บิลค่าไฟ)")
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "รูปถ่ายหน้างานสำรวจ"
+        verbose_name_plural = "รูปถ่ายหน้างานสำรวจ"
 
 class SolarSurveyItem(models.Model):
     job = models.ForeignKey(SolarSurveyJob, related_name='items', on_delete=models.CASCADE)
@@ -274,14 +356,25 @@ class SolarExpenseSlip(models.Model):
 # 💸 4. ระบบเบิกผลตอบแทนโซล่าเซลล์ (Incentive & Commission)
 # ==========================================
 class SolarCommissionClaim(models.Model):
-    CLAIM_TYPES = [('2%', '2% (จากมัดจำ)'), ('13.5%', '13.5% (จากปิดบิล)')]
+    # 🌟 [FIXED] เปลี่ยนประเภทการเบิก แยกบริหาร(1%) และ กองทุนพัฒนา(1.5%)
+    CLAIM_TYPES = [
+        ('1.5%', '1.5% (Admin)'),
+        ('1%', '1% (Executive)'),               # 🌟 ของใหม่: ผู้บริหารเบิกเดี่ยว
+        ('1.5_FUND%', '1.5% (กองทุนพัฒนา)'),      # 🌟 ของใหม่: กองทุนต้องเบิกร่วมกัน (ใช้คีย์ 1.5_FUND% เพื่อไม่ให้ซ้ำกับ Admin)
+        ('4%', '4% (Sales)'),
+        ('7.5%', '7.5% (Tech)')
+    ]
     STATUS_CHOICES = [('PENDING', 'รอโอนเงิน'), ('PAID', 'โอนเงินแล้ว')]
 
     code = models.CharField(max_length=20, unique=True, verbose_name="เลขที่ใบเบิกผลตอบแทน")
-    claim_type = models.CharField(max_length=10, choices=CLAIM_TYPES, verbose_name="ประเภทการเบิก")
+    claim_type = models.CharField(max_length=15, choices=CLAIM_TYPES, verbose_name="ประเภทการเบิก")
     requester = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, verbose_name="ผู้ทำรายการเบิก")
+
+    # 🌟 [NEW] ฟิลด์ใหม่สำหรับเก็บข้อมูล "พยาน/ผู้ร่วมเบิก" เฉพาะกรณีกองทุนพัฒนา 🌟
+    co_claimer = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, blank=True, related_name='co_claimed_solar_funds', verbose_name="ผู้ร่วมเบิก (Partner)")
+    co_claimer_department = models.CharField(max_length=100, blank=True, null=True, verbose_name="แผนกของผู้ร่วมเบิก")
+
     total_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name="ยอดเงินรวม")
-    # 🌟 [NEW] เพิ่ม 2 บรรทัดนี้ เพื่อเก็บข้อมูลธนาคารของใบเบิกแต่ละใบ 🌟
     bank_name = models.CharField(max_length=100, blank=True, null=True, verbose_name="ธนาคารที่รับเงิน")
     bank_account = models.CharField(max_length=50, blank=True, null=True, verbose_name="เลขที่บัญชี")
     account_name = models.CharField(max_length=150, blank=True, null=True, verbose_name="ชื่อบัญชีธนาคาร")
@@ -295,8 +388,14 @@ class SolarCommissionClaim(models.Model):
         if not self.code:
             now = timezone.now()
             thai_year = (now.year + 543) % 100
-            # แยกรหัส REQ2 และ REQ13
-            prefix = f"REQ2-SOL-{thai_year:02d}{now.strftime('%m')}" if self.claim_type == '2%' else f"REQ13-SOL-{thai_year:02d}{now.strftime('%m')}"
+
+            # 🌟 [FIXED] อัปเดต Prefix ให้รองรับตัวใหม่
+            if self.claim_type == '1.5%': prefix = f"R15-SOL-{thai_year:02d}{now.strftime('%m')}"
+            elif self.claim_type == '1%': prefix = f"R1-SOL-{thai_year:02d}{now.strftime('%m')}"
+            elif self.claim_type == '1.5_FUND%': prefix = f"RF15-SOL-{thai_year:02d}{now.strftime('%m')}"
+            elif self.claim_type == '4%': prefix = f"R4-SOL-{thai_year:02d}{now.strftime('%m')}"
+            else: prefix = f"R75-SOL-{thai_year:02d}{now.strftime('%m')}"
+
             last = SolarCommissionClaim.objects.filter(code__startswith=prefix).order_by('code').last()
             seq = int(last.code.split('-')[-1]) + 1 if last else 1
             self.code = f"{prefix}-{seq:03d}"
@@ -306,11 +405,18 @@ class SolarCommissionClaim(models.Model):
         return self.code
 
 class SolarCommissionTicket(models.Model):
-    TICKET_TYPES = [('2%', '2% (จากมัดจำ)'), ('13.5%', '13.5% (จากปิดบิล)')]
+    # 🌟 [FIXED] อัปเดตประเภทตั๋วให้ตรงกัน
+    TICKET_TYPES = [
+        ('1.5%', '1.5% (Admin)'),
+        ('1%', '1% (Executive)'),
+        ('1.5_FUND%', '1.5% (กองทุนพัฒนา)'),
+        ('4%', '4% (Sales)'),
+        ('7.5%', '7.5% (Tech)')
+    ]
     STATUS_CHOICES = [('AVAILABLE', 'พร้อมเบิก'), ('CLAIMING', 'กำลังตั้งเบิก'), ('PAID', 'จ่ายแล้ว')]
 
     code = models.CharField(max_length=20, unique=True, verbose_name="เลขที่ใบคุมสิทธิ์")
-    ticket_type = models.CharField(max_length=10, choices=TICKET_TYPES, verbose_name="ประเภทสิทธิ์")
+    ticket_type = models.CharField(max_length=15, choices=TICKET_TYPES, verbose_name="ประเภทสิทธิ์")
 
     quotation_ref = models.ForeignKey('SolarQuotation', on_delete=models.CASCADE, null=True, blank=True, verbose_name="อ้างอิงใบเสนอราคา")
     invoice_ref = models.ForeignKey('SolarInvoice', on_delete=models.CASCADE, null=True, blank=True, verbose_name="อ้างอิงใบแจ้งหนี้")
@@ -327,8 +433,14 @@ class SolarCommissionTicket(models.Model):
         if not self.code:
             now = timezone.now()
             thai_year = (now.year + 543) % 100
-            # แยกรหัส C2 และ C13
-            prefix = f"C2-SOL-{thai_year:02d}{now.strftime('%m')}" if self.ticket_type == '2%' else f"C13-SOL-{thai_year:02d}{now.strftime('%m')}"
+
+            # 🌟 [FIXED] อัปเดต Prefix ให้รองรับตัวใหม่
+            if self.ticket_type == '1.5%': prefix = f"C15-SOL-{thai_year:02d}{now.strftime('%m')}"
+            elif self.ticket_type == '1%': prefix = f"C1-SOL-{thai_year:02d}{now.strftime('%m')}"
+            elif self.ticket_type == '1.5_FUND%': prefix = f"CF15-SOL-{thai_year:02d}{now.strftime('%m')}"
+            elif self.ticket_type == '4%': prefix = f"C4-SOL-{thai_year:02d}{now.strftime('%m')}"
+            else: prefix = f"C75-SOL-{thai_year:02d}{now.strftime('%m')}"
+
             last = SolarCommissionTicket.objects.filter(code__startswith=prefix).order_by('code').last()
             seq = int(last.code.split('-')[-1]) + 1 if last else 1
             self.code = f"{prefix}-{seq:03d}"

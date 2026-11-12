@@ -41,7 +41,10 @@ class SolarJobBOMForm(forms.ModelForm):
         widgets = {
             'product': forms.Select(attrs={'class': 'form-select form-select-sm fw-bold'}),
             'planned_quantity': forms.NumberInput(attrs={'class': 'form-control text-center', 'step': '0.01'}),
-            'actual_used_quantity': forms.NumberInput(attrs={'class': 'form-control text-center fw-bold text-primary', 'step': '0.01'}),
+
+            # 🌟 [NEW] เพิ่ม attrs 'readonly': 'readonly' เข้าไปเพื่อล็อคไม่ให้ฝั่ง Center แก้ไขได้
+            'actual_used_quantity': forms.NumberInput(attrs={'class': 'form-control text-center fw-bold text-secondary bg-light border-0', 'step': '0.01', 'readonly': 'readonly'}),
+
             'unit_cost': forms.NumberInput(attrs={'class': 'form-control text-end', 'step': '0.01'}),
         }
 

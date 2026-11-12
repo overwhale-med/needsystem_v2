@@ -1,0 +1,3050 @@
+import math
+import json
+import datetime
+import openpyxl
+import base64
+import pytz # 🌟 นำเข้าโมดูลจัดการโซนเวลา
+from django.core.files.base import ContentFile
+from decimal import Decimal, ROUND_DOWN, InvalidOperation
+
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib.auth.decorators import login_required
+from django.contrib import messages
+from django.http import JsonResponse, HttpResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.db.models import Q, Sum, Count, Max, F, FloatField
+from django.db.models.functions import TruncDate, TruncMonth
+from django.core.paginator import Paginator
+from django.utils.dateparse import parse_date
+from django.utils import timezone
+from datetime import timedelta
+from django.db import transaction
+
+# Models
+from .models import Quotation, QuotationItem, QuotationDeposit, POSOrder, POSOrderItem, Invoice, UpsaleCategory, UpsaleCatalog, QuotationUpsale, InvoicePayment, CustomerLead, Appointment, CommissionClaim, CommissionTicket, CommissionAllocation
+from master_data.models import Customer, CompanyInfo, ShippingRate
+from hr.models import Employee, SalesGroup, CompanySalesTarget, CommissionLog, FundTransaction
+from .forms import QuotationForm
+from manufacturing.models import ProductionOrder, Salesperson as MfgSalesperson, Branch, MfgBranch, ProductionStatus, JobLaborClaim, JobAirconClaim, JobOtherExpense, MasterExpenseClaim, ServiceTicket, ProductionTeam, ServiceTicketMedia, ServiceLaborClaim
+from inventory.models import Product, InventoryDoc, StockMovement, Category
+from solar_jobs.models import SolarJob
+
+# ==========================================
+# 🌟 Helper Function: แปลงวันที่ DD/MM/YYYY เป็น YYYY-MM-DD
+# ==========================================
+def parse_thai_date(date_str):
+    if not date_str:
+        return None
+    try:
+        # ลองแปลงแบบ YYYY-MM-DD ดูก่อน (เผื่อระบบส่งมาถูก)
+        return parse_date(date_str)
+    except:
+        pass
+    try:
+        # ถ้าแปลงไม่ได้ ให้ลองแปลงแบบ DD/MM/YYYY
+        day, month, year = map(int, date_str.split('/'))
+        return datetime.date(year, month, day)
+    except:
+        return None
+
+# ==========================================
+# 🧠 ระบบคำนวณคอมมิชชัน
+# ==========================================
+def process_commission_logic(sale_amount, seller, sale_ref_id):
+    now = timezone.now()
+    sale_amount = Decimal(str(sale_amount))
+    target, _ = CompanySalesTarget.objects.get_or_create(year=now.year, month=now.month)
+    target.current_sales += sale_amount
+    if target.current_sales >= target.target_amount:
+        target.is_unlocked = True
+    target.save()
+
+    exec_group = SalesGroup.objects.filter(group_type='EXECUTIVE').first()
+    if exec_group:
+        exec_pool_amount = sale_amount * (exec_group.commission_rate / Decimal('100'))
+        executives = Employee.objects.filter(sales_group=exec_group)
+        if executives.exists():
+            exact_share = exec_pool_amount / Decimal(str(executives.count()))
+            share_per_head = exact_share.quantize(Decimal('0.00'), rounding=ROUND_DOWN)
+            remainder = exec_pool_amount - (share_per_head * Decimal(str(executives.count())))
+            for ex in executives:
+                CommissionLog.objects.create(recipient=ex, source_employee=seller, level=1, amount=share_per_head, sale_ref_id=sale_ref_id)
+            if remainder > 0:
+                exec_group.fund_balance += remainder
+                exec_group.save()
+                FundTransaction.objects.create(group=exec_group, transaction_type='IN', amount=remainder, description=f"ปัดเศษเข้าสำรองบริหาร จากบิล {sale_ref_id}")
+
+    if not seller or not seller.sales_group: return
+    group = seller.sales_group
+
+    total_group_comm = sale_amount * (group.commission_rate / Decimal('100'))
+    fund_to_add = Decimal('0.00')
+
+    if group.group_type == 'TEAM':
+        exact_leader_share = total_group_comm * (group.share_leader / Decimal('100'))
+        leader_share = exact_leader_share.quantize(Decimal('0.00'), rounding=ROUND_DOWN)
+        fund_to_add += (exact_leader_share - leader_share)
+        leader = Employee.objects.filter(sales_group=group, group_role='LEADER').first()
+        if leader:
+            CommissionLog.objects.create(recipient=leader, source_employee=seller, level=1, amount=leader_share, sale_ref_id=sale_ref_id)
+        else:
+            fund_to_add += leader_share
+
+        exact_l1_share = total_group_comm * (group.share_level1 / Decimal('100'))
+        l1_members = Employee.objects.filter(sales_group=group, group_role='LEVEL1')
+        if l1_members.exists():
+            exact_split = exact_l1_share / Decimal(str(l1_members.count()))
+            split = exact_split.quantize(Decimal('0.00'), rounding=ROUND_DOWN)
+            remainder = exact_l1_share - (split * Decimal(str(l1_members.count())))
+            fund_to_add += remainder
+            for m in l1_members:
+                CommissionLog.objects.create(recipient=m, source_employee=seller, level=2, amount=split, sale_ref_id=sale_ref_id)
+        else:
+            fund_to_add += exact_l1_share
+
+        exact_l2_share = total_group_comm * (group.share_level2 / Decimal('100'))
+        l2_members = Employee.objects.filter(sales_group=group, group_role='LEVEL2')
+        if l2_members.exists():
+            exact_split = exact_l2_share / Decimal(str(l2_members.count()))
+            split = exact_split.quantize(Decimal('0.00'), rounding=ROUND_DOWN)
+            remainder = exact_l2_share - (split * Decimal(str(l2_members.count())))
+            fund_to_add += remainder
+            for m in l2_members:
+                CommissionLog.objects.create(recipient=m, source_employee=seller, level=3, amount=split, sale_ref_id=sale_ref_id)
+        else:
+            fund_to_add += exact_l2_share
+
+        exact_fixed_fund_share = total_group_comm * (group.share_fund / Decimal('100'))
+        fund_to_add += exact_fixed_fund_share
+
+    elif group.group_type == 'INDEPENDENT':
+        exact_fund_share = total_group_comm * (group.share_fund / Decimal('100'))
+        exact_personal_share = total_group_comm - exact_fund_share
+        personal_share = exact_personal_share.quantize(Decimal('0.00'), rounding=ROUND_DOWN)
+        fund_to_add = exact_fund_share + (exact_personal_share - personal_share)
+        CommissionLog.objects.create(recipient=seller, source_employee=seller, level=1, amount=personal_share, sale_ref_id=sale_ref_id)
+
+    if fund_to_add > 0:
+        group.fund_balance += fund_to_add
+        group.save()
+        FundTransaction.objects.create(group=group, transaction_type='IN', amount=fund_to_add, description=f"รับคอมฯและปัดเศษสตางค์ จากบิล {sale_ref_id}")
+
+def get_next_document_number():
+    now = timezone.now()
+    thai_year = (now.year + 543) % 100
+    prefix = f"DLN-{thai_year:02d}{now.strftime('%m')}"
+    last_inv = Invoice.objects.filter(code__startswith=prefix).aggregate(Max('code'))['code__max']
+    last_pos = POSOrder.objects.filter(code__startswith=prefix).aggregate(Max('code'))['code__max']
+    max_seq = 0
+    if last_inv:
+        try: max_seq = max(max_seq, int(last_inv.split('-')[-1]))
+        except: pass
+    if last_pos:
+        try: max_seq = max(max_seq, int(last_pos.split('-')[-1]))
+        except: pass
+    return f"{prefix}-{max_seq + 1:03d}"
+
+def get_target_employees(user):
+    current_emp = getattr(user, 'employee', None)
+    if user.is_superuser: return Employee.objects.all(), "Admin View"
+    elif current_emp:
+        dept_name = current_emp.department.name if current_emp.department else ""
+        if 'บัญชี' in dept_name or 'Accounting' in dept_name: return Employee.objects.all(), "Accounting View"
+        rank = current_emp.business_rank.lower() if current_emp.business_rank else ""
+        if rank in ['manager', 'director']: return Employee.objects.all(), "Manager View"
+        elif rank == 'supervisor':
+            if current_emp.department: return Employee.objects.filter(department=current_emp.department), f"Team {current_emp.department.name}"
+            else: return Employee.objects.filter(Q(id=current_emp.id) | Q(introducer=current_emp)), "Direct Team"
+        else: return Employee.objects.filter(id=current_emp.id), "Self View"
+    return Employee.objects.none(), "-"
+
+def get_sales_queryset(model_class, user, target_employees):
+    if user.is_superuser: return model_class.objects.all()
+    if hasattr(user, 'employee') and user.employee:
+        dept_name = user.employee.department.name if user.employee.department else ""
+        rank = user.employee.business_rank.lower() if user.employee.business_rank else ""
+        if 'บัญชี' in dept_name or rank in ['manager', 'director']: return model_class.objects.all()
+
+    emp_ids = list(target_employees.values_list('id', flat=True))
+    return model_class.objects.filter(employee_id__in=emp_ids)
+
+def is_sales_authorized(user):
+    if user.is_superuser: return True
+    if hasattr(user, 'employee') and user.employee:
+        dept = user.employee.department.name if user.employee.department else ''
+        if 'ขาย' in dept or 'Sales' in dept: return True
+    return False
+
+# ==========================================
+# หน้า Sales Hub และ Dashboards
+# ==========================================
+@login_required
+def sales_dashboard(request):
+    if not is_sales_authorized(request.user): return redirect('dashboard')
+
+    target_employees, scope_title = get_target_employees(request.user)
+
+    # 🌟 [FIXED] ใช้เวลาประเทศไทย
+    tz_bkk = pytz.timezone('Asia/Bangkok')
+    today_bkk = timezone.now().astimezone(tz_bkk).date()
+
+    # 🌟 [NEW] ระบบดึงข้อมูลสาขา เพื่อใช้เป็น Dropdown ตัวกรอง
+    from hr.models import Department
+    is_manager = False
+    is_supervisor = False
+    current_emp = getattr(request.user, 'employee', None)
+
+    if request.user.is_superuser:
+        is_manager = True
+    elif current_emp:
+        rank = current_emp.business_rank.lower() if current_emp.business_rank else ""
+        if rank in ['manager', 'director'] or 'manager' in getattr(current_emp.position, 'title', '').lower() or 'บัญชี' in getattr(current_emp.department, 'name', ''):
+            is_manager = True
+        elif rank == 'supervisor':
+            is_supervisor = True
+
+    # 🌟 โหลดรายชื่อสาขาหรือลูกทีมตามสิทธิ์
+    team_members = []
+    if is_manager:
+        # 🌟 [FIXED] ดึงเฉพาะแผนกที่มีคำว่า "สาขา" เท่านั้น (ตัดทีมช่างออก)
+        departments = list(Department.objects.filter(
+            name__icontains='สาขา'
+        ).order_by('name'))
+        for d in departments: d.name = d.name.replace('แผนก', '').strip()
+    elif is_supervisor and current_emp.department:
+        departments = []
+        # 🌟 [NEW] ถ้าเป็นหัวหน้าสาขา ให้ดึงรายชื่อเซลส์ในสาขานั้นมาแทน
+        team_members = list(Employee.objects.filter(department=current_emp.department).order_by('first_name'))
+    else:
+        departments = []
+
+    if is_manager:
+        template_name = 'dashboards/knockdown/manager.html'
+    elif is_supervisor:
+        template_name = 'dashboards/knockdown/supervisor.html'
+    else:
+        template_name = 'dashboards/knockdown/sales.html'
+
+    return render(request, template_name, {
+        'scope_title': scope_title,
+        'start_date': today_bkk.strftime('%Y-%m-%d'),
+        'end_date': today_bkk.strftime('%Y-%m-%d'),
+        'departments': departments,
+        'team_members': team_members, # 🌟 [NEW] ส่งรายชื่อลูกทีมไปหน้าเว็บ
+        'is_manager': is_manager,
+        'is_supervisor': is_supervisor
+    })
+
+@login_required
+def sales_hub(request):
+    if not is_sales_authorized(request.user):
+        messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์เปิดบิลขาย")
+        return redirect('dashboard')
+
+@login_required
+def api_dashboard_data(request):
+    if not is_sales_authorized(request.user): return JsonResponse({'error': 'Unauthorized'}, status=403)
+
+    target_employees, scope_title = get_target_employees(request.user)
+    emp = getattr(request.user, 'employee', None)
+
+    # 🌟 [FIXED] ใช้เวลาประเทศไทย
+    tz_bkk = pytz.timezone('Asia/Bangkok')
+    today_bkk = timezone.now().astimezone(tz_bkk).date()
+
+    start_date_str = request.GET.get('start_date')
+    end_date_str = request.GET.get('end_date')
+
+    start_date = parse_date(start_date_str) if start_date_str else today_bkk
+    end_date = parse_date(end_date_str) if end_date_str else today_bkk
+    end_date_inclusive = end_date + timedelta(days=1)
+
+    branch_filter = request.GET.get('branch', '')
+    emp_filter = request.GET.get('employee', '') # 🌟 รับค่าจากกล่องเลือกพนักงาน
+
+    user_rank = emp.business_rank.lower() if (emp and emp.business_rank) else "member"
+
+    # 🌟 [UPDATE] ปรับปรุงระบบกรองให้รองรับคำสั่ง 3 โหมด
+    if branch_filter and (user_rank in ['manager', 'director'] or request.user.is_superuser):
+        if branch_filter != 'sum_only': # 🌟 [NEW] ถ้าสั่งรวมยอด ไม่ต้องกรอง ID สาขา
+            target_employees = target_employees.filter(department_id=branch_filter)
+    elif emp_filter and user_rank == 'supervisor':
+        # 🌟 ถ้าหน้าบ้านส่งคำสั่งพิเศษมา ไม่ต้องกรอง ID แต่ถ้าส่งเป็นตัวเลขมา ให้กรองตามนั้น
+        if emp_filter not in ['sum_only', 'compare_all']:
+            target_employees = target_employees.filter(id=emp_filter)
+
+    pos_qs_all = get_sales_queryset(POSOrder, request.user, target_employees).filter(created_at__gte=start_date, created_at__lt=end_date_inclusive)
+    inv_qs_all = get_sales_queryset(Invoice, request.user, target_employees).filter(date__gte=start_date, date__lte=end_date)
+
+    total_sales = float((pos_qs_all.filter(status='PAID').aggregate(Sum('total_amount'))['total_amount__sum'] or 0) +
+                        (inv_qs_all.filter(status='PAID').aggregate(Sum('grand_total'))['grand_total__sum'] or 0))
+
+    today_start = datetime.datetime.combine(today_bkk, datetime.time.min)
+    today_start = tz_bkk.localize(today_start) # ระบุโซนเวลาให้ datetime
+    tomorrow_start = today_start + timedelta(days=1)
+
+    pos_today_count = get_sales_queryset(POSOrder, request.user, target_employees).filter(created_at__gte=today_start, created_at__lt=tomorrow_start).count()
+    inv_today_count = get_sales_queryset(Invoice, request.user, target_employees).filter(date=today_bkk).count()
+    total_orders_today = pos_today_count + inv_today_count
+
+    qt_all_qs = get_sales_queryset(Quotation, request.user, target_employees)
+    pending_approval = qt_all_qs.filter(status='DRAFT').count()
+    pending_closing = qt_all_qs.filter(status='APPROVED', is_deposit_paid=False).count()
+    in_production = qt_all_qs.filter(status='APPROVED', is_deposit_paid=True).count()
+
+    chart_labels, chart_data, chart_title, chart_type = [], [], "", "bar"
+
+    pos_raw = list(pos_qs_all.filter(status='PAID').values('total_amount', 'employee__department__name', 'employee__first_name'))
+    inv_raw = list(inv_qs_all.filter(status='PAID').values('grand_total', 'employee__department__name', 'employee__first_name'))
+
+    # 🌟 บังคับกราฟให้เป็นเปรียบเทียบทีม/สาขา หรือ พนักงานเสมอ (ผลรวมจะตรงกับบัตร 100%) 🌟
+    if user_rank in ['manager', 'director'] or request.user.is_superuser:
+        if branch_filter == 'sum_only': # 🌟 [NEW] โหมดดูเฉพาะยอดขายรวม
+            chart_title = "ยอดขายรวมทุกสาขา"
+            chart_labels = ["ยอดรวมสุทธิ"]
+            chart_data = [total_sales]
+        else:
+            chart_title = "ยอดขายเปรียบเทียบรายสาขา"
+            team_dict = {}
+            for p in pos_raw:
+                t = p['employee__department__name'] or 'ไม่ระบุสาขา'
+                team_dict[t] = team_dict.get(t, 0) + float(p['total_amount'] or 0)
+            for i in inv_raw:
+                t = i['employee__department__name'] or 'ไม่ระบุสาขา'
+                team_dict[t] = team_dict.get(t, 0) + float(i['grand_total'] or 0)
+
+            sorted_data = sorted(team_dict.items(), key=lambda x: x[1], reverse=True)
+            chart_labels, chart_data = [x[0] for x in sorted_data], [x[1] for x in sorted_data]
+
+    elif user_rank == 'supervisor':
+
+        # 🌟 โหมด 1: ดูเฉพาะยอดขาย (รวมกันเป็นแท่งเดียว)
+        if emp_filter == 'sum_only':
+            dept_name = emp.department.name if (emp and emp.department) else ''
+            chart_title = f"ยอดขายรวมทั้งทีม ({dept_name})"
+            chart_labels = ["ยอดรวมสุทธิ"]
+            chart_data = [total_sales]
+
+        # 🌟 โหมด 3: เลือกรายบุคคล (กราฟแท่งเดียวของคนนั้น)
+        elif emp_filter and emp_filter != 'compare_all':
+            chart_title = "ยอดขายส่วนตัว"
+            emp_name = target_employees.first().first_name if target_employees.exists() else "พนักงาน"
+            chart_labels = [emp_name]
+            chart_data = [total_sales]
+
+        # 🌟 โหมด 2: ดูเปรียบเทียบทุกคน (ค่าเริ่มต้น - กราฟหลายแท่งแข่งขันกัน)
+        else:
+            chart_title = f"ยอดขายเปรียบเทียบพนักงานในทีม"
+            mem_dict = {}
+            for p in pos_raw:
+                m = p['employee__first_name'] or 'ไม่ระบุชื่อ'
+                mem_dict[m] = mem_dict.get(m, 0) + float(p['total_amount'] or 0)
+            for i in inv_raw:
+                m = i['employee__first_name'] or 'ไม่ระบุชื่อ'
+                mem_dict[m] = mem_dict.get(m, 0) + float(i['grand_total'] or 0)
+
+            sorted_data = sorted(mem_dict.items(), key=lambda x: x[1], reverse=True)
+            chart_labels, chart_data = [x[0] for x in sorted_data], [x[1] for x in sorted_data]
+
+    else:
+        chart_title = "ยอดขายส่วนตัว"
+        chart_labels = [emp.first_name if emp else 'พนักงาน']
+        chart_data = [total_sales]
+
+    recent_pos = list(get_sales_queryset(POSOrder, request.user, target_employees)
+                      .filter(created_at__gte=start_date, created_at__lt=end_date_inclusive)
+                      .select_related('employee', 'employee__department')
+                      .order_by('-created_at')[:10])
+
+    recent_inv = list(get_sales_queryset(Invoice, request.user, target_employees)
+                      .filter(date__gte=start_date, date__lte=end_date)
+                      .select_related('employee', 'employee__department', 'quotation_ref')
+                      .prefetch_related('quotation_ref__production_orders')
+                      .order_by('-created_at')[:10])
+
+    combined = sorted(recent_pos + recent_inv, key=lambda x: x.created_at, reverse=True)[:10]
+    recent_sales_data = []
+
+    for item in combined:
+        is_pos = isinstance(item, POSOrder)
+        qt, job = "-", "-"
+
+        if not is_pos and getattr(item, 'quotation_ref', None):
+            qt = item.quotation_ref.code
+            jobs = item.quotation_ref.production_orders.all()
+            if jobs.exists(): job = ", ".join([j.code for j in jobs])
+
+        # แปลงเวลาสร้างให้เป็นโซนเวลาไทยก่อนแสดงผล
+        item_time_bkk = item.created_at.astimezone(tz_bkk)
+
+        recent_sales_data.append({
+            'time': item_time_bkk.strftime('%H:%M') if item_time_bkk.date() == today_bkk else item_time_bkk.strftime('%d/%m/%Y'),
+            'code': item.code, 'is_pos': is_pos, 'qt_code': qt, 'job_code': job,
+            'employee_name': item.employee.first_name if item.employee else '-',
+            'employee_branch': item.employee.department.name if item.employee and item.employee.department else '-',
+            'employee_photo': item.employee.photo.url if item.employee and getattr(item.employee, 'photo', None) else None,
+            'employee_initial': item.employee.first_name[0] if item.employee and item.employee.first_name else '-',
+            'amount': float(item.total_amount) if is_pos else float(item.grand_total)
+        })
+
+    # 🌟 [NEW] สมองกลคำนวณยอดรายได้สะสม (คอมมิชชัน) ที่โอนแล้ว ของพนักงานที่ล็อกอินอยู่
+    accumulated_commission = 0
+    if emp:
+        accumulated_commission = CommissionAllocation.objects.filter(
+            employee=emp,
+            status='PAID'
+        ).aggregate(Sum('amount'))['amount__sum'] or 0
+
+    response_data = {
+        'total_sales': total_sales, 'total_orders_today': total_orders_today,
+        'pending_approval': pending_approval, 'pending_closing': pending_closing,
+        'in_production': in_production, 'chart_labels': chart_labels,
+        'chart_data': chart_data, 'chart_title': chart_title,
+        'chart_type': chart_type, 'scope_title': scope_title,
+        'recent_sales': recent_sales_data,
+        # 🌟 [NEW] แพ็คยอดเงินสะสม ส่งขึ้นรถไปให้หน้าเว็บแสดงผลที่การ์ดสีเขียว
+        'accumulated_commission': float(accumulated_commission)
+    }
+
+    return JsonResponse(response_data)
+
+@login_required
+def sales_hub(request):
+    if not is_sales_authorized(request.user):
+        messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์เปิดบิลขาย")
+        return redirect('dashboard')
+
+    target_employees, _ = get_target_employees(request.user)
+    qt_qs = get_sales_queryset(Quotation, request.user, target_employees)
+    inv_qs = get_sales_queryset(Invoice, request.user, target_employees)
+    pos_qs = get_sales_queryset(POSOrder, request.user, target_employees)
+
+    # 🌟 [FIXED] ใช้เวลาประเทศไทย
+    tz_bkk = pytz.timezone('Asia/Bangkok')
+    today_bkk = timezone.now().astimezone(tz_bkk).date()
+
+    ready_quotes = qt_qs.filter(status='APPROVED').order_by('-created_at')
+
+    # คำนวณขอบเขตของ "วันนี้" ตามเวลาไทย
+    today_start = tz_bkk.localize(datetime.datetime.combine(today_bkk, datetime.time.min))
+    tomorrow_start = today_start + timedelta(days=1)
+
+    today_invoices = inv_qs.filter(date=today_bkk).order_by('-created_at')
+    today_pos = pos_qs.filter(created_at__gte=today_start, created_at__lt=tomorrow_start).order_by('-created_at')
+
+    return render(request, 'sales/sales_hub.html', {
+        'ready_quotes': ready_quotes,
+        'today_invoices': today_invoices,
+        'today_pos': today_pos
+    })
+
+@login_required
+@transaction.atomic
+def record_deposit(request, qt_id):
+    qt = get_object_or_404(Quotation, pk=qt_id)
+    if request.method == 'POST':
+        amount_str = request.POST.get('deposit_amount', '0').replace(',', '')
+        try: amount = Decimal(amount_str)
+        except: amount = Decimal(0)
+
+        method = request.POST.get('deposit_method', 'TRANSFER')
+        date_str = request.POST.get('deposit_date')
+        next_url = request.POST.get('next')
+
+        if amount > 0:
+            # 🌟 [NEW] สร้างรหัส RVD ใหม่ 🌟
+            tz_bkk = pytz.timezone('Asia/Bangkok')
+            now_bkk = timezone.now().astimezone(tz_bkk)
+            thai_year = (now_bkk.year + 543) % 100
+            prefix = f"RVD-{thai_year:02d}{now_bkk.strftime('%m')}"
+
+            last_deposit = QuotationDeposit.objects.filter(code__startswith=prefix).order_by('code').last()
+            seq = int(last_deposit.code.split('-')[-1]) + 1 if last_deposit else 1
+            new_rvd_code = f"{prefix}-{seq:03d}"
+
+            # 🌟 [NEW] สร้างเรคคอร์ดมัดจำในตาราง QuotationDeposit ใหม่ 🌟
+            new_deposit = QuotationDeposit.objects.create(
+                code=new_rvd_code,
+                quotation=qt,
+                amount=amount,
+                payment_method=method,
+                deposit_date=parse_thai_date(date_str) if date_str else now_bkk.date()
+            )
+
+            if 'deposit_slip' in request.FILES:
+                new_deposit.deposit_slip = request.FILES['deposit_slip']
+                new_deposit.save()
+
+            # 🌟 [UPDATE] อัปเดตสถานะให้ Quotation แม่ ว่ามีการจ่ายมัดจำแล้ว (แต่ยังไม่ยืนยัน) 🌟
+            qt.is_deposit_paid = True
+            qt.is_deposit_verified = False # ต้องให้บัญชีมาตรวจใหม่ทุกครั้งที่มีการจ่ายมัดจำเพิ่ม
+
+            # ลบฟิลด์มัดจำเก่าทิ้ง เพื่อบังคับให้ระบบใหม่ดึงจากตารางใหม่ 100%
+            qt.deposit_code = None
+
+            # 🌟 [FIXED] ห้ามเซ็ตเป็น 0 ครับ! ให้มันบวกยอดมัดจำรวมไว้ที่ฟิลด์นี้ด้วย เพื่อใช้คำนวณ balance_due
+            current_deposit = qt.deposit_amount if qt.deposit_amount else Decimal('0.00')
+            qt.deposit_amount = current_deposit + amount
+            qt.save()
+
+            messages.success(request, f"💰 บันทึกรับมัดจำ {amount:,.2f} บาท และสร้างใบเสร็จ {new_deposit.code} เรียบร้อยแล้ว")
+        else:
+            messages.error(request, "❌ จำนวนเงินมัดจำต้องมากกว่า 0")
+
+        if next_url: return redirect(next_url)
+
+    return redirect('quotation_edit', qt_id=qt.id)
+
+# ==========================================
+# 🌟 สมองกลคำนวณวันจัดส่งอัตโนมัติ (แก้ไขใหม่) 🌟
+# ==========================================
+def get_auto_delivery_date(qt):
+    # 🌟 [FIXED] ดึงสินค้าตัวแรกสุดมาคำนวณทันที ป้องกันกรณีสินค้าไม่ได้ผูกรหัสในคลัง
+    first_item = qt.items.first()
+
+    # ถ้าไม่มีสินค้าเลย ให้คำนวณโควตาจาก 1 หลังเป็นค่าเริ่มต้น
+    total_qty = first_item.quantity if first_item else 1
+
+    from master_data.models import CompanyInfo
+    from manufacturing.models import ProductionOrder
+    company_info = CompanyInfo.objects.first()
+    max_quota = company_info.weekly_job_quota if company_info and company_info.weekly_job_quota else 25
+
+    # เช็ควันที่รับมัดจำ (ถ้าไม่มีให้ใช้วันนี้)
+    deposit_date = qt.deposit_date if qt.deposit_date else timezone.now().date()
+    current_check_date = deposit_date
+    weeks_pushed = 0
+
+    while True:
+        iso_year, iso_week, _ = current_check_date.isocalendar()
+        check_cohort = f"{iso_year}-W{iso_week:02d}"
+
+        total_qty_in_week = ProductionOrder.objects.filter(cohort_week=check_cohort, is_closed=False).aggregate(Sum('quantity'))['quantity__sum'] or 0
+
+        # ถ้าคิวสัปดาห์นั้นบวกจำนวนนี้แล้วไม่ล้นโควตา ให้หยุดคำนวณ
+        if total_qty_in_week + total_qty <= max_quota:
+            break
+
+        # ถ้าล้น ให้ปัดไปสัปดาห์ถัดไป
+        weeks_pushed += 1
+        current_check_date += datetime.timedelta(days=7)
+
+    # คำนวณ Lead Time: 14 วันพื้นฐาน + 7 วันต่อสัปดาห์ที่โดนปัด
+    base_lead_time = 14 + (weeks_pushed * 7)
+    delivery_start_date = deposit_date + datetime.timedelta(days=base_lead_time)
+
+    # ปัดให้ไปตกวันศุกร์เสมอเพื่อความเป็นระเบียบ
+    days_to_monday = delivery_start_date.weekday()
+    monday_of_delivery_week = delivery_start_date - datetime.timedelta(days=days_to_monday)
+
+    return monday_of_delivery_week + datetime.timedelta(days=4) # วันศุกร์
+
+@login_required
+def create_job_order(request, qt_id):
+    qt = get_object_or_404(Quotation, pk=qt_id)
+
+    if qt.production_orders.exists():
+        messages.warning(request, f"⚠️ ใบเสนอราคา {qt.code} ถูกส่งสั่งผลิตไปแล้ว!")
+        return redirect('quotation_list')
+
+    if qt.is_deposit_paid and not qt.is_deposit_verified:
+        messages.error(request, f"❌ ไม่สามารถส่งสั่งผลิตได้ บัญชียังไม่ได้ตรวจสอบสลิปเงินมัดจำของ {qt.code}")
+        return redirect('quotation_list')
+
+    first_item = qt.items.filter(product__isnull=False).first()
+    if not first_item:
+        messages.error(request, "❌ ไม่พบข้อมูลสินค้า (FG) ในใบเสนอราคา ไม่สามารถสร้างใบสั่งผลิตได้")
+        return redirect('quotation_list')
+
+    company_info = CompanyInfo.objects.first()
+    max_quota = company_info.weekly_job_quota if company_info and company_info.weekly_job_quota else 25
+
+    deposit_date = qt.deposit_date if qt.deposit_date else timezone.now().date()
+    current_check_date = deposit_date
+    weeks_pushed = 0
+    assigned_cohort = ""
+
+    while True:
+        iso_year, iso_week, _ = current_check_date.isocalendar()
+        check_cohort = f"{iso_year}-W{iso_week:02d}"
+
+        total_qty_in_week = ProductionOrder.objects.filter(cohort_week=check_cohort, is_closed=False).aggregate(Sum('quantity'))['quantity__sum'] or 0
+
+        if total_qty_in_week + first_item.quantity <= max_quota:
+            assigned_cohort = check_cohort
+            break
+
+        weeks_pushed += 1
+        current_check_date += datetime.timedelta(days=7)
+
+    base_lead_time = 14 + (weeks_pushed * 7)
+    start_date = deposit_date + datetime.timedelta(days=(weeks_pushed * 7))
+    delivery_start_date = deposit_date + datetime.timedelta(days=base_lead_time)
+
+    days_to_monday = delivery_start_date.weekday()
+    monday_of_delivery_week = delivery_start_date - datetime.timedelta(days=days_to_monday)
+
+    total_qty = int(first_item.quantity)
+    daily_qty = math.ceil(total_qty / 5.0)
+
+    delivery_plan_note = f"\n\n🚚 แผนการจัดส่ง (เฉลี่ยวันละ {daily_qty} หลัง):\n"
+    remaining_qty = total_qty
+    for i in range(5):
+        current_day = monday_of_delivery_week + datetime.timedelta(days=i)
+        qty_today = min(daily_qty, remaining_qty)
+        if qty_today > 0:
+            delivery_plan_note += f"- {current_day.strftime('%d/%m/%Y')} ({['จันทร์', 'อังคาร', 'พุธ', 'พฤหัสฯ', 'ศุกร์'][i]}): ส่ง {qty_today} หลัง\n"
+        remaining_qty -= qty_today
+
+    final_delivery_date = monday_of_delivery_week + datetime.timedelta(days=4)
+
+    target_date_str = request.POST.get('target_date')
+
+    requested_date_obj = parse_thai_date(target_date_str) if target_date_str else None
+
+    if requested_date_obj and requested_date_obj != final_delivery_date:
+        approval_status = 'PENDING'
+        req_date = requested_date_obj
+        deadline = requested_date_obj
+    else:
+        approval_status = 'NOT_REQUIRED'
+        req_date = None
+        deadline = final_delivery_date
+
+    sales_obj = None
+    if qt.employee:
+        emp_name = f"{qt.employee.first_name} {qt.employee.last_name}".strip()
+        branch_name = qt.employee.department.name if qt.employee.department else "สำนักงานใหญ่"
+        sales_branch_obj, _ = Branch.objects.get_or_create(name=branch_name)
+        sales_obj, _ = MfgSalesperson.objects.get_or_create(name=emp_name, branch=sales_branch_obj)
+
+    is_onsite_val = request.POST.get('is_onsite') == 'on'
+
+    job = ProductionOrder.objects.create(
+        product=first_item.product,
+        quantity=total_qty,
+        quotation_ref=qt,
+        customer_name=qt.customer_name,
+        note=f"อ้างอิงใบเสนอราคา: {qt.code}\n{qt.note}{delivery_plan_note}",
+        salesperson=sales_obj,
+        branch=None,
+        start_date=start_date,
+        delivery_date=deadline,
+        deadline_date=deadline,
+        auto_calculated_date=final_delivery_date,
+        requested_date=req_date,
+        date_approval_status=approval_status,
+        cohort_week=assigned_cohort,
+        is_onsite=is_onsite_val
+    )
+
+    if first_item.product and first_item.product.standard_blueprint:
+        job.blueprint_file = first_item.product.standard_blueprint
+        job.save()
+
+    if first_item.product:
+        p_name = first_item.product.name.lower()
+        c_name = first_item.product.category.name.lower() if hasattr(first_item.product, 'category') and first_item.product.category else ""
+
+        if 'โซล่า' in p_name or 'solar' in p_name or 'โซล่า' in c_name or 'solar' in c_name:
+            try:
+                SolarJob.objects.create(
+                    customer=qt.customer,
+                    salesperson=qt.employee,
+                    package_sold=first_item.product,
+                    status='DRAFT',
+                    note=f"📌 สร้างอัตโนมัติจากใบเสนอราคา {qt.code}\nรายละเอียดเพิ่มเติม: {qt.note}"
+                )
+            except Exception as e:
+                print(f"เกิดข้อผิดพลาดในการสร้าง Solar Job: {e}")
+
+    if approval_status == 'PENDING':
+        messages.warning(request, f"🏭 ส่งสั่งผลิตสำเร็จ! (ระบบตั้งสถานะ 'รออนุมัติวัน' เนื่องจากขอเปลี่ยนวันจัดส่งเป็น {req_date.strftime('%d/%m/%Y')})")
+    elif weeks_pushed > 0:
+        messages.warning(request, f"⚠️ คิวผลิตสัปดาห์แรกล้น! ระบบปัดคิวงาน {job.code} ไปสัปดาห์ถัดไป (กำหนดส่ง: {final_delivery_date.strftime('%d/%m/%Y')})")
+    else:
+        onsite_txt = " 👷‍♂️(ประกอบหน้างาน)" if is_onsite_val else ""
+        messages.success(request, f"🏭 ส่งข้อมูลเข้ากองกลางผลิตสำเร็จ (Job Order: {job.code}){onsite_txt}! (กำหนดส่ง: {deadline.strftime('%d/%m/%Y')})")
+
+    return redirect('quotation_list')
+
+
+# ==========================================
+# 🌟 [NEW] หน้าระบบ Timeline และ Dashboards สำหรับงานขาย 🌟
+# ==========================================
+@login_required
+def sales_timeline(request):
+    if not is_sales_authorized(request.user):
+        messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์เข้าถึงหน้า Timeline")
+        return redirect('dashboard')
+
+    # 🌟 [FIXED] ใช้เวลาประเทศไทย
+    tz_bkk = pytz.timezone('Asia/Bangkok')
+    today_bkk = timezone.now().astimezone(tz_bkk).date()
+
+    company_info = CompanyInfo.objects.first()
+    max_quota = company_info.weekly_job_quota if company_info and company_info.weekly_job_quota else 25
+
+    deposit_date_str = request.GET.get('deposit_date')
+    if deposit_date_str:
+        try: calc_deposit_date = parse_thai_date(deposit_date_str) or today_bkk
+        except: calc_deposit_date = today_bkk
+    else:
+        calc_deposit_date = today_bkk
+
+    current_check_date = calc_deposit_date
+    weeks_pushed = 0
+    while True:
+        iso_year, iso_week, _ = current_check_date.isocalendar()
+        check_cohort = f"{iso_year}-W{iso_week:02d}"
+
+        total_qty_in_week = ProductionOrder.objects.filter(cohort_week=check_cohort, is_closed=False).aggregate(Sum('quantity'))['quantity__sum'] or 0
+
+        if total_qty_in_week < max_quota:
+            break
+
+        weeks_pushed += 1
+        current_check_date += datetime.timedelta(days=7)
+
+    smart_eta_date = calc_deposit_date + datetime.timedelta(days=22 + (weeks_pushed * 7))
+
+    def format_week_range(d):
+        iso_y, iso_w, _ = d.isocalendar()
+        monday = datetime.date.fromisocalendar(iso_y, iso_w, 1)
+        sunday = monday + datetime.timedelta(days=6)
+        y_str = str(sunday.year + 543)[-2:]
+        if monday.month == sunday.month:
+            return f"จ.{monday.day}-อา.{sunday.day}/{monday.month}/{y_str}"
+        else:
+            return f"จ.{monday.day}/{monday.month}-อา.{sunday.day}/{sunday.month}/{y_str}"
+
+    chart_labels = []
+    chart_labels_display = []
+    chart_week_starts = []
+    chart_week_ends = []
+
+    chart1_ordered = []
+    chart1_pending = []
+    chart1_delivered = []
+
+    start_date = today_bkk - datetime.timedelta(weeks=4)
+    for i in range(8):
+        w_date = start_date + datetime.timedelta(weeks=i)
+        iso_year, iso_week, _ = w_date.isocalendar()
+        cohort = f"{iso_year}-W{iso_week:02d}"
+
+        monday = datetime.date.fromisocalendar(iso_year, iso_week, 1)
+        sunday = monday + datetime.timedelta(days=6)
+
+        chart_labels.append(cohort)
+        chart_labels_display.append(format_week_range(w_date))
+        chart_week_starts.append(monday.strftime('%Y-%m-%d'))
+        chart_week_ends.append(sunday.strftime('%Y-%m-%d'))
+
+        ordered = ProductionOrder.objects.filter(cohort_week=cohort).exclude(status='CANCELLED').aggregate(Sum('quantity'))['quantity__sum'] or 0
+        pending = ProductionOrder.objects.filter(cohort_week=cohort, status='COMPLETED', is_closed=False).aggregate(Sum('quantity'))['quantity__sum'] or 0
+        deli = ProductionOrder.objects.filter(cohort_week=cohort, is_closed=True).aggregate(Sum('quantity'))['quantity__sum'] or 0
+
+        chart1_ordered.append(int(ordered))
+        chart1_pending.append(int(pending))
+        chart1_delivered.append(int(deli))
+
+    filter_date_str = request.GET.get('filter_date')
+    if filter_date_str:
+        try: filter_date = parse_thai_date(filter_date_str) or today_bkk
+        except: filter_date = today_bkk
+    else:
+        filter_date = today_bkk
+
+    f_iso_year, f_iso_week, _ = filter_date.isocalendar()
+    target_cohort = f"{f_iso_year}-W{f_iso_week:02d}"
+    filter_week_display = format_week_range(filter_date)
+
+    branches = MfgBranch.objects.all().order_by('id')
+    chart2_labels = []
+    chart2_data = []
+    chart2_bg_colors = ['#0d6efd', '#ffc107', '#198754', '#dc3545', '#6f42c1', '#0dcaf0', '#fd7e14']
+
+    for b in branches:
+        chart2_labels.append(b.name)
+        qty = ProductionOrder.objects.filter(cohort_week=target_cohort, branch=b).aggregate(Sum('quantity'))['quantity__sum'] or 0
+        chart2_data.append(int(qty))
+
+    return render(request, 'sales/sales_timeline.html', {
+        'today': today_bkk,
+        'calc_deposit_date': calc_deposit_date,
+        'smart_eta_date': smart_eta_date,
+        'filter_date': filter_date,
+        'filter_week_display': filter_week_display,
+        'chart_labels_display_json': json.dumps(chart_labels_display),
+        'chart_week_starts_json': json.dumps(chart_week_starts),
+        'chart_week_ends_json': json.dumps(chart_week_ends),
+        'chart1_ordered_json': json.dumps(chart1_ordered),
+        'chart1_pending_json': json.dumps(chart1_pending),
+        'chart1_delivered_json': json.dumps(chart1_delivered),
+        'chart2_labels_json': json.dumps(chart2_labels),
+        'chart2_data_json': json.dumps(chart2_data),
+        'chart2_colors_json': json.dumps(chart2_bg_colors[:len(branches)]),
+    })
+
+@login_required
+@transaction.atomic
+def convert_quote_to_invoice(request, qt_id):
+    qt = get_object_or_404(Quotation, pk=qt_id)
+    new_code = get_next_document_number()
+
+    balance = qt.grand_total - qt.deposit_amount
+    status = 'PAID' if balance <= 0 else 'UNPAID'
+
+    # 🌟 [FIXED] ใช้เวลาประเทศไทย
+    tz_bkk = pytz.timezone('Asia/Bangkok')
+    today_bkk = timezone.now().astimezone(tz_bkk).date()
+
+    invoice = Invoice.objects.create(
+        code=new_code,
+        quotation_ref=qt,
+        date=today_bkk,
+        customer=qt.customer,
+        employee=request.user.employee if hasattr(request.user, 'employee') else None,
+        grand_total=qt.grand_total,
+        deposit_amount=qt.deposit_amount,
+        balance_amount=balance,
+        status=status
+    )
+    qt.status = 'CONVERTED'
+    qt.save()
+
+    for job in qt.production_orders.all():
+        if not job.is_closed:
+            job.is_closed = True
+            job.save()
+
+        # 🌟 [NEW] ย้ายจุดตัดสต็อกมาไว้ตอนเปิดบิล
+        search_keyword = f"{job.code}"
+        job_product = Product.objects.filter(code__icontains=search_keyword).first()
+
+        if not job_product:
+            job_product = job.product
+
+        already_dispatched = StockMovement.objects.filter(
+            product=job_product,
+            movement_type='DISPATCH',
+            reference_doc=new_code
+        ).exists()
+
+        if not already_dispatched:
+            StockMovement.objects.create(
+                doc=None,
+                product=job_product,
+                quantity=Decimal(str(job.quantity)),
+                movement_type='DISPATCH',
+                reference_doc=new_code,
+                note=f"เบิกออก (เปิดบิล) อ้างอิงใบแจ้งหนี้: {new_code}",
+                created_by=request.user
+            )
+
+            # 🌟 [FIXED] เพิ่ม 2 บรรทัดนี้ เพื่อหักตัวเลขสต็อกคงเหลือในระบบจริงๆ 🌟
+            job_product.stock_qty -= Decimal(str(job.quantity))
+            job_product.save()
+
+    messages.success(request, f"✅ เปิดใบขายสินค้า {new_code} เรียบร้อย และตัดสต็อกสินค้าแล้ว (ยอดคงค้างชำระ: {balance:,.2f} บาท)")
+    return redirect('invoice_list')
+
+@login_required
+def pos_home(request):
+    if not is_sales_authorized(request.user):
+        messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์ใช้งานระบบ POS")
+        return redirect('dashboard')
+    products = Product.objects.filter(is_active=True, stock_qty__gt=0, product_type='FG')
+    categories = Category.objects.all()
+    return render(request, 'sales/pos_home.html', {'products': products, 'categories': categories})
+
+@csrf_exempt
+@login_required
+@transaction.atomic
+def pos_checkout(request):
+    if request.method == 'POST':
+        try:
+            payment_method = request.POST.get('payment_method', 'CASH')
+            total_amount = Decimal(request.POST.get('total_amount', 0))
+            received_amount = Decimal(request.POST.get('received_amount', 0))
+
+            cust_id = request.POST.get('customer_id')
+            cust_name = request.POST.get('customer_name', '')
+            cust_addr = request.POST.get('customer_address', '')
+            cust_phone = request.POST.get('customer_phone', '')
+            cust_tax = request.POST.get('customer_tax_id', '')
+
+            cart_json = request.POST.get('cart', '[]')
+            cart = json.loads(cart_json)
+
+            order_code = get_next_document_number()
+            current_emp = getattr(request.user, 'employee', None)
+
+            customer_obj = None
+            if cust_id:
+                 try: customer_obj = Customer.objects.get(id=cust_id)
+                 except: pass
+
+            order = POSOrder.objects.create(
+                code=order_code,
+                employee=current_emp,
+                total_amount=total_amount,
+                received_amount=received_amount,
+                change_amount=received_amount - total_amount,
+                payment_method=payment_method,
+                status='PENDING',
+                customer=customer_obj,
+                customer_name=cust_name,
+                customer_address=cust_addr,
+                customer_phone=cust_phone,
+                customer_tax_id=cust_tax
+            )
+
+            if payment_method == 'TRANSFER':
+                if 'transfer_slip' in request.FILES:
+                    order.transfer_slip = request.FILES['transfer_slip']
+            elif payment_method == 'CHECK':
+                order.check_number = request.POST.get('check_number', '')
+                order.check_bank = request.POST.get('check_bank', '')
+                if 'check_slip' in request.FILES:
+                    order.check_slip = request.FILES['check_slip']
+
+            order.save()
+
+            for item in cart:
+                product = Product.objects.get(id=item['id'])
+                POSOrderItem.objects.create(
+                    order=order, product=product, product_name=product.name,
+                    quantity=item['qty'], price=item['price'],
+                    total_price=float(item['qty']) * float(item['price'])
+                )
+
+                # 🌟 [UPDATE] ใช้ระบบสต็อกการ์ด (RESERVE) แทนการลบเลขตรงๆ เพื่อให้มีประวัติในคลัง
+                StockMovement.objects.create(
+                    doc=None,
+                    product=product,
+                    quantity=Decimal(str(item['qty'])),
+                    movement_type='RESERVE',
+                    reference_doc=order_code,
+                    note=f"ขายหน้าร้าน (POS) บิลเลขที่ {order_code}",
+                    created_by=request.user
+                )
+                product.stock_qty -= int(item['qty'])
+                product.save()
+
+            if current_emp: process_commission_logic(total_amount, current_emp, order_code)
+
+            return JsonResponse({'success': True, 'order_code': order_code})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
+    return JsonResponse({'success': False, 'error': 'Invalid Request'})
+
+@login_required
+def pos_print_slip(request, order_code):
+    order = get_object_or_404(POSOrder, code=order_code)
+    company = CompanyInfo.objects.first()
+
+    items = list(order.items.all())
+    item_total = Decimal('0.00')
+    for item in items:
+        item.item_name = item.product_name
+        item.unit_price = item.price
+        item.amount = item.total_price
+        item_total += Decimal(str(item.amount))
+
+    payment_note = "ชำระโดย: เงินสด (Cash)"
+    if order.payment_method == 'TRANSFER':
+        payment_note = "ชำระโดย: โอนเงิน (Bank Transfer)"
+    elif order.payment_method == 'CHECK':
+        payment_note = f"ชำระโดย: เช็คธนาคาร {order.check_bank} #{order.check_number}"
+
+    grand_total = order.total_amount
+    subtotal = grand_total / Decimal('1.07')
+    tax_amount = grand_total - subtotal
+
+    context = {
+        'inv': order, 'company': company, 'items': items,
+        'item_total': item_total, 'subtotal': subtotal, 'tax_amount': tax_amount,
+        'discount': Decimal('0.00'), 'shipping_cost': Decimal('0.00'),
+        'note': payment_note, 'is_pos': True
+    }
+    return render(request, 'sales/invoice_print.html', context)
+
+@login_required
+def quotation_list(request):
+    if not is_sales_authorized(request.user):
+        messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์เข้าถึงหน้ารายการใบเสนอราคา")
+        return redirect('dashboard')
+
+    target_employees, _ = get_target_employees(request.user)
+    queryset = get_sales_queryset(Quotation, request.user, target_employees).order_by('-created_at')
+
+    # 🌟 [NEW] ระบบจำกัดสิทธิ์และดึงข้อมูลสาขา
+    from hr.models import Department
+    is_manager = False
+    is_supervisor = False
+    current_emp = getattr(request.user, 'employee', None)
+
+    if request.user.is_superuser:
+        is_manager = True
+    elif current_emp:
+        rank = current_emp.business_rank.lower() if current_emp.business_rank else ""
+        if rank in ['manager', 'director'] or 'manager' in getattr(current_emp.position, 'title', '').lower() or 'บัญชี' in getattr(current_emp.department, 'name', ''):
+            is_manager = True
+        elif rank == 'supervisor':
+            is_supervisor = True
+
+    # 🌟 โหลดรายชื่อสาขาตามสิทธิ์ (กรองเฉพาะ "ทีม" และ "สาขา")
+    if is_manager:
+        departments = list(Department.objects.filter(
+            Q(name__icontains='ทีม') |
+            Q(name__icontains='สาขา')
+        ).order_by('name'))
+    elif is_supervisor and current_emp.department:
+        departments = list(Department.objects.filter(id=current_emp.department.id))
+    else:
+        departments = []
+
+    # 🌟 ลบคำว่า "แผนก" ทิ้งเพื่อความสะอาดตา
+    for d in departments:
+        d.name = d.name.replace('แผนก', '').strip()
+
+    search_query = request.GET.get('q', '')
+    status_filter = request.GET.get('status')
+    prod_status_filter = request.GET.get('prod_status')
+    deliv_status_filter = request.GET.get('deliv_status')
+    branch_filter = request.GET.get('branch', '')
+
+    # 🌟 1. กรองข้อมูลตาม "สาขา"
+    if branch_filter and (is_manager or is_supervisor):
+        queryset = queryset.filter(employee__department_id=branch_filter)
+
+    # 🌟 2. กรองข้อมูลตาม "สถานะเอกสาร"
+    if status_filter:
+        if status_filter == 'PENDING_CLOSING': # รอรับมัดจำ
+            queryset = queryset.filter(status='APPROVED', is_deposit_paid=False).distinct()
+        elif status_filter == 'PENDING_VERIFY': # รอตรวจมัดจำ (เพิ่มใหม่)
+            queryset = queryset.filter(status='APPROVED', is_deposit_paid=True, is_deposit_verified=False).distinct()
+        elif status_filter == 'READY': # พร้อมส่งงาน (มัดจำผ่านแล้ว แต่ยังไม่สั่งผลิต) (เพิ่มใหม่)
+            queryset = queryset.filter(status='APPROVED', is_deposit_paid=True, is_deposit_verified=True, production_orders__isnull=True).distinct()
+        elif status_filter == 'IN_PRODUCTION': # กำลังดำเนินการผลิต
+            queryset = queryset.filter(status='APPROVED', is_deposit_paid=True, is_deposit_verified=True, production_orders__isnull=False).distinct()
+        else:
+            queryset = queryset.filter(status=status_filter).distinct()
+
+    total_departments_count = ProductionStatus.objects.count()
+
+    # 🌟 3. กรองข้อมูลตาม "สถานะผลิต"
+    if prod_status_filter:
+        if prod_status_filter == 'CLOSED':
+            valid_jobs = ProductionOrder.objects.filter(is_closed=True)
+        else:
+            valid_jobs = ProductionOrder.objects.filter(is_closed=False)
+            if prod_status_filter == 'IN_PROGRESS_5':
+                 valid_jobs = valid_jobs.annotate(dept_count=Count('completed_departments')).filter(status='IN_PROGRESS', dept_count__lt=total_departments_count)
+            elif prod_status_filter == 'IN_PROGRESS_6':
+                 valid_jobs = valid_jobs.annotate(dept_count=Count('completed_departments')).filter(status='IN_PROGRESS', dept_count=total_departments_count)
+            elif prod_status_filter == 'WAITING_QC_REWORK':
+                 valid_jobs = valid_jobs.filter(status__in=['WAITING_QC', 'REWORK'])
+            else:
+                  valid_jobs = valid_jobs.filter(status=prod_status_filter)
+        valid_job_ids = list(valid_jobs.values_list('id', flat=True))
+        queryset = queryset.filter(production_orders__in=valid_job_ids).distinct()
+
+    # 🌟 4. กรองข้อมูลตาม "สถานะจัดส่ง"
+    if deliv_status_filter:
+        if deliv_status_filter == 'NO_TRUCK':
+            valid_jobs = ProductionOrder.objects.filter(
+                Q(status='COMPLETED') | Q(status='WAITING_QC') | Q(is_onsite=True)
+            ).filter(transporter__isnull=True)
+        elif deliv_status_filter == 'DELIVERING':
+            valid_jobs = ProductionOrder.objects.filter(transporter__isnull=False).exclude(
+                delivery_status__name__in=['ส่งมอบสำเร็จ', 'ลูกค้าเซ็นรับแล้ว', 'จัดส่งเรียบร้อย']
+            )
+        elif deliv_status_filter == 'DELIVERED':
+            valid_jobs = ProductionOrder.objects.filter(
+                delivery_status__name__in=['ส่งมอบสำเร็จ', 'ลูกค้าเซ็นรับแล้ว', 'จัดส่งเรียบร้อย']
+            )
+        valid_job_ids = list(valid_jobs.values_list('id', flat=True))
+        queryset = queryset.filter(production_orders__in=valid_job_ids).distinct()
+
+    # 🌟 5. กรองคำค้นหา
+    if search_query:
+        queryset = queryset.filter(Q(code__icontains=search_query) | Q(customer_name__icontains=search_query)).distinct()
+
+    # 🌟 6. กรองวันที่ (FIXED: ใช้เวลาประเทศไทย) 🌟
+    tz_bkk = pytz.timezone('Asia/Bangkok')
+    today_bkk = timezone.now().astimezone(tz_bkk).date()
+
+    date_start = request.GET.get('start_date')
+    date_end = request.GET.get('end_date')
+
+    if not date_start or date_start == 'None':
+        date_start = (today_bkk - datetime.timedelta(days=29)).strftime('%Y-%m-%d')
+    if not date_end or date_end == 'None':
+        date_end = today_bkk.strftime('%Y-%m-%d')
+
+    # ถ้ามีการกรองสถานะใดๆ ให้ข้ามการกรองวันที่ไป เพื่อให้เจองานที่ค้างอยู่ทั้งหมด
+    if not status_filter and not prod_status_filter and not deliv_status_filter:
+        queryset = queryset.filter(date__gte=date_start, date__lte=date_end).distinct()
+
+    paginator = Paginator(queryset, 10)
+    page_obj = paginator.get_page(request.GET.get('page'))
+
+    for qt in page_obj:
+        if qt.status == 'APPROVED' and qt.is_deposit_paid and qt.is_deposit_verified and not qt.production_orders.exists():
+            qt.auto_delivery_date = get_auto_delivery_date(qt)
+
+    return render(request, 'sales/quotation_list.html', {
+        'page_obj': page_obj, 'search_query': search_query, 'is_manager': is_manager,
+        'is_supervisor': is_supervisor, 'departments': departments, 'branch_filter': branch_filter,
+        'status_filter': status_filter, 'prod_status_filter': prod_status_filter,
+        'date_start': date_start, 'date_end': date_end, 'total_departments_count': total_departments_count
+    })
+
+@login_required
+def quotation_create(request):
+    if not is_sales_authorized(request.user):
+        messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์สร้างใบเสนอราคา")
+        return redirect('dashboard')
+
+    if request.method == 'POST':
+        form = QuotationForm(request.POST)
+        if form.is_valid():
+            qt = form.save(commit=False)
+            qt.created_by = request.user
+            if hasattr(request.user, 'employee'): qt.employee = request.user.employee
+            cust_id = request.POST.get('customer_id')
+            if cust_id:
+                try: qt.customer = Customer.objects.get(pk=cust_id)
+                except Customer.DoesNotExist: pass
+
+            # 🌟 [FIXED] รันรหัสใบเสนอราคาตามเวลาประเทศไทย
+            tz_bkk = pytz.timezone('Asia/Bangkok')
+            now_bkk = timezone.now().astimezone(tz_bkk)
+
+            thai_year = (now_bkk.year + 543) % 100
+            prefix = f"QT-{thai_year:02d}{now_bkk.strftime('%m')}"
+            last = Quotation.objects.filter(code__startswith=prefix).order_by('code').last()
+            seq = int(last.code.split('-')[-1]) + 1 if last else 1
+            qt.code = f"{prefix}-{seq:03d}"
+
+            if not qt.payment_terms: qt.payment_terms = "-ชำระเงินมัดจำ 50% ของยอดรวมเพื่อยืนยันการสั่งซื้อ ส่วนที่เหลือชำระก่อนการจัดส่ง"
+            if not qt.note: qt.note = "-ไม่มี-"
+
+            # กำหนด date เป็นวันปัจจุบันของไทย
+            qt.date = now_bkk.date()
+            qt.save()
+            messages.success(request, f"ร่างใบเสนอราคา {qt.code} เรียบร้อย กรุณาเพิ่มรายการสินค้า")
+            return redirect('quotation_edit', qt_id=qt.id)
+    else:
+        tz_bkk = pytz.timezone('Asia/Bangkok')
+        today_bkk = timezone.now().astimezone(tz_bkk).date()
+        form = QuotationForm(initial={'date': today_bkk, 'valid_until': today_bkk + datetime.timedelta(days=15)})
+    return render(request, 'sales/quotation_form.html', {'form': form})
+
+
+@login_required
+def quotation_edit(request, qt_id):
+
+    if not is_sales_authorized(request.user):
+        messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์แก้ไขใบเสนอราคา")
+        return redirect('dashboard')
+
+    qt = get_object_or_404(Quotation, pk=qt_id)
+
+    main_categories = Category.objects.all()
+    products = Product.objects.filter(is_active=True, product_type='FG').exclude(code__contains='-JOB')
+
+    products_list = []
+    for p in products:
+        products_list.append({
+            'id': p.id, 'name': p.name, 'code': p.code, 'sell_price': float(p.sell_price), 'category_id': getattr(p, 'category_id', None)
+        })
+
+    upsale_categories = UpsaleCategory.objects.filter(is_active=True)
+    upsale_catalogs = UpsaleCatalog.objects.filter(is_active=True)
+
+    upsales_list = []
+    for u in upsale_catalogs:
+        upsales_list.append({
+            'id': u.id, 'name': u.name, 'default_price': float(u.default_price), 'category_id': u.category_id
+        })
+
+    main_item_total = sum(i.quantity * i.unit_price for i in qt.items.all())
+    upsale_total = sum(u.total_price for u in qt.upsales.all())
+    item_total = main_item_total + upsale_total
+
+    balance_due = qt.grand_total - qt.deposit_amount
+
+    regions_data = {
+        'ภาคเหนือ': ['เชียงราย', 'เชียงใหม่', 'น่าน', 'พะเยา', 'แพร่', 'แม่ฮ่องสอน', 'ลำปาง', 'ลำพูน', 'อุตรดิตถ์'],
+        'ภาคกลาง': ['กรุงเทพมหานคร', 'กำแพงเพชร', 'ชัยนาท', 'นครนายก', 'นครปฐม', 'นครสวรรค์', 'นนทบุรี', 'ปทุมธานี', 'พระนครศรีอยุธยา', 'พิจิตร', 'พิษณุโลก', 'เพชรบูรณ์', 'ลพบุรี', 'สมุทรปราการ', 'สมุทรสงคราม', 'สมุทรสาคร', 'สระบุรี', 'สิงห์บุรี', 'สุโขทัย', 'สุพรรณบุรี', 'อ่างทอง', 'อุทัยธานี'],
+        'ภาคอีสาน': ['กาฬสินธุ์', 'ขอนแก่น', 'ชัยภูมิ', 'นครพนม', 'นครราชสีมา', 'บึงกาฬ', 'บุรีรัมย์', 'มหาสารคาม', 'มุกดาหาร', 'ยโสธร', 'ร้อยเอ็ด', 'เลย', 'ศรีสะเกษ', 'สกลนคร', 'สุรินทร์', 'หนองคาย', 'หนองบัวลำภู', 'อำนาจเจริญ', 'อุดรธานี', 'อุบลราชธานี'],
+        'ภาคตะวันออก': ['จันทบุรี', 'ฉะเชิงเทรา', 'ชลบุรี', 'ตราด', 'ปราจีนบุรี', 'ระยอง', 'สระแก้ว'],
+        'ภาคตะวันตก': ['กาญจนบุรี', 'ตาก', 'ประจวบคีรีขันธ์', 'เพชรบุรี', 'ราชบุรี'],
+        'ภาคใต้': ['กระบี่', 'ชุมพร', 'ตรัง', 'นครศรีธรรมราช', 'พังงา', 'พัทลุง', 'ภูเก็ต', 'ระนอง', 'สงขลา', 'สตูล', 'สุราษฎร์ธานี']
+    }
+
+    shipping_rates = list(ShippingRate.objects.all().values('origin_branch', 'destination_province', 'price'))
+    shipping_rates_json = json.dumps([
+        {'origin': r['origin_branch'], 'province': r['destination_province'], 'price': float(r['price'])} for r in shipping_rates
+    ])
+
+    if request.method == 'POST':
+        if qt.status != 'DRAFT':
+            messages.error(request, "❌ ไม่สามารถแก้ไขได้ เนื่องจากเอกสารนี้ถูกอนุมัติหรือล็อกไปแล้ว")
+            return redirect('quotation_edit', qt_id=qt.id)
+
+        if 'add_item' in request.POST:
+            item_name = request.POST.get('item_name')
+            qty = int(request.POST.get('quantity', 1))
+            price = Decimal(request.POST.get('price', '0').replace(',', ''))
+            product_id = request.POST.get('product_id')
+
+            product_obj = None
+            if product_id:
+                try: product_obj = Product.objects.get(id=product_id)
+                except Product.DoesNotExist: pass
+
+            if item_name:
+                QuotationItem.objects.create(quotation=qt, product=product_obj, item_name=item_name, quantity=qty, unit_price=price)
+                calculate_totals(qt)
+            return redirect('quotation_edit', qt_id=qt.id)
+
+        elif 'add_upsale' in request.POST:
+            desc = request.POST.get('upsale_desc')
+            qty = Decimal(request.POST.get('upsale_qty', '1'))
+            price = Decimal(request.POST.get('upsale_price', '0').replace(',', ''))
+            if desc:
+                QuotationUpsale.objects.create(quotation=qt, description=desc, quantity=qty, unit_price=price)
+                calculate_totals(qt)
+            return redirect('quotation_edit', qt_id=qt.id)
+
+        elif 'delete_upsale' in request.POST:
+            upsale_id = request.POST.get('upsale_id')
+            try:
+                 QuotationUpsale.objects.filter(id=upsale_id).delete()
+                 calculate_totals(qt)
+            except: pass
+            return redirect('quotation_edit', qt_id=qt.id)
+
+        elif 'update_info' in request.POST or 'finish_quote' in request.POST:
+            qt.payment_terms = request.POST.get('payment_terms', '')
+            qt.note = request.POST.get('note', '')
+            qt.discount = Decimal(request.POST.get('discount', '0') or 0)
+
+            qt.shipping_origin = request.POST.get('shipping_origin', '')
+            qt.shipping_province = request.POST.get('shipping_province', '')
+            qt.shipping_is_island = request.POST.get('shipping_is_island') == 'on'
+            qt.shipping_is_oversize = request.POST.get('shipping_is_oversize') == 'on'
+            qt.shipping_cost = Decimal(request.POST.get('shipping_cost', '0') or 0)
+
+            calculate_totals(qt)
+
+            if 'finish_quote' in request.POST:
+                messages.success(request, f"✅ สร้างใบเสนอราคา {qt.code} เสร็จสมบูรณ์แล้ว! (รอผู้จัดการอนุมัติ)")
+                return redirect('quotation_list')
+            else:
+                messages.success(request, "อัปเดตยอดเงินและหมายเหตุเรียบร้อย")
+                return redirect('quotation_edit', qt_id=qt.id)
+
+    return render(request, 'sales/quotation_edit.html', {
+        'qt': qt, 'main_categories': main_categories, 'upsale_categories': upsale_categories,
+        'products_json': json.dumps(products_list), 'upsales_json': json.dumps(upsales_list),
+        'item_total': item_total, 'balance_due': balance_due,
+        'regions_json': json.dumps(regions_data), 'shipping_rates_json': shipping_rates_json
+    })
+
+def calculate_totals(qt):
+    item_sum = sum(item.quantity * item.unit_price for item in qt.items.all())
+    upsale_sum = sum(u.quantity * u.unit_price for u in qt.upsales.all())
+    total_goods = item_sum + upsale_sum
+
+    shipping = qt.shipping_cost if qt.shipping_cost else Decimal(0)
+    discount = qt.discount if qt.discount else Decimal(0)
+
+    grand_total = (total_goods + shipping) - discount
+    if grand_total < 0: grand_total = 0
+
+    qt.subtotal = grand_total / Decimal('1.07')
+    qt.tax_amount = grand_total - qt.subtotal
+    qt.grand_total = grand_total
+    qt.save()
+
+@login_required
+def delete_item(request, item_id):
+    item = get_object_or_404(QuotationItem, pk=item_id)
+    qt = item.quotation
+
+    if qt.status != 'DRAFT':
+        messages.error(request, "❌ ไม่สามารถลบรายการได้ เนื่องจากเอกสารนี้ถูกอนุมัติหรือล็อกไปแล้ว")
+        return redirect('quotation_edit', qt_id=qt.id)
+
+    item.delete()
+    calculate_totals(qt)
+    return redirect('quotation_edit', qt_id=qt.id)
+
+@login_required
+def quotation_clone(request, qt_id):
+    old_qt = get_object_or_404(Quotation, pk=qt_id)
+
+    # 🌟 [FIXED] รันรหัสใบเสนอราคาใหม่ตามเวลาประเทศไทย
+    tz_bkk = pytz.timezone('Asia/Bangkok')
+    now_bkk = timezone.now().astimezone(tz_bkk)
+
+    thai_year = (now_bkk.year + 543) % 100
+    prefix = f"QT-{thai_year:02d}{now_bkk.strftime('%m')}"
+    last = Quotation.objects.filter(code__startswith=prefix).order_by('code').last()
+    seq = int(last.code.split('-')[-1]) + 1 if last else 1
+    new_code = f"{prefix}-{seq:03d}"
+
+    new_qt = Quotation.objects.create(
+        code=new_code,
+        date=now_bkk.date(),
+        valid_until=now_bkk.date() + datetime.timedelta(days=15),
+        customer=old_qt.customer,
+        customer_name=old_qt.customer_name,
+        customer_address=old_qt.customer_address,
+        customer_tax_id=old_qt.customer_tax_id,
+        customer_phone=old_qt.customer_phone,
+        employee=request.user.employee if hasattr(request.user, 'employee') else None,
+        subtotal=old_qt.subtotal,
+        discount=old_qt.discount,
+        shipping_cost=old_qt.shipping_cost,
+        tax_amount=old_qt.tax_amount,
+        grand_total=old_qt.grand_total,
+        status='DRAFT',
+        payment_terms=old_qt.payment_terms if old_qt.payment_terms else "-ชำระเงินมัดจำ 50% ของยอดรวมเพื่อยืนยันการสั่งซื้อ ส่วนที่เหลือชำระก่อนการจัดส่ง",
+        note=old_qt.note if old_qt.note else "-ไม่มี-",
+    )
+
+    for item in old_qt.items.all():
+        QuotationItem.objects.create(
+            quotation=new_qt, product=item.product, item_name=item.item_name,
+            description=item.description, quantity=item.quantity, unit_price=item.unit_price, amount=item.amount
+        )
+
+    for upsale in old_qt.upsales.all():
+        QuotationUpsale.objects.create(
+            quotation=new_qt, description=upsale.description,
+            quantity=upsale.quantity, unit_price=upsale.unit_price, total_price=upsale.total_price
+        )
+
+    messages.success(request, f"📋 คัดลอกเอกสารสำเร็จ! (คุณกำลังอยู่ในเอกสารใหม่ อ้างอิงข้อมูลจากใบเดิม {old_qt.code})")
+    return redirect('quotation_edit', qt_id=new_qt.id)
+
+@login_required
+def quotation_approve(request, qt_id):
+    qt = get_object_or_404(Quotation, pk=qt_id)
+    current_emp = getattr(request.user, 'employee', None)
+    qt.status = 'APPROVED'
+    qt.approved_by = current_emp
+    qt.approved_at = timezone.now()
+    qt.save()
+    messages.success(request, f"✅ อนุมัติใบเสนอราคา {qt.code} เรียบร้อยแล้ว")
+    return redirect('quotation_list')
+
+@login_required
+def quotation_cancel(request, qt_id):
+    qt = get_object_or_404(Quotation, pk=qt_id)
+    current_emp = getattr(request.user, 'employee', None)
+    is_manager = request.user.is_superuser or request.user.groups.filter(name__icontains='Manager').exists()
+    is_owner = (qt.employee == current_emp) if current_emp else False
+
+    if is_manager or is_owner:
+        # 🌟 ด่านตรวจที่ 2: ห้ามยกเลิกถ้าสั่งผลิตแล้ว 🌟
+        if qt.production_orders.exists():
+            messages.error(request, "❌ ไม่อนุญาตให้ยกเลิก เนื่องจากเอกสารนี้ถูกส่งเข้ากระบวนการผลิตเรียบร้อยแล้ว")
+
+        # 🌟 ด่านตรวจที่ 1: ห้ามยกเลิกถ้าจ่ายมัดจำแล้ว 🌟
+        elif qt.is_deposit_paid:
+            messages.error(request, "❌ ไม่สามารถยกเลิกได้ เนื่องจากมีการรับมัดจำแล้ว กรุณาทำเรื่องคืนเงินมัดจำก่อน")
+
+        # 🌟 ผ่านด่านตรวจ จึงจะยอมให้ยกเลิก 🌟
+        elif qt.status in ['DRAFT', 'APPROVED']:
+            qt.status = 'CANCELLED'
+            qt.save()
+            messages.warning(request, f"⚠️ ยกเลิกใบเสนอราคา {qt.code} เรียบร้อยแล้ว (เอกสารนี้ถือเป็นโมฆะ)")
+        else:
+            messages.error(request, "❌ ไม่สามารถยกเลิกได้ เนื่องจากเอกสารถูกนำไปเปิดบิลแล้ว หรือสถานะไม่ถูกต้อง")
+    else:
+        messages.error(request, "❌ คุณไม่มีสิทธิ์ยกเลิกใบเสนอราคานี้")
+
+    return redirect('quotation_list')
+
+@login_required
+def quotation_print(request, qt_id):
+    qt = get_object_or_404(Quotation, pk=qt_id)
+    company = CompanyInfo.objects.first()
+    main_total = sum(item.quantity * item.unit_price for item in qt.items.all())
+    upsale_total = sum(u.quantity * u.unit_price for u in qt.upsales.all())
+    item_total = main_total + upsale_total
+    return render(request, 'sales/quotation_print.html', {'qt': qt, 'company': company, 'item_total': item_total})
+
+# ==========================================
+# 🌟 [NEW] ฟังก์ชันแปลงตัวเลขเป็นภาษาไทย และพิมพ์สัญญามัดจำ 🌟
+# ==========================================
+def get_thai_baht_text(number):
+    if number == 0: return "ศูนย์บาทถ้วน"
+    import math
+    number = round(float(number), 2)
+    baht = math.floor(number)
+    satang = int(round((number - baht) * 100))
+
+    def read_num(n):
+        if n == 0: return ""
+        numbers = ["", "หนึ่ง", "สอง", "สาม", "สี่", "ห้า", "หก", "เจ็ด", "แปด", "เก้า"]
+        positions = ["", "สิบ", "ร้อย", "พัน", "หมื่น", "แสน", "ล้าน"]
+        s = str(n)
+        length = len(s)
+        res = ""
+        for i, digit in enumerate(s):
+            val = int(digit)
+            pos = length - i - 1
+            if val == 0:
+                continue
+            if pos == 0 and val == 1 and length > 1:
+                res += "เอ็ด"
+            elif pos == 1 and val == 1:
+                res += "สิบ"
+            elif pos == 1 and val == 2:
+                res += "ยี่สิบ"
+            else:
+                res += numbers[val] + positions[pos]
+        return res
+
+    res = ""
+    if baht > 0:
+        res += read_num(baht) + "บาท"
+    if satang > 0:
+        res += read_num(satang) + "สตางค์"
+    else:
+        res += "ถ้วน"
+    return res
+
+@login_required
+def print_deposit_contract(request, qt_id):
+    qt = get_object_or_404(Quotation, pk=qt_id)
+    company = CompanyInfo.objects.first()
+
+    grand_total = qt.grand_total if qt.grand_total else Decimal('0.00')
+    balance_due = qt.balance_due if hasattr(qt, 'balance_due') else (grand_total - (qt.deposit_amount or Decimal('0.00')))
+
+    # 🌟 [FIXED] ตรวจสอบว่ามีระบุรหัส RVD มาใน URL ไหม (?rvd=123)
+    rvd_id = request.GET.get('rvd')
+    specific_deposit = None
+
+    if rvd_id:
+        try:
+            # ถ้ามีรหัส RVD ให้ดึงข้อมูลเฉพาะงวดนั้นมาพิมพ์
+            specific_deposit = QuotationDeposit.objects.get(pk=rvd_id, quotation=qt)
+            deposit_amount = specific_deposit.amount
+            rvd_code = specific_deposit.code
+            rvd_date = specific_deposit.deposit_date
+            rvd_method = specific_deposit.get_payment_method_display()
+        except QuotationDeposit.DoesNotExist:
+            deposit_amount = qt.deposit_amount if qt.deposit_amount else Decimal('0.00')
+            rvd_code = f"QT-{qt.code.split('-')[-1]}" # Fallback
+            rvd_date = qt.deposit_date
+            rvd_method = "ไม่ระบุ"
+    else:
+        # ถ้าไม่มีรหัส RVD (เช่นกดพิมพ์งวดแรก) ให้พยายามดึงสลิปใบแรกสุดมาโชว์
+        first_dep = qt.quotationdeposit_set.first()
+        if first_dep:
+            specific_deposit = first_dep
+            deposit_amount = first_dep.amount
+            rvd_code = first_dep.code
+            rvd_date = first_dep.deposit_date
+            rvd_method = first_dep.get_payment_method_display()
+        else:
+            deposit_amount = qt.deposit_amount if qt.deposit_amount else Decimal('0.00')
+            rvd_code = f"QT-{qt.code.split('-')[-1]}" # Fallback
+            rvd_date = qt.deposit_date
+            rvd_method = "ไม่ระบุ"
+
+    grand_total_text = get_thai_baht_text(grand_total)
+    deposit_amount_text = get_thai_baht_text(deposit_amount)
+    balance_due_text = get_thai_baht_text(balance_due)
+
+    job = qt.production_orders.first()
+    delivery_date = job.delivery_date if job else None
+
+    return render(request, 'sales/print_deposit_contract.html', {
+        'qt': qt,
+        'company': company,
+        'grand_total_text': grand_total_text,
+        'deposit_amount': deposit_amount,          # ส่งยอดงวดนี้ไป
+        'deposit_amount_text': deposit_amount_text,# ส่งคำอ่านยอดงวดนี้ไป
+        'balance_due': balance_due,
+        'balance_due_text': balance_due_text,
+        'delivery_date': delivery_date,
+        'rvd_code': rvd_code,                      # ส่งรหัสใบเสร็จ (RVD) ไปแสดง
+        'rvd_date': rvd_date,                      # ส่งวันที่รับมัดจำไปแสดง
+        'rvd_method': rvd_method                   # ส่งช่องทางรับเงินไปแสดง
+    })
+
+@login_required
+def export_sales_excel(request):
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Sales Report"
+    ws.append(["วันที่", "เลขที่เอกสาร", "ประเภท", "ยอดขาย"])
+    for p in POSOrder.objects.all():
+        ws.append([p.created_at.strftime('%d/%m/%Y'), p.code, "POS", p.total_amount])
+    for i in Invoice.objects.all():
+        ws.append([i.date.strftime('%d/%m/%Y'), i.code, "Invoice", i.grand_total])
+    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition'] = 'attachment; filename="Sales_Report.xlsx"'
+    wb.save(response)
+    return response
+
+@login_required
+def api_search_customer(request):
+    query = request.GET.get('q', '').strip()
+    if not query: return JsonResponse({'results': []})
+    customers = Customer.objects.filter(Q(name__icontains=query) | Q(code__icontains=query) | Q(phone__icontains=query))[:10]
+    results = []
+    for c in customers:
+        addr_parts = [c.address, f"ต.{c.sub_district}" if c.sub_district else "", f"อ.{c.district}" if c.district else "", f"จ.{c.province}" if c.province else "", c.zip_code]
+        full_address = " ".join(filter(None, addr_parts))
+        results.append({'id': c.id, 'name': c.name, 'code': c.code, 'address': full_address, 'tax_id': c.tax_id, 'phone': c.phone})
+    return JsonResponse({'results': results})
+
+@csrf_exempt
+@login_required
+def api_create_customer(request):
+    if request.method == 'POST':
+        try:
+            name = request.POST.get('name')
+            code = request.POST.get('code')
+            phone = request.POST.get('phone')
+            tax_id = request.POST.get('tax_id')
+            address = request.POST.get('address')
+
+            if not code:
+                count = Customer.objects.count() + 1
+                code = f"C{count:04d}"
+
+            customer = Customer.objects.create(name=name, code=code, phone=phone, tax_id=tax_id, address=address)
+            return JsonResponse({'success': True, 'customer': {'id': customer.id, 'name': customer.name, 'address': customer.address, 'tax_id': customer.tax_id, 'phone': customer.phone}})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
+    return JsonResponse({'success': False, 'error': 'Invalid Method'})
+
+@login_required
+def invoice_list(request):
+    if not is_sales_authorized(request.user):
+        messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์เข้าถึงหน้ารายการใบเสร็จ")
+        return redirect('dashboard')
+
+    target_employees, _ = get_target_employees(request.user)
+    qs_invoice = get_sales_queryset(Invoice, request.user, target_employees).prefetch_related('payment_history', 'quotation_ref__production_orders')
+    qs_pos = get_sales_queryset(POSOrder, request.user, target_employees)
+
+    # 🌟 [NEW] ระบบดึงข้อมูลสาขา เพื่อใช้เป็นตัวกรอง
+    from hr.models import Department
+
+    # 🌟 เช็คสิทธิ์และระดับ (Rank) ของพนักงาน
+    is_manager = request.user.is_superuser
+    is_supervisor = False
+    current_emp = getattr(request.user, 'employee', None)
+
+    if current_emp:
+        rank = current_emp.business_rank.lower() if current_emp.business_rank else ""
+        if rank in ['manager', 'director'] or 'บัญชี' in current_emp.department.name:
+            is_manager = True
+        elif rank == 'supervisor':
+            is_supervisor = True
+
+    # 🌟 โหลดรายชื่อสาขาตามสิทธิ์ (กรองเฉพาะ "ทีม" และ "สาขา" เท่านั้น)
+    if is_manager:
+        departments = list(Department.objects.filter(
+            Q(name__icontains='ทีม') |
+            Q(name__icontains='สาขา')
+        ).order_by('name'))
+    elif is_supervisor and current_emp.department:
+        departments = list(Department.objects.filter(id=current_emp.department.id))
+    else:
+        departments = [] # พนักงานทั่วไป ไม่ต้องเห็นสาขา
+
+    # 🌟 ลบคำว่า "แผนก" ออกจากชื่อ เพื่อความสะอาดตาบนหน้าเว็บ
+    for d in departments:
+        d.name = d.name.replace('แผนก', '').strip()
+
+    # 🌟 รับค่าการค้นหาจากฟอร์ม
+    search_query = request.GET.get('q', '')
+    status_filter = request.GET.get('status', '')
+    branch_filter = request.GET.get('branch', '') # 🌟 รับค่าสาขา
+
+    # 🌟 กรองข้อมูลตาม "สาขา"
+    if branch_filter and (is_manager or is_supervisor):
+        qs_invoice = qs_invoice.filter(employee__department_id=branch_filter)
+        qs_pos = qs_pos.filter(employee__department_id=branch_filter)
+
+    # กรองข้อมูลอื่นๆ
+    if search_query:
+        qs_invoice = qs_invoice.filter(Q(code__icontains=search_query) | Q(customer__name__icontains=search_query))
+        qs_pos = qs_pos.filter(code__icontains=search_query)
+
+    if status_filter:
+        if status_filter == 'PENDING':
+            qs_invoice = qs_invoice.filter(Q(status='PENDING') | Q(status='UNPAID'))
+            qs_pos = qs_pos.filter(Q(status='PENDING') | Q(status='UNPAID'))
+        else:
+            qs_invoice = qs_invoice.filter(status=status_filter)
+            qs_pos = qs_pos.filter(status=status_filter)
+
+    # 🌟 กรองวันที่ (FIXED: ใช้เวลาประเทศไทย) 🌟
+    tz_bkk = pytz.timezone('Asia/Bangkok')
+    today_bkk = timezone.now().astimezone(tz_bkk).date()
+
+    start_date = request.GET.get('start_date')
+    end_date = request.GET.get('end_date')
+
+    # ถ้าไม่มีการเลือกวันที่มา (โหลดหน้าแรก) ให้บังคับดึงข้อมูลของ "วันนี้" (เวลาไทย)
+    if not start_date or start_date == 'None':
+        start_date = today_bkk.strftime('%Y-%m-%d')
+    if not end_date or end_date == 'None':
+        end_date = today_bkk.strftime('%Y-%m-%d')
+
+    qs_invoice = qs_invoice.filter(date__gte=start_date, date__lte=end_date)
+    qs_pos = qs_pos.filter(created_at__date__gte=start_date, created_at__date__lte=end_date)
+
+    combined_list = sorted(list(qs_invoice) + list(qs_pos), key=lambda x: x.created_at, reverse=True)
+    paginator = Paginator(combined_list, 15)
+    page_obj = paginator.get_page(request.GET.get('page'))
+
+    return render(request, 'sales/invoice_list.html', {
+        'page_obj': page_obj, 'search_query': search_query,
+        'start_date': start_date, 'end_date': end_date, 'status_filter': status_filter,
+        'departments': departments, 'branch_filter': branch_filter,
+        'is_manager': is_manager, 'is_supervisor': is_supervisor
+    })
+
+@login_required
+def confirm_payment(request, doc_type, doc_id):
+    current_emp = getattr(request.user, 'employee', None)
+
+    if doc_type == 'pos':
+        obj = get_object_or_404(POSOrder, id=doc_id)
+        if obj.status != 'PAID':
+            obj.status = 'PAID'
+            obj.save()
+            sale_amt = getattr(obj, 'total_amount', getattr(obj, 'grand_total', 0))
+            if obj.employee:
+                process_commission_logic(sale_amt, obj.employee, obj.code)
+        messages.success(request, f"✅ ยืนยันรับชำระเงินเอกสาร {obj.code} ปิดการขายเรียบร้อยแล้ว!")
+
+    else:
+        obj = get_object_or_404(Invoice, id=doc_id)
+        if obj.status == 'PENDING':
+            pending_payments = obj.payment_history.filter(status='PENDING')
+            pending_payments.update(status='VERIFIED')
+
+            if obj.balance_amount <= 0:
+                obj.status = 'PAID'
+                obj.verified_by = current_emp
+                obj.save()
+                sale_amt = getattr(obj, 'total_amount', getattr(obj, 'grand_total', 0))
+
+                if obj.employee:
+                    process_commission_logic(sale_amt, obj.employee, obj.code)
+
+                    # 🌟 AUTOMATION: สร้างตั๋วคอมมิชชัน 2.5% (บ้านน็อคดาวน์) 🌟
+                    if obj.quotation_ref and obj.quotation_ref.grand_total > 0:
+                        # 🌟 [UPDATE] เช็คว่าเคยออก 2.5% หรือ 3% ไปแล้วหรือยัง
+                        if not CommissionTicket.objects.filter(quotation_ref=obj.quotation_ref, ticket_type__in=['2.5%', '3%']).exists():
+                            grand_total = obj.quotation_ref.grand_total
+                            base_amount = grand_total - (grand_total * Decimal('0.10'))
+                            comm_amount = base_amount * Decimal('0.025') # คูณ 2.5% แทน
+
+                            CommissionTicket.objects.create(
+                                ticket_type='2.5%',
+                                quotation_ref=obj.quotation_ref,
+                                base_amount=base_amount,
+                                commission_amount=comm_amount
+                            )
+                messages.success(request, f"✅ ยืนยันรับชำระเงินครบ 100% เอกสาร {obj.code} ปิดการขายเรียบร้อยแล้ว!")
+            else:
+                obj.status = 'UNPAID'
+                obj.save()
+                messages.success(request, f"✅ ยืนยันการแบ่งชำระเงินเอกสาร {obj.code} เรียบร้อยแล้ว! (ยอดคงค้าง: {obj.balance_amount:,.2f} บาท)")
+    return redirect('invoice_list')
+
+@login_required
+def record_invoice_payment(request, inv_id):
+    inv = get_object_or_404(Invoice, pk=inv_id)
+    if request.method == 'POST':
+        method = request.POST.get('payment_method', 'TRANSFER')
+        date_str = request.POST.get('payment_date')
+        amount_str = request.POST.get('received_amount', '0').replace(',', '')
+
+        try:
+            amount = Decimal(amount_str)
+        except:
+            amount = Decimal('0.00')
+
+        if amount > 0:
+            payment = InvoicePayment(
+                invoice=inv,
+                amount=amount,
+                payment_method=method,
+                payment_date=parse_thai_date(date_str) if date_str else timezone.now().date()
+            )
+            if method == 'TRANSFER' and 'transfer_slip' in request.FILES:
+                payment.transfer_slip = request.FILES['transfer_slip']
+            elif method == 'CHECK':
+                payment.check_number = request.POST.get('check_number', '')
+                payment.check_bank = request.POST.get('check_bank', '')
+                if 'check_slip' in request.FILES:
+                    payment.check_slip = request.FILES['check_slip']
+            payment.save()
+
+            inv.balance_amount -= amount
+            if inv.balance_amount < 0:
+                inv.balance_amount = Decimal('0.00')
+
+            inv.status = 'PENDING'
+            inv.save()
+            messages.success(request, f"💰 บันทึกรับชำระเงิน {amount:,.2f} บาท สำหรับเอกสาร {inv.code} สำเร็จ! (รอตรวจสอบยอดจากฝ่ายบัญชี)")
+
+    return redirect('invoice_list')
+
+@login_required
+def delete_invoice_payment(request, pay_id):
+    # ป้องกันไม่ให้แผนกอื่นมาลบ
+    if not is_sales_authorized(request.user):
+        messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์ดำเนินการนี้")
+        return redirect('invoice_list')
+
+    payment = get_object_or_404(InvoicePayment, pk=pay_id)
+    inv = payment.invoice
+
+    # ดักไว้เผื่อมีคนพยายามลบรายการที่บัญชียืนยัน (VERIFIED) ไปแล้ว
+    if payment.status == 'VERIFIED':
+        messages.error(request, "❌ ไม่สามารถลบได้ เนื่องจากฝ่ายบัญชีได้ทำการตรวจสอบและรับเงินเข้าระบบไปแล้ว")
+        return redirect('invoice_list')
+
+    # ดึงยอดเงินที่กำลังจะลบ
+    amount_to_return = payment.amount
+
+    # ลบข้อมูลในฐานข้อมูล
+    payment.delete()
+
+    # คืนยอดค้างชำระให้บิลนั้นๆ
+    inv.balance_amount += amount_to_return
+
+    # ถ้ายอดค้างชำระกลับมาเท่ากับยอดเต็ม ให้ปรับสถานะเป็นยังไม่ชำระ
+    if inv.balance_amount >= inv.grand_total:
+        inv.status = 'UNPAID'
+    else:
+        # ถ้ายอดค้างยังน้อยกว่ายอดเต็ม แปลว่ายังมีรายการจ่ายอื่นค้างอยู่ ให้สถานะยังคงรอตรวจ
+        inv.status = 'PENDING'
+
+    inv.save()
+
+    messages.success(request, f"🗑️ ลบรายการรับชำระ {amount_to_return:,.2f} บาท สำเร็จ! (ระบบคืนยอดค้างชำระให้บิล {inv.code} แล้ว)")
+    return redirect('invoice_list')
+
+@login_required
+def invoice_print(request, inv_id):
+    inv = get_object_or_404(Invoice, pk=inv_id)
+    company = CompanyInfo.objects.first()
+
+    items = []
+    item_total = Decimal('0.00')
+    subtotal = Decimal('0.00')
+    tax_amount = Decimal('0.00')
+    discount = Decimal('0.00')
+    shipping_cost = Decimal('0.00')
+
+    note = "-ไม่มี-"
+    if inv.status == 'PAID':
+        p_date = inv.payment_date.strftime('%d/%m/%Y') if inv.payment_date else '-'
+        if inv.payment_method == 'TRANSFER':
+            note = f"ชำระโดย: โอนเงินเข้าบัญชี (วันที่ {p_date})"
+        elif inv.payment_method == 'CHECK':
+            note = f"ชำระโดย: เช็คธนาคาร {inv.check_bank} เลขที่ {inv.check_number} (วันที่ {p_date})"
+        elif inv.payment_method == 'CASH':
+            note = f"ชำระโดย: เงินสด (วันที่ {p_date})"
+        else:
+            note = "ชำระเงินเรียบร้อยแล้ว"
+    else:
+        if inv.quotation_ref:
+            if inv.quotation_ref.payment_terms and inv.quotation_ref.payment_terms != "-ไม่มี-":
+                note = f"เงื่อนไขการชำระเงิน:\n{inv.quotation_ref.payment_terms}"
+            elif inv.quotation_ref.note:
+                note = inv.quotation_ref.note
+
+    if inv.quotation_ref:
+        qt = inv.quotation_ref
+        items = list(qt.items.all())
+        for item in items:
+            item.amount = item.quantity * item.unit_price
+            item_total += Decimal(str(item.amount))
+
+        for u in qt.upsales.all():
+            items.append(u)
+            item_total += Decimal(str(u.total_price))
+
+        subtotal = qt.subtotal
+        tax_amount = qt.tax_amount
+        discount = qt.discount
+        shipping_cost = qt.shipping_cost
+
+    if not getattr(inv, 'customer_name', None) and inv.quotation_ref:
+            inv.customer_name = qt.customer_name
+            inv.customer_address = qt.customer_address
+            inv.customer_tax_id = qt.customer_tax_id
+            inv.customer_phone = qt.customer_phone
+
+    if not hasattr(inv, 'total_amount'):
+        inv.total_amount = inv.grand_total
+
+    if not hasattr(inv, 'deposit_amount'):
+        inv.deposit_amount = Decimal('0.00')
+        inv.balance_amount = inv.grand_total
+
+    context = {
+        'inv': inv, 'company': company, 'items': items,
+        'item_total': item_total, 'subtotal': subtotal, 'tax_amount': tax_amount,
+        'discount': discount, 'shipping_cost': shipping_cost, 'note': note,
+    }
+    return render(request, 'sales/invoice_print.html', context)
+
+@login_required
+def deposit_list(request):
+    target_employees, _ = get_target_employees(request.user)
+
+    # 🌟 [UPDATED] ดึงข้อมูลจากตาราง QuotationDeposit โดยตรง 🌟
+    qs = QuotationDeposit.objects.filter(
+        quotation__employee_id__in=target_employees.values_list('id', flat=True)
+    ).select_related('quotation', 'quotation__customer', 'quotation__employee', 'quotation__employee__department')
+
+    # รับค่าต่างๆ จาก URL
+    search_query = request.GET.get('q', '')
+    status_filter = request.GET.get('status')
+    start_date_str = request.GET.get('start_date')
+    end_date_str = request.GET.get('end_date')
+
+    # กรองข้อความ
+    if search_query:
+        qs = qs.filter(
+            Q(code__icontains=search_query) |
+            Q(quotation__code__icontains=search_query) |
+            Q(quotation__customer_name__icontains=search_query)
+        )
+
+    # กรองสถานะ
+    if status_filter == 'VERIFIED':
+        qs = qs.filter(is_verified=True)
+    elif status_filter == 'PENDING':
+        qs = qs.filter(is_verified=False)
+
+    # กรองวันที่มัดจำ
+    if start_date_str and end_date_str:
+        try:
+            start_date = parse_date(start_date_str)
+            end_date = parse_date(end_date_str)
+            if start_date and end_date:
+                 qs = qs.filter(deposit_date__range=[start_date, end_date])
+        except Exception:
+            pass
+
+    qs = qs.order_by('-deposit_date', '-created_at')
+    paginator = Paginator(qs, 15)
+    page_obj = paginator.get_page(request.GET.get('page'))
+
+    return render(request, 'sales/deposit_list.html', {
+        'page_obj': page_obj,
+        'search_query': search_query,
+        'status_filter': status_filter,
+        'start_date': start_date_str,
+        'end_date': end_date_str
+    })
+
+@login_required
+@transaction.atomic
+def verify_deposit(request, deposit_id): # 🌟 รับ id ของตารางมัดจำมาแทน
+    deposit = get_object_or_404(QuotationDeposit, pk=deposit_id)
+    deposit.is_verified = True
+    deposit.save()
+
+    # ไปอัปเดตแม่ (Quotation) ว่าตรวจมัดจำเรียบร้อยแล้ว
+    qt = deposit.quotation
+    qt.is_deposit_verified = True
+    qt.save()
+
+    # 🌟 AUTOMATION: สร้างตั๋วคอมมิชชัน 0.5% และ 2% (บ้านน็อคดาวน์) 🌟
+    if qt.employee and deposit.amount > 0:
+
+        # 🚨 [FIXED] บังคับดึง "ยอดรวมสินค้าทั้งหมด (grand_total)" มาใช้เป็นฐานคำนวณ ห้ามใช้ยอดมัดจำเด็ดขาด!
+        grand_total = qt.grand_total if qt.grand_total else Decimal('0.00')
+        base_amount = grand_total - (grand_total * Decimal('0.10'))
+
+        # 1. เช็คและสร้างตั๋ว 2%
+        if not CommissionTicket.objects.filter(quotation_ref=qt, ticket_type='2%').exists():
+            comm_amount_2 = base_amount * Decimal('0.02') # คูณ 2%
+            CommissionTicket.objects.create(
+                ticket_type='2%', quotation_ref=qt, base_amount=base_amount, commission_amount=comm_amount_2
+            )
+
+        # 2. เช็คและสร้างตั๋ว 0.5%
+        if not CommissionTicket.objects.filter(quotation_ref=qt, ticket_type='0.5%').exists():
+            comm_amount_05 = base_amount * Decimal('0.005') # คูณ 0.5%
+            CommissionTicket.objects.create(
+                ticket_type='0.5%', quotation_ref=qt, base_amount=base_amount, commission_amount=comm_amount_05
+            )
+
+    messages.success(request, f"✅ บัญชียืนยันตรวจสอบยอดมัดจำใบเสร็จ {deposit.code} เรียบร้อยแล้ว! (ระบบสร้างตั๋วคอมมิชชัน 0.5% และ 2% ให้พนักงานขายแล้ว)")
+    return redirect('deposit_list')
+
+# ==========================================
+# 🌟 [NEW] ระบบ CRM ติดตามลูกค้ามุ่งหวัง (Leads) 🌟
+# ==========================================
+@login_required
+def crm_board(request):
+    if not is_sales_authorized(request.user):
+        messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์เข้าถึงระบบ CRM")
+        return redirect('dashboard')
+
+    target_employees, scope_title = get_target_employees(request.user)
+
+    leads = get_sales_queryset(CustomerLead, request.user, target_employees)\
+        .select_related('employee', 'employee__department')\
+        .order_by('-created_at')
+
+    # 🌟 [FIXED] กรองรายชื่อให้โชว์เฉพาะพนักงานแผนก "ขาย" หรือ "Sales" เท่านั้น 🌟
+    all_emps_in_scope = target_employees.filter(
+        Q(department__name__icontains='ขาย') |
+        Q(department__name__icontains='Sales') |
+        Q(department__name__icontains='Marketing')
+    ).order_by('first_name')
+
+    # ระบบค้นหาและกรองข้อมูล
+    search_q = request.GET.get('q', '')
+    status_f = request.GET.get('status', '')
+    channel_f = request.GET.get('channel', '')
+    start_date = request.GET.get('start_date', '')
+    end_date = request.GET.get('end_date', '')
+    emp_f = request.GET.get('employee', '')
+
+    if search_q:
+        leads = leads.filter(Q(code__icontains=search_q) | Q(customer_name__icontains=search_q) | Q(phone__icontains=search_q))
+    if status_f:
+        leads = leads.filter(status=status_f)
+    if channel_f:
+        leads = leads.filter(channel=channel_f)
+    if start_date:
+        leads = leads.filter(date__date__gte=start_date)
+    if end_date:
+        leads = leads.filter(date__date__lte=end_date)
+    if emp_f:
+        leads = leads.filter(employee_id=emp_f)
+
+    paginator = Paginator(leads, 20)
+    page_obj = paginator.get_page(request.GET.get('page'))
+
+    return render(request, 'sales/crm_board.html', {
+        'leads': page_obj,
+        'search_q': search_q,
+        'status_f': status_f,
+        'channel_f': channel_f,
+        'start_date': start_date,
+        'end_date': end_date,
+        'emp_f': emp_f,
+        'scope_title': scope_title,
+        'status_choices': CustomerLead.STATUS_CHOICES,
+        'channel_choices': CustomerLead.CHANNEL_CHOICES,
+        'employees': all_emps_in_scope # ส่งรายชื่อเฉพาะเซลส์ไปทำ Dropdown
+    })
+
+@login_required
+def crm_lead_create(request):
+    if request.method == 'POST':
+        name = request.POST.get('customer_name')
+        phone = request.POST.get('phone', '')
+        channel = request.POST.get('channel', 'LINE')
+        requirements = request.POST.get('requirements', '')
+
+        # 🌟 [FIXED] รันรหัสลูกค้าระบบ CRM ตามเวลาประเทศไทย
+        tz_bkk = pytz.timezone('Asia/Bangkok')
+        now_bkk = timezone.now().astimezone(tz_bkk)
+
+        thai_year = (now_bkk.year + 543) % 100
+        prefix = f"LD-{thai_year:02d}{now_bkk.strftime('%m')}"
+        last = CustomerLead.objects.filter(code__startswith=prefix).order_by('code').last()
+        seq = int(last.code.split('-')[-1]) + 1 if last else 1
+        new_code = f"{prefix}-{seq:04d}"
+
+        current_emp = getattr(request.user, 'employee', None)
+
+        CustomerLead.objects.create(
+            code=new_code,
+            customer_name=name,
+            phone=phone,
+            channel=channel,
+            requirements=requirements,
+            employee=current_emp
+        )
+        messages.success(request, f"✅ สร้างข้อมูลลูกค้ามุ่งหวัง {new_code} เรียบร้อยแล้ว!")
+    return redirect('crm_board')
+
+@login_required
+def crm_lead_update(request, lead_id):
+    lead = get_object_or_404(CustomerLead, pk=lead_id)
+    if request.method == 'POST':
+        lead.customer_name = request.POST.get('customer_name', lead.customer_name)
+        lead.phone = request.POST.get('phone', lead.phone)
+        lead.channel = request.POST.get('channel', lead.channel)
+        lead.requirements = request.POST.get('requirements', lead.requirements)
+        lead.status = request.POST.get('status', lead.status)
+        lead.date = timezone.now() # อัปเดตเวลาล่าสุดทุกครั้งที่มีการเคลื่อนไหว
+        lead.save()
+        messages.success(request, f"✅ อัปเดตสถานะข้อมูลลูกค้า {lead.code} เรียบร้อยแล้ว!")
+    return redirect('crm_board')
+
+# ==========================================
+# 🌟 [NEW] ระบบจัดการนัดหมาย (Appointments) 🌟
+# ==========================================
+@login_required
+def appointment_board(request):
+    if not is_sales_authorized(request.user):
+        messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์เข้าถึงระบบนัดหมาย")
+        return redirect('dashboard')
+
+    target_employees, _ = get_target_employees(request.user)
+
+    # โหลดข้อมูลนัดหมายทั้งหมดมาโชว์ในตาราง (พ่วงข้อมูลพนักงานมาด้วย)
+    appointments = get_sales_queryset(Appointment, request.user, target_employees)\
+        .select_related('employee', 'employee__department', 'lead')\
+        .order_by('-appointment_date')
+
+    # ระบบตัวกรองและค้นหาในตาราง
+    search_q = request.GET.get('q', '')
+    type_f = request.GET.get('type', '')
+    status_f = request.GET.get('status', '')
+    start_date = request.GET.get('start_date', '')
+    end_date = request.GET.get('end_date', '')
+
+    if search_q:
+        appointments = appointments.filter(
+            Q(lead__customer_name__icontains=search_q) |
+            Q(lead__code__icontains=search_q) |
+            Q(details__icontains=search_q) |
+            Q(employee__first_name__icontains=search_q)
+        )
+    if type_f:
+        appointments = appointments.filter(appointment_type=type_f)
+    if status_f:
+        appointments = appointments.filter(status=status_f)
+    if start_date:
+        appointments = appointments.filter(appointment_date__date__gte=start_date)
+    if end_date:
+        appointments = appointments.filter(appointment_date__date__lte=end_date)
+
+    paginator = Paginator(appointments, 20)
+    page_obj = paginator.get_page(request.GET.get('page'))
+
+    return render(request, 'sales/appointment_board.html', {
+        'appointments': page_obj,
+        'search_q': search_q,
+        'type_f': type_f,
+        'status_f': status_f,
+        'start_date': start_date,
+        'end_date': end_date,
+        'type_choices': Appointment.TYPE_CHOICES,
+        'status_choices': Appointment.STATUS_CHOICES,
+    })
+
+@login_required
+def appointment_create_modal(request):
+    if request.method == 'POST':
+        lead_id = request.POST.get('lead_id')
+        lead_to_book = get_object_or_404(CustomerLead, pk=lead_id)
+        apt_date_str = request.POST.get('appointment_date')
+        apt_type = request.POST.get('appointment_type')
+        details = request.POST.get('details')
+
+        if apt_date_str:
+            Appointment.objects.create(
+                lead=lead_to_book,
+                appointment_date=apt_date_str,
+                appointment_type=apt_type,
+                details=details,
+                employee=getattr(request.user, 'employee', None)
+            )
+            messages.success(request, f"📅 สร้างรายการนัดหมายสำหรับ {lead_to_book.customer_name} เรียบร้อยแล้ว!")
+    return redirect('crm_board')
+
+@login_required
+def appointment_update(request, apt_id):
+    apt = get_object_or_404(Appointment, pk=apt_id)
+    if request.method == 'POST':
+        apt.status = request.POST.get('status', apt.status)
+        apt.details = request.POST.get('details', apt.details)
+        apt_date_str = request.POST.get('appointment_date')
+        if apt_date_str:
+            apt.appointment_date = apt_date_str
+        apt.save()
+        messages.success(request, "✅ อัปเดตข้อมูลการนัดหมายเรียบร้อยแล้ว!")
+    return redirect('appointment_board_global')
+
+# ... (โค้ดเดิมด้านบนทั้งหมด) ...
+
+@csrf_exempt
+def customer_sign_quotation(request, token):
+    # ดึงใบเสนอราคาตามรหัส Token ลับ
+    qt = get_object_or_404(Quotation, signature_token=token)
+
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            signature_data = data.get('signature_data')
+
+            if signature_data:
+                format, imgstr = signature_data.split(';base64,')
+                ext = format.split('/')[-1]
+                img_data = base64.b64decode(imgstr)
+                file_name = f"sign_QT_{qt.code}.{ext}"
+
+                qt.customer_signature.save(file_name, ContentFile(img_data), save=False)
+                qt.signature_date = timezone.now()
+                qt.save()
+                return JsonResponse({'success': True})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
+
+    main_total = sum(item.quantity * item.unit_price for item in qt.items.all())
+    upsale_total = sum(u.quantity * u.unit_price for u in qt.upsales.all())
+    item_total = main_total + upsale_total
+    company = CompanyInfo.objects.first()
+
+    return render(request, 'sales/customer_sign.html', {
+        'qt': qt,
+        'company': company,
+        'item_total': item_total
+    })
+
+# 🌟 [NEW] สมองกลบันทึกลายเซ็น "สัญญามัดจำ" 🌟
+@csrf_exempt
+def customer_sign_deposit(request, token):
+    qt = get_object_or_404(Quotation, deposit_signature_token=token)
+
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            signature_data = data.get('signature_data')
+
+            if signature_data:
+                # แปลง Base64 รูปภาพเซ็นมือ
+                format, imgstr = signature_data.split(';base64,')
+                ext = format.split('/')[-1]
+                img_data = base64.b64decode(imgstr)
+                file_name = f"sign_DEP_{qt.code}.{ext}"
+
+                # บันทึกรูปและอัปเดตเวลาลงตารางใหม่
+                qt.customer_deposit_signature.save(file_name, ContentFile(img_data), save=False)
+                qt.deposit_signature_date = timezone.now()
+                qt.save()
+                return JsonResponse({'success': True})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
+
+    # ส่งตัวแปรทั้งหมดเหมือนหน้า Print เอกสาร
+    company = CompanyInfo.objects.first()
+    grand_total = qt.grand_total if qt.grand_total else Decimal('0.00')
+    deposit_amount = qt.deposit_amount if qt.deposit_amount else Decimal('0.00')
+    balance_due = grand_total - deposit_amount
+
+    grand_total_text = get_thai_baht_text(grand_total)
+    deposit_amount_text = get_thai_baht_text(deposit_amount)
+    balance_due_text = get_thai_baht_text(balance_due)
+
+    job = qt.production_orders.first()
+    delivery_date = job.delivery_date if job else None
+
+    return render(request, 'sales/customer_sign_deposit.html', {
+        'qt': qt,
+        'company': company,
+        'grand_total_text': grand_total_text,
+        'deposit_amount_text': deposit_amount_text,
+        'balance_due': balance_due,
+        'balance_due_text': balance_due_text,
+        'delivery_date': delivery_date,
+    })
+
+# ==========================================
+# 🖨️ ฟังก์ชันพิมพ์ใบเสร็จรับเงินมัดจำ (RVD)
+# ==========================================
+@login_required
+def deposit_print(request, qt_id):
+    qt = get_object_or_404(Quotation, pk=qt_id)
+    from master_data.models import CompanyInfo
+    company = CompanyInfo.objects.first()
+
+    main_total = sum(item.quantity * item.unit_price for item in qt.items.all())
+    upsale_total = sum(u.quantity * u.unit_price for u in qt.upsales.all())
+    item_total = main_total + upsale_total
+
+    grand_total = qt.grand_total if qt.grand_total else Decimal('0.00')
+    balance_due = qt.balance_due if hasattr(qt, 'balance_due') else (grand_total - (qt.deposit_amount or Decimal('0.00')))
+
+    # 🌟 ดึงข้อมูล RVD ตามรหัสงวดที่กดมาจากหน้าตาราง
+    rvd_id = request.GET.get('rvd')
+
+    if rvd_id:
+        try:
+            specific_deposit = QuotationDeposit.objects.get(pk=rvd_id, quotation=qt)
+            deposit_amount = specific_deposit.amount
+            rvd_code = specific_deposit.code
+            rvd_date = specific_deposit.deposit_date
+            # ใช้ get_payment_method_display() ได้แล้วเพราะเราเพิ่ม Choices ใน Models ไปเมื่อกี้ครับ!
+            rvd_method = specific_deposit.get_payment_method_display()
+        except QuotationDeposit.DoesNotExist:
+            deposit_amount = qt.deposit_amount if qt.deposit_amount else Decimal('0.00')
+            rvd_code = f"QT-{qt.code.split('-')[-1]}"
+            rvd_date = qt.deposit_date
+            rvd_method = "ไม่ระบุ"
+    else:
+        first_dep = qt.deposits.first()
+        if first_dep:
+            deposit_amount = first_dep.amount
+            rvd_code = first_dep.code
+            rvd_date = first_dep.deposit_date
+            rvd_method = first_dep.get_payment_method_display()
+        else:
+            deposit_amount = qt.deposit_amount if qt.deposit_amount else Decimal('0.00')
+            rvd_code = f"QT-{qt.code.split('-')[-1]}"
+            rvd_date = qt.deposit_date
+            rvd_method = "ไม่ระบุ"
+
+    # ใช้ฟังก์ชันแปลงตัวเลขเป็นคำอ่านภาษาไทย
+    grand_total_text = get_thai_baht_text(grand_total)
+    deposit_amount_text = get_thai_baht_text(deposit_amount)
+    balance_due_text = get_thai_baht_text(balance_due)
+
+    return render(request, 'sales/deposit_print.html', {
+        'qt': qt,
+        'company': company,
+        'item_total': item_total,
+        'balance_due': balance_due,
+        'balance_due_text': balance_due_text,
+        'grand_total_text': grand_total_text,
+        'deposit_amount': deposit_amount,
+        'deposit_amount_text': deposit_amount_text,
+        'rvd_code': rvd_code,
+        'rvd_date': rvd_date,
+        'rvd_method': rvd_method
+    })
+
+# ==========================================
+# 💸 ศูนย์ตั้งเบิกผลตอบแทน บ้านน็อคดาวน์ (Commission Board)
+# ==========================================
+@login_required
+def commission_board(request):
+    if not is_sales_authorized(request.user):
+        messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์เข้าถึงหน้านี้")
+        return redirect('dashboard')
+
+    current_emp = getattr(request.user, 'employee', None)
+
+    # 🌟 1. กำหนดสิทธิ์การมองเห็น (Manager vs Supervisor)
+    is_manager_view = False
+    is_supervisor_view = False # 🌟 [NEW] เพิ่มสิทธิ์หัวหน้าสาขา
+
+    if request.user.is_superuser:
+        is_manager_view = True
+    elif current_emp:
+        rank = current_emp.business_rank.lower() if current_emp.business_rank else ""
+        dept_name = getattr(current_emp.department, 'name', '')
+        pos_title = getattr(current_emp.position, 'title', '').lower()
+        if rank in ['manager', 'director'] or 'manager' in pos_title or 'บริหาร' in dept_name:
+            is_manager_view = True
+        elif rank == 'supervisor': # 🌟 ถ้าเป็นหัวหน้าสาขา
+            is_supervisor_view = True
+
+    search_query = request.GET.get('q', '').strip()
+
+    # 🌟 3. ดึงข้อมูลตั๋วตามสิทธิ์
+    if is_manager_view:
+        # ผู้จัดการ: เห็นทุกอย่างของทุกคน
+        tickets_05 = CommissionTicket.objects.filter(ticket_type='0.5%', status='AVAILABLE').select_related('quotation_ref', 'quotation_ref__employee').order_by('-created_at')
+        tickets_2 = CommissionTicket.objects.filter(ticket_type='2%', status='AVAILABLE').select_related('quotation_ref', 'quotation_ref__employee').order_by('-created_at')
+        tickets_3 = CommissionTicket.objects.filter(ticket_type__in=['2.5%', '3%'], status='AVAILABLE').select_related('quotation_ref', 'quotation_ref__employee').order_by('-created_at')
+        claims_qs = CommissionClaim.objects.all().select_related('requester').order_by('-created_at')
+
+    elif is_supervisor_view and current_emp.department:
+        # 🌟 หัวหน้าสาขา: เห็นเฉพาะตั๋ว 2% และ 2.5% ของ "ทุกคนในสาขา"
+        dept_emps = Employee.objects.filter(department=current_emp.department)
+
+        # 🚨 ล็อกตาย! ห้ามหัวหน้าสาขาเห็นตั๋ว 0.5% เด็ดขาด
+        tickets_05 = CommissionTicket.objects.none()
+
+        tickets_2 = CommissionTicket.objects.filter(ticket_type='2%', status='AVAILABLE', quotation_ref__employee__in=dept_emps).select_related('quotation_ref', 'quotation_ref__employee').order_by('-created_at')
+        tickets_3 = CommissionTicket.objects.filter(ticket_type__in=['2.5%', '3%'], status='AVAILABLE', quotation_ref__employee__in=dept_emps).select_related('quotation_ref', 'quotation_ref__employee').order_by('-created_at')
+        claims_qs = CommissionClaim.objects.filter(requester__in=dept_emps).select_related('requester').order_by('-created_at')
+
+    else:
+        # เซลส์ปกติ: เห็นเฉพาะของตัวเอง
+        tickets_05 = CommissionTicket.objects.filter(ticket_type='0.5%', status='AVAILABLE', quotation_ref__employee=current_emp).order_by('-created_at')
+        tickets_2 = CommissionTicket.objects.filter(ticket_type='2%', status='AVAILABLE', quotation_ref__employee=current_emp).order_by('-created_at')
+        tickets_3 = CommissionTicket.objects.filter(ticket_type__in=['2.5%', '3%'], status='AVAILABLE', quotation_ref__employee=current_emp).order_by('-created_at')
+        claims_qs = CommissionClaim.objects.filter(requester=current_emp).order_by('-created_at')
+
+    if search_query:
+        claims_qs = claims_qs.filter(
+            Q(code__icontains=search_query) |
+            Q(requester__first_name__icontains=search_query) |
+            Q(bank_name__icontains=search_query)
+        )
+
+    claims_list = claims_qs[:10]
+
+    sum_05 = sum(t.commission_amount for t in tickets_05)
+    sum_2 = sum(t.commission_amount for t in tickets_2)
+    sum_3 = sum(t.commission_amount for t in tickets_3)
+
+    return render(request, 'sales/commission_board.html', {
+        'tickets_05': tickets_05,
+        'tickets_2': tickets_2,
+        'tickets_3': tickets_3,
+        'claims': claims_list,
+        'search_query': search_query,
+        'is_manager_view': is_manager_view,
+        'is_supervisor_view': is_supervisor_view, # 🌟 ส่งสิทธิ์หัวหน้าไปหน้าเว็บ
+        'sum_05': sum_05,
+        'sum_2': sum_2,
+        'sum_3': sum_3,
+    })
+
+# ==========================================
+# 📊 [NEW] หน้าประวัติใบตั้งเบิกคอมมิชชัน (แบบเต็มจอ + ค้นหาละเอียด)
+# ==========================================
+@login_required
+def commission_history_list(request):
+    if not is_sales_authorized(request.user):
+        messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์เข้าถึงหน้านี้")
+        return redirect('dashboard')
+
+    current_emp = getattr(request.user, 'employee', None)
+    is_manager_view = False
+    is_supervisor_view = False # 🌟 [NEW] เพิ่มสิทธิ์หัวหน้า
+
+    if request.user.is_superuser:
+        is_manager_view = True
+    elif current_emp:
+        rank = current_emp.business_rank.lower() if current_emp.business_rank else ""
+        dept_name = getattr(current_emp.department, 'name', '')
+        pos_title = getattr(current_emp.position, 'title', '').lower()
+        if rank in ['manager', 'director'] or 'manager' in pos_title or 'บริหาร' in dept_name:
+            is_manager_view = True
+        elif rank == 'supervisor': # 🌟 [NEW] เช็กว่าเป็นหัวหน้า
+            is_supervisor_view = True
+
+    # 🌟 [FIXED] นำ is_active=True ออก เนื่องจากตารางพนักงานไม่ได้ใช้ชื่อฟิลด์นี้
+    team_members = []
+    if is_supervisor_view and current_emp.department:
+        team_members = Employee.objects.filter(department=current_emp.department).order_by('first_name')
+    elif is_manager_view:
+        team_members = Employee.objects.all().order_by('first_name')
+
+    search_query = request.GET.get('q', '').strip()
+    emp_search = request.GET.get('emp', '').strip()
+    claim_type = request.GET.get('type', '')
+    claim_status = request.GET.get('status', '')
+
+    tz_bkk = pytz.timezone('Asia/Bangkok')
+    today_bkk = timezone.now().astimezone(tz_bkk).date()
+
+    start_date = request.GET.get('start_date')
+    end_date = request.GET.get('end_date')
+
+    if not start_date or start_date == 'None':
+        start_date = (today_bkk - timedelta(days=29)).strftime('%Y-%m-%d')
+    if not end_date or end_date == 'None':
+        end_date = today_bkk.strftime('%Y-%m-%d')
+
+    # 🌟 [NEW] ใช้ prefetch_related โหลดข้อมูล tickets และ allocations มาเผื่อไว้เลยเพื่อความเร็ว
+    if is_manager_view:
+        claims_qs = CommissionClaim.objects.all().select_related('requester', 'requester__department').prefetch_related('tickets', 'allocations').order_by('-created_at')
+    else:
+        claims_qs = CommissionClaim.objects.filter(requester=current_emp).select_related('requester', 'requester__department').prefetch_related('tickets', 'allocations').order_by('-created_at')
+
+    if search_query:
+        claims_qs = claims_qs.filter(code__icontains=search_query)
+    if emp_search:
+        claims_qs = claims_qs.filter(Q(requester__first_name__icontains=emp_search) | Q(requester__department__name__icontains=emp_search))
+    if claim_type:
+        claims_qs = claims_qs.filter(claim_type=claim_type)
+    if claim_status:
+        claims_qs = claims_qs.filter(status=claim_status)
+
+    try:
+        s_date = parse_date(start_date)
+        e_date = parse_date(end_date)
+        if s_date and e_date:
+            tz_bkk = pytz.timezone('Asia/Bangkok')
+            start_dt = tz_bkk.localize(datetime.datetime.combine(s_date, datetime.time.min))
+            end_dt = tz_bkk.localize(datetime.datetime.combine(e_date, datetime.time.max))
+            claims_qs = claims_qs.filter(created_at__gte=start_dt, created_at__lte=end_dt)
+    except:
+        pass
+
+    paginator = Paginator(claims_qs.distinct(), 20)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    return render(request, 'sales/commission_history.html', {
+        'page_obj': page_obj, 'search_query': search_query, 'emp_search': emp_search,
+        'claim_type': claim_type, 'claim_status': claim_status, 'start_date': start_date, 'end_date': end_date,
+        'is_manager_view': is_manager_view,
+        'is_supervisor_view': is_supervisor_view, # 🌟 ส่งสิทธิ์ไปที่ HTML
+        'team_members': team_members, # 🌟 ส่งรายชื่อลูกทีมไปสร้างแบบฟอร์ม
+    })
+
+@login_required
+def commission_create_claim(request, claim_type):
+    if request.method == 'POST':
+        ticket_ids = request.POST.getlist('ticket_ids')
+        bank_name = request.POST.get('bank_name')
+        bank_account = request.POST.get('bank_account')
+        account_name = request.POST.get('account_name')
+
+        if not ticket_ids:
+            messages.error(request, "❌ กรุณาเลือกใบคุมสิทธิ์ที่ต้องการเบิกอย่างน้อย 1 รายการ")
+            return redirect('commission_board')
+
+        # ค้นหาตั๋วที่ถูกเลือกและยังว่างอยู่
+        tickets = CommissionTicket.objects.filter(id__in=ticket_ids, status='AVAILABLE')
+        total_amount = sum(t.commission_amount for t in tickets)
+
+        if total_amount > 0:
+            # สร้างใบขอเบิก
+            claim = CommissionClaim.objects.create(
+                claim_type=claim_type,
+                requester=getattr(request.user, 'employee', None),
+                total_amount=total_amount,
+                bank_name=bank_name,
+                bank_account=bank_account,
+                account_name=account_name
+            )
+
+            # อัปเดตตั๋วให้ผูกกับใบขอเบิกนี้ และเปลี่ยนสถานะ
+            tickets.update(status='CLAIMING', claim_ref=claim)
+            messages.success(request, f"✅ สร้างใบขอเบิก {claim.code} ยอด {total_amount:,.2f} บาท สำเร็จ! (รอโอนเงินจากฝ่ายบัญชี)")
+        else:
+            messages.error(request, "❌ ไม่พบยอดเงินที่สามารถเบิกได้ หรือสิทธิ์ถูกเบิกไปแล้ว")
+
+    return redirect('commission_board')
+
+# ==========================================
+# 💸 ฟังก์ชันบัญชีกดทำจ่ายคอมมิชชัน น็อคดาวน์
+# ==========================================
+@login_required
+def knockdown_commission_pay(request, claim_id):
+    claim = get_object_or_404(CommissionClaim, id=claim_id)
+    if request.method == 'POST' and 'transfer_slip' in request.FILES:
+        from django.utils import timezone
+        claim.transfer_slip = request.FILES['transfer_slip']
+        claim.status = 'PAID'
+        claim.paid_at = timezone.now()
+        claim.save()
+
+        # อัปเดตตั๋วสิทธิ์ข้างในให้กลายเป็น โอนแล้ว (PAID) อัตโนมัติ
+        claim.tickets.update(status='PAID')
+
+        # 🌟 [NEW] อัปเดตสถานะเงินที่หัวหน้าจัดสรรให้ลูกทีมทุกคน เป็น "โอนแล้ว (PAID)" ด้วย
+        claim.allocations.update(status='PAID')
+
+        messages.success(request, f"✅ บัญชีทำรายการโอนเงินค่าคอมมิชชันน็อคดาวน์ {claim.code} สำเร็จ!")
+
+    return redirect('accounting_verification_hub', task_type='knockdown_commissions')
+
+# ==========================================
+# 🖨️ [NEW] ฟังก์ชันพิมพ์ใบตั้งเบิกคอมมิชชัน (A4)
+# ==========================================
+@login_required
+def print_commission_claim(request, claim_id):
+    # ดึงข้อมูลใบตั้งเบิกหลัก
+    claim = get_object_or_404(CommissionClaim, pk=claim_id)
+
+    # ดึงข้อมูลบริษัทสำหรับหัวกระดาษ
+    from master_data.models import CompanyInfo
+    company = CompanyInfo.objects.first()
+
+    # ดึงตั๋วสิทธิ์ (Tickets) ทั้งหมดที่ถูกมัดรวมอยู่ในใบเบิกนี้
+    tickets = claim.tickets.all()
+
+    # แปลงยอดเงินรวมให้เป็นตัวอักษรภาษาไทยอัตโนมัติ (เช่น สองพันบาทถ้วน)
+    total_amount_text = get_thai_baht_text(claim.total_amount)
+
+    return render(request, 'sales/print_commission_claim.html', {
+        'claim': claim,
+        'company': company,
+        'tickets': tickets,
+        'total_amount_text': total_amount_text
+    })
+
+# ==========================================
+# 🌟 [UPDATED] Master Job Report (ปรับปรุงระบบป้องกันเบิกซ้ำ / แก้ไข / ลบ) 🌟
+# ==========================================
+@login_required
+def master_job_report(request):
+    current_emp = getattr(request.user, 'employee', None)
+    is_authorized = request.user.is_superuser
+    if current_emp:
+        rank = current_emp.business_rank.lower() if current_emp.business_rank else ""
+        dept_name = getattr(current_emp.department, 'name', '')
+        if rank in ['manager', 'director'] or 'บัญชี' in dept_name or 'Accounting' in dept_name:
+            is_authorized = True
+
+    if not is_authorized:
+        messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์เข้าถึงหน้า Master Job Report")
+        return redirect('dashboard')
+
+    if request.method == 'POST' and 'action' in request.POST:
+        action = request.POST.get('action')
+
+        # -----------------------------------------
+        # 1. ระบบสร้างบิลใหม่ (หยอดตะกร้า)
+        # -----------------------------------------
+        if action == 'submit_expense_claim':
+            job_id = request.POST.get('job_id')
+            claim_type = request.POST.get('claim_type')
+
+            if not job_id:
+                messages.error(request, "❌ ไม่พบรหัสอ้างอิง JOB")
+                return redirect('master_job_report')
+
+            order = get_object_or_404(ProductionOrder, pk=job_id)
+
+            try:
+                amount_str = request.POST.get('claim_amount', '0').replace(',', '')
+                amount = Decimal(amount_str)
+                slip_file = request.FILES.get('claim_slip')
+
+                if amount <= 0:
+                    messages.error(request, "❌ ยอดเงินเบิกต้องมากกว่า 0 บาท")
+                    return redirect('master_job_report')
+                if not slip_file:
+                    messages.error(request, "❌ กรุณาแนบรูปบิล/หลักฐานหน้างาน")
+                    return redirect('master_job_report')
+
+                if claim_type == 'LABOR':
+                    # 🌟 ป้องกันการเบิกซ้ำ สำหรับค่าแรงเหมา
+                    if order.labor_claims.exists():
+                        messages.error(request, "❌ งานนี้มีรายการเบิกค่าแรงอยู่แล้ว ไม่สามารถตั้งเบิกซ้ำได้")
+                        return redirect('master_job_report')
+
+                    contractor_name = request.POST.get('contractor_name', '')
+                    JobLaborClaim.objects.create(
+                        production_order=order, requester=current_emp, contractor_name=contractor_name,
+                        amount=amount, slip_image=slip_file, status='UNCLAIMED'
+                    )
+                elif claim_type == 'AIRCON':
+                    # 🌟 ป้องกันการเบิกซ้ำ สำหรับค่าแอร์
+                    if order.aircon_claims.exists():
+                        messages.error(request, "❌ งานนี้มีรายการเบิกค่าแอร์อยู่แล้ว ไม่สามารถตั้งเบิกซ้ำได้")
+                        return redirect('master_job_report')
+
+                    tech_name = request.POST.get('technician_name', '')
+                    desc = request.POST.get('aircon_desc', '')
+                    JobAirconClaim.objects.create(
+                        production_order=order, requester=current_emp, technician_name=tech_name,
+                        description=desc, amount=amount, slip_image=slip_file, status='UNCLAIMED'
+                    )
+                elif claim_type == 'OTHER':
+                    desc = request.POST.get('other_desc', '')
+                    JobOtherExpense.objects.create(
+                        production_order=order, requester=current_emp, description=desc,
+                        amount=amount, receipt_image=slip_file, status='UNCLAIMED'
+                    )
+
+                messages.success(request, f"🛒 หยอดบิลงาน {order.code} ลงตะกร้าเบิกส่วนตัวสำเร็จ!")
+            except Exception as e:
+                messages.error(request, f"❌ เกิดข้อผิดพลาด: {str(e)}")
+
+        # -----------------------------------------
+        # 2. ระบบแก้ไขบิลในตะกร้า (Edit)
+        # -----------------------------------------
+        elif action == 'edit_expense_claim':
+            claim_id = request.POST.get('claim_id')
+            claim_type = request.POST.get('claim_type')
+
+            try:
+                amount_str = request.POST.get('claim_amount', '0').replace(',', '')
+                amount = Decimal(amount_str)
+                slip_file = request.FILES.get('claim_slip')
+
+                if amount <= 0:
+                    messages.error(request, "❌ ยอดเงินต้องมากกว่า 0 บาท")
+                    return redirect('master_job_report')
+
+                if claim_type == 'LABOR':
+                    claim = get_object_or_404(JobLaborClaim, pk=claim_id, status='UNCLAIMED')
+                    claim.contractor_name = request.POST.get('contractor_name', claim.contractor_name)
+                    claim.amount = amount
+                    if slip_file: claim.slip_image = slip_file
+                    claim.save()
+                elif claim_type == 'AIRCON':
+                    claim = get_object_or_404(JobAirconClaim, pk=claim_id, status='UNCLAIMED')
+                    claim.technician_name = request.POST.get('technician_name', claim.technician_name)
+                    claim.description = request.POST.get('aircon_desc', claim.description)
+                    claim.amount = amount
+                    if slip_file: claim.slip_image = slip_file
+                    claim.save()
+                elif claim_type == 'OTHER':
+                    claim = get_object_or_404(JobOtherExpense, pk=claim_id, status='UNCLAIMED')
+                    claim.description = request.POST.get('other_desc', claim.description)
+                    claim.amount = amount
+                    if slip_file: claim.receipt_image = slip_file
+                    claim.save()
+
+                messages.success(request, "✅ บันทึกการแก้ไขข้อมูลสำเร็จ!")
+            except Exception as e:
+                messages.error(request, "❌ ไม่สามารถแก้ไขได้ หรือบิลนี้ถูกส่งไปแล้ว")
+
+        # -----------------------------------------
+        # 3. ระบบลบบิลออกจากตะกร้า (Delete)
+        # -----------------------------------------
+        elif action == 'delete_expense_claim':
+            claim_id = request.POST.get('claim_id')
+            claim_type = request.POST.get('claim_type')
+
+            try:
+                if claim_type == 'LABOR':
+                    get_object_or_404(JobLaborClaim, pk=claim_id, status='UNCLAIMED').delete()
+                elif claim_type == 'AIRCON':
+                    get_object_or_404(JobAirconClaim, pk=claim_id, status='UNCLAIMED').delete()
+                elif claim_type == 'OTHER':
+                    get_object_or_404(JobOtherExpense, pk=claim_id, status='UNCLAIMED').delete()
+
+                messages.success(request, "🗑️ ลบรายการตั้งเบิกออกจากตะกร้าเรียบร้อยแล้ว")
+            except Exception as e:
+                messages.error(request, "❌ ไม่สามารถลบได้ หรือบิลนี้ถูกส่งไปแล้ว")
+
+        return redirect('master_job_report')
+
+    # 🌟 [UPDATE] เพิ่มการดึง service_tickets และ labor_claims 🌟
+    jobs_query = ProductionOrder.objects.select_related('quotation_ref', 'logistics_claim').prefetch_related(
+        'labor_claims', 'aircon_claims', 'other_expenses',
+        'service_tickets', 'service_tickets__labor_claims', 'service_tickets__labor_claims__master_claim'
+    ).order_by('-id')
+
+    search_query = request.GET.get('q', '')
+    if search_query:
+        jobs_query = jobs_query.filter(
+            Q(code__icontains=search_query) | Q(quotation_ref__code__icontains=search_query) | Q(customer_name__icontains=search_query)
+        ).distinct()
+
+    paginator = Paginator(jobs_query, 20)
+    page_obj = paginator.get_page(request.GET.get('page'))
+
+    qt_ids = [job.quotation_ref_id for job in page_obj if job.quotation_ref_id]
+    invoices = Invoice.objects.filter(quotation_ref_id__in=qt_ids)
+    inv_dict = {inv.quotation_ref_id: inv for inv in invoices}
+
+    tickets = CommissionTicket.objects.filter(Q(quotation_ref_id__in=qt_ids) | Q(invoice_ref__quotation_ref_id__in=qt_ids))
+    ticket_dict_05 = {}
+    ticket_dict_2 = {}
+    ticket_dict_3 = {}
+    for t in tickets:
+        if t.ticket_type == '0.5%' and t.quotation_ref_id:
+            ticket_dict_05.setdefault(t.quotation_ref_id, []).append(t)
+        elif t.ticket_type == '2%' and t.quotation_ref_id:
+            ticket_dict_2.setdefault(t.quotation_ref_id, []).append(t)
+        elif t.ticket_type in ['2.5%', '3%']:
+            q_id = t.quotation_ref_id or getattr(t.invoice_ref, 'quotation_ref_id', None)
+            if q_id:
+                ticket_dict_3.setdefault(q_id, []).append(t)
+
+    cart_count = 0
+    if current_emp:
+        cart_count = (
+            JobLaborClaim.objects.filter(requester=current_emp, status='UNCLAIMED').count() +
+            JobAirconClaim.objects.filter(requester=current_emp, status='UNCLAIMED').count() +
+            JobOtherExpense.objects.filter(requester=current_emp, status='UNCLAIMED').count()
+        )
+
+    for job in page_obj:
+        if job.quotation_ref_id:
+            job.matched_invoice = inv_dict.get(job.quotation_ref_id)
+            job.matched_tickets_05 = ticket_dict_05.get(job.quotation_ref_id, [])
+            job.matched_tickets_2 = ticket_dict_2.get(job.quotation_ref_id, [])
+            job.matched_tickets_3 = ticket_dict_3.get(job.quotation_ref_id, [])
+        else:
+            job.matched_invoice = None
+            job.matched_tickets_05 = []
+            job.matched_tickets_2 = []
+            job.matched_tickets_3 = []
+
+    return render(request, 'sales/master_job_report.html', {
+        'page_obj': page_obj, 'search_query': search_query, 'cart_count': cart_count
+    })
+
+# ==========================================
+# 🛒 [NEW] ฟังก์ชันดูตะกร้าเบิกส่วนตัว (Shopping Cart)
+# ==========================================
+@login_required
+def expense_cart_view(request):
+    current_emp = getattr(request.user, 'employee', None)
+    if not current_emp:
+        messages.error(request, "❌ ข้อมูลพนักงานไม่สมบูรณ์")
+        return redirect('master_job_report')
+
+    labor_items = JobLaborClaim.objects.filter(requester=current_emp, status='UNCLAIMED').order_by('created_at')
+    aircon_items = JobAirconClaim.objects.filter(requester=current_emp, status='UNCLAIMED').order_by('created_at')
+    other_items = JobOtherExpense.objects.filter(requester=current_emp, status='UNCLAIMED').order_by('created_at')
+
+    # 🌟 [NEW] เพิ่มการดึงบิลค่าแรงซ่อม
+    service_labor_items = ServiceLaborClaim.objects.filter(requester=current_emp, status='UNCLAIMED').order_by('created_at')
+
+    master_claims = MasterExpenseClaim.objects.filter(requester=current_emp).order_by('-created_at')
+    bank_choices = MasterExpenseClaim.BANK_CHOICES
+
+    return render(request, 'sales/expense_cart.html', {
+        'labor_items': labor_items,
+        'aircon_items': aircon_items,
+        'other_items': other_items,
+        'service_labor_items': service_labor_items, # 🌟 [NEW] ส่งไปแสดงผล
+        'master_claims': master_claims,
+        'bank_choices': bank_choices
+    })
+
+# ==========================================
+# 📦 [NEW] ฟังก์ชันกดสร้างใบคุมรวม (Submit Cart)
+# ==========================================
+@login_required
+@transaction.atomic
+def submit_expense_cart(request):
+    if request.method == 'POST':
+        current_emp = getattr(request.user, 'employee', None)
+
+        selected_labors = request.POST.getlist('labor_ids')
+        selected_aircons = request.POST.getlist('aircon_ids')
+        selected_others = request.POST.getlist('other_ids')
+        selected_service_labors = request.POST.getlist('service_labor_ids') # 🌟 [NEW]
+
+        bank_name = request.POST.get('bank_name')
+        bank_acc_num = request.POST.get('bank_account_number')
+        bank_acc_name = request.POST.get('bank_account_name')
+
+        if not (selected_labors or selected_aircons or selected_others or selected_service_labors):
+            messages.error(request, "❌ กรุณาเลือกบิลอย่างน้อย 1 รายการเพื่อสร้างใบคุมรวม")
+            return redirect('expense_cart_view')
+
+        if not bank_name or not bank_acc_num or not bank_acc_name:
+            messages.error(request, "❌ กรุณากรอกข้อมูลบัญชีธนาคารให้ครบถ้วนเพื่อความรวดเร็วในการโอนเงิน")
+            return redirect('expense_cart_view')
+
+        labor_qs = JobLaborClaim.objects.filter(id__in=selected_labors, requester=current_emp, status='UNCLAIMED')
+        aircon_qs = JobAirconClaim.objects.filter(id__in=selected_aircons, requester=current_emp, status='UNCLAIMED')
+        other_qs = JobOtherExpense.objects.filter(id__in=selected_others, requester=current_emp, status='UNCLAIMED')
+        service_labor_qs = ServiceLaborClaim.objects.filter(id__in=selected_service_labors, requester=current_emp, status='UNCLAIMED') # 🌟 [NEW]
+
+        total_labor = sum(item.amount for item in labor_qs)
+        total_aircon = sum(item.amount for item in aircon_qs)
+        total_other = sum(item.amount for item in other_qs)
+        total_service_labor = sum(item.amount for item in service_labor_qs) # 🌟 [NEW]
+
+        grand_total = total_labor + total_aircon + total_other + total_service_labor
+
+        if grand_total > 0:
+            master_claim = MasterExpenseClaim.objects.create(
+                requester=current_emp,
+                total_amount=grand_total,
+                bank_name=bank_name,
+                bank_account_number=bank_acc_num,
+                bank_account_name=bank_acc_name,
+                status='PENDING'
+            )
+
+            labor_qs.update(master_claim=master_claim, status='PENDING')
+            aircon_qs.update(master_claim=master_claim, status='PENDING')
+            other_qs.update(master_claim=master_claim, status='PENDING')
+            service_labor_qs.update(master_claim=master_claim, status='PENDING') # 🌟 [NEW]
+
+            messages.success(request, f"🎉 สร้างใบคุมรวม {master_claim.code} จำนวน {grand_total:,.2f} บาท สำเร็จ!")
+        else:
+            messages.error(request, "❌ ยอดเงินเบิกต้องมากกว่า 0 บาท")
+
+    return redirect('expense_cart_view')
+
+# ==========================================
+# 🌟 [NEW] สมองกล: ศูนย์แจ้งซ่อมและบริการ (After-Sales) 🌟
+# ==========================================
+@login_required
+def service_ticket_list(request):
+    if not is_sales_authorized(request.user):
+        messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์เข้าถึงศูนย์แจ้งซ่อม")
+        return redirect('dashboard')
+
+    target_employees, _ = get_target_employees(request.user)
+
+    # 🌟 [UPDATED] เพิ่มการดึงข้อมูล branch และ production_team มาด้วย เพื่อความเร็ว (N+1 Query) 🌟
+    if request.user.is_superuser:
+        tickets = ServiceTicket.objects.select_related(
+            'production_order',
+            'production_order__branch',
+            'production_order__production_team',
+            'salesperson'
+        ).all()
+    else:
+        emp_ids = list(target_employees.values_list('id', flat=True))
+        tickets = ServiceTicket.objects.select_related(
+            'production_order',
+            'production_order__branch',
+            'production_order__production_team',
+            'salesperson'
+        ).filter(salesperson_id__in=emp_ids)
+
+    # ระบบค้นหา
+    search_q = request.GET.get('q', '')
+    status_filter = request.GET.get('status', '')
+
+    if search_q:
+        tickets = tickets.filter(
+            Q(code__icontains=search_q) |
+            Q(production_order__customer_name__icontains=search_q) |
+            Q(production_order__code__icontains=search_q)
+        )
+    if status_filter:
+        tickets = tickets.filter(status=status_filter)
+
+    tickets = tickets.order_by('-created_at')
+
+    paginator = Paginator(tickets, 20)
+    page_obj = paginator.get_page(request.GET.get('page'))
+
+    # เพื่อให้ง่ายต่อการสร้างตั๋วใหม่ ดึงรายการ JOB ที่ส่งมอบแล้วมาเตรียมไว้ให้เลือก
+    completed_jobs = ProductionOrder.objects.filter(is_closed=True).order_by('-finish_date')[:50]
+
+    # 🌟 [FIXED] สร้างตัวเลือกสำรอง ป้องกันระบบพังหากหาในฐานข้อมูลไม่เจอ
+    fallback_category = getattr(ServiceTicket, 'CATEGORY_CHOICES', [
+        ('STRUCTURE', 'ปัญหาโครงสร้าง/รั่วซึม'),
+        ('ELECTRICAL', 'ระบบไฟฟ้า'),
+        ('PLUMBING', 'ระบบประปา'),
+        ('AIRCON', 'ระบบแอร์'),
+        ('OTHER', 'อื่นๆ')
+    ])
+
+    fallback_urgency = getattr(ServiceTicket, 'URGENCY_CHOICES', [
+        ('NORMAL', 'ปกติ (ภายใน 7 วัน)'),
+        ('URGENT', 'ด่วน (ภายใน 3 วัน)'),
+        ('CRITICAL', 'ฉุกเฉิน (ภายใน 24 ชม.)')
+    ])
+
+    return render(request, 'sales/service_ticket_list.html', {
+        'page_obj': page_obj,
+        'search_q': search_q,
+        'status_filter': status_filter,
+        'status_choices': getattr(ServiceTicket, 'STATUS_CHOICES', []),
+        'completed_jobs': completed_jobs,
+        'category_choices': fallback_category, # 🌟 ใช้ตัวเลือกสำรอง
+        'urgency_choices': fallback_urgency,   # 🌟 ใช้ตัวเลือกสำรอง
+    })
+
+@login_required
+@transaction.atomic
+def service_ticket_create(request):
+    if request.method == 'POST':
+        job_id = request.POST.get('job_id')
+        issue_category = request.POST.get('issue_category')
+        description = request.POST.get('description')
+        urgency = request.POST.get('urgency', 'NORMAL')
+        is_warranty = request.POST.get('is_warranty') == 'on'
+
+        # 🌟 [NEW] รับค่าเบอร์โทรและสถานที่หน้างาน 🌟
+        customer_phone = request.POST.get('customer_phone', '')
+        customer_location = request.POST.get('customer_location', '')
+
+        job = get_object_or_404(ProductionOrder, pk=job_id)
+        current_emp = getattr(request.user, 'employee', None)
+
+        # 1. สร้างตั๋วแจ้งซ่อมพร้อมบันทึกข้อมูลติดต่อ
+        ticket = ServiceTicket.objects.create(
+            production_order=job,
+            salesperson=current_emp,
+            issue_category=issue_category,
+            description=description,
+            urgency=urgency,
+            is_warranty=is_warranty,
+            customer_phone=customer_phone,       # บันทึกเบอร์โทรหน้างาน
+            customer_location=customer_location, # บันทึกพิกัดหน้างาน
+            status='PENDING'
+        )
+
+        # 2. กวาดไฟล์ทั้งหมดที่อัปโหลดมา บันทึกลงตาราง ServiceTicketMedia
+        media_files = request.FILES.getlist('media_files')
+        for f in media_files:
+            ServiceTicketMedia.objects.create(
+                ticket=ticket,
+                media_type='BEFORE',
+                file=f
+            )
+
+        messages.success(request, f"✅ เปิดตั๋วแจ้งซ่อม {ticket.code} สำหรับลูกค้า {job.customer_name} เรียบร้อยแล้ว! (ส่งเรื่องให้ช่างประเมิน)")
+
+    return redirect('service_ticket_list')
+
+@login_required
+def service_ticket_update(request, ticket_id):
+    ticket = get_object_or_404(ServiceTicket, pk=ticket_id)
+    if request.method == 'POST':
+        action = request.POST.get('action')
+
+        if action == 'approve_cost' and ticket.status == 'WAITING_APPROVAL':
+            ticket.status = 'PENDING' # คืนให้ช่างจัดคิว
+            ticket.save()
+            messages.success(request, f"✅ เซลส์คอนเฟิร์มค่าใช้จ่ายกับลูกค้าเรียบร้อยแล้ว ส่งงานกลับให้ช่างจัดคิวซ่อม!")
+
+        elif action == 'cancel' and ticket.status in ['PENDING', 'WAITING_APPROVAL']:
+            ticket.status = 'CANCELLED'
+            ticket.save()
+            messages.warning(request, f"⚠️ ยกเลิกใบแจ้งซ่อม {ticket.code} เรียบร้อยแล้ว")
+
+    return redirect('service_ticket_list')
+
+# ==========================================
+# 🧠 [NEW] ระบบสมองกลจัดสรรเงิน 3 รูปแบบ (สำหรับหัวหน้าสาขา)
+# ==========================================
+@login_required
+@transaction.atomic
+def commission_allocate(request, claim_id):
+    if not is_sales_authorized(request.user):
+        messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์ดำเนินการ")
+        return redirect('dashboard')
+
+    claim = get_object_or_404(CommissionClaim, id=claim_id)
+    current_emp = getattr(request.user, 'employee', None)
+
+    # 🔒 เช็กความปลอดภัย: เฉพาะหัวหน้าที่เป็นคนสร้างใบเบิก หรือแอดมินเท่านั้น ที่แบ่งเงินได้
+    if claim.requester != current_emp and not request.user.is_superuser:
+        messages.error(request, "❌ คุณไม่มีสิทธิ์จัดสรรเงินสำหรับใบเบิกนี้")
+        return redirect('commission_history_list')
+
+    if request.method == 'POST':
+        mode = request.POST.get('allocation_mode')
+        dept = current_emp.department if current_emp else None
+
+        # 🧹 ล้างประวัติการจัดสรรเดิมของบิลนี้ทิ้งก่อน (กรณีหัวหน้ากดเข้ามาแก้ไข/แบ่งใหม่)
+        claim.allocations.all().delete()
+
+        if mode == 'MANUAL':
+            # 📌 รูปแบบที่ 1: กรอกยอดเงินเอง (รายบุคคล + กองกลาง)
+            for key, val in request.POST.items():
+                if key.startswith('amount_emp_') and val.strip():
+                    emp_id = key.split('_')[-1]
+                    amount = Decimal(val.replace(',', ''))
+                    if amount > 0:
+                        CommissionAllocation.objects.create(
+                            claim=claim, employee_id=emp_id, amount=amount,
+                            method='MANUAL', status=claim.status, created_by=current_emp
+                        )
+            fund_amt = request.POST.get('amount_fund', '0').strip()
+            if fund_amt:
+                f_amt = Decimal(fund_amt.replace(',', ''))
+                if f_amt > 0:
+                    CommissionAllocation.objects.create(
+                        claim=claim, department=dept, amount=f_amt,
+                        method='MANUAL', status=claim.status, created_by=current_emp
+                    )
+
+        elif mode == 'PERCENT_CLAIM':
+            # 📌 รูปแบบที่ 2: แบ่งเปอร์เซ็นต์ จากยอดรวมของใบเบิกนี้
+            claim_total = claim.total_amount
+            for key, val in request.POST.items():
+                if key.startswith('pct_emp_') and val.strip():
+                    emp_id = key.split('_')[-1]
+                    pct = Decimal(val)
+                    if pct > 0:
+                        amount = (claim_total * (pct / Decimal('100'))).quantize(Decimal('0.00'), rounding=ROUND_DOWN)
+                        CommissionAllocation.objects.create(
+                            claim=claim, employee_id=emp_id, amount=amount,
+                            method='PERCENT_CLAIM', percentage_used=pct, status=claim.status, created_by=current_emp
+                        )
+            fund_pct = request.POST.get('pct_fund', '0').strip()
+            if fund_pct:
+                f_pct = Decimal(fund_pct)
+                if f_pct > 0:
+                    amount = (claim_total * (f_pct / Decimal('100'))).quantize(Decimal('0.00'), rounding=ROUND_DOWN)
+                    CommissionAllocation.objects.create(
+                        claim=claim, department=dept, amount=amount,
+                        method='PERCENT_CLAIM', percentage_used=f_pct, status=claim.status, created_by=current_emp
+                    )
+
+        elif mode == 'PERCENT_SALES':
+            # 📌 รูปแบบที่ 3: กางตั๋วทุกใบ แล้วแบ่งเปอร์เซ็นต์ จากยอดฐาน 100% ของบิลนั้นๆ
+            for t in claim.tickets.all():
+                base_amt = t.base_amount
+                for key, val in request.POST.items():
+                    if key.startswith(f'ticket_{t.id}_emp_') and val.strip():
+                        emp_id = key.split('_')[-1]
+                        pct = Decimal(val)
+                        if pct > 0:
+                            amount = (base_amt * (pct / Decimal('100'))).quantize(Decimal('0.00'), rounding=ROUND_DOWN)
+                            CommissionAllocation.objects.create(
+                                claim=claim, ticket=t, employee_id=emp_id, amount=amount,
+                                method='PERCENT_SALES', percentage_used=pct, status=claim.status, created_by=current_emp
+                            )
+                fund_pct = request.POST.get(f'ticket_{t.id}_fund', '0').strip()
+                if fund_pct:
+                    f_pct = Decimal(fund_pct)
+                    if f_pct > 0:
+                        amount = (base_amt * (f_pct / Decimal('100'))).quantize(Decimal('0.00'), rounding=ROUND_DOWN)
+                        CommissionAllocation.objects.create(
+                            claim=claim, ticket=t, department=dept, amount=amount,
+                            method='PERCENT_SALES', percentage_used=f_pct, status=claim.status, created_by=current_emp
+                        )
+
+        messages.success(request, f"✅ จัดสรรผลตอบแทนสำหรับใบเบิก {claim.code} สำเร็จ! ลูกทีมสามารถเห็นยอดเงินใน Dashboard ได้แล้ว")
+
+    return redirect('commission_history_list')
+
+# ==========================================
+# 📊 [NEW] หน้าประวัติส่วนตัวของพนักงานขาย (ดูประวัติที่หัวหน้าแบ่งเงินให้)
+# ==========================================
+@login_required
+def commission_history_personal(request):
+    if not is_sales_authorized(request.user):
+        messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์เข้าถึงหน้านี้")
+        return redirect('dashboard')
+
+    current_emp = getattr(request.user, 'employee', None)
+    if not current_emp:
+        return redirect('dashboard')
+
+    # 🌟 [NEW] สร้างสวิตช์เช็กว่าเป็นหัวหน้าสาขาขึ้นไปหรือไม่
+    is_supervisor_view = False
+    if request.user.is_superuser:
+        is_supervisor_view = True
+    else:
+        rank = current_emp.business_rank.lower() if current_emp.business_rank else ""
+        if rank in ['manager', 'director', 'supervisor']:
+            is_supervisor_view = True
+
+    allocations = CommissionAllocation.objects.filter(employee=current_emp).select_related('claim', 'created_by', 'ticket', 'ticket__quotation_ref').order_by('-created_at')
+
+    pending_total = allocations.filter(status='PENDING').aggregate(Sum('amount'))['amount__sum'] or 0
+    paid_total = allocations.filter(status='PAID').aggregate(Sum('amount'))['amount__sum'] or 0
+
+    # 🌟 คำนวณยอดกองกลาง เฉพาะเมื่อคนเปิดดูเป็นหัวหน้าเท่านั้น (ช่วยลดภาระเซิร์ฟเวอร์)
+    branch_fund_total = 0
+    if is_supervisor_view and current_emp.department:
+        branch_fund_total = CommissionAllocation.objects.filter(
+            department=current_emp.department, status='PAID'
+        ).aggregate(Sum('amount'))['amount__sum'] or 0
+
+    paginator = Paginator(allocations, 20)
+    page_obj = paginator.get_page(request.GET.get('page'))
+
+    return render(request, 'sales/commission_history_personal.html', {
+        'page_obj': page_obj,
+        'pending_total': pending_total,
+        'paid_total': paid_total,
+        'branch_fund_total': branch_fund_total,
+        'is_supervisor_view': is_supervisor_view, # 🌟 ส่งสวิตช์ไปหน้าเว็บ
+    })

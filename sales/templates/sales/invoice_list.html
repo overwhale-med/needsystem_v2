@@ -2,6 +2,9 @@
 {% load humanize %}
 
 {% block content %}
+<style>
+    .navbar-nav { display: none !important; }
+</style>
 <!-- นำเข้าไลบรารี Date Range Picker -->
 <script type="text/javascript" src="https://cdn.jsdelivr.net/jquery/latest/jquery.min.js"></script>
 <script type="text/javascript" src="https://cdn.jsdelivr.net/momentjs/latest/moment.min.js"></script>
@@ -35,7 +38,7 @@
 
     /* ซ่อน input แบบเดิมเพื่อส่งค่า */
     .hidden-date { display: none; }
-    
+
     /* สไตล์สำหรับ Flatpickr */
     .flatpickr-input { background-color: #f8f9fa !important; cursor: pointer; font-size: 0.85rem; }
 
@@ -644,13 +647,13 @@ $(function() {
         parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
         input.value = parts.join('.');
     }
-    
+
     // 🌟 [NEW] ปลุกการทำงานของ Flatpickr สำหรับปฏิทินเดี่ยว 🌟
-    flatpickr(".datepicker", { 
-        dateFormat: "Y-m-d", 
-        altInput: true, 
-        altFormat: "d/m/Y", 
-        allowInput: true 
+    flatpickr(".datepicker", {
+        dateFormat: "Y-m-d",
+        altInput: true,
+        altFormat: "d/m/Y",
+        allowInput: true
     });
 });
 </script>

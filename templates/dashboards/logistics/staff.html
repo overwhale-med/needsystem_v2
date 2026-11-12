@@ -1,0 +1,88 @@
+{% extends 'core/base.html' %}
+{% load humanize %}
+
+{% block content %}
+<style>
+    /* 🌟 Focus Mode: ปิดเมนูด้านบน เพื่อให้ใช้งานบนมือถือได้เต็มจอ */
+    {% if not request.user.is_superuser %}
+    .navbar-nav { display: none !important; }
+    {% endif %}
+
+    .mobile-card { transition: transform 0.2s; border-left: 5px solid #ffc107; }
+    .mobile-card:active { transform: scale(0.98); }
+</style>
+
+<div class="container-fluid py-3 px-3">
+    <!-- 🌟 Header -->
+    <div class="d-flex justify-content-between align-items-center mb-3 border-bottom pb-3">
+        <div>
+            <h4 class="fw-bold text-dark mb-1"><i class="fas fa-truck-moving text-warning me-2"></i>คิวจัดส่งของฉัน</h4>
+            <p class="text-muted small mb-0">พนักงานขับรถ/ติดตั้ง: {{ request.user.first_name }}</p>
+        </div>
+        <div>
+            <a href="{% url 'logistics_history_log' %}" class="btn btn-warning text-dark rounded-circle shadow-sm" style="width: 45px; height: 45px; display: flex; align-items: center; justify-content: center;">
+                <i class="fas fa-history"></i>
+            </a>
+        </div>
+    </div>
+
+    <!-- 🌟 รายการงานจัดส่ง (Mobile View) -->
+    <div class="row g-3">
+        {% for order in my_delivering_jobs %}
+            <div class="col-12">
+                <div class="card mobile-card shadow-sm border-0 rounded-4">
+                    <div class="card-body p-3">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <span class="badge bg-dark fs-6 shadow-sm">{{ order.code }}</span>
+                            <span class="badge bg-warning text-dark rounded-pill px-2 py-1 shadow-sm"><i class="fas fa-truck-loading me-1"></i> กำลังนำส่ง</span>
+                        </div>
+
+                        <h5 class="fw-bold text-dark mb-1">{{ order.product.name }}</h5>
+                        <div class="text-muted small mb-2"><i class="fas fa-map-marker-alt me-1 text-danger"></i> ลูกค้า: <span class="fw-bold text-dark">{{ order.customer_name|default:"-" }}</span></div>
+
+                        <!-- 🌟 แจ้งเตือนเก็บเงินลูกค้า (สำคัญมากสำหรับคนขับ) -->
+                        {% if order.actual_balance > 0 %}
+                            <div class="bg-danger bg-opacity-10 text-danger py-2 px-3 mb-3 rounded-3 small fw-bold shadow-sm" style="border-left: 4px solid #dc3545;">
+                                <i class="fas fa-exclamation-triangle fa-lg me-1"></i> ยอดต้องเก็บลูกค้าหน้างาน:<br>
+                                <span class="fs-5 fw-bold ms-4">฿{{ order.actual_balance|floatformat:2|intcomma }}</span>
+                            </div>
+                        {% endif %}
+
+                        <div class="bg-light p-2 rounded-3 border mb-3">
+                            <div class="small text-muted mb-1"><i class="fas fa-calendar-check me-1"></i> วันที่นัดหมาย: <span class="fw-bold text-danger">{{ order.delivery_date|date:"d/m/Y" }}</span></div>
+                            <div class="small text-muted"><i class="fas fa-user-tie me-1"></i> เซลส์: {{ order.salesperson.name|default:"ไม่ระบุ" }}</div>
+                        </div>
+
+                        <!-- 🌟 ฟอร์มอัปเดตสถานะและแนบรูปปิดงาน -->
+                        <form method="POST" action="{% url 'process_logistics' order.id %}" enctype="multipart/form-data">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="update_status">
+                            
+                            <label class="small fw-bold text-primary mb-1">อัปเดตสถานะจัดส่ง:</label>
+                            <select name="delivery_status" class="form-select form-select-lg mb-3 shadow-sm fs-6" required>
+                                <option value="">-- เลือกสถานะล่าสุด --</option>
+                                {% for s in delivery_statuses %}
+                                <option value="{{ s.id }}" {% if order.delivery_status_id == s.id %}selected{% endif %}>{{ s.name }}</option>
+                                {% endfor %}
+                            </select>
+
+                            <label class="small fw-bold text-danger mb-1"><i class="fas fa-camera"></i> ถ่ายรูปลายเซ็นลูกค้า (เพื่อปิดงาน):</label>
+                            <input type="file" name="proof_of_delivery" class="form-control form-control-lg mb-3 shadow-sm" accept="image/*" capture="environment">
+
+                            <button type="submit" class="btn btn-success w-100 rounded-pill py-3 fw-bold shadow-sm fs-5">
+                                <i class="fas fa-save me-1"></i> อัปเดตและบันทึกภาพ
+                            </button>
+                        </form>
+
+                    </div>
+                </div>
+            </div>
+        {% empty %}
+            <div class="col-12 text-center py-5">
+                <i class="fas fa-truck fa-4x text-muted opacity-25 mb-3"></i>
+                <h5 class="text-muted fw-bold">ยอดเยี่ยม! วันนี้ไม่มีคิววิ่งรถครับ</h5>
+            </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

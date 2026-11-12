@@ -1,6 +1,6 @@
 from django import forms
 from django.forms import inlineformset_factory
-from .models import SolarQuotation, SolarQuotationItem, SolarProduct
+from .models import SolarQuotation, SolarQuotationItem, SolarProduct, SolarCustomer
 from hr.models import Employee
 from django.db.models import Q
 
@@ -16,6 +16,10 @@ class SolarQuotationStep1Form(forms.ModelForm):
             # 🌟 [FIXED] ล็อคปุ่มให้กดเปลี่ยนไม่ได้ (Readonly) 🌟
             'vat_type': forms.Select(attrs={'class': 'form-select fw-bold', 'style': 'pointer-events: none; background-color: #e9ecef;'}),
         }
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # บังคับให้ดึงรายชื่อจากตารางโซล่าเซลล์ และเอาคนล่าสุดขึ้นก่อน
+        self.fields['customer'].queryset = SolarCustomer.objects.all().order_by('-id')
 
 # 🌟 สเต็ป 2: ฟอร์มจัดการเงื่อนไขและสรุปยอดเงิน
 class SolarQuotationStep2Form(forms.ModelForm):
@@ -66,7 +70,12 @@ class SolarSurveyJobForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+        # 🌟 บังคับให้อนุญาตให้เว้นว่างได้ (เผื่อกรณีพิมพ์ชื่อลูกค้า Walk-in เอง)
         self.fields['customer'].required = False
+
+        # 🌟 ดึงรายชื่อเฉพาะลูกค้าโซล่าเซลล์เรียงคนล่าสุดขึ้นก่อน
+        self.fields['customer'].queryset = SolarCustomer.objects.all().order_by('-id')
 
         # 🌟 [FIXED] กรองให้แสดงเฉพาะพนักงานแผนกช่าง/โซล่าเซลล์/ผลิต (แก้คำใน icontains ให้ตรงกับชื่อแผนกจริงได้เลยครับ) 🌟
         self.fields['surveyor'].queryset = Employee.objects.filter(
@@ -94,4 +103,24 @@ class SolarExpenseClaimForm(forms.ModelForm):
                 'inputmode': 'decimal' # เด้งคีย์บอร์ดตัวเลขในมือถือ
             }),
             'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 4, 'placeholder': 'เช่น \n- ค่าน้ำมันรถ 500 บาท\n- ค่าทางด่วน 150 บาท...'}),
+        }
+
+# ==========================================
+# 👥 ฟอร์มจัดการลูกค้าโซล่าเซลล์
+# ==========================================
+class SolarCustomerForm(forms.ModelForm):
+    class Meta:
+        model = SolarCustomer
+        fields = ['name', 'branch', 'tax_id', 'contact_person', 'phone', 'email', 'address', 'province', 'district', 'sub_district', 'zip_code', 'location', 'is_active']
+        widgets = {
+            'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'ระบุชื่อลูกค้า / บริษัท'}),
+            'branch': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'สำนักงานใหญ่ / สาขา...'}),
+            'tax_id': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'เลขผู้เสียภาษี 13 หลัก'}),
+            'contact_person': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'ระบุชื่อผู้ติดต่อ'}),
+            'phone': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'ตัวอย่าง: 0812345678'}),
+            'email': forms.EmailInput(attrs={'class': 'form-control', 'placeholder': 'อีเมล (ถ้ามี)'}),
+            'address': forms.Textarea(attrs={'class': 'form-control', 'rows': 3, 'placeholder': 'ที่อยู่ (เลขที่/หมู่บ้าน/ถนน)'}),
+            'zip_code': forms.TextInput(attrs={'class': 'form-control', 'id': 'input_zipcode'}),
+            'location': forms.URLInput(attrs={'class': 'form-control', 'id': 'input_location', 'placeholder': 'กดปุ่มเพื่อดึงพิกัด GPS หรือวางลิงก์'}),
+            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input', 'id': 'id_is_active'}),
         }

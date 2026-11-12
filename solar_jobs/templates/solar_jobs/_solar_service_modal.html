@@ -1,0 +1,149 @@
+<!-- Modal อัปเดตสถานะและข้อมูลแจ้งซ่อม -->
+<div class="modal fade" id="ticketModal-{{ t.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <form method="POST" action="{% url 'process_solar_service_ticket' t.id %}" enctype="multipart/form-data">
+                {% csrf_token %}
+                <div class="modal-header bg-light border-0 py-3 rounded-top-4">
+                    <h5 class="modal-title fw-bold text-dark">
+                        <i class="fas fa-tools text-gold me-2" style="color: #c5a059;"></i>จัดการงานซ่อม: {{ t.code }}
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                
+                <div class="modal-body p-4">
+                    <!-- ส่วนที่ 1: ข้อมูลสรุปจากลูกค้า (Read-only) -->
+                    <div class="bg-white p-3 rounded-3 border mb-4 shadow-sm">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <div class="small text-muted mb-1">ลูกค้า (อ้างอิง JOB: <a href="{% url 'solar_job_manage' t.job.id %}" target="_blank">{{ t.job.code }}</a>)</div>
+                                <div class="fw-bold fs-6">{{ t.job.customer.name }}</div>
+                            </div>
+                            <div class="col-md-6 border-start">
+                                <div class="small text-muted mb-1">หมวดหมู่ปัญหา</div>
+                                <div class="fw-bold text-danger">{{ t.issue_category.name|default:"ทั่วไป" }}</div>
+                            </div>
+                            <div class="col-12">
+                                <div class="small text-muted mb-1">รายละเอียดอาการเสีย</div>
+                                <div class="p-2 bg-light rounded text-secondary small">{{ t.description }}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ส่วนที่ 2: ฟอร์มอัปเดตสถานะและข้อมูล (Editable) -->
+                    <h6 class="fw-bold mb-3"><i class="fas fa-edit text-primary me-2"></i>อัปเดตข้อมูลและสถานะการซ่อม</h6>
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">สถานะปัจจุบัน</label>
+                            <select name="status" class="form-select form-select-sm border-primary">
+                                <option value="PENDING" {% if t.status == 'PENDING' %}selected{% endif %}>รอหัวหน้าช่างประเมิน</option>
+                                <option value="WAITING_APPROVAL" {% if t.status == 'WAITING_APPROVAL' %}selected{% endif %}>รอเซลส์คอนเฟิร์มราคา</option>
+                                <option value="IN_PROGRESS" {% if t.status == 'IN_PROGRESS' %}selected{% endif %}>นัดหมายช่าง/กำลังดำเนินการ</option>
+                                <option value="COMPLETED" {% if t.status == 'COMPLETED' %}selected{% endif %}>ซ่อมเสร็จสิ้น (รอปิดจ๊อบ)</option>
+                                <option value="CLOSED" {% if t.status == 'CLOSED' %}selected{% endif %}>ปิดจ๊อบสมบูรณ์ (ซ่อนจากกระดาน)</option>
+                                <option value="CANCELLED" {% if t.status == 'CANCELLED' %}selected{% endif %}>ยกเลิก</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">ทีมช่างที่เข้าซ่อม</label>
+                            <select name="technician_team" class="form-select form-select-sm">
+                                <option value="">-- เลือกทีมช่าง --</option>
+                                {% for team in teams %}
+                                    <option value="{{ team.id }}" {% if t.technician_team_id == team.id %}selected{% endif %}>{{ team.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">วันที่นัดหมาย / วันที่เข้าซ่อม</label>
+                            <input type="date" name="appointment_date" class="form-control form-control-sm" value="{{ t.appointment_date|date:'Y-m-d' }}">
+                        </div>
+                    </div>
+
+                    <!-- ส่วนที่ 3: อัปโหลดรูปภาพ -->
+                    <h6 class="fw-bold mb-3"><i class="fas fa-camera text-info me-2"></i>อัปโหลดรูปภาพ/วิดีโอ (เลือกได้หลายไฟล์)</h6>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label small text-danger fw-bold">อัปโหลดรูป "ก่อนซ่อม" (อาการเสีย)</label>
+                            <input type="file" name="media_before" class="form-control form-control-sm" multiple accept="image/*,video/*">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small text-success fw-bold">อัปโหลดรูป "หลังซ่อม" (งานเสร็จแล้ว)</label>
+                            <input type="file" name="media_after" class="form-control form-control-sm" multiple accept="image/*,video/*">
+                        </div>
+                    </div>
+
+                    <!-- คลังรูปภาพที่เคยอัปโหลดไว้ -->
+                    {% if t.media_files.exists %}
+                    <div class="mt-4 pt-3 border-top">
+                        <h6 class="fw-bold mb-2 small text-muted">คลังไฟล์ภาพที่แนบไว้แล้ว:</h6>
+                        <div class="d-flex flex-wrap gap-2">
+                            {% for m in t.media_files.all %}
+                                <div class="position-relative">
+                                    <span class="badge {% if m.media_type == 'BEFORE' %}bg-danger{% else %}bg-success{% endif %} position-absolute top-0 start-0 m-1" style="font-size: 0.6rem; z-index: 10;">
+                                        {{ m.get_media_type_display }}
+                                    </span>
+                                    {% if '.mp4' in m.file.url|lower or '.mov' in m.file.url|lower %}
+                                        <video src="{{ m.file.url }}" controls style="height: 80px; width: 80px; object-fit: cover; border-radius: 8px;"></video>
+                                    {% else %}
+                                        <a href="{{ m.file.url }}" target="_blank"><img src="{{ m.file.url }}" style="height: 80px; width: 80px; object-fit: cover; border-radius: 8px; border: 1px solid #ddd;"></a>
+                                    {% endif %}
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+                
+                <div class="modal-footer bg-light border-0 py-3 rounded-bottom-4 d-flex justify-content-between">
+                    <div>
+                        <!-- ปุ่มตั้งเบิกค่าแรง (โชว์เฉพาะถ้าซ่อมเสร็จแล้ว) -->
+                        {% if t.status == 'COMPLETED' %}
+                            <button type="button" class="btn btn-outline-danger rounded-pill px-4 fw-bold" data-bs-toggle="modal" data-bs-target="#laborModal-{{ t.id }}">
+                                <i class="fas fa-hand-holding-usd me-1"></i> ตั้งเบิกค่าแรง
+                            </button>
+                        {% endif %}
+                    </div>
+                    <div>
+                        <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">ปิด</button>
+                        <button type="submit" class="btn btn-gold rounded-pill px-4 fw-bold"><i class="fas fa-save me-1"></i> บันทึกข้อมูล</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal ตั้งเบิกค่าแรง (ซ้อนกัน) -->
+{% if t.status == 'COMPLETED' %}
+<div class="modal fade" id="laborModal-{{ t.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <form method="POST" action="{% url 'submit_solar_service_labor_claim' t.id %}" enctype="multipart/form-data">
+                {% csrf_token %}
+                <div class="modal-header bg-danger text-white border-0 py-3 rounded-top-4">
+                    <h5 class="modal-title fw-bold"><i class="fas fa-file-invoice-dollar me-2"></i>ตั้งเบิกค่าแรงซ่อม: {{ t.code }}</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small text-muted">ชื่อช่าง / ผู้รับเงิน</label>
+                        <input type="text" name="technician_name" class="form-control" value="{{ t.technician_team.name|default:'' }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small text-muted">ยอดเงินค่าแรง (บาท)</label>
+                        <input type="number" step="0.01" name="amount" class="form-control" required placeholder="0.00">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small text-muted">แนบรูปบิล / สลิปหลักฐาน (ถ้ามี)</label>
+                        <input type="file" name="slip_image" class="form-control" accept="image/*">
+                    </div>
+                </div>
+                <div class="modal-footer border-0">
+                    <button type="button" class="btn btn-light rounded-pill" data-bs-dismiss="modal">ยกเลิก</button>
+                    <button type="submit" class="btn btn-danger rounded-pill px-4 fw-bold">ส่งเรื่องเบิกเงิน</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}

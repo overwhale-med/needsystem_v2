@@ -1,0 +1,480 @@
+from django.db import models
+from django.utils import timezone
+from decimal import Decimal
+from master_data.models import Customer
+from hr.models import Employee
+from inventory.models import Product
+from PIL import Image
+import secrets
+
+class POSOrder(models.Model):
+    STATUS_CHOICES = [('PENDING', 'รอชำระเงิน'), ('PAID', 'ชำระเงินแล้ว'), ('CANCELLED', 'ยกเลิก')]
+    PAYMENT_CHOICES = [('CASH', 'เงินสด'), ('TRANSFER', 'โอนเงิน'), ('CHECK', 'เช็คธนาคาร')]
+
+    code = models.CharField(max_length=20, unique=True, verbose_name="เลขที่ใบเสร็จ")
+    employee = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, verbose_name="พนักงานขาย")
+    customer = models.ForeignKey(Customer, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="ลูกค้า (สมาชิก)")
+    customer_name = models.CharField(max_length=200, blank=True, verbose_name="ชื่อลูกค้า (ระบุเอง)")
+    customer_address = models.TextField(blank=True, verbose_name="ที่อยู่")
+    customer_tax_id = models.CharField(max_length=20, blank=True, verbose_name="เลขผู้เสียภาษี")
+    customer_phone = models.CharField(max_length=20, blank=True, verbose_name="เบอร์โทรศัพท์")
+    total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="ยอดรวม")
+    received_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="รับเงินมา")
+    change_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="เงินทอน")
+    payment_method = models.CharField(max_length=50, choices=PAYMENT_CHOICES, default='CASH', verbose_name="วิธีชำระ")
+    transfer_slip = models.ImageField(upload_to='pos_slips/%Y/%m/', null=True, blank=True, verbose_name="สลิปโอนเงิน")
+    check_number = models.CharField(max_length=50, blank=True, verbose_name="เลขที่เช็ค")
+    check_bank = models.CharField(max_length=100, blank=True, verbose_name="ธนาคารเช็ค")
+    check_slip = models.ImageField(upload_to='pos_checks/%Y/%m/', null=True, blank=True, verbose_name="รูปถ่ายเช็ค")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PAID', verbose_name="สถานะ")
+    is_commission_calculated = models.BooleanField(default=False, verbose_name="คำนวณคอมฯแล้ว")
+    created_at = models.DateTimeField(default=timezone.now, verbose_name="เวลาที่ขาย")
+
+    def __str__(self):
+        return str(self.code) if self.code else "ไม่มีเลขที่"
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        if self.transfer_slip:
+            try:
+                img = Image.open(self.transfer_slip.path)
+                if img.height > 800 or img.width > 800:
+                    output_size = (800, 800)
+                    img.thumbnail(output_size)
+                    img.save(self.transfer_slip.path, quality=85, optimize=True)
+            except Exception: pass
+        if self.check_slip:
+            try:
+                img = Image.open(self.check_slip.path)
+                if img.height > 800 or img.width > 800:
+                    output_size = (800, 800)
+                    img.thumbnail(output_size)
+                    img.save(self.check_slip.path, quality=85, optimize=True)
+            except Exception: pass
+
+class POSOrderItem(models.Model):
+    order = models.ForeignKey(POSOrder, related_name='items', on_delete=models.CASCADE)
+    product = models.ForeignKey(Product, on_delete=models.SET_NULL, null=True, verbose_name="สินค้า")
+    product_name = models.CharField(max_length=200, verbose_name="ชื่อสินค้า (ณ ตอนขาย)", null=True, blank=True)
+    quantity = models.IntegerField(default=1, verbose_name="จำนวน")
+    price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="ราคาต่อชิ้น")
+    total_price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="ราคารวม")
+
+    def save(self, *args, **kwargs):
+        self.total_price = self.quantity * self.price
+        if not self.product_name and self.product: self.product_name = self.product.name
+        super().save(*args, **kwargs)
+
+class Quotation(models.Model):
+    STATUS_CHOICES = [
+        ('DRAFT', 'รออนุมัติ'),
+        ('APPROVED', 'อนุมัติแล้ว'),
+        ('CONVERTED', 'เปิดบิลขายแล้ว'),
+        ('REJECTED', 'ไม่อนุมัติ'),
+        ('CANCELLED', 'ยกเลิกแล้ว')
+    ]
+    code = models.CharField(max_length=20, unique=True, verbose_name="เลขที่ใบเสนอราคา")
+
+    # 🌟 [NEW] เพิ่มฟิลด์ deposit_code สำหรับเก็บเลขที่ใบรับเงินมัดจำ (RVD) 🌟
+    deposit_code = models.CharField(max_length=50, blank=True, null=True, verbose_name="เลขที่ใบรับมัดจำ")
+
+    date = models.DateField(default=timezone.now, verbose_name="วันที่เอกสาร")
+    valid_until = models.DateField(null=True, blank=True, verbose_name="ยืนราคาถึงวันที่")
+    customer = models.ForeignKey(Customer, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="ลูกค้า (Link)")
+    customer_name = models.CharField(max_length=200, verbose_name="ชื่อลูกค้า (ระบุเอง)", blank=True)
+    customer_address = models.TextField(verbose_name="ที่อยู่", blank=True)
+    customer_tax_id = models.CharField(max_length=20, verbose_name="เลขผู้เสียภาษี", blank=True)
+    customer_phone = models.CharField(max_length=50, verbose_name="เบอร์โทร", blank=True)
+    employee = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, verbose_name="ผู้ออกใบเสนอราคา")
+    subtotal = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="รวมราคาสินค้า")
+    discount = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="ส่วนลด")
+
+    shipping_origin = models.CharField(max_length=100, blank=True, null=True, verbose_name="สาขาต้นทาง (ผลิต)")
+    shipping_province = models.CharField(max_length=100, blank=True, null=True, verbose_name="จังหวัดปลายทาง")
+    shipping_is_island = models.BooleanField(default=False, verbose_name="ส่งข้ามเกาะ")
+    shipping_is_oversize = models.BooleanField(default=False, verbose_name="ตู้ยาวเกินมาตรฐาน (+1000)")
+    shipping_cost = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="ค่าขนส่ง")
+
+    tax_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="ภาษีมูลค่าเพิ่ม")
+    grand_total = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="ยอดสุทธิ")
+
+    deposit_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="ยอดมัดจำที่รับแล้ว")
+    deposit_date = models.DateField(null=True, blank=True, verbose_name="วันที่รับมัดจำ")
+    deposit_method = models.CharField(max_length=50, blank=True, null=True, verbose_name="ช่องทางรับมัดจำ")
+    deposit_slip = models.ImageField(upload_to='deposit_slips/%Y/%m/', null=True, blank=True, verbose_name="สลิปมัดจำ")
+    is_deposit_paid = models.BooleanField(default=False, verbose_name="รับมัดจำแล้ว")
+    is_deposit_verified = models.BooleanField(default=False, verbose_name="บัญชีตรวจสอบมัดจำแล้ว")
+
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='DRAFT', verbose_name="สถานะ")
+
+    payment_terms = models.TextField(blank=True, verbose_name="เงื่อนไขการชำระเงิน")
+    note = models.TextField(blank=True, verbose_name="หมายเหตุ")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    approved_by = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, blank=True, related_name='approved_quotations', verbose_name="ผู้อนุมัติ")
+    approved_at = models.DateTimeField(null=True, blank=True, verbose_name="วันที่อนุมัติ")
+
+    signature_token = models.CharField(max_length=64, blank=True, null=True, unique=True)
+    customer_signature = models.ImageField(upload_to='customer_signatures/%Y/%m/', null=True, blank=True, verbose_name="ลายเซ็นลูกค้า")
+    signature_date = models.DateTimeField(null=True, blank=True, verbose_name="เวลาที่ลูกค้าเซ็น")
+
+    deposit_signature_token = models.CharField(max_length=64, blank=True, null=True, unique=True)
+    customer_deposit_signature = models.ImageField(upload_to='deposit_signatures_contract/%Y/%m/', null=True, blank=True, verbose_name="ลายเซ็นสัญญามัดจำ")
+    deposit_signature_date = models.DateTimeField(null=True, blank=True, verbose_name="เวลาที่เซ็นสัญญามัดจำ")
+
+    def __str__(self):
+        return str(self.code) if self.code else "ไม่มีเลขที่ใบเสนอราคา"
+
+    @property
+    def customer_code(self): return self.customer.code if self.customer else None
+
+    @property
+    def balance_due(self):
+        gt = self.grand_total if self.grand_total else Decimal(0)
+        dep = self.deposit_amount if self.deposit_amount else Decimal(0)
+        return gt - dep
+
+    def save(self, *args, **kwargs):
+        if not self.signature_token:
+            self.signature_token = secrets.token_urlsafe(32)
+        if not self.deposit_signature_token:
+            self.deposit_signature_token = secrets.token_urlsafe(32)
+
+        super().save(*args, **kwargs)
+
+        if self.deposit_slip:
+            try:
+                img = Image.open(self.deposit_slip.path)
+                if img.height > 800 or img.width > 800:
+                    output_size = (800, 800)
+                    img.thumbnail(output_size)
+                    img.save(self.deposit_slip.path, quality=85, optimize=True)
+            except Exception: pass
+
+class QuotationItem(models.Model):
+    quotation = models.ForeignKey(Quotation, related_name='items', on_delete=models.CASCADE)
+    product = models.ForeignKey(Product, on_delete=models.SET_NULL, null=True, verbose_name="สินค้า")
+    item_name = models.CharField(max_length=200, verbose_name="ชื่อรายการสินค้า")
+    description = models.CharField(max_length=255, blank=True, null=True)
+    quantity = models.IntegerField(default=1, verbose_name="จำนวน")
+    unit_price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="ราคาต่อหน่วย")
+    amount = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="รวมเงิน")
+
+    def save(self, *args, **kwargs):
+        self.amount = self.quantity * self.unit_price
+        super().save(*args, **kwargs)
+
+class Invoice(models.Model):
+    PAYMENT_CHOICES = [('CASH', 'เงินสด'), ('TRANSFER', 'โอนเงิน'), ('CHECK', 'เช็คธนาคาร')]
+
+    code = models.CharField(max_length=20, unique=True, verbose_name="เลขที่ใบกำกับภาษี/ใบเสร็จ")
+    quotation_ref = models.OneToOneField(Quotation, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="อ้างอิงใบเสนอราคา")
+    date = models.DateField(default=timezone.now, verbose_name="วันที่เอกสาร")
+    due_date = models.DateField(null=True, blank=True, verbose_name="ครบกำหนดชำระ")
+    customer = models.ForeignKey(Customer, on_delete=models.SET_NULL, null=True, verbose_name="ลูกค้า")
+    employee = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, verbose_name="พนักงานขาย")
+    grand_total = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="ยอดสุทธิ")
+    deposit_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="หักมัดจำ")
+    balance_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="ยอดคงค้างชำระ")
+
+    payment_method = models.CharField(max_length=50, choices=PAYMENT_CHOICES, blank=True, null=True, verbose_name="วิธีชำระเงิน")
+    payment_date = models.DateField(null=True, blank=True, verbose_name="วันที่ชำระเงิน")
+    transfer_slip = models.ImageField(upload_to='invoice_slips/%Y/%m/', null=True, blank=True, verbose_name="สลิปโอนเงิน")
+    check_number = models.CharField(max_length=50, blank=True, verbose_name="เลขที่เช็ค")
+    check_bank = models.CharField(max_length=100, blank=True, verbose_name="ธนาคารเช็ค")
+    check_slip = models.ImageField(upload_to='invoice_checks/%Y/%m/', null=True, blank=True, verbose_name="รูปถ่ายเช็ค")
+
+    status = models.CharField(max_length=20, choices=[('UNPAID', 'ยังไม่ชำระ'), ('PAID', 'ชำระแล้ว'), ('PENDING', 'รอตรวจสอบ')], default='UNPAID', verbose_name="สถานะ")
+    created_at = models.DateTimeField(auto_now_add=True)
+    verified_by = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, blank=True, related_name='verified_invoices', verbose_name="ผู้ตรวจสอบรับเงิน")
+
+    def __str__(self):
+        return str(self.code) if self.code else "ไม่มีเลขที่บิล"
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        if self.transfer_slip:
+            try:
+                img = Image.open(self.transfer_slip.path)
+                if img.height > 800 or img.width > 800:
+                    output_size = (800, 800)
+                    img.thumbnail(output_size)
+                    img.save(self.transfer_slip.path, quality=85, optimize=True)
+            except Exception: pass
+        if self.check_slip:
+            try:
+                img = Image.open(self.check_slip.path)
+                if img.height > 800 or img.width > 800:
+                    output_size = (800, 800)
+                    img.thumbnail(output_size)
+                    img.save(self.check_slip.path, quality=85, optimize=True)
+            except Exception: pass
+
+class UpsaleCategory(models.Model):
+    name = models.CharField(max_length=100, verbose_name="หมวดหมู่รายการเพิ่มเติม")
+    is_active = models.BooleanField(default=True, verbose_name="เปิดใช้งาน")
+    def __str__(self): return str(self.name) if self.name else "-"
+
+class UpsaleCatalog(models.Model):
+    category = models.ForeignKey(UpsaleCategory, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="หมวดหมู่")
+    name = models.CharField(max_length=200, verbose_name="ชื่อรายการปรับเปลี่ยน/เพิ่มเติม")
+    default_price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="ราคามาตรฐาน")
+    unit = models.CharField(max_length=50, blank=True, null=True, default="รายการ", verbose_name="หน่วยนับ")
+    is_active = models.BooleanField(default=True, verbose_name="เปิดใช้งาน")
+    def __str__(self): return str(self.name) if self.name else "-"
+
+class QuotationUpsale(models.Model):
+    quotation = models.ForeignKey(Quotation, related_name='upsales', on_delete=models.CASCADE)
+    description = models.CharField(max_length=255, verbose_name="รายการเพิ่มเติม")
+    quantity = models.DecimalField(max_digits=10, decimal_places=2, default=1)
+    unit_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    total_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+
+    def save(self, *args, **kwargs):
+        self.total_price = self.quantity * self.unit_price
+        super().save(*args, **kwargs)
+
+    def __str__(self): return f"{self.description} ({self.quotation.code if self.quotation else ''})"
+
+class InvoicePayment(models.Model):
+    invoice = models.ForeignKey(Invoice, related_name='payment_history', on_delete=models.CASCADE, verbose_name="อ้างอิงบิล")
+    amount = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="ยอดชำระ")
+    payment_method = models.CharField(max_length=50, choices=Invoice.PAYMENT_CHOICES, verbose_name="วิธีชำระ")
+    payment_date = models.DateField(default=timezone.now, verbose_name="วันที่ชำระ")
+    transfer_slip = models.ImageField(upload_to='invoice_slips/%Y/%m/', null=True, blank=True, verbose_name="สลิปโอนเงิน")
+    check_number = models.CharField(max_length=50, blank=True, verbose_name="เลขที่เช็ค")
+    check_bank = models.CharField(max_length=100, blank=True, verbose_name="ธนาคารเช็ค")
+    check_slip = models.ImageField(upload_to='invoice_checks/%Y/%m/', null=True, blank=True, verbose_name="รูปถ่ายเช็ค")
+    status = models.CharField(max_length=20, choices=[('PENDING', 'รอตรวจสอบ'), ('VERIFIED', 'ตรวจสอบแล้ว')], default='PENDING', verbose_name="สถานะการตรวจ")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        if self.transfer_slip:
+            try:
+                img = Image.open(self.transfer_slip.path)
+                if img.height > 800 or img.width > 800:
+                    img.thumbnail((800, 800))
+                    img.save(self.transfer_slip.path, quality=85, optimize=True)
+            except Exception: pass
+        if self.check_slip:
+            try:
+                img = Image.open(self.check_slip.path)
+                if img.height > 800 or img.width > 800:
+                    img.thumbnail((800, 800))
+                    img.save(self.check_slip.path, quality=85, optimize=True)
+            except Exception: pass
+
+class CustomerLead(models.Model):
+    CHANNEL_CHOICES = [
+        ('FACEBOOK', '🔵 Facebook'),
+        ('LINE', '🟢 LINE / LINE OA'),
+        ('PHONE', '📞 โทรศัพท์ติดต่อ'),
+        ('WALKIN', '🚶 หน้าร้าน / เข้ามาดูงาน'),
+        ('OTHER', '🌐 ช่องทางอื่นๆ')
+    ]
+    STATUS_CHOICES = [
+        ('NEW', 'ติดต่อใหม่ (New)'),
+        ('FOLLOW_UP', 'กำลังเจรจา (Follow Up)'),
+        ('QUOTED', 'เสนอราคาแล้ว (Quoted)'),
+        ('WON', 'ปิดการขายสำเร็จ (Won)'),
+        ('LOST', 'ยกเลิก/ไม่สนใจ (Lost)')
+    ]
+
+    code = models.CharField(max_length=20, unique=True, verbose_name="รหัสลูกค้า (Lead ID)")
+    date = models.DateTimeField(default=timezone.now, verbose_name="วันที่ติดต่อล่าสุด")
+    customer_name = models.CharField(max_length=200, verbose_name="ชื่อลูกค้า / โปรไฟล์")
+    phone = models.CharField(max_length=50, blank=True, verbose_name="เบอร์ติดต่อ")
+    channel = models.CharField(max_length=20, choices=CHANNEL_CHOICES, default='LINE', verbose_name="ช่องทางที่ติดต่อเข้ามา")
+    requirements = models.TextField(blank=True, verbose_name="รายละเอียด/ความต้องการของลูกค้า")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='NEW', verbose_name="สถานะลูกค้า")
+    employee = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, verbose_name="พนักงานขายผู้ดูแล")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.code or 'No-Code'} - {self.customer_name or 'No-Name'}"
+
+class Appointment(models.Model):
+    TYPE_CHOICES = [
+        ('PRE_BOOKED', 'นัดหมายล่วงหน้า (Appointment)'),
+        ('WALK_IN', 'เข้ามาหน้าร้าน (Walk-in)')
+    ]
+    STATUS_CHOICES = [
+        ('SCHEDULED', '⏳ รอดำเนินการ'),
+        ('COMPLETED', '🤝 สำเร็จ / เข้ามาแล้ว'),
+        ('CANCELLED', '❌ ยกเลิกนัด'),
+        ('NO_SHOW', '👻 ไม่มาตามนัด')
+    ]
+
+    lead = models.ForeignKey(CustomerLead, on_delete=models.CASCADE, related_name='appointments', verbose_name="ลูกค้ามุ่งหวัง")
+    appointment_date = models.DateTimeField(verbose_name="วัน/เวลาที่นัดหมาย")
+    appointment_type = models.CharField(max_length=20, choices=TYPE_CHOICES, default='PRE_BOOKED', verbose_name="ประเภทการติดต่อ")
+    details = models.TextField(blank=True, verbose_name="รายละเอียด/หมายเหตุ")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='SCHEDULED', verbose_name="สถานะ")
+    employee = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, verbose_name="พนักงานผู้รับผิดชอบ")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        lead_name = self.lead.customer_name if self.lead else "ไม่ระบุลูกค้า"
+        return f"นัดหมาย {lead_name} ({self.appointment_date.strftime('%d/%m/%Y %H:%M')})"
+
+# ==========================================
+# 💸 ระบบเบิกผลตอบแทนบ้านน็อคดาวน์ (Incentive & Commission)
+# ==========================================
+class CommissionClaim(models.Model):
+    # 🌟 [UPDATE] เพิ่มตัวเลือก 0.5% และ 2.5%
+    CLAIM_TYPES = [('0.5%', '0.5% (จากมัดจำ)'), ('2%', '2% (จากมัดจำ)'), ('2.5%', '2.5% (จากปิดบิล)'), ('3%', '3% (จากปิดบิล)')]
+    STATUS_CHOICES = [('PENDING', 'รอโอนเงิน'), ('PAID', 'โอนเงินแล้ว')]
+
+    code = models.CharField(max_length=20, unique=True, verbose_name="เลขที่ใบเบิกผลตอบแทน")
+    claim_type = models.CharField(max_length=10, choices=CLAIM_TYPES, verbose_name="ประเภทการเบิก")
+    requester = models.ForeignKey('hr.Employee', on_delete=models.SET_NULL, null=True, verbose_name="ผู้ทำรายการเบิก")
+    total_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name="ยอดเงินรวม")
+
+    bank_name = models.CharField(max_length=100, blank=True, null=True, verbose_name="ธนาคารที่รับเงิน")
+    bank_account = models.CharField(max_length=50, blank=True, null=True, verbose_name="เลขที่บัญชี")
+    account_name = models.CharField(max_length=150, blank=True, null=True, verbose_name="ชื่อบัญชีธนาคาร")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING', verbose_name="สถานะ")
+
+    transfer_slip = models.ImageField(upload_to='commissions_knockdown/', null=True, blank=True, verbose_name="สลิปโอนเงิน")
+    paid_at = models.DateTimeField(null=True, blank=True, verbose_name="วันที่โอนเงิน")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def save(self, *args, **kwargs):
+        if not self.code:
+            now = timezone.now()
+            thai_year = (now.year + 543) % 100
+            # 🌟 [UPDATE] แยกรหัส Prefix ตามประเภทให้ชัดเจน
+            if self.claim_type == '0.5%':
+                prefix = f"REQ05-KD-{thai_year:02d}{now.strftime('%m')}"
+            elif self.claim_type == '2.5%':
+                prefix = f"REQ25-KD-{thai_year:02d}{now.strftime('%m')}"
+            elif self.claim_type == '2%':
+                prefix = f"REQ2-KD-{thai_year:02d}{now.strftime('%m')}"
+            else:
+                prefix = f"REQ3-KD-{thai_year:02d}{now.strftime('%m')}"
+
+            last = CommissionClaim.objects.filter(code__startswith=prefix).order_by('code').last()
+            seq = int(last.code.split('-')[-1]) + 1 if last else 1
+            self.code = f"{prefix}-{seq:03d}"
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.code
+
+class CommissionTicket(models.Model):
+    # 🌟 [UPDATE] เพิ่มตัวเลือก 0.5% และ 2.5%
+    TICKET_TYPES = [('0.5%', '0.5% (จากมัดจำ)'), ('2%', '2% (จากมัดจำ)'), ('2.5%', '2.5% (จากปิดบิล)'), ('3%', '3% (จากปิดบิล)')]
+    STATUS_CHOICES = [('AVAILABLE', 'พร้อมเบิก'), ('CLAIMING', 'กำลังตั้งเบิก'), ('PAID', 'จ่ายแล้ว')]
+
+    code = models.CharField(max_length=20, unique=True, verbose_name="เลขที่ใบคุมสิทธิ์")
+    ticket_type = models.CharField(max_length=10, choices=TICKET_TYPES, verbose_name="ประเภทสิทธิ์")
+
+    quotation_ref = models.ForeignKey('Quotation', on_delete=models.CASCADE, null=True, blank=True, verbose_name="อ้างอิงใบเสนอราคา")
+    invoice_ref = models.ForeignKey('Invoice', on_delete=models.CASCADE, null=True, blank=True, verbose_name="อ้างอิงใบแจ้งหนี้")
+
+    base_amount = models.DecimalField(max_digits=12, decimal_places=2, verbose_name="ยอดฐานคำนวณ (หัก 10%)")
+    commission_amount = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="ยอดผลตอบแทน")
+
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='AVAILABLE', verbose_name="สถานะสิทธิ์")
+    claim_ref = models.ForeignKey(CommissionClaim, on_delete=models.SET_NULL, null=True, blank=True, related_name='tickets', verbose_name="รวมอยู่ในใบเบิกเลขที่")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def save(self, *args, **kwargs):
+        if not self.code:
+            now = timezone.now()
+            thai_year = (now.year + 543) % 100
+            # 🌟 [UPDATE] แยกรหัส Prefix ตามประเภทให้ชัดเจน
+            if self.ticket_type == '0.5%':
+                prefix = f"C05-KD-{thai_year:02d}{now.strftime('%m')}"
+            elif self.ticket_type == '2.5%':
+                prefix = f"C25-KD-{thai_year:02d}{now.strftime('%m')}"
+            elif self.ticket_type == '2%':
+                prefix = f"C2-KD-{thai_year:02d}{now.strftime('%m')}"
+            else:
+                prefix = f"C3-KD-{thai_year:02d}{now.strftime('%m')}"
+
+            last = CommissionTicket.objects.filter(code__startswith=prefix).order_by('code').last()
+            seq = int(last.code.split('-')[-1]) + 1 if last else 1
+            self.code = f"{prefix}-{seq:03d}"
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.code
+
+# ==========================================
+# 💰 ระบบจัดการใบรับเงินมัดจำ (Separated Deposit Model)
+# ==========================================
+class QuotationDeposit(models.Model):
+    # 🌟 [NEW] เพิ่มชุดตัวเลือก (Choices) ให้ฐานข้อมูลรู้จักช่องทางการชำระเงิน
+    PAYMENT_CHOICES = [
+        ('CASH', 'เงินสด'),
+        ('TRANSFER', 'โอนเงิน'),
+        ('CHECK', 'เช็คธนาคาร')
+    ]
+
+    code = models.CharField(max_length=20, unique=True, verbose_name="เลขที่ใบรับมัดจำ (RVD)")
+
+    # 🌟 เชื่อมโยงกลับไปที่ Quotation แบบ 1-to-Many (1 ใบเสนอราคา มีสลิปมัดจำได้หลายใบ)
+    quotation = models.ForeignKey('Quotation', on_delete=models.CASCADE, related_name='deposits', verbose_name="อ้างอิงใบเสนอราคา")
+
+    amount = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="ยอดมัดจำที่รับ")
+    deposit_date = models.DateField(default=timezone.now, verbose_name="วันที่รับมัดจำ")
+
+    # 🌟 [FIXED] ใส่ choices=PAYMENT_CHOICES เข้าไปในฟิลด์นี้ เพื่อให้รองรับคำสั่ง get_payment_method_display()
+    payment_method = models.CharField(max_length=50, choices=PAYMENT_CHOICES, blank=True, null=True, verbose_name="ช่องทางรับมัดจำ")
+
+    deposit_slip = models.ImageField(upload_to='deposit_slips_v2/%Y/%m/', null=True, blank=True, verbose_name="สลิปมัดจำ")
+
+    is_verified = models.BooleanField(default=False, verbose_name="บัญชีตรวจสอบมัดจำแล้ว")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        # ฟังก์ชันย่อขนาดรูปสลิปอัตโนมัติ (เหมือนของเดิม)
+        if self.deposit_slip:
+            try:
+                img = Image.open(self.deposit_slip.path)
+                if img.height > 800 or img.width > 800:
+                    output_size = (800, 800)
+                    img.thumbnail(output_size)
+                    img.save(self.deposit_slip.path, quality=85, optimize=True)
+            except Exception:
+                pass
+
+    def __str__(self):
+        return str(self.code)
+
+class CommissionAllocation(models.Model):
+    ALLOCATION_METHODS = [
+        ('MANUAL', 'กรอกยอดเงินเอง'),
+        ('PERCENT_CLAIM', 'แบ่ง % จากยอดรวมใบเบิก'),
+        ('PERCENT_SALES', 'แบ่ง % จากยอดขายสุทธิ (รายบิล)')
+    ]
+    STATUS_CHOICES = [
+        ('PENDING', 'รอโอนเงิน (จากบัญชี)'),
+        ('PAID', 'ได้รับเงินแล้ว')
+    ]
+
+    # อ้างอิงแหล่งที่มาของเงิน
+    claim = models.ForeignKey(CommissionClaim, on_delete=models.CASCADE, related_name='allocations', verbose_name="อ้างอิงใบเบิก")
+    ticket = models.ForeignKey(CommissionTicket, on_delete=models.SET_NULL, null=True, blank=True, related_name='allocations', verbose_name="อ้างอิงใบคุมสิทธิ์ (กรณีแบ่งตามบิล)")
+
+    # อ้างอิงผู้รับเงิน (ถ้าพนักงานเป็น Null แต่สาขามีค่า = เงินเข้ากองกลางสาขา)
+    employee = models.ForeignKey('hr.Employee', on_delete=models.SET_NULL, null=True, blank=True, related_name='received_commissions', verbose_name="พนักงานที่ได้รับ")
+    department = models.ForeignKey('hr.Department', on_delete=models.SET_NULL, null=True, blank=True, related_name='branch_funds', verbose_name="เข้ากองกลางสาขา")
+
+    # ยอดเงินและวิธีคำนวณ
+    amount = models.DecimalField(max_digits=12, decimal_places=2, verbose_name="จำนวนเงินที่จัดสรร")
+    method = models.CharField(max_length=20, choices=ALLOCATION_METHODS, verbose_name="รูปแบบการจัดสรร")
+    percentage_used = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, verbose_name="% ที่ใช้คำนวณ")
+
+    # สถานะและผู้ทำรายการ
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING', verbose_name="สถานะ")
+    created_by = models.ForeignKey('hr.Employee', on_delete=models.SET_NULL, null=True, related_name='allocated_commissions', verbose_name="ผู้จัดสรร (หัวหน้า)")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        recipient = self.employee.first_name if self.employee else f"กองกลางสาขา"
+        return f"{self.claim.code} -> {recipient} (฿{self.amount})"

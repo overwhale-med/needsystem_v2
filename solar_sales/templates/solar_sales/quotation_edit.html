@@ -2,7 +2,8 @@
 {% load humanize %}
 
 {% block content %}
-<div class="container-xxl py-4 px-4">
+<!-- 🌟 [FIXED] เปลี่ยนจาก container-xxl เป็น container-fluid เพื่อขยายหน้าจอเต็ม 100% -->
+<div class="container-fluid py-4 px-4">
 
     <!-- 🌟 ส่วนหัวและปุ่มจัดการ -->
     <div class="d-flex justify-content-between align-items-center mb-4">
@@ -17,6 +18,13 @@
         <div>
             <a href="{% url 'solar_quotation_list' %}" class="btn btn-light border shadow-sm rounded-pill px-3 btn-sm fw-bold"><i class="fas fa-chevron-left me-1"></i> กลับ</a>
 
+            <!-- 🌟 [NEW] ปุ่มวาร์ปไปดูรูปหน้างาน (ถ้ามีการเปิด JOB ไปแล้ว) -->
+            {% if qt.center_jobs.first %}
+            <a href="{% url 'solar_media_hub_detail' qt.center_jobs.first.id %}" target="_blank" class="btn btn-outline-primary shadow-sm rounded-pill px-3 ms-2 btn-sm fw-bold">
+                <i class="fas fa-photo-video me-1"></i> ดูรูปผลงานติดตั้ง
+            </a>
+            {% endif %}
+
             <!-- 🌟 ปุ่มส่งงานเข้า Center (จะแสดงเมื่อเอกสารอนุมัติแล้วเท่านั้น) -->
             {% if qt.status == 'APPROVED' %}
             <a href="{% url 'solar_quotation_send_to_center' qt.id %}" class="btn btn-warning shadow-sm rounded-pill px-4 ms-2 btn-sm fw-bold text-dark" onclick="return confirm('ยืนยันการส่งงาน {{ qt.code }} เข้า Center เพื่อเริ่มงานใช่หรือไม่?');">
@@ -28,7 +36,8 @@
 
     <div class="row g-3">
         <!-- 🌟 ฝั่งซ้าย: ข้อมูลลูกค้า (FIXED Variables) -->
-        <div class="col-lg-4">
+        <!-- 🌟 [FIXED] เปลี่ยนจาก col-lg-4 เป็น col-lg-3 -->
+        <div class="col-lg-3">
             <div class="card shadow-sm border-0 rounded-3 h-100">
                 <div class="card-header bg-white py-3 border-bottom">
                     <h6 class="m-0 fw-bold text-primary"><i class="fas fa-address-card me-2"></i>ข้อมูลลูกค้า</h6>
@@ -51,7 +60,8 @@
         </div>
 
         <!-- 🌟 ฝั่งขวา: รายการสินค้าและสรุปยอด -->
-        <div class="col-lg-8">
+        <!-- 🌟 [FIXED] เปลี่ยนจาก col-lg-8 เป็น col-lg-9 -->
+        <div class="col-lg-9">
 
             {% if qt.status == 'DRAFT' or qt.status == 'PENDING' %}
             <div class="d-flex justify-content-center gap-3 mb-4">

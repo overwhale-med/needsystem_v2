@@ -1,102 +1,157 @@
 {% extends 'core/base.html' %}
+{% load humanize %}
 {% block content %}
-<div class="container-fluid py-4 px-4">
-    <div class="d-flex justify-content-between align-items-end mb-4">
-        <div>
-            <h4 class="fw-bold mb-1 text-dark">รายละเอียดใบงาน: {{ job.code }}</h4>
-            <p class="text-muted small mb-0">ลูกค้า: {{ job.customer.name }} | นัดหมาย: {{ job.appointment_date|date:"d/m/Y H:i" }}</p>
-        </div>
-        <div>
-            <!-- ปุ่มเบิกค่าใช้จ่าย -->
-            <a href="{% url 'solar_expense_create' job.id %}" class="btn btn-warning fw-bold rounded-pill shadow-sm me-2">
-                <i class="fas fa-file-invoice-dollar me-1"></i> เบิกค่าใช้จ่าย (หน้างานนี้)
-            </a>
-            <a href="{% url 'solar_survey_list' %}" class="btn btn-outline-secondary rounded-pill px-4"><i class="fas fa-arrow-left me-2"></i> กลับ</a>
+<style>
+    body { background-color: #f4f6f9; }
+    .mobile-card { border-radius: 16px; border: none; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-bottom: 20px; }
+    .card-header-custom { background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; border-top-left-radius: 16px !important; border-top-right-radius: 16px !important; padding: 15px 20px; }
+    .btn-gold { background: linear-gradient(135deg, #d4af37 0%, #aa8c2c 100%); color: #ffffff !important; border: none; }
+    .img-thumbnail-custom { width: 100px; height: 100px; object-fit: cover; border-radius: 12px; border: 2px solid #eee; }
+</style>
+
+<div class="container-fluid py-4" style="max-width: 800px; margin: 0 auto;">
+    
+    <!-- 📍 ส่วนหัว: สรุปงาน -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h5 class="fw-bold mb-0 text-dark"><i class="fas fa-map-marked-alt text-primary me-2"></i>ใบงานสำรวจ: {{ job.code }}</h5>
+        <a href="{% url 'solar_survey_list' %}" class="btn btn-sm btn-outline-secondary rounded-pill px-3"><i class="fas fa-arrow-left"></i> กลับ</a>
+    </div>
+
+    <!-- 📍 การ์ด 1: ข้อมูลลูกค้า (ให้เซลส์ดู) -->
+    <div class="card mobile-card">
+        <div class="card-body p-4 bg-white rounded-4">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+                <div class="fw-bold fs-5 text-dark">{{ job.customer.name|default:job.walkin_name }}</div>
+                <span class="badge bg-primary rounded-pill px-3 py-2 shadow-sm">{{ job.get_status_display }}</span>
+            </div>
+            
+            <div class="row g-3 mt-1 text-muted small">
+                <div class="col-12"><i class="fas fa-map-marker-alt text-danger me-2" style="width:14px;"></i> {{ job.survey_address|default:job.customer.address|default:"ไม่ได้ระบุพิกัด" }}</div>
+                <div class="col-6"><i class="fas fa-phone-alt text-success me-2" style="width:14px;"></i> <a href="tel:{{ job.customer.phone|default:job.walkin_phone }}" class="text-decoration-none">{{ job.customer.phone|default:job.walkin_phone|default:"-" }}</a></div>
+                <div class="col-6"><i class="far fa-calendar-alt text-info me-2" style="width:14px;"></i> นัดหมาย: {{ job.appointment_date|date:"d/m/Y H:i" }}</div>
+            </div>
         </div>
     </div>
 
-    <div class="row g-4">
-        <!-- ฝั่งซ้าย: อัปเดตสถานะ -->
-        <div class="col-md-4">
-            <div class="card shadow-sm border-0 rounded-4 mb-4">
-                <div class="card-body p-4">
-                    <h6 class="fw-bold border-bottom pb-2 mb-3">อัปเดตสถานะใบงาน</h6>
-                    <form method="POST">
-                        {% csrf_token %}
-                        <input type="hidden" name="update_status" value="1">
-                        <select name="status" class="form-select mb-3">
-                            <option value="PENDING" {% if job.status == 'PENDING' %}selected{% endif %}>รอลงพื้นที่</option>
-                            <option value="IN_PROGRESS" {% if job.status == 'IN_PROGRESS' %}selected{% endif %}>กำลังดำเนินการ</option>
-                            <option value="COMPLETED" {% if job.status == 'COMPLETED' %}selected{% endif %}>สำรวจเสร็จสิ้น</option>
-                            <option value="CANCELLED" {% if job.status == 'CANCELLED' %}selected{% endif %}>ยกเลิก</option>
+    <!-- 📍 การ์ด 2: แบบฟอร์มกรอกข้อมูลหน้างาน (สำหรับ Sales) -->
+    <div class="card mobile-card">
+        <div class="card-header-custom d-flex justify-content-between align-items-center">
+            <h6 class="mb-0 fw-bold"><i class="fas fa-clipboard-list me-2"></i>บันทึกข้อมูลทางเทคนิค (Sales)</h6>
+        </div>
+        <div class="card-body p-4 bg-white rounded-bottom-4">
+            <!-- 🌟 [สำคัญ] ต้องมี enctype="multipart/form-data" เพื่อส่งรูปภาพ 🌟 -->
+            <form action="{% url 'solar_survey_update_tech' job.id %}" method="POST" enctype="multipart/form-data">
+                {% csrf_token %}
+                
+                <div class="row g-3 mb-4">
+                    <div class="col-6">
+                        <label class="form-label small fw-bold text-muted">ค่าไฟเฉลี่ย/เดือน (บาท)</label>
+                        <input type="number" step="0.01" name="avg_electric_bill" class="form-control" placeholder="เช่น 3500" value="{{ job.avg_electric_bill|default:'' }}">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label small fw-bold text-muted">ระบบไฟฟ้าเดิม</label>
+                        <select name="electric_phase" class="form-select">
+                            <option value="">-- เลือกเฟส --</option>
+                            <option value="1_PHASE" {% if job.electric_phase == '1_PHASE' %}selected{% endif %}>ไฟ 1 เฟส</option>
+                            <option value="3_PHASE" {% if job.electric_phase == '3_PHASE' %}selected{% endif %}>ไฟ 3 เฟส</option>
                         </select>
-                        <button type="submit" class="btn btn-primary w-100 fw-bold rounded-pill">อัปเดตสถานะ</button>
-                    </form>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label small fw-bold text-muted">ประเภทหลังคาหน้างาน</label>
+                        <select name="roof_type" class="form-select">
+                            <option value="">-- เลือกประเภทหลังคา --</option>
+                            <option value="METAL_SHEET" {% if job.roof_type == 'METAL_SHEET' %}selected{% endif %}>เมทัลชีท (Metal Sheet)</option>
+                            <option value="CPAC" {% if job.roof_type == 'CPAC' %}selected{% endif %}>กระเบื้องซีแพค (CPAC)</option>
+                            <option value="DECK" {% if job.roof_type == 'DECK' %}selected{% endif %}>ดาดฟ้าปูน / พื้นเรียบ</option>
+                            <option value="DOUBLE_CORRUGATED" {% if job.roof_type == 'DOUBLE_CORRUGATED' %}selected{% endif %}>กระเบื้องลอนคู่</option>
+                            <option value="OTHER" {% if job.roof_type == 'OTHER' %}selected{% endif %}>อื่นๆ (ระบุในหมายเหตุ)</option>
+                        </select>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label small fw-bold text-muted">ระยะสายไฟ (แผงถึงเมน)</label>
+                        <input type="text" name="cable_distance" class="form-control" placeholder="เช่น 20 เมตร" value="{{ job.cable_distance|default:'' }}">
+                    </div>
+                    <div class="col-6 d-flex align-items-end pb-2">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" name="has_wifi" id="wifiSwitch" {% if job.has_wifi %}checked{% endif %}>
+                            <label class="form-check-label small fw-bold ms-1" for="wifiSwitch">มี WiFi หน้างาน</label>
+                        </div>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label small fw-bold text-muted"><i class="fas fa-camera text-danger me-1"></i> ถ่ายรูป/แนบรูปหน้างาน (เลือกได้หลายรูป)</label>
+                        <input type="file" name="survey_images" class="form-control" multiple accept="image/*">
+                        <div class="form-text small text-warning">ควรถ่าย: มิเตอร์ไฟ, ตู้เบรกเกอร์, สภาพหลังคา</div>
+                    </div>
                 </div>
-            </div>
-            <!-- 🌟 [FIXED] เปลี่ยนกล่องหมายเหตุให้พิมพ์แก้ไขได้ตลอดเวลา 🌟 -->
-            <div class="card shadow-sm border-0 rounded-4 bg-light">
-                <div class="card-body p-4">
-                    <form method="POST">
-                        {% csrf_token %}
-                        <input type="hidden" name="update_note" value="1">
-                        <label class="fw-bold mb-2 small text-dark"><i class="fas fa-edit me-1"></i> หมายเหตุ / บันทึกเพิ่มเติม</label>
-                        <textarea name="note" class="form-control text-muted small border-0 shadow-sm" rows="5" placeholder="พิมพ์รายละเอียดหน้างานเพิ่มเติมที่นี่...">{{ job.note|default_if_none:"" }}</textarea>
-                        <button type="submit" class="btn btn-sm btn-secondary mt-3 w-100 rounded-pill fw-bold">บันทึกหมายเหตุ</button>
-                    </form>
+
+                <div class="mb-4 p-3 bg-light rounded-3 border">
+                    <div class="form-check form-switch fs-5">
+                        <input class="form-check-input" type="checkbox" name="mark_as_completed" id="completeSwitch" {% if job.status == 'COMPLETED' or job.status == 'QUOTED' %}checked disabled{% endif %}>
+                        <label class="form-check-label fw-bold ms-2 {% if job.status == 'COMPLETED' or job.status == 'QUOTED' %}text-success{% else %}text-dark{% endif %}" for="completeSwitch">
+                            ทำเครื่องหมายว่า "สำรวจหน้างานเสร็จสิ้นแล้ว"
+                        </label>
+                    </div>
+                    <div class="form-text small mt-2">หากเปิดสวิตช์นี้ ระบบจะแจ้งแอดมินให้ออกใบเสนอราคาครับ</div>
                 </div>
-            </div>
+
+                {% if job.status != 'QUOTED' %}
+                <button type="submit" class="btn btn-primary w-100 py-3 rounded-pill fw-bold fs-6 shadow-sm">
+                    <i class="fas fa-save me-2"></i> บันทึกข้อมูลส่งแอดมิน
+                </button>
+                {% else %}
+                <div class="alert alert-success text-center fw-bold mb-0 rounded-pill">
+                    <i class="fas fa-check-double me-2"></i> ใบงานนี้ออกใบเสนอราคาแล้ว
+                </div>
+                {% endif %}
+            </form>
         </div>
+    </div>
 
-        <!-- ฝั่งขวา: รายการวัสดุประเมิน -->
-        <div class="col-md-8">
-            <div class="card shadow-sm border-0 rounded-4">
-                <div class="card-body p-4">
-                    <h6 class="fw-bold border-bottom pb-2 mb-3">รายการวัสดุ/สเปคที่ต้องใช้ (ประเมินหน้างาน)</h6>
-
-                    <form method="POST" class="row g-2 mb-4 align-items-end">
-                        {% csrf_token %}
-                        <input type="hidden" name="add_item" value="1">
-                        <div class="col-md-6">
-                            <label class="small text-muted fw-bold">ชื่อวัสดุ/สเปค</label>
-                            <input type="text" name="item_name" class="form-control" required placeholder="เช่น สายไฟ 4mm, ท่อร้อยสาย">
-                        </div>
-                        <div class="col-md-2">
-                            <label class="small text-muted fw-bold">จำนวน</label>
-                            <input type="number" name="quantity" class="form-control text-center" value="1" min="0.01" step="0.01" required>
-                        </div>
-                        <div class="col-md-2">
-                            <label class="small text-muted fw-bold">หน่วย</label>
-                            <input type="text" name="unit" class="form-control text-center" value="ชิ้น" required>
-                        </div>
-                        <div class="col-md-2">
-                            <button type="submit" class="btn btn-success w-100 fw-bold"><i class="fas fa-plus"></i> เพิ่ม</button>
-                        </div>
-                    </form>
-
-                    <table class="table table-bordered align-middle">
-                        <thead class="bg-light text-center small">
-                            <tr>
-                                <th style="width: 10%;">ลำดับ</th>
-                                <th>รายการวัสดุ/สเปค</th>
-                                <th style="width: 20%;">จำนวน</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for item in job.items.all %}
-                            <tr>
-                                <td class="text-center text-muted">{{ forloop.counter }}</td>
-                                <td class="fw-bold">{{ item.item_name }}</td>
-                                <td class="text-center">{{ item.quantity|floatformat:2 }} {{ item.unit }}</td>
-                            </tr>
-                            {% empty %}
-                            <tr><td colspan="3" class="text-center text-muted py-3">ยังไม่มีการบันทึกรายการวัสดุ</td></tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
+    <!-- 📍 คลังรูปภาพ (Gallery) -->
+    {% if job.images.exists %}
+    <div class="card mobile-card">
+        <div class="card-body p-4 bg-white rounded-4">
+            <h6 class="fw-bold mb-3"><i class="fas fa-images text-info me-2"></i> รูปถ่ายหน้างานที่แนบไว้</h6>
+            <div class="d-flex flex-wrap gap-2">
+                {% for img in job.images.all %}
+                    <a href="{{ img.image.url }}" target="_blank">
+                        <img src="{{ img.image.url }}" class="img-thumbnail-custom shadow-sm" alt="Survey Image">
+                    </a>
+                {% endfor %}
             </div>
         </div>
     </div>
+    {% endif %}
+
+    <!-- 📍 การ์ด 3: สำหรับ แอดมิน (สร้างใบเสนอราคา) -->
+    {% if request.user.is_superuser or request.user.employee.department.name == "แอดมิน" or request.user.employee.department.name == "Admin" %}
+    <div class="card mobile-card border-warning border border-2">
+        <div class="card-body p-4 bg-white rounded-4 text-center">
+            <h5 class="fw-bold text-dark mb-3"><i class="fas fa-laptop-house text-warning me-2"></i> ส่วนควบคุมสำหรับ Admin</h5>
+            
+            {% if job.status == 'COMPLETED' %}
+                <p class="text-muted small mb-3">เซลส์ลงพื้นที่และบันทึกข้อมูลกลับมาเรียบร้อยแล้ว แอดมินสามารถกดสร้างใบเสนอราคาได้เลยครับ</p>
+                
+                <form action="{% url 'solar_survey_generate_quote' job.id %}" method="POST">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-gold w-100 py-3 rounded-pill fw-bold fs-5 shadow" onclick="return confirm('ยืนยันการดึงข้อมูลเพื่อสร้างใบเสนอราคาใช่หรือไม่?');">
+                        <i class="fas fa-magic me-2"></i> แปลงเป็นใบเสนอราคา
+                    </button>
+                </form>
+                
+            {% elif job.status == 'QUOTED' %}
+                <div class="badge bg-success fs-6 p-2 rounded-pill w-100">
+                    <i class="fas fa-check-circle me-1"></i> ออกใบเสนอราคาแล้ว ({{ job.quotation_generated.code }})
+                </div>
+                <a href="{% url 'solar_quotation_edit' job.quotation_generated.id %}" class="btn btn-outline-primary w-100 rounded-pill mt-3 fw-bold">เปิดดูใบเสนอราคา</a>
+            {% else %}
+                <div class="alert alert-warning small mb-0 rounded-4">
+                    <i class="fas fa-hourglass-half me-1"></i> ต้องรอให้สถานะเป็น "สำรวจเสร็จสิ้น" ก่อน จึงจะกดออกบิลได้ครับ
+                </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
 </div>
 {% endblock %}

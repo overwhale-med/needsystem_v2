@@ -9,8 +9,6 @@
     .btn-gold { background: linear-gradient(135deg, #d4af37 0%, #aa8c2c 100%); color: #ffffff !important; border: none; transition: all 0.3s ease; }
     .btn-gold:hover { background: linear-gradient(135deg, #aa8c2c 0%, #8c7324 100%); transform: translateY(-2px); box-shadow: 0 4px 8px rgba(212, 175, 55, 0.3) !important; }
     .step-indicator { width: 45px; height: 45px; border-radius: 50%; background-color: #c5a059; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 1.3rem; }
-
-    /* ปรับแต่ง Select2 ให้เข้ากับ Bootstrap 5 */
     .select2-container .select2-selection--single { height: 45px; border: 1px solid #ced4da; border-radius: 8px; display: flex; align-items: center; }
     .select2-container--default .select2-selection--single .select2-selection__arrow { height: 43px; }
 </style>
@@ -30,7 +28,7 @@
                 </div>
             </div>
 
-            <form method="POST">
+            <form method="POST" id="mainForm">
                 {% csrf_token %}
 
                 <div class="row g-4 mb-4">
@@ -42,7 +40,6 @@
                         <label class="form-label fw-bold text-muted small">ยืนยันราคาถึง (dd/mm/yyyy)</label>
                         {{ form.valid_until }}
                     </div>
-                    <!-- 🌟 [FIXED] เพิ่มช่องเลือกประเภทภาษีตรงนี้ เพื่อให้ข้อมูลส่งไปครบถ้วน 🌟 -->
                     <div class="col-md-4">
                         <label class="form-label fw-bold text-primary small">ประเภทภาษี (VAT)</label>
                         {{ form.vat_type }}
@@ -51,8 +48,11 @@
 
                 <div class="mb-5 bg-light p-4 rounded-4 border">
                     <div class="d-flex justify-content-between align-items-center mb-2">
-                        <label class="form-label fw-bold text-dark mb-0"><i class="fas fa-search me-1 text-primary"></i> ค้นหาลูกค้าจากฐานข้อมูล</label>
-                        <a href="{% url 'customer_list' %}" target="_blank" class="btn btn-sm btn-outline-primary rounded-pill bg-white"><i class="fas fa-user-plus me-1"></i> เพิ่มลูกค้าใหม่</a>
+                        <label class="form-label fw-bold text-dark mb-0"><i class="fas fa-search me-1 text-primary"></i> ค้นหาลูกค้าโซล่าเซลล์</label>
+                        <!-- 🌟 [UPDATE] เปลี่ยนปุ่มให้เรียก Modal แทนการลิงก์ไปหน้าอื่น -->
+                        <a href="{% url 'solar_customer_create' %}" target="_blank" class="btn btn-sm btn-outline-primary rounded-pill bg-white fw-bold">
+                            <i class="fas fa-user-plus me-1"></i> เพิ่มลูกค้าใหม่
+                        </a>
                     </div>
                     <p class="small text-muted mb-3">พิมพ์ชื่อบริษัท หรือ ชื่อลูกค้า แล้วกดเลือกจากรายการเพื่อดึงข้อมูล</p>
                     {{ form.customer }}
@@ -68,45 +68,59 @@
         </div>
     </div>
 </div>
-
 <script>
     $(document).ready(function() {
-        // เปลี่ยน Dropdown ธรรมดา ให้กลายเป็นช่องค้นหาอัจฉริยะด้วย Select2
+        // 1. เปลี่ยน Dropdown เป็น Select2
         $('select[name="customer"]').select2({
             placeholder: "-- พิมพ์ค้นหาชื่อลูกค้า... --",
             allowClear: true,
             width: '100%',
-            language: {
-                noResults: function() {
-                    return "ไม่พบข้อมูลลูกค้าในระบบ";
-                }
-            }
-        });
-    });
-</script>
-
-<script>
-    $(document).ready(function() {
-        // เปลี่ยน Dropdown ธรรมดา ให้กลายเป็นช่องค้นหาอัจฉริยะด้วย Select2
-        $('select[name="customer"]').select2({
-            placeholder: "-- พิมพ์ค้นหาชื่อลูกค้า... --",
-            allowClear: true,
-            width: '100%',
-            language: {
-                noResults: function() {
-                    return "ไม่พบข้อมูลลูกค้าในระบบ";
-                }
-            }
+            language: { noResults: function() { return "ไม่พบข้อมูลลูกค้าในระบบ"; } }
         });
 
-        // 🌟 [NEW] ป้องกันการกดปุ่มบันทึกซ้ำ (Double Submit Prevention) 🌟
-        $('form').on('submit', function() {
+        // 2. ล็อคปุ่มโหลดเมื่อกด Submit
+        $('#mainForm').on('submit', function() {
             var btn = $('#submitBtn');
-            // ตรวจสอบว่าฟอร์มผ่านการตรวจสอบความถูกต้องแล้ว (ถ้ามี validation)
             if (this.checkValidity()) {
-                btn.prop('disabled', true); // ล็อคปุ่มทันที
-                btn.html('<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>กำลังบันทึก...'); // เปลี่ยนข้อความและใส่ไอคอนหมุนๆ
+                btn.prop('disabled', true);
+                btn.html('<span class="spinner-border spinner-border-sm me-2"></span>กำลังบันทึก...');
             }
+        });
+
+        // ==========================================
+        // 🌟 ระบบคำนวณวันหมดอายุอัตโนมัติ (+30 วัน) 🌟
+        // ==========================================
+        function updateValidUntilDate() {
+            let dateInput = $('#id_date').val();
+            if (dateInput) {
+                // แยกข้อความ dd/mm/yyyy ออกมาเป็น Array [dd, mm, yyyy]
+                let parts = dateInput.split('/');
+                if (parts.length === 3) {
+                    // สร้าง Date Object (เดือนใน JS ต้องลบ 1 เพราะเริ่มจาก 0)
+                    let docDate = new Date(parts[2], parseInt(parts[1]) - 1, parts[0]);
+
+                    // บวกเพิ่ม 30 วัน
+                    docDate.setDate(docDate.getDate() + 30);
+
+                    // แปลงกลับเป็นฟอร์แมต dd/mm/yyyy
+                    let d = docDate.getDate().toString().padStart(2, '0');
+                    let m = (docDate.getMonth() + 1).toString().padStart(2, '0');
+                    let y = docDate.getFullYear();
+
+                    // อัปเดตค่าลงในช่องยืนยันราคาถึง (ถ้ายังไม่มีการแก้ไขด้วยมือ)
+                    $('#id_valid_until').val(`${d}/${m}/${y}`);
+                }
+            }
+        }
+
+        // สั่งให้คำนวณทันทีเมื่อโหลดหน้าเว็บ (เพื่อดึงค่าเริ่มต้น)
+        if (!$('#id_valid_until').val()) {
+            updateValidUntilDate();
+        }
+
+        // สั่งให้คำนวณใหม่ทุกครั้งที่มีการเปลี่ยน "วันที่เอกสาร"
+        $('#id_date').on('change', function() {
+            updateValidUntilDate();
         });
     });
 </script>

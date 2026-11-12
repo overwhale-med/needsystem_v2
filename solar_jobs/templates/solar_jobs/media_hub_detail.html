@@ -1,0 +1,148 @@
+{% extends 'core/base.html' %}
+{% block content %}
+<style>
+    .gallery-img { width: 160px; height: 160px; object-fit: cover; border-radius: 12px; cursor: pointer; transition: 0.3s; border: 2px solid #f8f9fa; }
+    .gallery-img:hover { transform: scale(1.05); border-color: #c5a059; box-shadow: 0 8px 16px rgba(0,0,0,0.15); }
+    .section-header { border-bottom: 2px solid #f0f0f0; padding-bottom: 10px; margin-bottom: 20px; font-weight: bold; color: #2c3e50; }
+</style>
+
+<div class="container-fluid py-4 px-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="fw-bold mb-1 text-dark"><i class="far fa-folder-open text-warning me-2"></i>แฟ้มประวัติงาน: {{ job.code }}</h4>
+            <p class="text-muted small mb-0">ลูกค้า: {{ job.customer.name|default:"-" }} | พิกัด: {{ job.customer.address|default:"-" }}</p>
+        </div>
+        <a href="{% url 'solar_media_hub_list' %}" class="btn btn-outline-secondary rounded-pill px-4 fw-bold"><i class="fas fa-arrow-left me-2"></i> กลับหน้ารวม</a>
+    </div>
+
+    <div class="row g-4">
+        <!-- 📂 หมวดที่ 1: ภาพสำรวจหน้างาน -->
+        <div class="col-12">
+            <div class="card shadow-sm border-0 rounded-4">
+                <div class="card-body p-4">
+                    <h5 class="section-header"><i class="fas fa-map-marked-alt text-primary me-2"></i>1. ภาพสำรวจหน้างาน (จากทีม Sales)</h5>
+                    {% if survey_images %}
+                        <div class="d-flex flex-wrap gap-3">
+                            {% for img in survey_images %}
+                                <a href="{{ img.image.url }}" target="_blank" data-bs-toggle="tooltip" title="{{ img.description|default:'ภาพสำรวจ' }}">
+                                    <img src="{{ img.image.url }}" class="gallery-img" alt="Survey">
+                                </a>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <p class="text-muted small mb-0"><i class="fas fa-info-circle me-1"></i> ไม่มีรูปภาพสำรวจหน้างานสำหรับจ๊อบนี้</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- 📂 หมวดที่ 2: ภาพผลงานติดตั้ง -->
+        <div class="col-12">
+            <div class="card shadow-sm border-0 rounded-4">
+                <div class="card-body p-4">
+                    <div class="d-flex justify-content-between align-items-center section-header">
+                        <h5 class="mb-0 fw-bold text-success"><i class="fas fa-tools me-2"></i>2. ภาพผลงานติดตั้ง (จากทีมช่างติดตั้ง)</h5>
+                        <!-- ปุ่มให้ช่าง/แอดมิน อัปโหลดรูปเพิ่มได้เลยจากหน้านี้ -->
+                        <button type="button" class="btn btn-sm btn-success rounded-pill px-3 fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#uploadInstallModal">
+                            <i class="fas fa-cloud-upload-alt me-1"></i> อัปโหลดรูปติดตั้ง
+                        </button>
+                    </div>
+                    
+                    {% if install_images %}
+                        <div class="d-flex flex-wrap gap-3 mt-3">
+                            {% for img in install_images %}
+                                <div class="text-center">
+                                    <a href="{{ img.image.url }}" target="_blank">
+                                        <img src="{{ img.image.url }}" class="gallery-img" alt="Install">
+                                    </a>
+                                    <div class="small text-muted mt-2 fw-bold" style="max-width: 160px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ img.description|default:"ผลงานติดตั้ง" }}</div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <p class="text-muted small mb-0 mt-3"><i class="fas fa-info-circle me-1"></i> ช่างยังไม่ได้อัปโหลดรูปผลงานติดตั้ง</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- 📂 หมวดที่ 3: ประวัติแจ้งซ่อม -->
+        <div class="col-12">
+            <div class="card shadow-sm border-0 rounded-4 mb-5">
+                <div class="card-body p-4">
+                    <h5 class="section-header text-danger"><i class="fas fa-headset me-2"></i>3. ประวัติภาพแจ้งซ่อม (After-Sales Service)</h5>
+                    {% if service_tickets %}
+                        <div class="accordion" id="serviceAccordion">
+                            {% for ticket in service_tickets %}
+                            <div class="accordion-item border-0 mb-3 bg-light rounded-4 overflow-hidden shadow-sm">
+                                <h2 class="accordion-header">
+                                    <button class="accordion-button {% if not forloop.first %}collapsed{% endif %} fw-bold bg-light text-dark" type="button" data-bs-toggle="collapse" data-bs-target="#ticket{{ ticket.id }}">
+                                        <i class="fas fa-ticket-alt text-danger me-2"></i> ตั๋วแจ้งซ่อม: {{ ticket.code }} (แจ้งเมื่อ: {{ ticket.created_at|date:"d/m/Y" }})
+                                    </button>
+                                </h2>
+                                <div id="ticket{{ ticket.id }}" class="accordion-collapse collapse {% if forloop.first %}show{% endif %}" data-bs-parent="#serviceAccordion">
+                                    <div class="accordion-body bg-white border-top">
+                                        <p class="small text-muted mb-3"><strong><i class="fas fa-comment-dots me-1"></i> อาการเสียที่ลูกค้าแจ้ง:</strong> {{ ticket.description }}</p>
+                                        <div class="row g-4">
+                                            <div class="col-md-6 border-end">
+                                                <h6 class="fw-bold text-warning small mb-3"><i class="fas fa-exclamation-triangle me-1"></i>ภาพก่อนซ่อม (ปัญหา)</h6>
+                                                <div class="d-flex flex-wrap gap-2">
+                                                    {% for media in ticket.media_files.all %}
+                                                        {% if media.media_type == 'BEFORE' %}
+                                                            <a href="{{ media.file.url }}" target="_blank"><img src="{{ media.file.url }}" class="gallery-img" style="width: 120px; height: 120px;" alt="Before"></a>
+                                                        {% endif %}
+                                                    {% endfor %}
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <h6 class="fw-bold text-success small mb-3"><i class="fas fa-check-circle me-1"></i>ภาพหลังซ่อม (ผลงานช่าง)</h6>
+                                                <div class="d-flex flex-wrap gap-2">
+                                                    {% for media in ticket.media_files.all %}
+                                                        {% if media.media_type == 'AFTER' %}
+                                                            <a href="{{ media.file.url }}" target="_blank"><img src="{{ media.file.url }}" class="gallery-img" style="width: 120px; height: 120px;" alt="After"></a>
+                                                        {% endif %}
+                                                    {% endfor %}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <p class="text-muted small mb-0"><i class="fas fa-check-circle text-success me-1"></i> บ้านหลังนี้ยังไม่มีประวัติการแจ้งซ่อมครับ</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal สำหรับช่างกดอัปโหลดรูปติดตั้งจากหน้านี้ได้เลย -->
+<div class="modal fade" id="uploadInstallModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow-lg">
+            <div class="modal-header bg-success text-white py-3">
+                <h5 class="modal-title fw-bold"><i class="fas fa-cloud-upload-alt me-2"></i>อัปโหลดรูปผลงานติดตั้ง</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <form action="{% url 'solar_media_hub_upload' job.id %}" method="POST" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small text-muted">เลือกรูปภาพ (ลากคลุมเลือกได้หลายรูป)</label>
+                        <input type="file" name="install_images" class="form-control" multiple accept="image/*" required>
+                    </div>
+                    <div class="mb-4">
+                        <label class="form-label fw-bold small text-muted">คำอธิบายสั้นๆ (ถ้ามี)</label>
+                        <input type="text" name="description" class="form-control" placeholder="เช่น หลังคาทิศใต้, ตู้เบรกเกอร์">
+                    </div>
+                    <button type="submit" class="btn btn-success w-100 fw-bold rounded-pill shadow-sm py-2">บันทึกรูปภาพ</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

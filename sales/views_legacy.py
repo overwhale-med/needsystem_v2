@@ -21,11 +21,11 @@ from datetime import timedelta
 from django.db import transaction
 
 # Models
-from .models import Quotation, QuotationItem, QuotationDeposit, POSOrder, POSOrderItem, Invoice, UpsaleCategory, UpsaleCatalog, QuotationUpsale, InvoicePayment, CustomerLead, Appointment, CommissionClaim, CommissionTicket
+from .models import Quotation, QuotationItem, QuotationDeposit, POSOrder, POSOrderItem, Invoice, UpsaleCategory, UpsaleCatalog, QuotationUpsale, InvoicePayment, CustomerLead, Appointment, CommissionClaim, CommissionTicket, CommissionAllocation
 from master_data.models import Customer, CompanyInfo, ShippingRate
 from hr.models import Employee, SalesGroup, CompanySalesTarget, CommissionLog, FundTransaction
 from .forms import QuotationForm
-from manufacturing.models import ProductionOrder, Salesperson as MfgSalesperson, Branch, MfgBranch, ProductionStatus, JobLaborClaim, JobAirconClaim, JobOtherExpense, MasterExpenseClaim
+from manufacturing.models import ProductionOrder, Salesperson as MfgSalesperson, Branch, MfgBranch, ProductionStatus, JobLaborClaim, JobAirconClaim, JobOtherExpense, MasterExpenseClaim, ServiceTicket, ProductionTeam, ServiceTicketMedia, ServiceLaborClaim
 from inventory.models import Product, InventoryDoc, StockMovement, Category
 from solar_jobs.models import SolarJob
 
@@ -203,25 +203,34 @@ def sales_dashboard(request):
         elif rank == 'supervisor':
             is_supervisor = True
 
-    # 🌟 โหลดรายชื่อสาขาตามสิทธิ์ (กรองเฉพาะ "ทีม" และ "สาขา")
+    # 🌟 โหลดรายชื่อสาขาหรือลูกทีมตามสิทธิ์
+    team_members = []
     if is_manager:
+        # 🌟 [FIXED] ดึงเฉพาะแผนกที่มีคำว่า "สาขา" เท่านั้น (ตัดทีมช่างออก)
         departments = list(Department.objects.filter(
-            Q(name__icontains='ทีม') | Q(name__icontains='สาขา')
+            name__icontains='สาขา'
         ).order_by('name'))
+        for d in departments: d.name = d.name.replace('แผนก', '').strip()
     elif is_supervisor and current_emp.department:
-        departments = list(Department.objects.filter(id=current_emp.department.id))
+        departments = []
+        # 🌟 [NEW] ถ้าเป็นหัวหน้าสาขา ให้ดึงรายชื่อเซลส์ในสาขานั้นมาแทน
+        team_members = list(Employee.objects.filter(department=current_emp.department).order_by('first_name'))
     else:
         departments = []
 
-    # ลบคำว่า "แผนก" ทิ้งเพื่อความสะอาดตา
-    for d in departments:
-        d.name = d.name.replace('แผนก', '').strip()
+    if is_manager:
+        template_name = 'dashboards/knockdown/manager.html'
+    elif is_supervisor:
+        template_name = 'dashboards/knockdown/supervisor.html'
+    else:
+        template_name = 'dashboards/knockdown/sales.html'
 
-    return render(request, 'sales/dashboard.html', {
+    return render(request, template_name, {
         'scope_title': scope_title,
         'start_date': today_bkk.strftime('%Y-%m-%d'),
         'end_date': today_bkk.strftime('%Y-%m-%d'),
         'departments': departments,
+        'team_members': team_members, # 🌟 [NEW] ส่งรายชื่อลูกทีมไปหน้าเว็บ
         'is_manager': is_manager,
         'is_supervisor': is_supervisor
     })
@@ -251,10 +260,18 @@ def api_dashboard_data(request):
     end_date_inclusive = end_date + timedelta(days=1)
 
     branch_filter = request.GET.get('branch', '')
+    emp_filter = request.GET.get('employee', '') # 🌟 รับค่าจากกล่องเลือกพนักงาน
+
     user_rank = emp.business_rank.lower() if (emp and emp.business_rank) else "member"
 
-    if branch_filter and (user_rank in ['manager', 'director', 'supervisor'] or request.user.is_superuser):
-        target_employees = target_employees.filter(department_id=branch_filter)
+    # 🌟 [UPDATE] ปรับปรุงระบบกรองให้รองรับคำสั่ง 3 โหมด
+    if branch_filter and (user_rank in ['manager', 'director'] or request.user.is_superuser):
+        if branch_filter != 'sum_only': # 🌟 [NEW] ถ้าสั่งรวมยอด ไม่ต้องกรอง ID สาขา
+            target_employees = target_employees.filter(department_id=branch_filter)
+    elif emp_filter and user_rank == 'supervisor':
+        # 🌟 ถ้าหน้าบ้านส่งคำสั่งพิเศษมา ไม่ต้องกรอง ID แต่ถ้าส่งเป็นตัวเลขมา ให้กรองตามนั้น
+        if emp_filter not in ['sum_only', 'compare_all']:
+            target_employees = target_employees.filter(id=emp_filter)
 
     pos_qs_all = get_sales_queryset(POSOrder, request.user, target_employees).filter(created_at__gte=start_date, created_at__lt=end_date_inclusive)
     inv_qs_all = get_sales_queryset(Invoice, request.user, target_employees).filter(date__gte=start_date, date__lte=end_date)
@@ -282,30 +299,52 @@ def api_dashboard_data(request):
 
     # 🌟 บังคับกราฟให้เป็นเปรียบเทียบทีม/สาขา หรือ พนักงานเสมอ (ผลรวมจะตรงกับบัตร 100%) 🌟
     if user_rank in ['manager', 'director'] or request.user.is_superuser:
-        chart_title = "ยอดขายเปรียบเทียบรายทีม/สาขา"
-        team_dict = {}
-        for p in pos_raw:
-            t = p['employee__department__name'] or 'ไม่ระบุสาขา'
-            team_dict[t] = team_dict.get(t, 0) + float(p['total_amount'] or 0)
-        for i in inv_raw:
-            t = i['employee__department__name'] or 'ไม่ระบุสาขา'
-            team_dict[t] = team_dict.get(t, 0) + float(i['grand_total'] or 0)
+        if branch_filter == 'sum_only': # 🌟 [NEW] โหมดดูเฉพาะยอดขายรวม
+            chart_title = "ยอดขายรวมทุกสาขา"
+            chart_labels = ["ยอดรวมสุทธิ"]
+            chart_data = [total_sales]
+        else:
+            chart_title = "ยอดขายเปรียบเทียบรายสาขา"
+            team_dict = {}
+            for p in pos_raw:
+                t = p['employee__department__name'] or 'ไม่ระบุสาขา'
+                team_dict[t] = team_dict.get(t, 0) + float(p['total_amount'] or 0)
+            for i in inv_raw:
+                t = i['employee__department__name'] or 'ไม่ระบุสาขา'
+                team_dict[t] = team_dict.get(t, 0) + float(i['grand_total'] or 0)
 
-        sorted_data = sorted(team_dict.items(), key=lambda x: x[1], reverse=True)
-        chart_labels, chart_data = [x[0] for x in sorted_data], [x[1] for x in sorted_data]
+            sorted_data = sorted(team_dict.items(), key=lambda x: x[1], reverse=True)
+            chart_labels, chart_data = [x[0] for x in sorted_data], [x[1] for x in sorted_data]
 
     elif user_rank == 'supervisor':
-        chart_title = f"ยอดขายเปรียบเทียบพนักงานในทีม"
-        mem_dict = {}
-        for p in pos_raw:
-            m = p['employee__first_name'] or 'ไม่ระบุชื่อ'
-            mem_dict[m] = mem_dict.get(m, 0) + float(p['total_amount'] or 0)
-        for i in inv_raw:
-            m = i['employee__first_name'] or 'ไม่ระบุชื่อ'
-            mem_dict[m] = mem_dict.get(m, 0) + float(i['grand_total'] or 0)
 
-        sorted_data = sorted(mem_dict.items(), key=lambda x: x[1], reverse=True)
-        chart_labels, chart_data = [x[0] for x in sorted_data], [x[1] for x in sorted_data]
+        # 🌟 โหมด 1: ดูเฉพาะยอดขาย (รวมกันเป็นแท่งเดียว)
+        if emp_filter == 'sum_only':
+            dept_name = emp.department.name if (emp and emp.department) else ''
+            chart_title = f"ยอดขายรวมทั้งทีม ({dept_name})"
+            chart_labels = ["ยอดรวมสุทธิ"]
+            chart_data = [total_sales]
+
+        # 🌟 โหมด 3: เลือกรายบุคคล (กราฟแท่งเดียวของคนนั้น)
+        elif emp_filter and emp_filter != 'compare_all':
+            chart_title = "ยอดขายส่วนตัว"
+            emp_name = target_employees.first().first_name if target_employees.exists() else "พนักงาน"
+            chart_labels = [emp_name]
+            chart_data = [total_sales]
+
+        # 🌟 โหมด 2: ดูเปรียบเทียบทุกคน (ค่าเริ่มต้น - กราฟหลายแท่งแข่งขันกัน)
+        else:
+            chart_title = f"ยอดขายเปรียบเทียบพนักงานในทีม"
+            mem_dict = {}
+            for p in pos_raw:
+                m = p['employee__first_name'] or 'ไม่ระบุชื่อ'
+                mem_dict[m] = mem_dict.get(m, 0) + float(p['total_amount'] or 0)
+            for i in inv_raw:
+                m = i['employee__first_name'] or 'ไม่ระบุชื่อ'
+                mem_dict[m] = mem_dict.get(m, 0) + float(i['grand_total'] or 0)
+
+            sorted_data = sorted(mem_dict.items(), key=lambda x: x[1], reverse=True)
+            chart_labels, chart_data = [x[0] for x in sorted_data], [x[1] for x in sorted_data]
 
     else:
         chart_title = "ยอดขายส่วนตัว"
@@ -348,13 +387,23 @@ def api_dashboard_data(request):
             'amount': float(item.total_amount) if is_pos else float(item.grand_total)
         })
 
+    # 🌟 [NEW] สมองกลคำนวณยอดรายได้สะสม (คอมมิชชัน) ที่โอนแล้ว ของพนักงานที่ล็อกอินอยู่
+    accumulated_commission = 0
+    if emp:
+        accumulated_commission = CommissionAllocation.objects.filter(
+            employee=emp,
+            status='PAID'
+        ).aggregate(Sum('amount'))['amount__sum'] or 0
+
     response_data = {
         'total_sales': total_sales, 'total_orders_today': total_orders_today,
         'pending_approval': pending_approval, 'pending_closing': pending_closing,
         'in_production': in_production, 'chart_labels': chart_labels,
         'chart_data': chart_data, 'chart_title': chart_title,
         'chart_type': chart_type, 'scope_title': scope_title,
-        'recent_sales': recent_sales_data
+        'recent_sales': recent_sales_data,
+        # 🌟 [NEW] แพ็คยอดเงินสะสม ส่งขึ้นรถไปให้หน้าเว็บแสดงผลที่การ์ดสีเขียว
+        'accumulated_commission': float(accumulated_commission)
     }
 
     return JsonResponse(response_data)
@@ -390,6 +439,7 @@ def sales_hub(request):
     })
 
 @login_required
+@transaction.atomic
 def record_deposit(request, qt_id):
     qt = get_object_or_404(Quotation, pk=qt_id)
     if request.method == 'POST':
@@ -738,6 +788,7 @@ def sales_timeline(request):
     })
 
 @login_required
+@transaction.atomic
 def convert_quote_to_invoice(request, qt_id):
     qt = get_object_or_404(Quotation, pk=qt_id)
     new_code = get_next_document_number()
@@ -810,6 +861,7 @@ def pos_home(request):
 
 @csrf_exempt
 @login_required
+@transaction.atomic
 def pos_checkout(request):
     if request.method == 'POST':
         try:
@@ -1600,18 +1652,17 @@ def confirm_payment(request, doc_type, doc_id):
                 if obj.employee:
                     process_commission_logic(sale_amt, obj.employee, obj.code)
 
-                    # 🌟 AUTOMATION: สร้างตั๋วคอมมิชชัน 3% (บ้านน็อคดาวน์) 🌟
+                    # 🌟 AUTOMATION: สร้างตั๋วคอมมิชชัน 2.5% (บ้านน็อคดาวน์) 🌟
                     if obj.quotation_ref and obj.quotation_ref.grand_total > 0:
-                        # 🌟 [FIXED] เช็คและผูกตั๋วเข้ากับ Quotation ตรงๆ เหมือนตั๋ว 2%
-                        if not CommissionTicket.objects.filter(quotation_ref=obj.quotation_ref, ticket_type='3%').exists():
-                            # ดึงยอดรวมจาก Quotation มาหักต้นทุน 10%
+                        # 🌟 [UPDATE] เช็คว่าเคยออก 2.5% หรือ 3% ไปแล้วหรือยัง
+                        if not CommissionTicket.objects.filter(quotation_ref=obj.quotation_ref, ticket_type__in=['2.5%', '3%']).exists():
                             grand_total = obj.quotation_ref.grand_total
                             base_amount = grand_total - (grand_total * Decimal('0.10'))
-                            comm_amount = base_amount * Decimal('0.03') # คูณ 3%
+                            comm_amount = base_amount * Decimal('0.025') # คูณ 2.5% แทน
 
                             CommissionTicket.objects.create(
-                                ticket_type='3%',
-                                quotation_ref=obj.quotation_ref, # 🌟 [FIXED] ผูกกับ Quotation
+                                ticket_type='2.5%',
+                                quotation_ref=obj.quotation_ref,
                                 base_amount=base_amount,
                                 commission_amount=comm_amount
                             )
@@ -1815,6 +1866,7 @@ def deposit_list(request):
     })
 
 @login_required
+@transaction.atomic
 def verify_deposit(request, deposit_id): # 🌟 รับ id ของตารางมัดจำมาแทน
     deposit = get_object_or_404(QuotationDeposit, pk=deposit_id)
     deposit.is_verified = True
@@ -1825,22 +1877,28 @@ def verify_deposit(request, deposit_id): # 🌟 รับ id ของตาร�
     qt.is_deposit_verified = True
     qt.save()
 
-    # 🌟 AUTOMATION: สร้างตั๋วคอมมิชชัน 2% (บ้านน็อคดาวน์) จากยอดมัดจำใบนี้ 🌟
+    # 🌟 AUTOMATION: สร้างตั๋วคอมมิชชัน 0.5% และ 2% (บ้านน็อคดาวน์) 🌟
     if qt.employee and deposit.amount > 0:
-        # เช็คป้องกันการสร้างตั๋วซ้ำจากใบมัดจำนี้
-        if not CommissionTicket.objects.filter(quotation_ref=qt, ticket_type='2%').exists():
-            # สูตร: หักออก 10% จาก Grand Total (คำนวณจากยอดรวมใบเสนอราคาตามเดิม)
-            base_amount = qt.grand_total - (qt.grand_total * Decimal('0.10'))
-            comm_amount = base_amount * Decimal('0.02') # คูณ 2%
 
+        # 🚨 [FIXED] บังคับดึง "ยอดรวมสินค้าทั้งหมด (grand_total)" มาใช้เป็นฐานคำนวณ ห้ามใช้ยอดมัดจำเด็ดขาด!
+        grand_total = qt.grand_total if qt.grand_total else Decimal('0.00')
+        base_amount = grand_total - (grand_total * Decimal('0.10'))
+
+        # 1. เช็คและสร้างตั๋ว 2%
+        if not CommissionTicket.objects.filter(quotation_ref=qt, ticket_type='2%').exists():
+            comm_amount_2 = base_amount * Decimal('0.02') # คูณ 2%
             CommissionTicket.objects.create(
-                ticket_type='2%',
-                quotation_ref=qt,
-                base_amount=base_amount,
-                commission_amount=comm_amount
+                ticket_type='2%', quotation_ref=qt, base_amount=base_amount, commission_amount=comm_amount_2
             )
 
-    messages.success(request, f"✅ บัญชียืนยันตรวจสอบยอดมัดจำใบเสร็จ {deposit.code} เรียบร้อยแล้ว! (ระบบสร้างตั๋วคอมมิชชัน 2% ให้พนักงานขายแล้ว)")
+        # 2. เช็คและสร้างตั๋ว 0.5%
+        if not CommissionTicket.objects.filter(quotation_ref=qt, ticket_type='0.5%').exists():
+            comm_amount_05 = base_amount * Decimal('0.005') # คูณ 0.5%
+            CommissionTicket.objects.create(
+                ticket_type='0.5%', quotation_ref=qt, base_amount=base_amount, commission_amount=comm_amount_05
+            )
+
+    messages.success(request, f"✅ บัญชียืนยันตรวจสอบยอดมัดจำใบเสร็จ {deposit.code} เรียบร้อยแล้ว! (ระบบสร้างตั๋วคอมมิชชัน 0.5% และ 2% ให้พนักงานขายแล้ว)")
     return redirect('deposit_list')
 
 # ==========================================
@@ -2193,8 +2251,10 @@ def commission_board(request):
 
     current_emp = getattr(request.user, 'employee', None)
 
-    # 🌟 1. กำหนดสิทธิ์ Super View (ตรวจสอบว่าเป็น Admin หรือ Manager หรือไม่)
+    # 🌟 1. กำหนดสิทธิ์การมองเห็น (Manager vs Supervisor)
     is_manager_view = False
+    is_supervisor_view = False # 🌟 [NEW] เพิ่มสิทธิ์หัวหน้าสาขา
+
     if request.user.is_superuser:
         is_manager_view = True
     elif current_emp:
@@ -2203,21 +2263,37 @@ def commission_board(request):
         pos_title = getattr(current_emp.position, 'title', '').lower()
         if rank in ['manager', 'director'] or 'manager' in pos_title or 'บริหาร' in dept_name:
             is_manager_view = True
+        elif rank == 'supervisor': # 🌟 ถ้าเป็นหัวหน้าสาขา
+            is_supervisor_view = True
 
-    # 🌟 2. รับค่าคำค้นหาจากหน้าเว็บ
     search_query = request.GET.get('q', '').strip()
 
     # 🌟 3. ดึงข้อมูลตั๋วตามสิทธิ์
     if is_manager_view:
+        # ผู้จัดการ: เห็นทุกอย่างของทุกคน
+        tickets_05 = CommissionTicket.objects.filter(ticket_type='0.5%', status='AVAILABLE').select_related('quotation_ref', 'quotation_ref__employee').order_by('-created_at')
         tickets_2 = CommissionTicket.objects.filter(ticket_type='2%', status='AVAILABLE').select_related('quotation_ref', 'quotation_ref__employee').order_by('-created_at')
-        tickets_3 = CommissionTicket.objects.filter(ticket_type='3%', status='AVAILABLE').select_related('quotation_ref', 'quotation_ref__employee').order_by('-created_at')
+        tickets_3 = CommissionTicket.objects.filter(ticket_type__in=['2.5%', '3%'], status='AVAILABLE').select_related('quotation_ref', 'quotation_ref__employee').order_by('-created_at')
         claims_qs = CommissionClaim.objects.all().select_related('requester').order_by('-created_at')
+
+    elif is_supervisor_view and current_emp.department:
+        # 🌟 หัวหน้าสาขา: เห็นเฉพาะตั๋ว 2% และ 2.5% ของ "ทุกคนในสาขา"
+        dept_emps = Employee.objects.filter(department=current_emp.department)
+
+        # 🚨 ล็อกตาย! ห้ามหัวหน้าสาขาเห็นตั๋ว 0.5% เด็ดขาด
+        tickets_05 = CommissionTicket.objects.none()
+
+        tickets_2 = CommissionTicket.objects.filter(ticket_type='2%', status='AVAILABLE', quotation_ref__employee__in=dept_emps).select_related('quotation_ref', 'quotation_ref__employee').order_by('-created_at')
+        tickets_3 = CommissionTicket.objects.filter(ticket_type__in=['2.5%', '3%'], status='AVAILABLE', quotation_ref__employee__in=dept_emps).select_related('quotation_ref', 'quotation_ref__employee').order_by('-created_at')
+        claims_qs = CommissionClaim.objects.filter(requester__in=dept_emps).select_related('requester').order_by('-created_at')
+
     else:
+        # เซลส์ปกติ: เห็นเฉพาะของตัวเอง
+        tickets_05 = CommissionTicket.objects.filter(ticket_type='0.5%', status='AVAILABLE', quotation_ref__employee=current_emp).order_by('-created_at')
         tickets_2 = CommissionTicket.objects.filter(ticket_type='2%', status='AVAILABLE', quotation_ref__employee=current_emp).order_by('-created_at')
-        tickets_3 = CommissionTicket.objects.filter(ticket_type='3%', status='AVAILABLE', quotation_ref__employee=current_emp).order_by('-created_at')
+        tickets_3 = CommissionTicket.objects.filter(ticket_type__in=['2.5%', '3%'], status='AVAILABLE', quotation_ref__employee=current_emp).order_by('-created_at')
         claims_qs = CommissionClaim.objects.filter(requester=current_emp).order_by('-created_at')
 
-    # 🌟 4. กรองข้อมูลตามคำค้นหา (Search) 🌟
     if search_query:
         claims_qs = claims_qs.filter(
             Q(code__icontains=search_query) |
@@ -2225,15 +2301,23 @@ def commission_board(request):
             Q(bank_name__icontains=search_query)
         )
 
-    # 🌟 5. แสดงผลแค่ 10 รายการล่าสุด (ตัด Paginator ออก) 🌟
     claims_list = claims_qs[:10]
 
+    sum_05 = sum(t.commission_amount for t in tickets_05)
+    sum_2 = sum(t.commission_amount for t in tickets_2)
+    sum_3 = sum(t.commission_amount for t in tickets_3)
+
     return render(request, 'sales/commission_board.html', {
+        'tickets_05': tickets_05,
         'tickets_2': tickets_2,
         'tickets_3': tickets_3,
-        'claims': claims_list, # 🌟 ส่งลิสต์ 10 รายการไปแทน
+        'claims': claims_list,
         'search_query': search_query,
         'is_manager_view': is_manager_view,
+        'is_supervisor_view': is_supervisor_view, # 🌟 ส่งสิทธิ์หัวหน้าไปหน้าเว็บ
+        'sum_05': sum_05,
+        'sum_2': sum_2,
+        'sum_3': sum_3,
     })
 
 # ==========================================
@@ -2247,6 +2331,8 @@ def commission_history_list(request):
 
     current_emp = getattr(request.user, 'employee', None)
     is_manager_view = False
+    is_supervisor_view = False # 🌟 [NEW] เพิ่มสิทธิ์หัวหน้า
+
     if request.user.is_superuser:
         is_manager_view = True
     elif current_emp:
@@ -2255,83 +2341,68 @@ def commission_history_list(request):
         pos_title = getattr(current_emp.position, 'title', '').lower()
         if rank in ['manager', 'director'] or 'manager' in pos_title or 'บริหาร' in dept_name:
             is_manager_view = True
+        elif rank == 'supervisor': # 🌟 [NEW] เช็กว่าเป็นหัวหน้า
+            is_supervisor_view = True
 
-    # 🌟 รับค่าจากตัวกรอง (Filters) 🌟
-    # 🌟 รับค่าจากตัวกรอง (Filters) 🌟
+    # 🌟 [FIXED] นำ is_active=True ออก เนื่องจากตารางพนักงานไม่ได้ใช้ชื่อฟิลด์นี้
+    team_members = []
+    if is_supervisor_view and current_emp.department:
+        team_members = Employee.objects.filter(department=current_emp.department).order_by('first_name')
+    elif is_manager_view:
+        team_members = Employee.objects.all().order_by('first_name')
+
     search_query = request.GET.get('q', '').strip()
     emp_search = request.GET.get('emp', '').strip()
     claim_type = request.GET.get('type', '')
-    claim_status = request.GET.get('status', '') # 🌟 [NEW] รับค่าสถานะ
+    claim_status = request.GET.get('status', '')
 
-    # 🌟 [NEW] ตั้งค่าเริ่มต้นวันที่ 30 วันย้อนหลัง (เวลาไทย) 🌟
     tz_bkk = pytz.timezone('Asia/Bangkok')
     today_bkk = timezone.now().astimezone(tz_bkk).date()
 
     start_date = request.GET.get('start_date')
     end_date = request.GET.get('end_date')
 
-    # ถ้าไม่มีการเลือกวันที่มา ให้บังคับเป็น 30 วันย้อนหลัง
     if not start_date or start_date == 'None':
         start_date = (today_bkk - timedelta(days=29)).strftime('%Y-%m-%d')
     if not end_date or end_date == 'None':
         end_date = today_bkk.strftime('%Y-%m-%d')
 
-    # ดึงข้อมูลตามสิทธิ์
+    # 🌟 [NEW] ใช้ prefetch_related โหลดข้อมูล tickets และ allocations มาเผื่อไว้เลยเพื่อความเร็ว
     if is_manager_view:
-        claims_qs = CommissionClaim.objects.all().select_related('requester', 'requester__department').order_by('-created_at')
+        claims_qs = CommissionClaim.objects.all().select_related('requester', 'requester__department').prefetch_related('tickets', 'allocations').order_by('-created_at')
     else:
-        claims_qs = CommissionClaim.objects.filter(requester=current_emp).select_related('requester', 'requester__department').order_by('-created_at')
+        claims_qs = CommissionClaim.objects.filter(requester=current_emp).select_related('requester', 'requester__department').prefetch_related('tickets', 'allocations').order_by('-created_at')
 
-    # 1. กรองเลขที่ใบเบิก
     if search_query:
         claims_qs = claims_qs.filter(code__icontains=search_query)
-
-    # 2. กรองชื่อพนักงาน/สาขา
     if emp_search:
-        claims_qs = claims_qs.filter(
-            Q(requester__first_name__icontains=emp_search) |
-            Q(requester__department__name__icontains=emp_search)
-        )
-
-    # 3. กรองประเภทคอมมิชชัน
-    # 3. กรองประเภทคอมมิชชัน
+        claims_qs = claims_qs.filter(Q(requester__first_name__icontains=emp_search) | Q(requester__department__name__icontains=emp_search))
     if claim_type:
         claims_qs = claims_qs.filter(claim_type=claim_type)
-
-    # 🌟 [NEW] 3.5 กรองสถานะการโอนเงิน
     if claim_status:
         claims_qs = claims_qs.filter(status=claim_status)
 
-    # 🌟 4. กรองวันที่ (กางเวลา 00:00:00 ถึง 23:59:59 ของโซนเวลาไทย ป้องกันข้อมูลตกหล่น) 🌟
     try:
         s_date = parse_date(start_date)
         e_date = parse_date(end_date)
         if s_date and e_date:
             tz_bkk = pytz.timezone('Asia/Bangkok')
-
-            # จับคู่วันที่กับเวลา 00:00:00 และ 23:59:59 แล้วสวมโซนเวลาไทย
             start_dt = tz_bkk.localize(datetime.datetime.combine(s_date, datetime.time.min))
             end_dt = tz_bkk.localize(datetime.datetime.combine(e_date, datetime.time.max))
-
-            # ใช้การเทียบเวลาแบบ __gte (>=) และ __lte (<=) แทนแบบ __date เดิม
             claims_qs = claims_qs.filter(created_at__gte=start_dt, created_at__lte=end_dt)
     except:
         pass
 
-    # ระบบแบ่งหน้า (หน้าละ 20 รายการ)
-    paginator = Paginator(claims_qs, 20)
+    paginator = Paginator(claims_qs.distinct(), 20)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
     return render(request, 'sales/commission_history.html', {
-        'page_obj': page_obj,
-        'search_query': search_query,
-        'emp_search': emp_search,
-        'claim_type': claim_type,
-        'claim_status': claim_status, # 🌟 [NEW] ส่งค่าสถานะกลับไปแสดงผล
-        'start_date': start_date,
-        'end_date': end_date,
+        'page_obj': page_obj, 'search_query': search_query, 'emp_search': emp_search,
+        'claim_type': claim_type, 'claim_status': claim_status, 'start_date': start_date, 'end_date': end_date,
         'is_manager_view': is_manager_view,
+        'is_supervisor_view': is_supervisor_view, # 🌟 ส่งสิทธิ์ไปที่ HTML
+        'team_members': team_members, # 🌟 ส่งรายชื่อลูกทีมไปสร้างแบบฟอร์ม
     })
 
 @login_required
@@ -2384,6 +2455,10 @@ def knockdown_commission_pay(request, claim_id):
 
         # อัปเดตตั๋วสิทธิ์ข้างในให้กลายเป็น โอนแล้ว (PAID) อัตโนมัติ
         claim.tickets.update(status='PAID')
+
+        # 🌟 [NEW] อัปเดตสถานะเงินที่หัวหน้าจัดสรรให้ลูกทีมทุกคน เป็น "โอนแล้ว (PAID)" ด้วย
+        claim.allocations.update(status='PAID')
+
         messages.success(request, f"✅ บัญชีทำรายการโอนเงินค่าคอมมิชชันน็อคดาวน์ {claim.code} สำเร็จ!")
 
     return redirect('accounting_verification_hub', task_type='knockdown_commissions')
@@ -2553,9 +2628,10 @@ def master_job_report(request):
 
         return redirect('master_job_report')
 
-    # โค้ดเดิมดึงข้อมูลมาแสดง...
+    # 🌟 [UPDATE] เพิ่มการดึง service_tickets และ labor_claims 🌟
     jobs_query = ProductionOrder.objects.select_related('quotation_ref', 'logistics_claim').prefetch_related(
-        'labor_claims', 'aircon_claims', 'other_expenses'
+        'labor_claims', 'aircon_claims', 'other_expenses',
+        'service_tickets', 'service_tickets__labor_claims', 'service_tickets__labor_claims__master_claim'
     ).order_by('-id')
 
     search_query = request.GET.get('q', '')
@@ -2572,13 +2648,18 @@ def master_job_report(request):
     inv_dict = {inv.quotation_ref_id: inv for inv in invoices}
 
     tickets = CommissionTicket.objects.filter(Q(quotation_ref_id__in=qt_ids) | Q(invoice_ref__quotation_ref_id__in=qt_ids))
+    ticket_dict_05 = {}
     ticket_dict_2 = {}
     ticket_dict_3 = {}
     for t in tickets:
-        if t.ticket_type == '2%' and t.quotation_ref_id:
+        if t.ticket_type == '0.5%' and t.quotation_ref_id:
+            ticket_dict_05.setdefault(t.quotation_ref_id, []).append(t)
+        elif t.ticket_type == '2%' and t.quotation_ref_id:
             ticket_dict_2.setdefault(t.quotation_ref_id, []).append(t)
-        elif t.ticket_type == '3%' and getattr(t.invoice_ref, 'quotation_ref_id', None):
-            ticket_dict_3.setdefault(t.invoice_ref.quotation_ref_id, []).append(t)
+        elif t.ticket_type in ['2.5%', '3%']:
+            q_id = t.quotation_ref_id or getattr(t.invoice_ref, 'quotation_ref_id', None)
+            if q_id:
+                ticket_dict_3.setdefault(q_id, []).append(t)
 
     cart_count = 0
     if current_emp:
@@ -2591,10 +2672,12 @@ def master_job_report(request):
     for job in page_obj:
         if job.quotation_ref_id:
             job.matched_invoice = inv_dict.get(job.quotation_ref_id)
+            job.matched_tickets_05 = ticket_dict_05.get(job.quotation_ref_id, [])
             job.matched_tickets_2 = ticket_dict_2.get(job.quotation_ref_id, [])
             job.matched_tickets_3 = ticket_dict_3.get(job.quotation_ref_id, [])
         else:
             job.matched_invoice = None
+            job.matched_tickets_05 = []
             job.matched_tickets_2 = []
             job.matched_tickets_3 = []
 
@@ -2605,8 +2688,6 @@ def master_job_report(request):
 # ==========================================
 # 🛒 [NEW] ฟังก์ชันดูตะกร้าเบิกส่วนตัว (Shopping Cart)
 # ==========================================
-from manufacturing.models import MasterExpenseClaim
-
 @login_required
 def expense_cart_view(request):
     current_emp = getattr(request.user, 'employee', None)
@@ -2618,16 +2699,17 @@ def expense_cart_view(request):
     aircon_items = JobAirconClaim.objects.filter(requester=current_emp, status='UNCLAIMED').order_by('created_at')
     other_items = JobOtherExpense.objects.filter(requester=current_emp, status='UNCLAIMED').order_by('created_at')
 
-    # ประวัติใบคุมที่เคยเบิก
-    master_claims = MasterExpenseClaim.objects.filter(requester=current_emp).order_by('-created_at')
+    # 🌟 [NEW] เพิ่มการดึงบิลค่าแรงซ่อม
+    service_labor_items = ServiceLaborClaim.objects.filter(requester=current_emp, status='UNCLAIMED').order_by('created_at')
 
-    # ดึงรายชื่อธนาคารไปใช้ใน Dropdown
+    master_claims = MasterExpenseClaim.objects.filter(requester=current_emp).order_by('-created_at')
     bank_choices = MasterExpenseClaim.BANK_CHOICES
 
     return render(request, 'sales/expense_cart.html', {
         'labor_items': labor_items,
         'aircon_items': aircon_items,
         'other_items': other_items,
+        'service_labor_items': service_labor_items, # 🌟 [NEW] ส่งไปแสดงผล
         'master_claims': master_claims,
         'bank_choices': bank_choices
     })
@@ -2641,17 +2723,16 @@ def submit_expense_cart(request):
     if request.method == 'POST':
         current_emp = getattr(request.user, 'employee', None)
 
-        # รับค่าบิลที่ถูกติ๊กเลือก
         selected_labors = request.POST.getlist('labor_ids')
         selected_aircons = request.POST.getlist('aircon_ids')
         selected_others = request.POST.getlist('other_ids')
+        selected_service_labors = request.POST.getlist('service_labor_ids') # 🌟 [NEW]
 
-        # ข้อมูลบัญชีธนาคาร
         bank_name = request.POST.get('bank_name')
         bank_acc_num = request.POST.get('bank_account_number')
         bank_acc_name = request.POST.get('bank_account_name')
 
-        if not (selected_labors or selected_aircons or selected_others):
+        if not (selected_labors or selected_aircons or selected_others or selected_service_labors):
             messages.error(request, "❌ กรุณาเลือกบิลอย่างน้อย 1 รายการเพื่อสร้างใบคุมรวม")
             return redirect('expense_cart_view')
 
@@ -2659,18 +2740,19 @@ def submit_expense_cart(request):
             messages.error(request, "❌ กรุณากรอกข้อมูลบัญชีธนาคารให้ครบถ้วนเพื่อความรวดเร็วในการโอนเงิน")
             return redirect('expense_cart_view')
 
-        # ดึงบิลที่ติ๊ก และรวมยอดเงิน
         labor_qs = JobLaborClaim.objects.filter(id__in=selected_labors, requester=current_emp, status='UNCLAIMED')
         aircon_qs = JobAirconClaim.objects.filter(id__in=selected_aircons, requester=current_emp, status='UNCLAIMED')
         other_qs = JobOtherExpense.objects.filter(id__in=selected_others, requester=current_emp, status='UNCLAIMED')
+        service_labor_qs = ServiceLaborClaim.objects.filter(id__in=selected_service_labors, requester=current_emp, status='UNCLAIMED') # 🌟 [NEW]
 
         total_labor = sum(item.amount for item in labor_qs)
         total_aircon = sum(item.amount for item in aircon_qs)
         total_other = sum(item.amount for item in other_qs)
-        grand_total = total_labor + total_aircon + total_other
+        total_service_labor = sum(item.amount for item in service_labor_qs) # 🌟 [NEW]
+
+        grand_total = total_labor + total_aircon + total_other + total_service_labor
 
         if grand_total > 0:
-            # สร้างใบคุมรวม Master Expense Claim
             master_claim = MasterExpenseClaim.objects.create(
                 requester=current_emp,
                 total_amount=grand_total,
@@ -2680,13 +2762,289 @@ def submit_expense_cart(request):
                 status='PENDING'
             )
 
-            # ผูกบิลย่อยเข้ากับใบคุมนี้ และเปลี่ยนสถานะเป็น PENDING เพื่อส่งให้บัญชี
             labor_qs.update(master_claim=master_claim, status='PENDING')
             aircon_qs.update(master_claim=master_claim, status='PENDING')
             other_qs.update(master_claim=master_claim, status='PENDING')
+            service_labor_qs.update(master_claim=master_claim, status='PENDING') # 🌟 [NEW]
 
-            messages.success(request, f"🎉 สร้างใบคุมรวม {master_claim.code} จำนวน {grand_total:,.2f} บาท สำเร็จ! (ข้อมูลส่งถึงโต๊ะฝ่ายบัญชีแล้วครับ)")
+            messages.success(request, f"🎉 สร้างใบคุมรวม {master_claim.code} จำนวน {grand_total:,.2f} บาท สำเร็จ!")
         else:
             messages.error(request, "❌ ยอดเงินเบิกต้องมากกว่า 0 บาท")
 
     return redirect('expense_cart_view')
+
+# ==========================================
+# 🌟 [NEW] สมองกล: ศูนย์แจ้งซ่อมและบริการ (After-Sales) 🌟
+# ==========================================
+@login_required
+def service_ticket_list(request):
+    if not is_sales_authorized(request.user):
+        messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์เข้าถึงศูนย์แจ้งซ่อม")
+        return redirect('dashboard')
+
+    target_employees, _ = get_target_employees(request.user)
+
+    # 🌟 [UPDATED] เพิ่มการดึงข้อมูล branch และ production_team มาด้วย เพื่อความเร็ว (N+1 Query) 🌟
+    if request.user.is_superuser:
+        tickets = ServiceTicket.objects.select_related(
+            'production_order',
+            'production_order__branch',
+            'production_order__production_team',
+            'salesperson'
+        ).all()
+    else:
+        emp_ids = list(target_employees.values_list('id', flat=True))
+        tickets = ServiceTicket.objects.select_related(
+            'production_order',
+            'production_order__branch',
+            'production_order__production_team',
+            'salesperson'
+        ).filter(salesperson_id__in=emp_ids)
+
+    # ระบบค้นหา
+    search_q = request.GET.get('q', '')
+    status_filter = request.GET.get('status', '')
+
+    if search_q:
+        tickets = tickets.filter(
+            Q(code__icontains=search_q) |
+            Q(production_order__customer_name__icontains=search_q) |
+            Q(production_order__code__icontains=search_q)
+        )
+    if status_filter:
+        tickets = tickets.filter(status=status_filter)
+
+    tickets = tickets.order_by('-created_at')
+
+    paginator = Paginator(tickets, 20)
+    page_obj = paginator.get_page(request.GET.get('page'))
+
+    # เพื่อให้ง่ายต่อการสร้างตั๋วใหม่ ดึงรายการ JOB ที่ส่งมอบแล้วมาเตรียมไว้ให้เลือก
+    completed_jobs = ProductionOrder.objects.filter(is_closed=True).order_by('-finish_date')[:50]
+
+    # 🌟 [FIXED] สร้างตัวเลือกสำรอง ป้องกันระบบพังหากหาในฐานข้อมูลไม่เจอ
+    fallback_category = getattr(ServiceTicket, 'CATEGORY_CHOICES', [
+        ('STRUCTURE', 'ปัญหาโครงสร้าง/รั่วซึม'),
+        ('ELECTRICAL', 'ระบบไฟฟ้า'),
+        ('PLUMBING', 'ระบบประปา'),
+        ('AIRCON', 'ระบบแอร์'),
+        ('OTHER', 'อื่นๆ')
+    ])
+
+    fallback_urgency = getattr(ServiceTicket, 'URGENCY_CHOICES', [
+        ('NORMAL', 'ปกติ (ภายใน 7 วัน)'),
+        ('URGENT', 'ด่วน (ภายใน 3 วัน)'),
+        ('CRITICAL', 'ฉุกเฉิน (ภายใน 24 ชม.)')
+    ])
+
+    return render(request, 'sales/service_ticket_list.html', {
+        'page_obj': page_obj,
+        'search_q': search_q,
+        'status_filter': status_filter,
+        'status_choices': getattr(ServiceTicket, 'STATUS_CHOICES', []),
+        'completed_jobs': completed_jobs,
+        'category_choices': fallback_category, # 🌟 ใช้ตัวเลือกสำรอง
+        'urgency_choices': fallback_urgency,   # 🌟 ใช้ตัวเลือกสำรอง
+    })
+
+@login_required
+@transaction.atomic
+def service_ticket_create(request):
+    if request.method == 'POST':
+        job_id = request.POST.get('job_id')
+        issue_category = request.POST.get('issue_category')
+        description = request.POST.get('description')
+        urgency = request.POST.get('urgency', 'NORMAL')
+        is_warranty = request.POST.get('is_warranty') == 'on'
+
+        # 🌟 [NEW] รับค่าเบอร์โทรและสถานที่หน้างาน 🌟
+        customer_phone = request.POST.get('customer_phone', '')
+        customer_location = request.POST.get('customer_location', '')
+
+        job = get_object_or_404(ProductionOrder, pk=job_id)
+        current_emp = getattr(request.user, 'employee', None)
+
+        # 1. สร้างตั๋วแจ้งซ่อมพร้อมบันทึกข้อมูลติดต่อ
+        ticket = ServiceTicket.objects.create(
+            production_order=job,
+            salesperson=current_emp,
+            issue_category=issue_category,
+            description=description,
+            urgency=urgency,
+            is_warranty=is_warranty,
+            customer_phone=customer_phone,       # บันทึกเบอร์โทรหน้างาน
+            customer_location=customer_location, # บันทึกพิกัดหน้างาน
+            status='PENDING'
+        )
+
+        # 2. กวาดไฟล์ทั้งหมดที่อัปโหลดมา บันทึกลงตาราง ServiceTicketMedia
+        media_files = request.FILES.getlist('media_files')
+        for f in media_files:
+            ServiceTicketMedia.objects.create(
+                ticket=ticket,
+                media_type='BEFORE',
+                file=f
+            )
+
+        messages.success(request, f"✅ เปิดตั๋วแจ้งซ่อม {ticket.code} สำหรับลูกค้า {job.customer_name} เรียบร้อยแล้ว! (ส่งเรื่องให้ช่างประเมิน)")
+
+    return redirect('service_ticket_list')
+
+@login_required
+def service_ticket_update(request, ticket_id):
+    ticket = get_object_or_404(ServiceTicket, pk=ticket_id)
+    if request.method == 'POST':
+        action = request.POST.get('action')
+
+        if action == 'approve_cost' and ticket.status == 'WAITING_APPROVAL':
+            ticket.status = 'PENDING' # คืนให้ช่างจัดคิว
+            ticket.save()
+            messages.success(request, f"✅ เซลส์คอนเฟิร์มค่าใช้จ่ายกับลูกค้าเรียบร้อยแล้ว ส่งงานกลับให้ช่างจัดคิวซ่อม!")
+
+        elif action == 'cancel' and ticket.status in ['PENDING', 'WAITING_APPROVAL']:
+            ticket.status = 'CANCELLED'
+            ticket.save()
+            messages.warning(request, f"⚠️ ยกเลิกใบแจ้งซ่อม {ticket.code} เรียบร้อยแล้ว")
+
+    return redirect('service_ticket_list')
+
+# ==========================================
+# 🧠 [NEW] ระบบสมองกลจัดสรรเงิน 3 รูปแบบ (สำหรับหัวหน้าสาขา)
+# ==========================================
+@login_required
+@transaction.atomic
+def commission_allocate(request, claim_id):
+    if not is_sales_authorized(request.user):
+        messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์ดำเนินการ")
+        return redirect('dashboard')
+
+    claim = get_object_or_404(CommissionClaim, id=claim_id)
+    current_emp = getattr(request.user, 'employee', None)
+
+    # 🔒 เช็กความปลอดภัย: เฉพาะหัวหน้าที่เป็นคนสร้างใบเบิก หรือแอดมินเท่านั้น ที่แบ่งเงินได้
+    if claim.requester != current_emp and not request.user.is_superuser:
+        messages.error(request, "❌ คุณไม่มีสิทธิ์จัดสรรเงินสำหรับใบเบิกนี้")
+        return redirect('commission_history_list')
+
+    if request.method == 'POST':
+        mode = request.POST.get('allocation_mode')
+        dept = current_emp.department if current_emp else None
+
+        # 🧹 ล้างประวัติการจัดสรรเดิมของบิลนี้ทิ้งก่อน (กรณีหัวหน้ากดเข้ามาแก้ไข/แบ่งใหม่)
+        claim.allocations.all().delete()
+
+        if mode == 'MANUAL':
+            # 📌 รูปแบบที่ 1: กรอกยอดเงินเอง (รายบุคคล + กองกลาง)
+            for key, val in request.POST.items():
+                if key.startswith('amount_emp_') and val.strip():
+                    emp_id = key.split('_')[-1]
+                    amount = Decimal(val.replace(',', ''))
+                    if amount > 0:
+                        CommissionAllocation.objects.create(
+                            claim=claim, employee_id=emp_id, amount=amount,
+                            method='MANUAL', status=claim.status, created_by=current_emp
+                        )
+            fund_amt = request.POST.get('amount_fund', '0').strip()
+            if fund_amt:
+                f_amt = Decimal(fund_amt.replace(',', ''))
+                if f_amt > 0:
+                    CommissionAllocation.objects.create(
+                        claim=claim, department=dept, amount=f_amt,
+                        method='MANUAL', status=claim.status, created_by=current_emp
+                    )
+
+        elif mode == 'PERCENT_CLAIM':
+            # 📌 รูปแบบที่ 2: แบ่งเปอร์เซ็นต์ จากยอดรวมของใบเบิกนี้
+            claim_total = claim.total_amount
+            for key, val in request.POST.items():
+                if key.startswith('pct_emp_') and val.strip():
+                    emp_id = key.split('_')[-1]
+                    pct = Decimal(val)
+                    if pct > 0:
+                        amount = (claim_total * (pct / Decimal('100'))).quantize(Decimal('0.00'), rounding=ROUND_DOWN)
+                        CommissionAllocation.objects.create(
+                            claim=claim, employee_id=emp_id, amount=amount,
+                            method='PERCENT_CLAIM', percentage_used=pct, status=claim.status, created_by=current_emp
+                        )
+            fund_pct = request.POST.get('pct_fund', '0').strip()
+            if fund_pct:
+                f_pct = Decimal(fund_pct)
+                if f_pct > 0:
+                    amount = (claim_total * (f_pct / Decimal('100'))).quantize(Decimal('0.00'), rounding=ROUND_DOWN)
+                    CommissionAllocation.objects.create(
+                        claim=claim, department=dept, amount=amount,
+                        method='PERCENT_CLAIM', percentage_used=f_pct, status=claim.status, created_by=current_emp
+                    )
+
+        elif mode == 'PERCENT_SALES':
+            # 📌 รูปแบบที่ 3: กางตั๋วทุกใบ แล้วแบ่งเปอร์เซ็นต์ จากยอดฐาน 100% ของบิลนั้นๆ
+            for t in claim.tickets.all():
+                base_amt = t.base_amount
+                for key, val in request.POST.items():
+                    if key.startswith(f'ticket_{t.id}_emp_') and val.strip():
+                        emp_id = key.split('_')[-1]
+                        pct = Decimal(val)
+                        if pct > 0:
+                            amount = (base_amt * (pct / Decimal('100'))).quantize(Decimal('0.00'), rounding=ROUND_DOWN)
+                            CommissionAllocation.objects.create(
+                                claim=claim, ticket=t, employee_id=emp_id, amount=amount,
+                                method='PERCENT_SALES', percentage_used=pct, status=claim.status, created_by=current_emp
+                            )
+                fund_pct = request.POST.get(f'ticket_{t.id}_fund', '0').strip()
+                if fund_pct:
+                    f_pct = Decimal(fund_pct)
+                    if f_pct > 0:
+                        amount = (base_amt * (f_pct / Decimal('100'))).quantize(Decimal('0.00'), rounding=ROUND_DOWN)
+                        CommissionAllocation.objects.create(
+                            claim=claim, ticket=t, department=dept, amount=amount,
+                            method='PERCENT_SALES', percentage_used=f_pct, status=claim.status, created_by=current_emp
+                        )
+
+        messages.success(request, f"✅ จัดสรรผลตอบแทนสำหรับใบเบิก {claim.code} สำเร็จ! ลูกทีมสามารถเห็นยอดเงินใน Dashboard ได้แล้ว")
+
+    return redirect('commission_history_list')
+
+# ==========================================
+# 📊 [NEW] หน้าประวัติส่วนตัวของพนักงานขาย (ดูประวัติที่หัวหน้าแบ่งเงินให้)
+# ==========================================
+@login_required
+def commission_history_personal(request):
+    if not is_sales_authorized(request.user):
+        messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์เข้าถึงหน้านี้")
+        return redirect('dashboard')
+
+    current_emp = getattr(request.user, 'employee', None)
+    if not current_emp:
+        return redirect('dashboard')
+
+    # 🌟 [NEW] สร้างสวิตช์เช็กว่าเป็นหัวหน้าสาขาขึ้นไปหรือไม่
+    is_supervisor_view = False
+    if request.user.is_superuser:
+        is_supervisor_view = True
+    else:
+        rank = current_emp.business_rank.lower() if current_emp.business_rank else ""
+        if rank in ['manager', 'director', 'supervisor']:
+            is_supervisor_view = True
+
+    allocations = CommissionAllocation.objects.filter(employee=current_emp).select_related('claim', 'created_by', 'ticket', 'ticket__quotation_ref').order_by('-created_at')
+
+    pending_total = allocations.filter(status='PENDING').aggregate(Sum('amount'))['amount__sum'] or 0
+    paid_total = allocations.filter(status='PAID').aggregate(Sum('amount'))['amount__sum'] or 0
+
+    # 🌟 คำนวณยอดกองกลาง เฉพาะเมื่อคนเปิดดูเป็นหัวหน้าเท่านั้น (ช่วยลดภาระเซิร์ฟเวอร์)
+    branch_fund_total = 0
+    if is_supervisor_view and current_emp.department:
+        branch_fund_total = CommissionAllocation.objects.filter(
+            department=current_emp.department, status='PAID'
+        ).aggregate(Sum('amount'))['amount__sum'] or 0
+
+    paginator = Paginator(allocations, 20)
+    page_obj = paginator.get_page(request.GET.get('page'))
+
+    return render(request, 'sales/commission_history_personal.html', {
+        'page_obj': page_obj,
+        'pending_total': pending_total,
+        'paid_total': paid_total,
+        'branch_fund_total': branch_fund_total,
+        'is_supervisor_view': is_supervisor_view, # 🌟 ส่งสวิตช์ไปหน้าเว็บ
+    })

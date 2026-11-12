@@ -322,7 +322,8 @@ class Appointment(models.Model):
 # 💸 ระบบเบิกผลตอบแทนบ้านน็อคดาวน์ (Incentive & Commission)
 # ==========================================
 class CommissionClaim(models.Model):
-    CLAIM_TYPES = [('2%', '2% (จากมัดจำ)'), ('3%', '3% (จากปิดบิล)')]
+    # 🌟 [UPDATE] เพิ่มตัวเลือก 0.5% และ 2.5%
+    CLAIM_TYPES = [('0.5%', '0.5% (จากมัดจำ)'), ('2%', '2% (จากมัดจำ)'), ('2.5%', '2.5% (จากปิดบิล)'), ('3%', '3% (จากปิดบิล)')]
     STATUS_CHOICES = [('PENDING', 'รอโอนเงิน'), ('PAID', 'โอนเงินแล้ว')]
 
     code = models.CharField(max_length=20, unique=True, verbose_name="เลขที่ใบเบิกผลตอบแทน")
@@ -343,8 +344,16 @@ class CommissionClaim(models.Model):
         if not self.code:
             now = timezone.now()
             thai_year = (now.year + 543) % 100
-            # ใช้รหัส KD ย่อมาจาก Knockdown เพื่อแยกกับ SOL
-            prefix = f"REQ2-KD-{thai_year:02d}{now.strftime('%m')}" if self.claim_type == '2%' else f"REQ3-KD-{thai_year:02d}{now.strftime('%m')}"
+            # 🌟 [UPDATE] แยกรหัส Prefix ตามประเภทให้ชัดเจน
+            if self.claim_type == '0.5%':
+                prefix = f"REQ05-KD-{thai_year:02d}{now.strftime('%m')}"
+            elif self.claim_type == '2.5%':
+                prefix = f"REQ25-KD-{thai_year:02d}{now.strftime('%m')}"
+            elif self.claim_type == '2%':
+                prefix = f"REQ2-KD-{thai_year:02d}{now.strftime('%m')}"
+            else:
+                prefix = f"REQ3-KD-{thai_year:02d}{now.strftime('%m')}"
+
             last = CommissionClaim.objects.filter(code__startswith=prefix).order_by('code').last()
             seq = int(last.code.split('-')[-1]) + 1 if last else 1
             self.code = f"{prefix}-{seq:03d}"
@@ -354,7 +363,8 @@ class CommissionClaim(models.Model):
         return self.code
 
 class CommissionTicket(models.Model):
-    TICKET_TYPES = [('2%', '2% (จากมัดจำ)'), ('3%', '3% (จากปิดบิล)')]
+    # 🌟 [UPDATE] เพิ่มตัวเลือก 0.5% และ 2.5%
+    TICKET_TYPES = [('0.5%', '0.5% (จากมัดจำ)'), ('2%', '2% (จากมัดจำ)'), ('2.5%', '2.5% (จากปิดบิล)'), ('3%', '3% (จากปิดบิล)')]
     STATUS_CHOICES = [('AVAILABLE', 'พร้อมเบิก'), ('CLAIMING', 'กำลังตั้งเบิก'), ('PAID', 'จ่ายแล้ว')]
 
     code = models.CharField(max_length=20, unique=True, verbose_name="เลขที่ใบคุมสิทธิ์")
@@ -375,7 +385,16 @@ class CommissionTicket(models.Model):
         if not self.code:
             now = timezone.now()
             thai_year = (now.year + 543) % 100
-            prefix = f"C2-KD-{thai_year:02d}{now.strftime('%m')}" if self.ticket_type == '2%' else f"C3-KD-{thai_year:02d}{now.strftime('%m')}"
+            # 🌟 [UPDATE] แยกรหัส Prefix ตามประเภทให้ชัดเจน
+            if self.ticket_type == '0.5%':
+                prefix = f"C05-KD-{thai_year:02d}{now.strftime('%m')}"
+            elif self.ticket_type == '2.5%':
+                prefix = f"C25-KD-{thai_year:02d}{now.strftime('%m')}"
+            elif self.ticket_type == '2%':
+                prefix = f"C2-KD-{thai_year:02d}{now.strftime('%m')}"
+            else:
+                prefix = f"C3-KD-{thai_year:02d}{now.strftime('%m')}"
+
             last = CommissionTicket.objects.filter(code__startswith=prefix).order_by('code').last()
             seq = int(last.code.split('-')[-1]) + 1 if last else 1
             self.code = f"{prefix}-{seq:03d}"
@@ -426,3 +445,36 @@ class QuotationDeposit(models.Model):
 
     def __str__(self):
         return str(self.code)
+
+class CommissionAllocation(models.Model):
+    ALLOCATION_METHODS = [
+        ('MANUAL', 'กรอกยอดเงินเอง'),
+        ('PERCENT_CLAIM', 'แบ่ง % จากยอดรวมใบเบิก'),
+        ('PERCENT_SALES', 'แบ่ง % จากยอดขายสุทธิ (รายบิล)')
+    ]
+    STATUS_CHOICES = [
+        ('PENDING', 'รอโอนเงิน (จากบัญชี)'),
+        ('PAID', 'ได้รับเงินแล้ว')
+    ]
+
+    # อ้างอิงแหล่งที่มาของเงิน
+    claim = models.ForeignKey(CommissionClaim, on_delete=models.CASCADE, related_name='allocations', verbose_name="อ้างอิงใบเบิก")
+    ticket = models.ForeignKey(CommissionTicket, on_delete=models.SET_NULL, null=True, blank=True, related_name='allocations', verbose_name="อ้างอิงใบคุมสิทธิ์ (กรณีแบ่งตามบิล)")
+
+    # อ้างอิงผู้รับเงิน (ถ้าพนักงานเป็น Null แต่สาขามีค่า = เงินเข้ากองกลางสาขา)
+    employee = models.ForeignKey('hr.Employee', on_delete=models.SET_NULL, null=True, blank=True, related_name='received_commissions', verbose_name="พนักงานที่ได้รับ")
+    department = models.ForeignKey('hr.Department', on_delete=models.SET_NULL, null=True, blank=True, related_name='branch_funds', verbose_name="เข้ากองกลางสาขา")
+
+    # ยอดเงินและวิธีคำนวณ
+    amount = models.DecimalField(max_digits=12, decimal_places=2, verbose_name="จำนวนเงินที่จัดสรร")
+    method = models.CharField(max_length=20, choices=ALLOCATION_METHODS, verbose_name="รูปแบบการจัดสรร")
+    percentage_used = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, verbose_name="% ที่ใช้คำนวณ")
+
+    # สถานะและผู้ทำรายการ
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING', verbose_name="สถานะ")
+    created_by = models.ForeignKey('hr.Employee', on_delete=models.SET_NULL, null=True, related_name='allocated_commissions', verbose_name="ผู้จัดสรร (หัวหน้า)")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        recipient = self.employee.first_name if self.employee else f"กองกลางสาขา"
+        return f"{self.claim.code} -> {recipient} (฿{self.amount})"

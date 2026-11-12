@@ -1,0 +1,142 @@
+{% extends 'core/base.html' %}
+{% load humanize %}
+
+{% block content %}
+<style>
+    .navbar-nav { display: none !important; }
+    .hover-scale { transition: transform 0.2s; cursor: pointer; }
+    .hover-scale:hover { transform: translateY(-3px); }
+</style>
+<div class="container-fluid py-4 px-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-end mb-4 gap-3">
+        <div>
+            <h4 class="fw-bold mb-1 text-dark"><i class="fas fa-wallet text-success me-2"></i>ประวัติรายได้ค่าคอมมิชชัน (ส่วนตัว)</h4>
+            <p class="text-muted small mb-0">ตรวจสอบประวัติการรับผลตอบแทนที่หัวหน้าสาขาจัดสรรให้</p>
+        </div>
+        <div>
+            <a href="{% url 'sales_dashboard' %}" class="btn btn-outline-secondary rounded-pill px-4 shadow-sm fw-bold"><i class="fas fa-arrow-left me-2"></i> กลับ Dashboard</a>
+        </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="row g-3 mb-4">
+        <!-- กล่อง 1: รอโอน (ถ้าเป็นเซลส์จะขยายเป็น 50% ถ้าเป็นหัวหน้าจะเหลือ 33%) -->
+        <div class="{% if is_supervisor_view %}col-lg-4{% else %}col-lg-6{% endif %} col-md-12">
+            <div class="card border-0 shadow-sm rounded-4 h-100 bg-white">
+                <div class="card-body p-4 d-flex align-items-center">
+                    <div class="bg-warning bg-opacity-10 text-warning rounded-circle d-flex align-items-center justify-content-center me-3" style="width: 60px; height: 60px; font-size: 1.5rem;">
+                        <i class="fas fa-hourglass-half"></i>
+                    </div>
+                    <div>
+                        <p class="text-muted small fw-bold mb-1">ยอดรอโอนเงิน (Pending)</p>
+                        <h4 class="fw-bold text-dark mb-0">฿{{ pending_total|floatformat:2|intcomma }}</h4>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- กล่อง 2: โอนแล้ว -->
+        <div class="{% if is_supervisor_view %}col-lg-4{% else %}col-lg-6{% endif %} col-md-12">
+            <div class="card border-0 shadow-sm rounded-4 h-100" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%);">
+                <div class="card-body p-4 d-flex align-items-center">
+                    <div class="bg-white bg-opacity-25 text-white rounded-circle d-flex align-items-center justify-content-center me-3" style="width: 60px; height: 60px; font-size: 1.5rem;">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                    <div>
+                        <p class="text-white text-opacity-75 small fw-bold mb-1">รับแล้วสะสม (Paid)</p>
+                        <h4 class="fw-bold text-white mb-0">฿{{ paid_total|floatformat:2|intcomma }}</h4>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 🌟 [NEW] กล่อง 3: กองกลางสาขา (ซ่อนจากเซลส์) -->
+        {% if is_supervisor_view %}
+        <div class="col-lg-4 col-md-12">
+            <div class="card border-0 shadow-sm rounded-4 h-100 bg-white">
+                <div class="card-body p-4 d-flex align-items-center">
+                    <div class="bg-primary bg-opacity-10 text-primary rounded-circle d-flex align-items-center justify-content-center me-3" style="width: 60px; height: 60px; font-size: 1.5rem;">
+                        <i class="fas fa-piggy-bank"></i>
+                    </div>
+                    <div>
+                        <p class="text-muted small fw-bold mb-1">ยอดเงินกองกลางสาขาปัจจุบัน</p>
+                        <h4 class="fw-bold text-primary mb-0">฿{{ branch_fund_total|floatformat:2|intcomma }}</h4>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Data Table -->
+    <div class="card border-0 shadow-sm rounded-4">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="bg-light border-bottom text-muted small">
+                        <tr>
+                            <th class="ps-4 py-3">วันที่จัดสรร</th>
+                            <th class="py-3">อ้างอิงใบเบิกหลัก</th>
+                            <th class="py-3">รูปแบบการคำนวณ</th>
+                            <th class="py-3">ผู้จัดสรร (หัวหน้า)</th>
+                            <th class="text-end py-3">ยอดเงิน (บาท)</th>
+                            <th class="text-center py-3 pe-4">สถานะ</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for a in page_obj %}
+                        <tr>
+                            <td class="ps-4">
+                                <div class="fw-bold text-dark"><i class="far fa-calendar-alt text-primary me-2"></i>{{ a.created_at|date:"d/m/Y" }}</div>
+                                <div class="small text-muted ms-4">{{ a.created_at|date:"H:i น." }}</div>
+                            </td>
+                            <td>
+                                <div class="fw-bold text-dark fs-6">{{ a.claim.code }}</div>
+                                {% if a.ticket %}
+                                    <div class="small text-muted mt-1"><i class="fas fa-ticket-alt text-success me-1"></i>จากบิลอ้างอิง: {{ a.ticket.quotation_ref.code|default:"-" }}</div>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span class="badge bg-light text-dark border">{{ a.get_method_display }}</span>
+                                {% if a.percentage_used %}
+                                    <span class="small fw-bold text-primary ms-2">({{ a.percentage_used }}%)</span>
+                                {% endif %}
+                            </td>
+                            <td class="small text-dark fw-bold"><i class="fas fa-user-tie text-muted me-2"></i>{{ a.created_by.first_name|default:"-" }}</td>
+                            <td class="text-end">
+                                <h6 class="fw-bold text-success mb-0">฿ {{ a.amount|floatformat:2|intcomma }}</h6>
+                            </td>
+                            <td class="text-center pe-4">
+                                {% if a.status == 'PENDING' %}
+                                    <span class="badge bg-warning text-dark rounded-pill px-3 py-1 shadow-sm">รอโอนเงิน</span>
+                                {% else %}
+                                    <span class="badge bg-success rounded-pill px-3 py-1 shadow-sm">โอนแล้ว</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="6" class="text-center py-5 text-muted">ยังไม่มีประวัติการรับเงินค่าคอมมิชชัน</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            {% if page_obj.has_other_pages %}
+            <div class="card-footer bg-light border-top py-3 d-flex justify-content-center m-0 rounded-bottom-4">
+                <nav>
+                    <ul class="pagination pagination-sm mb-0 shadow-sm">
+                        {% if page_obj.has_previous %}
+                            <li class="page-item"><a class="page-link text-primary" href="?page={{ page_obj.previous_page_number }}">ก่อนหน้า</a></li>
+                        {% endif %}
+                        <li class="page-item active"><span class="page-link fw-bold border-0">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span></li>
+                        {% if page_obj.has_next %}
+                            <li class="page-item"><a class="page-link text-primary" href="?page={{ page_obj.next_page_number }}">ถัดไป</a></li>
+                        {% endif %}
+                    </ul>
+                </nav>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -33,6 +33,10 @@ urlpatterns = [
     # 🌟 เส้นทางใหม่: สร้างรหัสพนักงาน และ สร้างกลุ่ม 🌟
     path('api/generate-emp-id/', views.api_generate_emp_id, name='api_generate_emp_id'),
     path('api/create-group/', views.api_create_group, name='api_create_group'),
+    # 🌟 API สำหรับระบบ Dropdown 3 สเต็ป (รับพนักงานใหม่) 🌟
+    path('api/get-departments/', views.api_get_departments, name='api_get_departments'),
+    path('api/get-positions/', views.api_get_positions, name='api_get_positions'),
+    path('api/generate-auto-account/', views.api_generate_auto_account, name='api_generate_auto_account'),
 
     # 🌟 เส้นทางสำหรับระบบจัดการสิทธิ์ และ Profile การเข้าถึง 🌟
     path('roles/', views.role_management, name='role_management'),
@@ -41,6 +45,8 @@ urlpatterns = [
     path('api/reset-password/', views.api_reset_password, name='api_reset_password'),
     path('api/toggle-user-group/', views.api_toggle_user_group, name='api_toggle_user_group'),
     path('sales-groups/', views.sales_group_settings, name='sales_group_settings'),
+    # 🌟 เส้นทางสำหรับจัดการ โครงสร้างองค์กร (แผนก/ตำแหน่ง) 🌟
+    path('org-structure/', views.org_structure_settings, name='org_structure_settings'),
 
     # 🌟 เส้นทางทำเนียบพนักงาน และ API แก้ไขทีมขายไว 🌟
     path('directory/', views.employee_directory, name='employee_directory'),

@@ -11,16 +11,26 @@
 
 <div class="container py-4">
     <!-- Header Section -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
         <div>
             <h3 class="fw-bold text-dark mb-1">
                 <i class="fas fa-history text-gold me-2"></i>รายการเคลื่อนไหวอุปกรณ์ (Stock Card)
             </h3>
             <p class="text-muted mb-0">ประวัติการรับเข้าและเบิกออกของสินค้า</p>
         </div>
-        <a href="{% url 'solar_inventory_list' %}" class="btn btn-light border rounded-pill px-4 fw-bold shadow-sm">
-            <i class="fas fa-arrow-left me-2"></i>กลับหน้าคลังสินค้า
-        </a>
+
+        <!-- 🌟 [NEW] เพิ่มกลุ่มปุ่มกด (Button Group) พร้อมปุ่ม GR/GI -->
+        <div class="d-flex gap-2 flex-wrap">
+            <a href="{% url 'solar_document_list_in' %}" class="btn btn-outline-warning text-dark rounded-pill px-4 fw-bold shadow-sm">
+                <i class="fas fa-file-import me-1"></i> ประวัติรับเข้า (GR)
+            </a>
+            <a href="{% url 'solar_document_list_out' %}" class="btn btn-outline-danger rounded-pill px-4 fw-bold shadow-sm">
+                <i class="fas fa-file-export me-1"></i> ประวัติเบิกออก (GI)
+            </a>
+            <a href="{% url 'solar_inventory_list' %}" class="btn btn-light border rounded-pill px-4 fw-bold shadow-sm">
+                <i class="fas fa-arrow-left me-2"></i> กลับหน้าคลังสินค้า
+            </a>
+        </div>
     </div>
 
     <!-- Product Info Card -->
@@ -44,9 +54,10 @@
                     </p>
                 </div>
                 <div class="col-md-4 text-md-end mt-3 mt-md-0 border-start ps-md-4">
-                    <p class="text-muted small mb-1">ยอดคงเหลือปัจจุบัน</p>
-                    <h2 class="fw-bold text-{% if product.stock_qty <= product.min_level %}danger{% else %}success{% endif %} mb-0">
-                        {{ product.stock_qty|floatformat:2 }} <span class="fs-6 fw-normal text-muted">{{ product.unit }}</span>
+                    <!-- 🌟 [UPDATE] เปลี่ยนหัวข้อเป็น "ติดตั้งแล้วจำนวน" และดึงสูตรใหม่มาโชว์ -->
+                    <p class="text-muted small fw-bold mb-1">ติดตั้งแล้วจำนวน</p>
+                    <h2 class="fw-bold text-success mb-0">
+                        {{ product.total_installed_qty|floatformat:2 }} <span class="fs-6 fw-normal text-muted">ชุด</span>
                     </h2>
                 </div>
             </div>

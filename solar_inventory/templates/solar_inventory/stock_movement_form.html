@@ -1,12 +1,30 @@
 {% extends 'core/base.html' %}
 
 {% block content %}
+<!-- 🌟 [NEW] นำเข้าไฟล์ CSS สำหรับ Select2 และปรับแต่งให้สวยเข้ากับ Bootstrap -->
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<style>
+    .select2-container .select2-selection--single {
+        height: 38px;
+        border: 1px solid #ced4da;
+        border-radius: 0.375rem;
+    }
+    .select2-container--default .select2-selection--single .select2-selection__rendered {
+        line-height: 36px;
+        color: #212529;
+    }
+    .select2-container--default .select2-selection--single .select2-selection__arrow {
+        height: 36px;
+    }
+</style>
+
 <div class="container py-4">
     <div class="row justify-content-center">
         <div class="col-md-8 col-lg-6">
             <div class="card border-0 shadow-sm rounded-4 bg-white">
                 <div class="card-header bg-white pt-4 pb-3 border-bottom-0 text-center">
-                    <h4 class="fw-bold mb-0 text-dark">
+                    <!-- 🌟 [UPDATE] คง id="form-header-title" ไว้เหมือนเดิม -->
+                    <h4 class="fw-bold mb-0 text-dark" id="form-header-title">
                         <i class="fas fa-exchange-alt text-primary me-2"></i>บันทึกรับเข้า / เบิกออก (Manual)
                     </h4>
                     <p class="text-muted small mt-2 mb-0">บันทึกความเคลื่อนไหวของคลังสินค้าโซล่าเซลล์</p>
@@ -14,7 +32,7 @@
                 <div class="card-body p-4">
                     <form method="POST">
                         {% csrf_token %}
-                        
+
                         <!-- เลือกสินค้า -->
                         <div class="mb-3">
                             <label class="form-label fw-bold text-dark">สินค้า / แพ็กเกจ <span class="text-danger">*</span></label>
@@ -24,12 +42,12 @@
 
                         <!-- ประเภท และ จำนวน -->
                         <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label fw-bold text-dark">ประเภทรายการ <span class="text-danger">*</span></label>
+                            <!-- 🌟 [UPDATE] ซ่อนช่องประเภทรายการ -->
+                            <div style="display: none;">
                                 {{ form.movement_type }}
-                                {% if form.movement_type.errors %}<div class="text-danger small mt-1">{{ form.movement_type.errors }}</div>{% endif %}
                             </div>
-                            <div class="col-md-6 mb-3">
+
+                            <div class="mb-3">
                                 <label class="form-label fw-bold text-dark">จำนวน <span class="text-danger">*</span></label>
                                 {{ form.quantity }}
                                 {% if form.quantity.errors %}<div class="text-danger small mt-1">{{ form.quantity.errors }}</div>{% endif %}
@@ -59,4 +77,41 @@
         </div>
     </div>
 </div>
+
+<!-- 🌟 [NEW] นำเข้า jQuery และ Select2 JS -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+<!-- 🌟 Script หลักสำหรับควบคุมหน้าเว็บ -->
+<script>
+    // 1. ฟังก์ชันเปลี่ยน Dropdown ให้พิมพ์ค้นหาได้ (Select2)
+    $(document).ready(function() {
+        $('#id_product').select2({
+            placeholder: "พิมพ์ค้นหารหัส หรือชื่อแพ็กเกจ/สินค้า...",
+            width: '100%',
+            language: {
+                noResults: function() {
+                    return "ไม่พบข้อมูลที่ค้นหา";
+                }
+            }
+        });
+    });
+
+    // 2. ฟังก์ชันดึงค่าจาก URL เพื่อตั้งค่าประเภทรับเข้า-เบิกออกอัตโนมัติ (โค้ดเดิม)
+    document.addEventListener("DOMContentLoaded", function() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const typeParam = urlParams.get('type');
+
+        const typeSelect = document.getElementById('id_movement_type');
+        const headerTitle = document.getElementById('form-header-title');
+
+        if (typeParam === 'IN') {
+            if(typeSelect) typeSelect.value = 'IN';
+            headerTitle.innerHTML = '<i class="fas fa-download text-success me-2"></i>บันทึกรับเข้าคลัง (GR)';
+        } else if (typeParam === 'OUT') {
+            if(typeSelect) typeSelect.value = 'OUT';
+            headerTitle.innerHTML = '<i class="fas fa-upload text-danger me-2"></i>บันทึกเบิกออก (GI)';
+        }
+    });
+</script>
 {% endblock %}

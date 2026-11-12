@@ -4,19 +4,38 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 
+<!-- 🌟 [NEW] เพิ่ม Library Select2 สำหรับค้นหาชื่อลูกค้า 🌟 -->
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+<style>
+    /* ปรับขนาด Select2 ให้พอดีกับช่องกรอกข้อมูลอื่นๆ */
+    .select2-container .select2-selection--single { height: 38px; border: 1px solid #ced4da; border-radius: 6px; display: flex; align-items: center; }
+    .select2-container--default .select2-selection--single .select2-selection__arrow { height: 36px; }
+</style>
+
 <div class="container py-5" style="max-width: 800px;">
     <div class="card border-0 shadow-sm rounded-4 bg-white overflow-hidden">
         <div class="card-header py-4 border-bottom-0 bg-primary text-white text-center">
             <h4 class="fw-bold mb-0"><i class="fas fa-calendar-plus me-2"></i>สร้างใบงานสำรวจหน้างาน</h4>
         </div>
         <div class="card-body p-5 pt-4">
-            <form method="POST">
+            <form method="POST" id="surveyForm">
                 {% csrf_token %}
                 <div class="row g-4 mb-4">
+                    
+                    <!-- 🌟 [UPDATE] ส่วนเลือกลูกค้าและปุ่มเพิ่มลูกค้าใหม่ -->
                     <div class="col-md-12">
-                        <label class="form-label fw-bold text-muted small">เลือกลูกค้า (จากฐานข้อมูล)</label>
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <label class="form-label fw-bold text-muted small mb-0">เลือกลูกค้า (จากฐานข้อมูลโซล่าเซลล์)</label>
+                            <button type="button" class="btn btn-sm btn-outline-primary rounded-pill bg-white fw-bold" data-bs-toggle="modal" data-bs-target="#solarCustomerModal">
+                                <i class="fas fa-user-plus me-1"></i> เพิ่มลูกค้าใหม่
+                            </button>
+                        </div>
                         {{ form.customer }}
                     </div>
+
                     <div class="col-md-6">
                         <label class="form-label fw-bold text-muted small">หรือ พิมพ์ชื่อลูกค้า (Walk-in)</label>
                         {{ form.walkin_name }}
@@ -40,23 +59,127 @@
                 </div>
                 <div class="d-flex justify-content-between mt-4">
                     <a href="{% url 'solar_survey_list' %}" class="btn btn-light border rounded-pill px-4 fw-bold">ยกเลิก</a>
-                    <button type="submit" class="btn btn-primary rounded-pill px-5 fw-bold shadow-sm">บันทึกใบงาน <i class="fas fa-save ms-2"></i></button>
+                    <button type="submit" id="submitBtn" class="btn btn-primary rounded-pill px-5 fw-bold shadow-sm">บันทึกใบงาน <i class="fas fa-save ms-2"></i></button>
                 </div>
             </form>
         </div>
     </div>
 </div>
 
-<!-- 🌟 ตั้งค่าให้ปฏิทินโชว์เป็นรูปแบบ DD/MM/YYYY 🌟 -->
+<!-- ========================================== -->
+<!-- 🌟 Modal สำหรับเพิ่มลูกค้าโซล่าเซลล์ใหม่ -->
+<!-- ========================================== -->
+<div class="modal fade" id="solarCustomerModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+            <div class="modal-header bg-primary py-3">
+                <h5 class="modal-title fw-bold text-white"><i class="fas fa-user-plus me-2"></i>เพิ่มรายชื่อลูกค้าใหม่ (โซล่าเซลล์)</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4 bg-light">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="small fw-bold text-muted">ชื่อ-นามสกุล / ชื่อบริษัท*</label>
+                        <input type="text" id="newCusName" class="form-control border-primary" placeholder="ระบุชื่อลูกค้า">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="small fw-bold text-muted">เลขประจำตัวผู้เสียภาษี (ถ้ามี)</label>
+                        <input type="text" id="newCusTax" class="form-control" placeholder="Tax ID 13 หลัก">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="small fw-bold text-muted">ชื่อผู้ติดต่อ / แผนก</label>
+                        <input type="text" id="newCusContact" class="form-control" placeholder="ชื่อผู้ประสานงาน">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="small fw-bold text-muted">เบอร์โทรศัพท์</label>
+                        <input type="text" id="newCusPhone" class="form-control" placeholder="เช่น 081-XXXXXXX">
+                    </div>
+                    <div class="col-12">
+                        <label class="small fw-bold text-muted">ที่อยู่</label>
+                        <textarea id="newCusAddress" class="form-control" rows="2" placeholder="ระบุที่อยู่..."></textarea>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-top-0 bg-white">
+                <button type="button" class="btn btn-light rounded-pill px-4 me-2 border" data-bs-dismiss="modal">ยกเลิก</button>
+                <button type="button" id="btnSaveCustomer" class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm"><i class="fas fa-save me-1"></i> บันทึกข้อมูลลูกค้า</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
+    // 🌟 1. ตั้งค่าปฏิทิน 🌟
     document.addEventListener('DOMContentLoaded', function() {
         flatpickr(".datetimepicker", {
             enableTime: true,
             time_24hr: true,
-            dateFormat: "Y-m-d H:i", // ส่งหลังบ้านเป็นปี ค.ศ. เพื่อไม่ให้ Error
+            dateFormat: "Y-m-d H:i", 
             altInput: true,
-            altFormat: "d/m/Y H:i",  // โชว์หน้าบ้านเป็นแบบ DD/MM/YYYY
+            altFormat: "d/m/Y H:i",  
             placeholder: "คลิกเพื่อเลือกวัน/เวลา",
+        });
+    });
+
+    $(document).ready(function() {
+        // 🌟 2. เรียกใช้งานระบบค้นหาลูกค้า 🌟
+        $('select[name="customer"]').select2({
+            placeholder: "-- พิมพ์ค้นหาชื่อลูกค้า หรือ เลือกลูกค้า --",
+            allowClear: true,
+            width: '100%',
+            language: { noResults: function() { return "ไม่พบข้อมูลลูกค้าในระบบ"; } }
+        });
+
+        // ล็อคปุ่มเวลาโหลด
+        $('#surveyForm').on('submit', function() {
+            var btn = $('#submitBtn');
+            if (this.checkValidity()) {
+                btn.prop('disabled', true);
+                btn.html('<span class="spinner-border spinner-border-sm me-2"></span>กำลังบันทึก...');
+            }
+        });
+
+        // 🌟 3. ระบบส่งข้อมูลลูกค้าใหม่ไปหลังบ้านผ่าน AJAX 🌟
+        $('#btnSaveCustomer').click(function() {
+            const customerData = {
+                name: $('#newCusName').val().trim(),
+                tax_id: $('#newCusTax').val().trim(),
+                contact_person: $('#newCusContact').val().trim(),
+                phone: $('#newCusPhone').val().trim(),
+                address: $('#newCusAddress').val().trim()
+            };
+
+            if(!customerData.name) {
+                alert('กรุณาระบุชื่อลูกค้าหรือบริษัทให้เรียบร้อยครับ');
+                $('#newCusName').focus();
+                return;
+            }
+
+            fetch('{% url "ajax_add_solar_customer" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify(customerData)
+            })
+            .then(res => res.json())
+            .then(data => {
+                if(data.success) {
+                    const select = $('select[name="customer"]');
+                    const option = new Option(data.name, data.id, true, true);
+                    select.append(option).trigger('change');
+
+                    $('#newCusName, #newCusTax, #newCusContact, #newCusPhone, #newCusAddress').val('');
+                    $('#solarCustomerModal').modal('hide');
+                } else {
+                    alert('เกิดข้อผิดพลาด: ' + (data.error || 'ไม่สามารถบันทึกได้'));
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                alert('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้');
+            });
         });
     });
 </script>

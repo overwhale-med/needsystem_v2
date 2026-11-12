@@ -203,6 +203,20 @@ def po_print(request, po_id):
     company = CompanyInfo.objects.first()
     return render(request, 'purchasing/po_print.html', {'po': po, 'company': company})
 
+# 🌟 [NEW] ฟังก์ชันสำหรับพิมพ์ "ใบขอเสนอราคา (RFQ)" แบบไม่มีราคา (ฝั่งน็อคดาวน์)
+@login_required
+def po_print_rfq(request, po_id):
+    if not can_create_po(request.user):
+        return redirect('po_list')
+
+    po = get_object_or_404(PurchaseOrder, id=po_id)
+    company = CompanyInfo.objects.first()
+
+    return render(request, 'purchasing/po_rfq_print.html', {
+        'po': po,
+        'company': company
+    })
+
 @login_required
 def po_edit(request, po_id):
     if not can_create_po(request.user): return redirect('purchasing_dashboard')
@@ -225,10 +239,7 @@ def po_edit(request, po_id):
             po.save()
 
             messages.success(request, f"✅ แก้ไขและบันทึกใบสั่งซื้อ {po.code} เรียบร้อยแล้ว!")
-            if po.ppo_ref:
-                try: return redirect('ppo_detail', pk=PurchasePreparation.objects.get(code=po.ppo_ref).id)
-                except: return redirect('po_list')
-            else: return redirect('po_list')
+            return redirect('po_list') # 🌟 [FIXED] บังคับให้เด้งกลับหน้าตาราง PO ทันที
         else: messages.error(request, "❌ กรุณาตรวจสอบข้อมูลให้ครบถ้วน")
     else:
         form = PurchaseOrderForm(instance=po)

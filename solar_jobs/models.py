@@ -1,11 +1,8 @@
 from django.db import models
 from django.utils import timezone
 import datetime
-
-from master_data.models import Customer
 from hr.models import Employee
-# 🌟 [FIXED] นำเข้า SolarQuotation มาเพื่อเชื่อมโยงฐานข้อมูล 🌟
-from solar_sales.models import SolarQuotation
+from solar_sales.models import SolarQuotation, SolarCustomer
 from solar_inventory.models import SolarProduct
 
 class SubcontractorTeam(models.Model):
@@ -38,8 +35,7 @@ class SolarJob(models.Model):
 
     # 🌟 [NEW] เพิ่มฟิลด์อ้างอิงใบเสนอราคา เพื่อผูกข้อมูลกัน 🌟
     quotation_ref = models.ForeignKey(SolarQuotation, on_delete=models.SET_NULL, null=True, blank=True, related_name='center_jobs', verbose_name="ใบเสนอราคาอ้างอิง")
-
-    customer = models.ForeignKey(Customer, on_delete=models.SET_NULL, null=True, verbose_name="ลูกค้า")
+    customer = models.ForeignKey(SolarCustomer, on_delete=models.SET_NULL, null=True, verbose_name="ลูกค้า")
     salesperson = models.ForeignKey(Employee, related_name='solar_sales_jobs', on_delete=models.SET_NULL, null=True, verbose_name="พนักงานขาย")
     package_sold = models.ForeignKey(SolarProduct, on_delete=models.SET_NULL, null=True, related_name='solar_jobs', verbose_name="แพ็กเกจที่ขาย (FG)")
 
@@ -163,46 +159,6 @@ class SolarExpense(models.Model):
 
     def __str__(self):
         return f"{self.job.code} - {self.get_expense_type_display()} ({self.amount} บาท)"
-
-# ==========================================
-# 🛒 ระบบใบเตรียมสั่งซื้อสำหรับโซล่าเซลล์ (Solar PPO)
-# ==========================================
-class SolarPurchasePreparation(models.Model):
-    code = models.CharField(max_length=20, unique=True, verbose_name="เลขที่ใบเตรียมสั่งซื้อ (Solar PPO)")
-    job = models.ForeignKey(SolarJob, on_delete=models.CASCADE, related_name='ppos', verbose_name="อ้างอิงใบสั่งงาน (JOB)")
-    created_at = models.DateTimeField(auto_now_add=True)
-    created_by = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, verbose_name="ผู้จัดทำ (สโตร์)")
-    status = models.CharField(max_length=20, choices=[('PENDING', 'รอจัดซื้อดำเนินการ'), ('ORDERED', 'สั่งซื้อแล้ว'), ('CANCELLED', 'ยกเลิก')], default='PENDING')
-
-    class Meta:
-        verbose_name = "ใบเตรียมสั่งซื้อโซล่า (Solar PPO)"
-        verbose_name_plural = "ใบเตรียมสั่งซื้อโซล่า (Solar PPO)"
-
-    def __str__(self):
-        return self.code
-
-    def save(self, *args, **kwargs):
-        if not self.code:
-            today = datetime.date.today()
-            thai_year = (today.year + 543) % 100
-            prefix = f"SPPO{thai_year:02d}{today.strftime('%m')}"
-
-            last_ppo = SolarPurchasePreparation.objects.filter(code__startswith=prefix).order_by('code').last()
-            if last_ppo:
-                try: seq = int(last_ppo.code.replace(prefix, '')) + 1
-                except: seq = 1
-            else:
-                seq = 1
-            self.code = f"{prefix}{seq:03d}"
-        super().save(*args, **kwargs)
-
-class SolarPurchasePreparationItem(models.Model):
-    ppo = models.ForeignKey(SolarPurchasePreparation, on_delete=models.CASCADE, related_name='items')
-    product = models.ForeignKey(SolarProduct, on_delete=models.CASCADE, verbose_name="วัสดุที่ขาด")
-    quantity_needed = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="จำนวนที่ต้องการสั่งเพิ่ม")
-
-    def __str__(self):
-        return f"{self.product.name} ({self.quantity_needed})"
 
 # ==========================================
 # 🌟 [NEW] ตารางที่ 1: ระบบตั้งเบิกค่าสำรวจหน้างาน (Solar Survey Claim) 🌟
@@ -344,3 +300,142 @@ class SolarOtherExpense(models.Model):
             seq = int(last.code.split('-')[-1]) + 1 if last else 1
             self.code = f"{prefix}-{seq:04d}"
         super().save(*args, **kwargs)
+
+# ==========================================
+# 🌟 [NEW] ระบบแจ้งซ่อมและบริการหลังการขาย (Solar After-Sales Service) 🌟
+# ==========================================
+
+class SolarServiceCategory(models.Model):
+    name = models.CharField(max_length=100, unique=True, verbose_name="ชื่อหมวดหมู่ปัญหา (โซล่าเซลล์)")
+    description = models.TextField(blank=True, verbose_name="คำอธิบายเพิ่มเติม (ถ้ามี)")
+    is_active = models.BooleanField(default=True, verbose_name="สถานะใช้งาน")
+
+    class Meta:
+        verbose_name = "หมวดหมู่ปัญหาโซล่าเซลล์"
+        verbose_name_plural = "หมวดหมู่ปัญหาโซล่าเซลล์"
+
+    def __str__(self):
+        return self.name
+
+class SolarServiceTicket(models.Model):
+    STATUS_CHOICES = [
+        ('PENDING', 'รอหัวหน้าช่างประเมิน'),
+        ('WAITING_APPROVAL', 'รอเซลส์คอนเฟิร์มราคา (งานมีค่าใช้จ่าย)'),
+        ('IN_PROGRESS', 'กำลังดำเนินการ / นัดหมายช่างแล้ว'),
+        ('COMPLETED', 'ซ่อมเสร็จสิ้น (รอปิดงาน)'),
+        ('CLOSED', 'ปิดจ๊อบ/เคลียร์บัญชีแล้ว (ซ่อนจากกระดาน)'),
+        ('CANCELLED', 'ยกเลิกการแจ้งซ่อม')
+    ]
+
+    URGENCY_CHOICES = [
+        ('NORMAL', 'ปกติ (ตามคิว)'),
+        ('URGENT', 'ด่วนมาก (ฉุกเฉิน)')
+    ]
+
+    code = models.CharField(max_length=20, unique=True, verbose_name="เลขที่ใบแจ้งซ่อมโซล่า")
+    # 🌟 ผูกกับ SolarJob แทน ProductionOrder
+    job = models.ForeignKey('SolarJob', on_delete=models.CASCADE, related_name='service_tickets', verbose_name="อ้างอิงใบสั่งงาน (SOL)")
+    salesperson = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, related_name='solar_created_tickets', verbose_name="เซลส์ผู้รับเรื่อง")
+
+    issue_category = models.ForeignKey(SolarServiceCategory, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="หมวดหมู่ปัญหา")
+    description = models.TextField(verbose_name="รายละเอียดอาการเสีย")
+    urgency = models.CharField(max_length=10, choices=URGENCY_CHOICES, default='NORMAL', verbose_name="ความเร่งด่วน")
+
+    customer_phone = models.CharField(max_length=50, blank=True, null=True, verbose_name="เบอร์โทรติดต่อหน้างาน")
+    customer_location = models.TextField(blank=True, null=True, verbose_name="สถานที่/พิกัดหน้างาน")
+
+    is_warranty = models.BooleanField(default=True, verbose_name="อยู่ในระยะประกัน (ซ่อมฟรี)")
+    estimated_cost = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, verbose_name="ประเมินค่าใช้จ่าย (กรณีหมดประกัน)")
+    cost_comment = models.TextField(blank=True, verbose_name="หมายเหตุค่าใช้จ่ายจากช่าง")
+
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING', verbose_name="สถานะงานซ่อม")
+    # 🌟 ผูกกับ SubcontractorTeam ของฝั่งโซล่า
+    technician_team = models.ForeignKey('SubcontractorTeam', on_delete=models.SET_NULL, null=True, blank=True, verbose_name="ทีมช่างที่เข้าซ่อม")
+    appointment_date = models.DateField(null=True, blank=True, verbose_name="วันที่นัดหมายเข้าซ่อม")
+
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="วันที่เปิดแจ้งซ่อม")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="อัปเดตล่าสุด")
+    completed_at = models.DateTimeField(null=True, blank=True, verbose_name="วันที่ซ่อมเสร็จ")
+
+    class Meta:
+        verbose_name = "ตั๋วแจ้งซ่อมโซล่า (Solar Service Ticket)"
+        verbose_name_plural = "ตั๋วแจ้งซ่อมโซล่า (Solar Service Tickets)"
+
+    def __str__(self):
+        return f"{self.code} - {self.job.customer.name if self.job and self.job.customer else '-'}"
+
+    def save(self, *args, **kwargs):
+        if not self.code:
+            now = timezone.now()
+            thai_year = (now.year + 543) % 100
+            prefix = f"SSV-{thai_year:02d}{now.strftime('%m')}"
+            last = SolarServiceTicket.objects.filter(code__startswith=prefix).order_by('code').last()
+            seq = int(last.code.split('-')[-1]) + 1 if last else 1
+            self.code = f"{prefix}-{seq:04d}"
+        super().save(*args, **kwargs)
+
+class SolarServiceTicketMedia(models.Model):
+    MEDIA_TYPE_CHOICES = [
+        ('BEFORE', 'ก่อนซ่อม (อาการเสีย)'),
+        ('AFTER', 'หลังซ่อม (ผลงาน)')
+    ]
+    ticket = models.ForeignKey(SolarServiceTicket, related_name='media_files', on_delete=models.CASCADE)
+    media_type = models.CharField(max_length=10, choices=MEDIA_TYPE_CHOICES, default='BEFORE')
+    file = models.FileField(upload_to='solar_service_media/%Y/%m/', verbose_name="ไฟล์รูป/วิดีโอ")
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "สื่อ - แจ้งซ่อมโซล่า"
+        verbose_name_plural = "สื่อ - แจ้งซ่อมโซล่า"
+
+class SolarServiceLaborClaim(models.Model):
+    STATUS_CHOICES = [
+        ('UNCLAIMED', 'รอตั้งเบิก (ในตะกร้า)'),
+        ('PENDING', 'รอจ่ายเงิน (Pending)'),
+        ('PAID', 'จ่ายเงินแล้ว (Paid)')
+    ]
+
+    code = models.CharField(max_length=20, unique=True, verbose_name="เลขที่ใบเบิก")
+    service_ticket = models.ForeignKey(SolarServiceTicket, on_delete=models.CASCADE, related_name='labor_claims', verbose_name="อ้างอิงใบแจ้งซ่อมโซล่า")
+    requester = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, verbose_name="พนักงานผู้เบิก")
+    technician_name = models.CharField(max_length=150, verbose_name="ชื่อช่าง/ทีมซ่อมโซล่า")
+    amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, verbose_name="ยอดเบิกค่าแรงซ่อม")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='UNCLAIMED', verbose_name="สถานะการจ่ายเงิน")
+    slip_image = models.ImageField(upload_to='solar_service_labor_slips/%Y/%m/', null=True, blank=True, verbose_name="หลักฐาน/บิลค่าแรง")
+
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="วันที่ตั้งเบิก")
+    paid_at = models.DateTimeField(null=True, blank=True, verbose_name="วันที่จ่ายเงิน")
+
+    class Meta:
+        verbose_name = "ใบเบิกค่าแรงซ่อมโซล่า"
+        verbose_name_plural = "ใบเบิกค่าแรงซ่อมโซล่า"
+
+    def __str__(self):
+        return f"{self.code} - {self.technician_name}"
+
+    def save(self, *args, **kwargs):
+        if not self.code:
+            now = timezone.now()
+            thai_year = (now.year + 543) % 100
+            prefix = f"SSLC-{thai_year:02d}{now.strftime('%m')}"
+            last = SolarServiceLaborClaim.objects.filter(code__startswith=prefix).order_by('code').last()
+            seq = int(last.code.split('-')[-1]) + 1 if last else 1
+            self.code = f"{prefix}-{seq:04d}"
+        super().save(*args, **kwargs)
+
+# ==========================================
+# 🌟 [NEW] ตารางเก็บรูปถ่ายผลงานติดตั้งหน้าไซต์งาน 🌟
+# ==========================================
+class SolarJobMedia(models.Model):
+    job = models.ForeignKey(SolarJob, related_name='installation_media', on_delete=models.CASCADE, verbose_name="อ้างอิงใบสั่งงาน")
+    image = models.ImageField(upload_to='solar_install_photos/%Y/%m/', verbose_name="รูปถ่ายผลงานติดตั้ง")
+    description = models.CharField(max_length=255, blank=True, null=True, verbose_name="คำอธิบาย (เช่น แผงทิศใต้, ตู้ Inverter)")
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    uploaded_by = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, verbose_name="ผู้อัปโหลด (ช่าง)")
+
+    class Meta:
+        verbose_name = "รูปถ่ายผลงานติดตั้งโซล่าเซลล์"
+        verbose_name_plural = "รูปถ่ายผลงานติดตั้งโซล่าเซลล์"
+
+    def __str__(self):
+        return f"Photo for {self.job.code}"

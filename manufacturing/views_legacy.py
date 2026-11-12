@@ -22,7 +22,7 @@ from django.db import transaction
 from django.urls import reverse # 🌟 นำเข้า reverse เพิ่มเติม (ใส่ไว้บรรทัดบนสุดของไฟล์ร่วมกับอันอื่น หรือใส่ตรงนี้ก็ได้ครับ)
 
 # Models
-from .models import ProductionOrder, ProductionOrderMaterial, BOM, BOMItem, Branch, MfgBranch, Salesperson, ProductionStatus, ProductionTeam, DeliveryStatus, Transporter, QCInspectionLog, QCReceiptDoc
+from .models import ProductionOrder, ProductionOrderMaterial, BOM, BOMItem, Branch, MfgBranch, Salesperson, ProductionStatus, ProductionTeam, DeliveryStatus, Transporter, QCInspectionLog, QCReceiptDoc, QCPassedMedia, QCFailedMedia
 from master_data.models import CompanyInfo
 from inventory.models import Product, InventoryDoc, StockMovement
 from purchasing.models import PurchaseOrder, PurchaseOrderItem, PurchasePreparation
@@ -579,20 +579,22 @@ def materials_ready(request, pk):
         messages.error(request, f"❌ ไม่สามารถตัดสต็อกได้! วัตถุดิบในคลังไม่พอ: {err_msg}")
         return redirect('inventory_board')
 
-    doc_out = InventoryDoc.objects.create(doc_type='GI', reference=f"เบิกผลิต {order.code}", description=f"เบิกวัตถุดิบเตรียมผลิต {order.product.name}", created_by=request.user)
+    # 🌟 [UPDATE] สร้างใบเบิกพร้อมติด Tag 'RM' เพื่อให้รันเลขเอกสารแบบใหม่
+    doc_out = InventoryDoc(
+        doc_type='GI',
+        reference=f"เบิกผลิต {order.code}",
+        description=f"เบิกวัตถุดิบเตรียมผลิต {order.product.name}",
+        created_by=request.user
+    )
+    doc_out._doc_category = 'RM' # ส่งซิกว่าเป็น RM (วัตถุดิบ)
+    doc_out.save()
     for item in job_materials:
         StockMovement.objects.create(doc=doc_out, product=item.raw_material, quantity=Decimal(str(item.quantity)), movement_type='OUT', created_by=request.user)
 
-    if order.is_onsite:
-        order.status = 'COMPLETED'
-        order.finish_date = timezone.now().date()
-        order.is_qc_passed = True
-        order.save()
-        messages.success(request, f"🚀 ตัดสต็อกสำเร็จ! (ประกอบหน้างาน) สถานะกระโดดไป 'รอจัดส่ง' ให้ขนส่งเรียบร้อยแล้ว!")
-    else:
-        order.status = 'IN_PROGRESS'
-        order.save()
-        messages.success(request, f"✅ ตัดสต็อกสำเร็จ! สถานะเปลี่ยนเป็น 'งานอยู่ระหว่างผลิต' แล้ว")
+    # 🌟 [FIXED] ยกเลิกทางลัด On-site งานทุกประเภทเมื่อเบิกของเสร็จ ต้องไปที่ "กระดานผลิต (IN_PROGRESS)" ทั้งหมด
+    order.status = 'IN_PROGRESS'
+    order.save()
+    messages.success(request, f"✅ ตัดสต็อกสำเร็จ! สถานะเปลี่ยนเป็น 'งานอยู่ระหว่างผลิต' เพื่อรอช่างและ QC ตรวจสอบแล้ว")
 
     return redirect('inventory_board')
 
@@ -940,6 +942,56 @@ def ajax_get_fg_by_category(request):
     product_list = list(products.values('id', 'name', 'code'))
     return JsonResponse({'products': product_list})
 
+# ==========================================
+# 🌟 [NEW] ดาวน์โหลดไฟล์แม่แบบ Excel สำหรับ BOM 🌟
+# ==========================================
+@login_required
+def download_bom_template(request):
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment
+
+    # สร้างไฟล์ Excel เปล่า
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "BOM_Template"
+
+    # กำหนดหัวคอลัมน์
+    headers = ['FG SKU', 'RM SKU', 'Quantity']
+    ws.append(headers)
+
+    # ตกแต่งหัวคอลัมน์ให้สวยงาม (สีพื้นหลังเขียว, ตัวหนา, จัดกึ่งกลาง)
+    header_fill = PatternFill(start_color="4CAF50", end_color="4CAF50", fill_type="solid")
+    header_font = Font(color="FFFFFF", bold=True)
+    align_center = Alignment(horizontal="center", vertical="center")
+
+    for col_num, header in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col_num)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = align_center
+
+    # ปรับความกว้างคอลัมน์
+    ws.column_dimensions['A'].width = 25
+    ws.column_dimensions['B'].width = 25
+    ws.column_dimensions['C'].width = 15
+
+    # ใส่ข้อมูลตัวอย่าง 1 บรรทัด (เพื่อให้ผู้ใช้เข้าใจรูปแบบ)
+    ws.append(['ตัวอย่าง: SD169', 'ตัวอย่าง: RM-6910-001', 1])
+
+    # ทำให้แถวข้อมูลตัวอย่างเป็นตัวเอียงสีเทา
+    sample_font = Font(italic=True, color="808080")
+    for col_num in range(1, 4):
+        ws.cell(row=2, column=col_num).font = sample_font
+
+    # เตรียมส่งไฟล์ให้ผู้ใช้ดาวน์โหลด
+    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition'] = 'attachment; filename="BOM_Import_Template.xlsx"'
+    wb.save(response)
+
+    return response
+
+# (ฟังก์ชัน import_bom_excel เดิมของคุณปอนด์จะอยู่ตรงนี้ครับ)
+
 @login_required
 def import_bom_excel(request):
     if request.method == 'POST' and request.FILES.get('excel_file'):
@@ -986,7 +1038,15 @@ def ajax_search_raw_material(request):
     products = Product.objects.filter(product_type='RM', is_active=True)
     if q: products = products.filter(Q(code__icontains=q) | Q(name__icontains=q))
     products = products.order_by('code')[:30]
-    results = [{'id': p.id, 'text': f"{p.code} - {p.name}"} for p in products]
+
+    # 🌟 [UPDATE] แนบค่า cost_price ส่งกลับไปด้วย เพื่อให้หน้าเว็บเอาไปคำนวณแบบ Real-time
+    results = [
+        {
+            'id': p.id,
+            'text': f"{p.code} - {p.name}",
+            'cost_price': float(p.cost_price or 0) # ส่งราคาไปให้หน้าเว็บ
+        } for p in products
+    ]
     return JsonResponse({'results': results})
 
 # ==========================================
@@ -1217,8 +1277,38 @@ def process_qc(request, pk):
         order.qc_aircon = request.POST.get('qc_aircon') == 'on'
 
         if action == 'save_progress':
+            comments = request.POST.get('comments', '')
+
+            # 1. กวาดไฟล์ "ผ่าน" บันทึกลงตารางทันที
+            passed_files = request.FILES.getlist('passed_media')
+            for f in passed_files:
+                QCPassedMedia.objects.create(
+                    production_order=order,
+                    uploaded_by=getattr(request.user, 'employee', None),
+                    file=f
+                )
+
+            # 2. กวาดไฟล์ "ไม่ผ่าน" และคอมเมนต์ บันทึกเป็นร่าง(Draft) ในรอบปัจจุบัน
+            failed_files = request.FILES.getlist('failed_media')
+            if failed_files or comments:
+                log, created = QCInspectionLog.objects.get_or_create(
+                    production_order=order,
+                    round_number=order.rework_count + 1,
+                    defaults={
+                        'inspector': getattr(request.user, 'employee', None),
+                        'status': 'FAILED',
+                        'comments': comments
+                    }
+                )
+                if not created and comments:
+                    log.comments = comments
+                    log.save()
+
+                for f in failed_files:
+                    QCFailedMedia.objects.create(qc_log=log, file=f)
+
             order.save()
-            messages.success(request, f"💾 บันทึกความคืบหน้าการตรวจ QC สำหรับ {order.code} เรียบร้อยแล้ว! (รอตรวจต่อ)")
+            messages.success(request, f"💾 บันทึกความคืบหน้าและรูปภาพสำหรับ {order.code} ลงฐานข้อมูลเรียบร้อยแล้ว!")
             return redirect('qc_board')
 
         elif action == 'pass':
@@ -1226,7 +1316,6 @@ def process_qc(request, pk):
             alloc_name = f"{order.product.name} [{order.code}]"
             if order.customer_name: alloc_name += f" (ลค. {order.customer_name})"
 
-            # 🌟 [FIXED] เพิ่มฟังก์ชันคัดลอกรูปภาพจากรหัสแม่ ไปใส่รหัสลูก
             allocated_product, created = Product.objects.get_or_create(
                 code=alloc_code,
                 defaults={
@@ -1234,18 +1323,16 @@ def process_qc(request, pk):
                     'product_type': 'FG', 'sell_price': order.product.sell_price,
                     'cost_price': order.product.cost_price, 'min_level': 0,
                     'stock_qty': 0, 'is_active': True,
-                    'image': order.product.image if order.product.image else None, # 👈 คำสั่งโคลนรูปภาพ
+                    'image': order.product.image if order.product.image else None,
                 }
             )
 
-            # 🌟 [NEW] เพิ่มเลขใบเสนอราคาต่อท้าย Note
             ref_doc_text = ""
             if order.quotation_ref:
                 ref_doc_text = f" อ้างอิงใบเสนอราคา: {order.quotation_ref.code}"
 
             note_text = f"รับสินค้าจากฝ่ายผลิต {order.code} (ผ่าน QC){ref_doc_text}"
 
-            # 🌟 [FIXED] แยกตะกร้ารับเข้าเป็นของฝ่ายผลิตโดยเฉพาะ (GR-FG)
             qc_doc = QCReceiptDoc.objects.create(production_order=order, product=allocated_product, quantity=Decimal(str(order.quantity)), created_by=request.user)
             StockMovement.objects.create(doc=None, reference_doc=qc_doc.doc_no, note=note_text, product=allocated_product, quantity=Decimal(str(order.quantity)), movement_type='IN', created_by=request.user)
 
@@ -1254,30 +1341,59 @@ def process_qc(request, pk):
             order.is_qc_passed = True
             order.save()
 
-            messages.success(request, f"🎉 ตรวจผ่านเรียบร้อย! รับ {allocated_product.name} เข้าคลังแล้ว งานย้ายไปช่อง W4 พร้อมส่ง")
+            # 🌟 [NEW] บันทึกประวัติการตรวจ "ผ่าน" ลงในฐานข้อมูล เพื่อให้โชว์ในหน้า My QC Log
+            QCInspectionLog.objects.create(
+                production_order=order,
+                round_number=order.rework_count + 1,
+                inspector=getattr(request.user, 'employee', None),
+                status='PASSED',
+                comments="ผ่านการตรวจสอบเรียบร้อย"
+            )
+
+            passed_files = request.FILES.getlist('passed_media')
+            for f in passed_files:
+                QCPassedMedia.objects.create(
+                    production_order=order,
+                    uploaded_by=getattr(request.user, 'employee', None),
+                    file=f
+                )
+
+            messages.success(request, f"🎉 ตรวจผ่านเรียบร้อย! รับ {allocated_product.name} เข้าคลังแล้ว พร้อมบันทึกคลังภาพ/คลิป")
 
         elif action == 'fail':
             comments = request.POST.get('comments', '')
             order.rework_count += 1
             order.status = 'REWORK'
 
-            log = QCInspectionLog.objects.create(
+            # ดึง Log เดิมที่อาจจะถูกร่างไว้ตอนกด "บันทึกไว้ก่อน" ขึ้นมาใช้งานจริง
+            log, created = QCInspectionLog.objects.get_or_create(
                 production_order=order,
                 round_number=order.rework_count,
-                inspector=getattr(request.user, 'employee', None),
-                status='FAILED',
-                comments=comments
+                defaults={
+                    'inspector': getattr(request.user, 'employee', None),
+                    'status': 'FAILED',
+                    'comments': comments
+                }
             )
+
+            log.comments = comments
+            log.inspector = getattr(request.user, 'employee', None)
 
             if 'defect_image_1' in request.FILES:
                 log.defect_image_1 = request.FILES['defect_image_1']
             if 'defect_image_2' in request.FILES:
                 log.defect_image_2 = request.FILES['defect_image_2']
-
             log.save()
-            order.save()
 
-            messages.warning(request, f"🚨 ตีกลับงาน {order.code} ให้ช่างแก้ไขเรียบร้อยแล้ว (การตีกลับรอบที่ {order.rework_count})")
+            failed_files = request.FILES.getlist('failed_media')
+            for f in failed_files:
+                QCFailedMedia.objects.create(
+                    qc_log=log,
+                    file=f
+                )
+
+            order.save()
+            messages.warning(request, f"🚨 ตีกลับงาน {order.code} ให้ช่างแก้ไขเรียบร้อย พร้อมแนบรูป/คลิปตำหนิ (รอบที่ {order.rework_count})")
 
     return redirect('qc_board')
 
@@ -1684,6 +1800,52 @@ def print_logistics_claim(request, pk):
     amount_text = get_thai_baht_text(claim.total_amount)
     return render(request, 'manufacturing/print_logistics_claim.html', {'claim': claim, 'jobs': jobs, 'company': company, 'amount_text': amount_text})
 
+# ==========================================
+# 🌟 [NEW] หน้าต่างรวมประวัติการจัดส่งสินค้า (Master Logistics Log) 🌟
+# ==========================================
+@login_required
+def logistics_history_log(request):
+    # ดึงเฉพาะงานที่ถูกจัดส่งเรียบร้อยแล้ว หรือเสร็จสมบูรณ์แล้ว
+    orders = ProductionOrder.objects.select_related(
+        'product', 'branch', 'transporter', 'delivery_status', 'salesperson'
+    ).filter(
+        Q(delivery_status__name__in=['ส่งมอบสำเร็จ', 'ลูกค้าเซ็นรับแล้ว', 'จัดส่งเรียบร้อย']) |
+        Q(is_onsite=True, status='COMPLETED')
+    ).order_by('-delivery_date', '-finish_date', '-id')
+
+    search_q = request.GET.get('q', '')
+    search_transporter = request.GET.get('transporter', '')
+    start_date = request.GET.get('start_date', '')
+    end_date = request.GET.get('end_date', '')
+
+    if search_q:
+        orders = orders.filter(
+            Q(code__icontains=search_q) |
+            Q(customer_name__icontains=search_q) |
+            Q(product__name__icontains=search_q)
+        )
+    if search_transporter:
+        orders = orders.filter(transporter_id=search_transporter)
+    if start_date:
+        orders = orders.filter(delivery_date__gte=start_date)
+    if end_date:
+        orders = orders.filter(delivery_date__lte=end_date)
+
+    paginator = Paginator(orders, 30) # โชว์หน้าละ 30 รายการ
+    page_num = request.GET.get('page', 1)
+    page_obj = paginator.get_page(page_num)
+
+    transporters = Transporter.objects.all().order_by('name')
+
+    return render(request, 'manufacturing/logistics_history_log.html', {
+        'page_obj': page_obj,
+        'search_q': search_q,
+        'search_transporter': search_transporter,
+        'start_date': start_date,
+        'end_date': end_date,
+        'transporters': transporters,
+    })
+
 @login_required
 def logistics_claim_history(request):
     claims = LogisticsClaim.objects.select_related('transporter').prefetch_related('production_orders', 'production_orders__quotation_ref').all().order_by('-created_at')
@@ -1770,12 +1932,26 @@ def update_bom_labor_cost(request, pk):
     if request.method == 'POST':
         bom = get_object_or_404(BOM, pk=pk)
         try:
+            # 1. ค่าแรงประกอบ
             labor_val = request.POST.get('labor_cost', '0').replace(',', '')
             bom.labor_cost = Decimal(labor_val)
+
+            # 2. ค่าบริหารการขาย
+            bom.sales_admin_type = request.POST.get('sales_admin_type', 'PERCENT')
+            bom.sales_admin_value = Decimal(request.POST.get('sales_admin_value', '0').replace(',', ''))
+
+            # 3. ค่าขนส่ง
+            bom.freight_type = request.POST.get('freight_type', 'THB')
+            bom.freight_value = Decimal(request.POST.get('freight_value', '0').replace(',', ''))
+
+            # 4. ค่าใช้จ่ายอื่นๆ
+            bom.misc_expense_type = request.POST.get('misc_expense_type', 'THB')
+            bom.misc_expense_value = Decimal(request.POST.get('misc_expense_value', '0').replace(',', ''))
+
             bom.save()
-            messages.success(request, f"✅ บันทึกค่าแรงประกอบสำหรับ {bom.product.code} เรียบร้อยแล้ว")
+            messages.success(request, f"✅ บันทึกต้นทุนการผลิตสำหรับ {bom.product.code} เรียบร้อยแล้ว")
         except (ValueError, InvalidOperation):
-            messages.error(request, "❌ เกิดข้อผิดพลาดในการบันทึกตัวเลขค่าแรงประกอบ")
+            messages.error(request, "❌ เกิดข้อผิดพลาดในการบันทึกตัวเลขต้นทุน")
     return redirect('bom_list')
 
 @login_required
@@ -1787,11 +1963,435 @@ def bom_list(request):
             0,
             output_field=DecimalField(max_digits=12, decimal_places=2)
         )
-    ).annotate(
-        estimated_profit=ExpressionWrapper(
-            F('product__sell_price') - (F('total_rm_cost') + F('labor_cost')),
-            output_field=DecimalField(max_digits=12, decimal_places=2)
-        )
     ).order_by('-id')
 
+    # 🌟 สมองกลคำนวณต้นทุนใหม่แบบละเอียด 🌟
+    for bom in boms:
+        sell_price = bom.product.sell_price or Decimal('0.00')
+        total_rm = bom.total_rm_cost or Decimal('0.00')
+        labor = bom.labor_cost or Decimal('0.00')
+
+        # 1. ค่าบริหารการขาย (ถ้าระบุเป็น % ให้หักออก 10% จากราคาขายก่อนคูณ)
+        sales_admin = Decimal('0.00')
+        if bom.sales_admin_type == 'PERCENT':
+            base_for_admin = sell_price * Decimal('0.90')
+            sales_admin = base_for_admin * (bom.sales_admin_value / Decimal('100'))
+        else:
+            sales_admin = bom.sales_admin_value
+
+        # 2. ค่าขนส่ง (ถ้าระบุเป็น % ให้คูณจากราคาขายเต็ม)
+        freight = Decimal('0.00')
+        if bom.freight_type == 'PERCENT':
+            freight = sell_price * (bom.freight_value / Decimal('100'))
+        else:
+            freight = bom.freight_value
+
+        # 3. ค่าใช้จ่ายอื่นๆ (ถ้าระบุเป็น % ให้คูณจากราคาขายเต็ม)
+        misc = Decimal('0.00')
+        if bom.misc_expense_type == 'PERCENT':
+            misc = sell_price * (bom.misc_expense_value / Decimal('100'))
+        else:
+            misc = bom.misc_expense_value
+
+        # คำนวณกำไรสุทธิ: ราคาขาย - (ต้นทุนวัตถุดิบ + ค่าแรง + ค่าบริหาร + ค่าขนส่ง + อื่นๆ)
+        bom.estimated_profit = sell_price - (total_rm + labor + sales_admin + freight + misc)
+
+        # แนบต้นทุนแต่ละก้อนไปแสดงผลหน้าเว็บด้วย (สำหรับแนวทาง B ที่ต้องแสดงทุกคอลัมน์)
+        bom.calculated_sales_admin = sales_admin
+        bom.calculated_freight = freight
+        bom.calculated_misc = misc
+
+        # คำนวณ % กำไร
+        if sell_price > 0:
+            bom.profit_percentage = (bom.estimated_profit / sell_price) * Decimal('100')
+        else:
+            bom.profit_percentage = Decimal('0.00')
+
     return render(request, 'manufacturing/bom_list.html', {'boms': boms})
+
+# ==========================================
+# 🌟 ศูนย์รวมแฟ้มภาพและบริการ (Media Hub)
+# ==========================================
+@login_required
+def media_hub(request, pk):
+    # 1. ดึงข้อมูลใบสั่งผลิต (JOB)
+    order = get_object_or_404(ProductionOrder, pk=pk)
+
+    # 2. ดึงรูปภาพ/คลิป ที่ผ่าน QC แล้ว (สีเขียว)
+    passed_medias = order.passed_media.all().order_by('-id')
+
+    # 3. ดึงประวัติการตีกลับและรูปตำหนิ (สีแดง)
+    qc_logs = order.qc_logs.prefetch_related('failed_media').order_by('-round_number')
+
+    # 🌟 [NEW] 4. ดึงประวัติการแจ้งซ่อม (สีเหลือง)
+    service_tickets = order.service_tickets.all().order_by('-created_at')
+
+    return render(request, 'manufacturing/media_hub.html', {
+        'order': order,
+        'passed_medias': passed_medias,
+        'qc_logs': qc_logs,
+        'service_tickets': service_tickets, # 🌟 ส่งตัวแปรนี้ไปที่หน้าเว็บ
+    })
+
+@login_required
+def media_hub_list(request):
+    search_q = request.GET.get('q', '')
+
+    # ดึงข้อมูลใบสั่งผลิตทั้งหมดเรียงตามวันที่ล่าสุด
+    orders = ProductionOrder.objects.select_related(
+        'product', 'salesperson', 'production_team'
+    ).all().order_by('-id')
+
+    # ระบบค้นหา
+    if search_q:
+        orders = orders.filter(
+            Q(code__icontains=search_q) |
+            Q(customer_name__icontains=search_q) |
+            Q(product__name__icontains=search_q)
+        )
+
+    return render(request, 'manufacturing/media_hub_list.html', {
+        'orders': orders[:100],  # ดึงมาแสดงผลเบื้องต้น 100 รายการเพื่อไม่ให้เว็บโหลดช้า
+        'search_q': search_q,
+    })
+
+# ==========================================
+# 🌟 [UPDATED] ประวัติการทำงานส่วนบุคคล และ ศูนย์รวมประวัติสำหรับผู้บริหาร 🌟
+# ==========================================
+@login_required
+def my_production_log(request):
+    emp = getattr(request.user, 'employee', None)
+    team = emp.production_team if emp else None
+
+    # เช็คสิทธิ์ว่าเป็นผู้บริหารหรือแอดมินหรือไม่
+    is_manager = False
+    if request.user.is_superuser:
+        is_manager = True
+    elif emp:
+        rank = emp.business_rank.lower() if emp.business_rank else ""
+        if rank in ['manager', 'director', 'executive']:
+            is_manager = True
+
+    # 🌟 1. กรณีเป็นผู้บริหาร (Admin/Manager): ดึงประวัติที่เสร็จสิ้นของ "ทุกแผนก"
+    if is_manager:
+        orders = ProductionOrder.objects.select_related(
+            'product', 'salesperson', 'production_team', 'transporter', 'blueprint_approved_by'
+        ).filter(
+            # ดึงงานที่เสร็จสิ้นแล้วในมิติใดมิติหนึ่ง (ประกอบเสร็จ, ผ่าน QC, หรือส่งมอบแล้ว)
+            Q(status__in=['COMPLETED', 'CLOSED']) |
+            Q(is_qc_passed=True) |
+            Q(delivery_status__name__in=['ส่งมอบสำเร็จ', 'ลูกค้าเซ็นรับแล้ว', 'จัดส่งเรียบร้อย'])
+        ).order_by('-finish_date', '-id')[:100]
+
+    # 🌟 2. กรณีเป็นช่างทั่วไป: ดึงเฉพาะงานที่ "ทีมตัวเอง" ประกอบเสร็จ
+    elif team:
+        orders = ProductionOrder.objects.select_related(
+            'product', 'salesperson', 'production_team'
+        ).filter(
+            production_team=team,
+            status__in=['COMPLETED', 'CLOSED']
+        ).order_by('-finish_date', '-id')[:100]
+
+    # 🌟 3. กรณีไม่มีสังกัดทีมและไม่ใช่ผู้บริหาร
+    else:
+        orders = ProductionOrder.objects.none()
+
+    return render(request, 'manufacturing/my_production_log.html', {
+        'orders': orders,
+        'is_manager': is_manager, # ส่งตัวแปรไปบอกหน้าเว็บว่าเป็นผู้บริหาร
+    })
+
+@login_required
+def my_qc_log(request):
+    emp = getattr(request.user, 'employee', None)
+
+    # 🌟 1. เช็คสิทธิ์ว่าเป็นผู้บริหารหรือแอดมินหรือไม่
+    is_manager = False
+    if request.user.is_superuser:
+        is_manager = True
+    elif emp:
+        rank = emp.business_rank.lower() if emp.business_rank else ""
+        if rank in ['manager', 'director', 'executive']:
+            is_manager = True
+
+    # 🌟 2. ดึงประวัติแบบแยกสิทธิ์
+    if is_manager:
+        # แอดมิน/ผู้บริหาร: เห็นประวัติการตรวจของ "ทุกคน"
+        qc_logs = QCInspectionLog.objects.select_related(
+            'production_order', 'production_order__product', 'inspector'
+        ).all().order_by('-inspected_at')[:100]
+    else:
+        # พนักงานทั่วไป: เห็นเฉพาะประวัติที่ "ตัวเอง" เป็นคนตรวจ
+        qc_logs = QCInspectionLog.objects.select_related(
+            'production_order', 'production_order__product', 'inspector'
+        ).filter(inspector=emp).order_by('-inspected_at')[:100]
+
+    return render(request, 'manufacturing/my_qc_log.html', {
+        'qc_logs': qc_logs,
+        'is_manager': is_manager, # ส่งตัวแปรนี้ไปที่หน้าเว็บ
+    })
+
+# ==========================================
+# 🌟 [NEW] สมองกล: กระดานคิวงานแจ้งซ่อม (Service Board สำหรับช่าง) 🌟
+# ==========================================
+from .models import ServiceTicket
+
+@login_required
+def service_board(request):
+    # ดึงตั๋วแจ้งซ่อมทั้งหมดเรียงตามวันล่าสุด
+    tickets = ServiceTicket.objects.select_related('production_order', 'salesperson', 'production_team').all().order_by('-created_at')
+
+    col1_pending = []     # รอประเมิน / รอเซลส์คอนเฟิร์ม
+    col2_inprogress = []  # นัดช่างแล้ว กำลังซ่อม
+    col3_completed = []   # ซ่อมเสร็จแล้ว (โชว์แค่ 30 งานล่าสุดพอ)
+
+    completed_count = 0
+    for t in tickets:
+        if t.status in ['PENDING', 'WAITING_APPROVAL']:
+            col1_pending.append(t)
+        elif t.status == 'IN_PROGRESS':
+            col2_inprogress.append(t)
+        elif t.status in ['COMPLETED', 'CANCELLED']:
+            if completed_count < 30:
+                col3_completed.append(t)
+                completed_count += 1
+
+    teams = ProductionTeam.objects.all().order_by('name')
+
+    return render(request, 'manufacturing/service_board.html', {
+        'col1_pending': col1_pending,
+        'col2_inprogress': col2_inprogress,
+        'col3_completed': col3_completed,
+        'teams': teams
+    })
+
+@login_required
+def process_service_ticket(request, ticket_id):
+    ticket = get_object_or_404(ServiceTicket, pk=ticket_id)
+
+    if request.method == 'POST':
+        action = request.POST.get('action')
+
+        # 1. หัวหน้าช่างประเมินราคา (กรณีหมดประกัน)
+        if action == 'estimate_cost':
+            # 🌟 [FIXED] ดักจับกรณีช่างลืมกรอกเลข
+            cost_str = request.POST.get('estimated_cost', '0')
+            if not cost_str: cost_str = '0'
+            cost = cost_str.replace(',', '')
+
+            comment = request.POST.get('cost_comment', '')
+
+            ticket.estimated_cost = Decimal(cost)
+            ticket.cost_comment = comment
+            ticket.status = 'WAITING_APPROVAL' # เด้งกลับไปให้เซลส์คอนเฟิร์ม
+            ticket.save()
+            messages.warning(request, f"ส่งประเมินราคา ฿{ticket.estimated_cost:,.2f} ให้เซลส์เพื่อคอนเฟิร์มกับลูกค้าแล้ว")
+
+        # 🌟 [NEW] หัวหน้าช่างอนุโลมซ่อมฟรี (ข้ามขั้นตอนเซลส์) 🌟
+        elif action == 'free_repair':
+            ticket.estimated_cost = Decimal('0.00')
+            ticket.cost_comment = "อนุโลมซ่อมฟรี (หัวหน้าช่างประเมินแล้วไม่มีค่าใช้จ่าย)"
+            # ไม่เปลี่ยนสถานะเป็น WAITING_APPROVAL เพื่อให้ช่างจ่ายงานต่อได้เลย
+            ticket.save()
+            messages.success(request, f"🎁 ดำเนินการอนุโลมซ่อมฟรี! คุณสามารถจ่ายงานให้ทีมช่างเข้าพื้นที่ได้เลยครับ")
+
+        # 2. จ่ายงานให้ทีมช่าง
+        elif action == 'assign_team':
+            team_id = request.POST.get('production_team')
+            apt_date = request.POST.get('appointment_date')
+
+            if team_id:
+                ticket.production_team_id = team_id
+                if apt_date:
+                    ticket.appointment_date = parse_date(apt_date)
+                ticket.status = 'IN_PROGRESS'
+                ticket.save()
+                messages.success(request, f"✅ จ่ายงานแจ้งซ่อม {ticket.code} ให้ทีมช่างเข้าพื้นที่เรียบร้อยแล้ว!")
+
+        # 3. ช่างซ่อมเสร็จ ปิดจ๊อบ
+        elif action == 'close_ticket':
+            after_files = request.FILES.getlist('after_media_files')
+            if after_files:
+                for f in after_files:
+                    from manufacturing.models import ServiceTicketMedia # ดึงโมเดลมาใช้
+                    ServiceTicketMedia.objects.create(
+                        ticket=ticket,
+                        media_type='AFTER',
+                        file=f
+                    )
+
+                ticket.status = 'COMPLETED'
+                ticket.completed_at = timezone.now()
+                ticket.save()
+                messages.success(request, f"🎉 ปิดจ๊อบงานซ่อม {ticket.code} และบันทึกรูปลง Media Hub สำเร็จ!")
+            else:
+                messages.error(request, "❌ กรุณาแนบรูปภาพ/วิดีโอหลังซ่อมเสร็จอย่างน้อย 1 ไฟล์เพื่อปิดงาน")
+
+        # 🌟 [NEW] 4. หัวหน้าช่างกดปิดงาน นำออกจากกระดาน (Archive) 🌟
+        elif action == 'archive_ticket':
+            ticket.status = 'CLOSED'
+            ticket.save()
+            messages.success(request, f"📦 ปิดงานซ่อม {ticket.code} ถาวร! การ์ดถูกย้ายไปที่ตารางประวัติเรียบร้อยแล้วครับ")
+
+    return redirect('service_board')
+
+# ==========================================
+# 🌟 [NEW] ตารางประวัติแจ้งซ่อม และ ตั้งเบิกค่าแรงซ่อม 🌟
+# ==========================================
+@login_required
+def service_history_list(request):
+    if not is_sales_authorized(request.user):
+        messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์เข้าถึง")
+        return redirect('dashboard')
+
+    # ดึงตั๋วแจ้งซ่อมทั้งหมดเรียงตามวันล่าสุด (เน้นงานที่ปิดจ๊อบแล้ว)
+    tickets = ServiceTicket.objects.select_related('production_order', 'salesperson', 'production_team').all().order_by('-created_at')
+
+    search_q = request.GET.get('q', '')
+    status_filter = request.GET.get('status', '')
+
+    # 🌟 [NEW] รับค่าตัวกรองใหม่
+    search_team = request.GET.get('team', '')
+    start_date = request.GET.get('start_date', '')
+    end_date = request.GET.get('end_date', '')
+
+    if search_q:
+        tickets = tickets.filter(
+            Q(code__icontains=search_q) |
+            Q(production_order__customer_name__icontains=search_q) |
+            Q(production_order__code__icontains=search_q)
+        )
+    if status_filter:
+        tickets = tickets.filter(status=status_filter)
+
+    # 🌟 [NEW] กรองตามทีมช่างที่ประกอบงาน (อ้างอิงจากใบสั่งผลิตต้นทาง)
+    if search_team:
+        tickets = tickets.filter(production_order__production_team_id=search_team)
+
+    # 🌟 [NEW] กรองตามช่วงวันที่แจ้งซ่อม
+    if start_date:
+        tickets = tickets.filter(created_at__date__gte=start_date)
+    if end_date:
+        tickets = tickets.filter(created_at__date__lte=end_date)
+
+    paginator = Paginator(tickets, 20)
+    page_obj = paginator.get_page(request.GET.get('page'))
+
+    # 🌟 [NEW] ดึงรายชื่อทีมช่างทั้งหมดไปแสดงใน Dropdown
+    teams = ProductionTeam.objects.all().order_by('name')
+
+    return render(request, 'manufacturing/service_history_list.html', {
+        'page_obj': page_obj,
+        'search_q': search_q,
+        'status_filter': status_filter,
+        'search_team': search_team,
+        'start_date': start_date,
+        'end_date': end_date,
+        'status_choices': ServiceTicket.STATUS_CHOICES,
+        'teams': teams,
+    })
+
+@login_required
+@transaction.atomic
+def submit_service_labor_claim(request, ticket_id):
+    if request.method == 'POST':
+        ticket = get_object_or_404(ServiceTicket, pk=ticket_id)
+        current_emp = getattr(request.user, 'employee', None)
+
+        # 🌟 ป้องกันการเบิกซ้ำ 🌟
+        if ticket.labor_claims.exists():
+            messages.error(request, f"❌ ตั๋วแจ้งซ่อม {ticket.code} ถูกตั้งเบิกค่าแรงไปแล้ว ไม่สามารถตั้งเบิกซ้ำได้")
+            return redirect('service_history_list')
+
+        try:
+            amount_str = request.POST.get('claim_amount', '0').replace(',', '')
+            amount = Decimal(amount_str)
+            contractor_name = request.POST.get('technician_name', '')
+            slip_file = request.FILES.get('claim_slip')
+
+            if amount <= 0:
+                messages.error(request, "❌ ยอดเงินเบิกต้องมากกว่า 0 บาท")
+                return redirect('service_history_list')
+            if not slip_file:
+                messages.error(request, "❌ กรุณาแนบรูปบิล/หลักฐานหน้างาน")
+                return redirect('service_history_list')
+
+            # สร้างใบเบิกค่าแรงซ่อม และบันทึกลงตะกร้า (UNCLAIMED)
+            from manufacturing.models import ServiceLaborClaim # ดึงโมเดลมาใช้
+            ServiceLaborClaim.objects.create(
+                service_ticket=ticket,
+                requester=current_emp,
+                technician_name=contractor_name,
+                amount=amount,
+                slip_image=slip_file,
+                status='UNCLAIMED'
+            )
+
+            messages.success(request, f"🛒 หยอดบิลค่าแรงซ่อม {ticket.code} ลงตะกร้าเบิกส่วนตัวสำเร็จ!")
+        except Exception as e:
+            messages.error(request, f"❌ เกิดข้อผิดพลาด: {str(e)}")
+
+    return redirect('service_history_list')
+# ==========================================
+# 🌟 [NEW] สมองกลสำหรับ Control Dashboard 🌟
+# ==========================================
+@login_required
+def control_dashboard(request):
+    # 1. เช็กสิทธิ์ว่าเป็นระดับไหน เพื่อเลือกหน้าจอ (Template) ให้ถูกต้อง
+    user_groups = list(request.user.groups.values_list('name', flat=True))
+
+    is_manager = request.user.is_superuser or 'Manager_Team' in user_groups or 'Executive' in user_groups
+    is_supervisor = 'Supervisor_Team' in user_groups
+
+    if is_manager:
+        template_name = 'dashboards/control/manager.html'
+    elif is_supervisor:
+        template_name = 'dashboards/control/supervisor.html'
+    else:
+        template_name = 'dashboards/control/staff.html'
+
+    # 2. คำนวณตัวเลข KPI ทั้ง 4 ช่องแบบ Real-time
+
+    # 🟦 KPI 1: วางแผนการผลิต (รอจัดคิว / ตรวจแบบ)
+    # นับ JOB ที่เพิ่งเข้ามาใหม่ หรือกำลังรอตรวจแบบแปลน
+    kpi1_planning = ProductionOrder.objects.filter(
+        status__in=['NEW_JOB', 'WAITING_BLUEPRINT'],
+        is_closed=False
+    ).count()
+
+    # 🟨 KPI 2: วางแผนการจัดซื้อ (รอทำ PPO สั่งซื้อวัตถุดิบ)
+    # นับ JOB ที่รอวัตถุดิบ แต่ยังไม่ได้ถูกมัดรวมไปทำใบขอซื้อ (PPO)
+    kpi2_purchasing = ProductionOrder.objects.filter(
+        status='WAITING_MATERIALS',
+        is_materials_ordered=False,
+        ppo_ref__isnull=True,
+        is_closed=False
+    ).count()
+
+    # 🟧 KPI 3: วางแผนการจัดวัตถุดิบ (รอเบิกของหน้าลาน)
+    # นับ JOB ที่รอสโตร์จัดของและตัดสต็อก (GI) ให้ช่าง
+    kpi3_inventory = ProductionOrder.objects.filter(
+        status='WAITING_INVENTORY',
+        is_closed=False
+    ).count()
+
+    # 🟩 KPI 4: วางแผนการขนส่ง (รอจัดรถ)
+    # นับ JOB ที่ผลิตเสร็จ/รอ QC/ช่างหน้างาน แต่ยังไม่มีการระบุทะเบียนรถ
+    kpi4_logistics = ProductionOrder.objects.filter(
+        Q(status='COMPLETED') | Q(status='WAITING_QC') | Q(is_onsite=True)
+    ).filter(
+        transporter__isnull=True,
+        is_closed=False
+    ).distinct().count()
+
+    # 3. ส่งข้อมูลทั้งหมดไปให้หน้าจอ HTML นำไปวาดกราฟและตัวเลข
+    context = {
+        'kpi1_planning': kpi1_planning,
+        'kpi2_purchasing': kpi2_purchasing,
+        'kpi3_inventory': kpi3_inventory,
+        'kpi4_logistics': kpi4_logistics,
+        'is_manager': is_manager,
+        'is_supervisor': is_supervisor,
+    }
+
+    return render(request, template_name, context)

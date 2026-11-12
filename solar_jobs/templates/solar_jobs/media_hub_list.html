@@ -1,0 +1,58 @@
+{% extends 'core/base.html' %}
+{% block content %}
+<div class="container-fluid py-4 px-4">
+    <div class="d-flex justify-content-between align-items-end mb-4">
+        <div>
+            <h4 class="fw-bold mb-1 text-dark"><i class="fas fa-photo-video text-primary me-2"></i>ศูนย์รวมแฟ้มภาพ (Solar Media Hub)</h4>
+            <p class="text-muted small mb-0">ค้นหาและเลือกใบสั่งงานเพื่อดูประวัติรูปถ่ายตั้งแต่ต้นจนจบ</p>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0 rounded-4">
+        <div class="card-body p-4">
+            <!-- ช่องค้นหา -->
+            <form method="GET" class="mb-4">
+                <div class="input-group">
+                    <span class="input-group-text bg-white border-end-0"><i class="fas fa-search text-muted"></i></span>
+                    <input type="text" name="q" class="form-control border-start-0" placeholder="พิมพ์เลข JOB, เลขใบเสนอราคา หรือชื่อลูกค้า..." value="{{ search_query }}">
+                    <button type="submit" class="btn btn-dark px-4 fw-bold">ค้นหา</button>
+                </div>
+            </form>
+
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead class="bg-light text-muted small">
+                        <tr>
+                            <th style="width: 15%;">เลขที่ JOB</th>
+                            <th>ข้อมูลลูกค้า / วันที่เริ่มงาน</th>
+                            <th style="width: 20%;">ทีมช่างติดตั้ง</th>
+                            <th style="width: 15%; text-align: center;">สถานะงาน</th>
+                            <th style="width: 15%; text-align: center;">จัดการ</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for job in page_obj %}
+                        <tr>
+                            <td class="fw-bold text-primary">{{ job.code }}</td>
+                            <td>
+                                <div class="fw-bold text-dark">{{ job.customer.name|default:"ลูกค้า Walk-in" }}</div>
+                                <div class="small text-muted"><i class="far fa-calendar-alt me-1"></i> เริ่ม: {{ job.start_date|date:"d/m/Y"|default:"ยังไม่ระบุ" }}</div>
+                            </td>
+                            <td>{{ job.technician_team.name|default:"-" }}</td>
+                            <td class="text-center"><span class="badge {{ job.progress_color }} rounded-pill px-3">{{ job.get_status_display }}</span></td>
+                            <td class="text-center">
+                                <a href="{% url 'solar_media_hub_detail' job.id %}" class="btn btn-sm btn-outline-primary rounded-pill fw-bold px-3 shadow-sm">
+                                    <i class="far fa-folder-open me-1"></i> เปิดแฟ้ม
+                                </a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="5" class="text-center text-muted py-5"><i class="fas fa-folder-open fs-1 text-light mb-3 d-block"></i>ไม่พบข้อมูลใบสั่งงาน</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

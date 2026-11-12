@@ -215,7 +215,7 @@
         {% endwith %}
 
         <!-- 🌟 [NEW] การ์ดสำหรับทีมช่างโซล่าเซลล์ (เช็กคิวงาน + ประวัติเบิกเงิน) 🌟 -->
-        {% if user.is_superuser or 'ช่าง' in user.employee.department.name or 'ผลิต' in user.employee.department.name or 'โซล่า' in user.employee.department.name %}
+        {% if user.is_superuser or 'โซล่า' in user.employee.department.name or user.groups.all.0.name == 'Solar_Sales_Team' %}
 
         <!-- การ์ดที่ 1: คิวงานสำรวจ -->
         <div class="col-6 col-md-3 col-lg-3">

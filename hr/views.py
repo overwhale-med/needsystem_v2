@@ -7,6 +7,7 @@ from datetime import datetime, date, timedelta
 from django.contrib.auth.models import User, Group
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
+from django.utils.crypto import get_random_string
 
 from .models import Employee, Attendance, LeaveRequest, Payslip, CommissionLog, Position, Department, SalesGroup
 from .forms import LeaveRequestForm, EmployeeForm
@@ -678,3 +679,174 @@ def api_assign_to_team(request):
         return JsonResponse({'status': 'success', 'message': msg})
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
+
+# ==========================================
+# 🌟 ระบบจัดการโครงสร้างองค์กร (Departments & Positions)
+# ==========================================
+@user_passes_test(is_hr_or_admin, login_url='/')
+def org_structure_settings(request):
+    departments = Department.objects.all().order_by('parent__name', 'name')
+    positions = Position.objects.select_related('department').order_by('department__name', 'title')
+
+    if request.method == 'POST':
+        action = request.POST.get('action')
+
+        # --- 1. โซนจัดการแผนก (Departments) ---
+        if action == 'add_dept':
+            name = request.POST.get('name')
+            parent_id = request.POST.get('parent_id')
+            code = request.POST.get('code') # 🌟 [NEW] รับค่าโค้ด
+            if name:
+                parent = Department.objects.get(id=parent_id) if parent_id else None
+                Department.objects.create(name=name, parent=parent, code=code) # 🌟 [NEW] บันทึกโค้ด
+                messages.success(request, f"✅ เพิ่มแผนก '{name}' เรียบร้อยแล้ว")
+
+        elif action == 'edit_dept':
+            dept_id = request.POST.get('dept_id')
+            name = request.POST.get('name')
+            parent_id = request.POST.get('parent_id')
+            code = request.POST.get('code') # 🌟 [NEW] รับค่าโค้ด
+            if dept_id and name:
+                dept = get_object_or_404(Department, id=dept_id)
+                dept.name = name
+                dept.parent = Department.objects.get(id=parent_id) if parent_id else None
+                dept.code = code # 🌟 [NEW] อัปเดตโค้ด
+                dept.save()
+                messages.success(request, f"✅ แก้ไขข้อมูลแผนก '{name}' เรียบร้อยแล้ว")
+
+        elif action == 'delete_dept':
+            dept_id = request.POST.get('dept_id')
+            dept = get_object_or_404(Department, id=dept_id)
+            if dept.employee_set.exists() or dept.sub_departments.exists():
+                messages.error(request, f"❌ ไม่สามารถลบแผนก '{dept.name}' ได้ เนื่องจากยังมีพนักงานหรือแผนกย่อยสังกัดอยู่")
+            else:
+                dept_name = dept.name
+                dept.delete()
+                messages.success(request, f"🗑️ ลบแผนก '{dept_name}' เรียบร้อยแล้ว")
+
+        # --- 2. โซนจัดการตำแหน่ง (Positions) ---
+        elif action == 'add_pos':
+            title = request.POST.get('title')
+            dept_id = request.POST.get('dept_id')
+            desc = request.POST.get('description')
+            auth = request.POST.get('approval_authority')
+            code = request.POST.get('code') # 🌟 [NEW] รับค่าโค้ด
+            if title and dept_id:
+                dept = get_object_or_404(Department, id=dept_id)
+                Position.objects.create(title=title, department=dept, description=desc, approval_authority=auth, code=code) # 🌟 [NEW]
+                messages.success(request, f"✅ เพิ่มตำแหน่ง '{title}' เรียบร้อยแล้ว")
+
+        elif action == 'edit_pos':
+            pos_id = request.POST.get('pos_id')
+            title = request.POST.get('title')
+            dept_id = request.POST.get('dept_id')
+            desc = request.POST.get('description')
+            auth = request.POST.get('approval_authority')
+            code = request.POST.get('code') # 🌟 [NEW] รับค่าโค้ด
+            if pos_id and title and dept_id:
+                pos = get_object_or_404(Position, id=pos_id)
+                dept = get_object_or_404(Department, id=dept_id)
+                pos.title = title
+                pos.department = dept
+                pos.description = desc
+                pos.approval_authority = auth
+                pos.code = code # 🌟 [NEW] อัปเดตโค้ด
+                pos.save()
+                messages.success(request, f"✅ แก้ไขตำแหน่ง '{title}' เรียบร้อยแล้ว")
+
+        elif action == 'delete_pos':
+            pos_id = request.POST.get('pos_id')
+            pos = get_object_or_404(Position, id=pos_id)
+            if pos.employee_set.exists():
+                messages.error(request, f"❌ ไม่สามารถลบตำแหน่ง '{pos.title}' ได้ เนื่องจากยังมีพนักงานใช้งานอยู่")
+            else:
+                pos_title = pos.title
+                pos.delete()
+                messages.success(request, f"🗑️ ลบตำแหน่ง '{pos_title}' เรียบร้อยแล้ว")
+
+        return redirect('org_structure_settings')
+
+    context = {
+        'departments': departments,
+        'positions': positions,
+    }
+    return render(request, 'hr/org_structure_settings.html', context)
+
+# ==========================================
+# 🌟 API สำหรับระบบ Dropdown 3 สเต็ป (ฝ่าย -> แผนก -> ตำแหน่ง)
+# ==========================================
+@user_passes_test(is_hr_or_admin, login_url='/')
+def api_get_departments(request):
+    """API ดึงรายชื่อแผนกย่อย โดยอ้างอิงจาก ฝ่าย (Parent) ที่เลือกใน Step 1"""
+    division_id = request.GET.get('division_id')
+    if division_id:
+        # ดึงเฉพาะแผนกที่มีสังกัดเป็น division_id ที่ส่งมา
+        departments = Department.objects.filter(parent_id=division_id).order_by('name')
+        data = [{'id': d.id, 'name': d.name} for d in departments]
+    else:
+        data = []
+    return JsonResponse(data, safe=False)
+
+@user_passes_test(is_hr_or_admin, login_url='/')
+def api_get_positions(request):
+    """API ดึงรายชื่อตำแหน่ง โดยอ้างอิงจาก แผนกย่อย ที่เลือกใน Step 2"""
+    department_id = request.GET.get('department_id')
+    if department_id:
+        # ดึงเฉพาะตำแหน่งที่สังกัด department_id ที่ส่งมา
+        positions = Position.objects.filter(department_id=department_id).order_by('title')
+        data = [{'id': p.id, 'title': p.title} for p in positions]
+    else:
+        data = []
+    return JsonResponse(data, safe=False)
+
+@user_passes_test(is_hr_or_admin, login_url='/')
+def api_generate_auto_account(request):
+    """API สำหรับสุ่มสร้าง Username และ Password อัตโนมัติจากโค้ดย่อ"""
+    division_id = request.GET.get('division_id')
+    department_id = request.GET.get('department_id')
+    position_id = request.GET.get('position_id')
+
+    if not (division_id and department_id and position_id):
+        return JsonResponse({'status': 'error', 'message': 'กรุณาเลือก ฝ่าย, แผนก และ ตำแหน่ง ให้ครบถ้วนก่อนกด AUTO'})
+
+    try:
+        div = Department.objects.get(id=division_id)
+        dept = Department.objects.get(id=department_id)
+        pos = Position.objects.get(id=position_id)
+
+        # ดึงโค้ดย่อ (ถ้าในอนาคต HR ลืมใส่โค้ดในตั้งค่า ระบบจะใช้ตัวย่อสำรอง 'div', 'dept', 'pos' กันพังครับ)
+        div_code = (div.code or 'div').lower().strip()
+        dept_code = (dept.code or 'dept').lower().strip()
+        pos_code = (pos.code or 'pos').lower().strip()
+
+        # ประกอบร่าง Prefix เช่น 'sale_korat_mgr'
+        prefix = f"{div_code}_{dept_code}_{pos_code}"
+
+        # ค้นหา Username ที่ขึ้นต้นด้วย Prefix นี้ในฐานข้อมูล
+        existing_users = User.objects.filter(username__startswith=f"{prefix}_")
+
+        max_seq = 0
+        for user in existing_users:
+            try:
+                # ดึงตัวเลขท้ายสุดมาหาค่าสูงสุด (เช่น ดึง '03' จาก 'sale_korat_mgr_03')
+                seq_str = user.username.split('_')[-1]
+                seq_num = int(seq_str)
+                if seq_num > max_seq:
+                    max_seq = seq_num
+            except ValueError:
+                pass # ถ้าตัวท้ายไม่ใช่ตัวเลข ก็ข้ามไป
+
+        # บวก 1 เพื่อรันคิวต่อไป พร้อมบังคับให้เป็นเลข 2 หลัก (เช่น 01, 02)
+        next_seq = max_seq + 1
+        new_username = f"{prefix}_{next_seq:02d}"
+
+        # สุ่มรหัสผ่าน 8 ตัวอักษร (สุ่มตัวเล็ก ตัวใหญ่ และตัวเลข)
+        new_password = get_random_string(length=8)
+
+        return JsonResponse({
+            'status': 'success',
+            'username': new_username,
+            'password': new_password
+        })
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)})

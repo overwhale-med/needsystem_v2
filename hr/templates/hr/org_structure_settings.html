@@ -1,0 +1,535 @@
+{% extends 'core/base.html' %}
+{% load humanize %}
+
+{% block content %}
+<style>
+    .navbar-nav { display: none !important; }
+    .nav-tabs .nav-link { color: #6c757d; font-weight: 600; border-radius: 8px 8px 0 0; border: none; padding: 12px 24px; transition: 0.3s; }
+    .nav-tabs .nav-link:hover { color: #0d6efd; background-color: #f8f9fa; }
+    .nav-tabs .nav-link.active { background-color: #f8f9fa; color: #0d6efd; border-bottom: 3px solid #0d6efd; }
+    .table-hover tbody tr:hover { background-color: #f8f9fa; }
+</style>
+
+<div class="container-fluid py-4 px-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-end mb-4">
+        <div>
+            <h4 class="fw-bold mb-1 text-dark"><i class="fas fa-sitemap text-primary me-2"></i>จัดการโครงสร้างองค์กร</h4>
+            <p class="text-muted small mb-0">ระบบจัดการ ฝ่าย (Divisions), แผนกย่อย (Departments) และตำแหน่งงาน</p>
+        </div>
+        <div>
+            <a href="{% url 'hr_executive_dashboard' %}" class="btn btn-outline-secondary rounded-pill px-4 shadow-sm fw-bold"><i class="fas fa-arrow-left me-2"></i> กลับหน้า HR</a>
+        </div>
+    </div>
+
+    <!-- 🌟 ส่วนเนื้อหาหลัก แยกเป็น 3 แท็บ 🌟 -->
+    <ul class="nav nav-tabs border-bottom-0 mb-0" id="orgTab" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="div-tab" data-bs-toggle="tab" data-bs-target="#div-pane" type="button" role="tab"><i class="fas fa-city me-2 text-warning"></i>1. จัดการฝ่าย (Divisions)</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="dept-tab" data-bs-toggle="tab" data-bs-target="#dept-pane" type="button" role="tab"><i class="fas fa-building me-2 text-info"></i>2. จัดการแผนกย่อย (Departments)</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="pos-tab" data-bs-toggle="tab" data-bs-target="#pos-pane" type="button" role="tab"><i class="fas fa-user-tag me-2 text-success"></i>3. จัดการตำแหน่ง (Positions)</button>
+        </li>
+    </ul>
+
+    <div class="tab-content bg-white border border-top-0 rounded-bottom-4 shadow-sm p-4" id="orgTabContent">
+
+        <!-- ========================================== -->
+        <!-- 🏢 แท็บที่ 1: จัดการฝ่าย (Divisions - ไม่มี Parent) -->
+        <!-- ========================================== -->
+        <div class="tab-pane fade show active" id="div-pane" role="tabpanel">
+            <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+                <h6 class="fw-bold text-dark mb-0">รายชื่อฝ่ายหลัก (เสาหลักองค์กร)</h6>
+                <div class="d-flex gap-2 align-items-center">
+                    <button class="btn btn-sm btn-warning rounded-pill px-3 shadow-sm fw-bold text-dark" data-bs-toggle="modal" data-bs-target="#addDeptModal"><i class="fas fa-plus me-1"></i> สร้างฝ่ายใหม่</button>
+                </div>
+            </div>
+
+            <div class="table-responsive border rounded-3">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="bg-light text-secondary small">
+                        <tr>
+                            <th class="ps-4">ชื่อฝ่าย (Division)</th>
+                            <th>โค้ดย่อ (Code)</th>
+                            <th>สถานะ</th>
+                            <th class="text-center" width="150">จัดการ</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for d in departments %}
+                            {% if not d.parent %}
+                            <tr>
+                                <td class="ps-4 fw-bold text-dark"><i class="fas fa-crown text-warning me-2" style="font-size: 0.8rem;"></i>{{ d.name }}</td>
+                                <td>
+                                    {% if d.code %}
+                                        <span class="badge" style="background-color: #f1f5f9; color: #0f172a; border: 1px solid #cbd5e1; font-size: 0.85rem; padding: 5px 10px; font-weight: 700; letter-spacing: 1px;">{{ d.code }}</span>
+                                    {% else %}<span class="text-muted small">-</span>{% endif %}
+                                </td>
+                                <td><span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 px-2">ฝ่ายหลัก (สูงสุด)</span></td>
+                                <td class="text-center">
+                                    <button class="btn btn-sm btn-outline-warning rounded-circle shadow-sm" data-bs-toggle="modal" data-bs-target="#editDeptModal{{ d.id }}" title="แก้ไข"><i class="fas fa-pen"></i></button>
+                                    <button class="btn btn-sm btn-outline-danger rounded-circle shadow-sm ms-1" data-bs-toggle="modal" data-bs-target="#deleteDeptModal{{ d.id }}" title="ลบ"><i class="fas fa-trash"></i></button>
+                                </td>
+                            </tr>
+                            {% endif %}
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- 📂 แท็บที่ 2: จัดการแผนกย่อย (Departments - มี Parent) -->
+        <!-- ========================================== -->
+        <div class="tab-pane fade" id="dept-pane" role="tabpanel">
+            <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+                <h6 class="fw-bold text-dark mb-0">รายชื่อแผนกย่อย</h6>
+                <div class="d-flex gap-2 align-items-center flex-wrap">
+                    
+                    <div class="input-group input-group-sm shadow-sm rounded-pill overflow-hidden" style="width: 250px;">
+                        <span class="input-group-text bg-light border-0 ps-3"><i class="fas fa-filter text-muted"></i></span>
+                        <select id="filterDivision" class="form-select bg-light border-0 fw-bold shadow-none text-dark" style="cursor: pointer;">
+                            <option value="ALL">ดูทุกแผนก</option>
+                            <optgroup label="กรองตามฝ่าย">
+                                {% for d in departments %}
+                                    {% if not d.parent %}
+                                        <option value="{{ d.name }}">{{ d.name }}</option>
+                                    {% endif %}
+                                {% endfor %}
+                            </optgroup>
+                        </select>
+                    </div>
+
+                    <div class="input-group input-group-sm shadow-sm rounded-pill overflow-hidden" style="width: 200px;">
+                        <span class="input-group-text bg-light border-0 ps-3"><i class="fas fa-search text-muted"></i></span>
+                        <input type="text" id="searchDept" class="form-control bg-light border-0 shadow-none" placeholder="ค้นหาแผนก...">
+                    </div>
+                    <button class="btn btn-sm btn-primary rounded-pill px-3 shadow-sm fw-bold" data-bs-toggle="modal" data-bs-target="#addDeptModal"><i class="fas fa-plus me-1"></i> เพิ่มแผนกย่อย</button>
+                </div>
+            </div>
+
+            <div class="table-responsive border rounded-3">
+                <table class="table table-hover align-middle mb-0" id="subDeptTable">
+                    <thead class="bg-light text-secondary small">
+                        <tr>
+                            <th class="ps-4">ชื่อแผนกย่อย (Department)</th>
+                            <th>สังกัดฝ่าย (Parent Division)</th>
+                            <th>โค้ดย่อ (Code)</th>
+                            <th class="text-center" width="150">จัดการ</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for d in departments %}
+                            {% if d.parent %}
+                            <tr class="sub-dept-row" data-parent="{{ d.parent.name }}">
+                                <td class="ps-4 fw-bold text-dark">{{ d.name }}</td>
+                                <td><span class="badge bg-light text-dark border shadow-sm"><i class="fas fa-level-up-alt text-muted me-1"></i> {{ d.parent.name }}</span></td>
+                                <td>
+                                    {% if d.code %}
+                                        <span class="badge" style="background-color: #f1f5f9; color: #0f172a; border: 1px solid #cbd5e1; font-size: 0.85rem; padding: 5px 10px; font-weight: 700; letter-spacing: 1px;">{{ d.code }}</span>
+                                    {% else %}<span class="text-muted small">-</span>{% endif %}
+                                </td>
+                                <td class="text-center">
+                                    <button class="btn btn-sm btn-outline-warning rounded-circle shadow-sm" data-bs-toggle="modal" data-bs-target="#editDeptModal{{ d.id }}" title="แก้ไข"><i class="fas fa-pen"></i></button>
+                                    <button class="btn btn-sm btn-outline-danger rounded-circle shadow-sm ms-1" data-bs-toggle="modal" data-bs-target="#deleteDeptModal{{ d.id }}" title="ลบ"><i class="fas fa-trash"></i></button>
+                                </td>
+                            </tr>
+                            {% endif %}
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- 🧑‍💼 แท็บที่ 3: จัดการตำแหน่ง (Positions) -->
+        <!-- ========================================== -->
+        <div class="tab-pane fade" id="pos-pane" role="tabpanel">
+            <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+                <h6 class="fw-bold text-dark mb-0">รายชื่อตำแหน่งงานทั้งหมด</h6>
+                <div class="d-flex gap-2 align-items-center flex-wrap">
+
+                    <!-- 🌟 [NEW] Dropdown กรองตามฝ่าย สำหรับแท็บตำแหน่ง 🌟 -->
+                    <div class="input-group input-group-sm shadow-sm rounded-pill overflow-hidden" style="width: 250px;">
+                        <span class="input-group-text bg-light border-0 ps-3"><i class="fas fa-filter text-muted"></i></span>
+                        <select id="filterDivisionPos" class="form-select bg-light border-0 fw-bold shadow-none text-dark" style="cursor: pointer;">
+                            <option value="ALL">ดูทุกฝ่าย</option>
+                            <optgroup label="กรองตามฝ่าย">
+                                {% for d in departments %}
+                                    {% if not d.parent %}
+                                        <option value="{{ d.name }}">{{ d.name }}</option>
+                                    {% endif %}
+                                {% endfor %}
+                            </optgroup>
+                        </select>
+                    </div>
+
+                    <div class="input-group input-group-sm shadow-sm rounded-pill overflow-hidden" style="width: 250px;">
+                        <span class="input-group-text bg-light border-0 ps-3"><i class="fas fa-search text-muted"></i></span>
+                        <input type="text" id="searchPos" class="form-control bg-light border-0 shadow-none" placeholder="ค้นหาตำแหน่ง, แผนก, โค้ดย่อ...">
+                    </div>
+                    <button class="btn btn-sm btn-success rounded-pill px-3 shadow-sm fw-bold" data-bs-toggle="modal" data-bs-target="#addPosModal"><i class="fas fa-plus me-1"></i> เพิ่มตำแหน่งใหม่</button>
+                </div>
+            </div>
+
+            <div class="table-responsive border rounded-3">
+                <table class="table table-hover align-middle mb-0" id="posTable">
+                    <thead class="bg-light text-secondary small">
+                        <tr>
+                            <th class="ps-4">ชื่อตำแหน่ง (Position Title)</th>
+                            <th>สังกัดฝ่ายหลัก (Division)</th> <!-- 🌟 [NEW] เพิ่มคอลัมน์ฝ่าย -->
+                            <th>สังกัดแผนกย่อย (Department)</th>
+                            <th>โค้ดย่อ (Code)</th>
+                            <th>อำนาจการอนุมัติ</th>
+                            <th class="text-center" width="150">จัดการ</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for p in positions %}
+                        <!-- 🌟 ฝัง data-division เอาไว้กรอง (เช็กตรรกะความสัมพันธ์แผนก/ฝ่าย อย่างละเอียด) -->
+                        <tr class="pos-row" data-division="{% if p.department %}{% if p.department.parent %}{{ p.department.parent.name }}{% else %}{{ p.department.name }}{% endif %}{% else %}NONE{% endif %}">
+                            <td class="ps-4 fw-bold text-dark">{{ p.title }}</td>
+                            
+                            <!-- 🌟 โชว์ชื่อฝ่ายหลัก -->
+                            <td>
+                                {% if p.department %}
+                                    {% if p.department.parent %}
+                                        <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 shadow-sm"><i class="fas fa-city me-1"></i> {{ p.department.parent.name }}</span>
+                                    {% else %}
+                                        <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 shadow-sm"><i class="fas fa-city me-1"></i> {{ p.department.name }}</span>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="text-muted small">-</span>
+                                {% endif %}
+                            </td>
+
+                            <!-- 🌟 โชว์ชื่อแผนกย่อย -->
+                            <td>
+                                {% if p.department %}
+                                    {% if p.department.parent %}
+                                        <span class="badge bg-light text-dark border shadow-sm"><i class="fas fa-building text-muted me-1"></i> {{ p.department.name }}</span>
+                                    {% else %}
+                                        <span class="text-muted small" style="font-size: 0.75rem;"><i class="fas fa-link text-secondary me-1"></i>ผูกกับฝ่ายโดยตรง</span>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="text-muted small">-</span>
+                                {% endif %}
+                            </td>
+
+                            <td>
+                                {% if p.code %}
+                                    <span class="badge" style="background-color: #f1f5f9; color: #0f172a; border: 1px solid #cbd5e1; font-size: 0.85rem; padding: 5px 10px; font-weight: 700; letter-spacing: 1px;">{{ p.code }}</span>
+                                {% else %}
+                                    <span class="text-muted small">-</span>
+                                {% endif %}
+                            </td>
+                            <td><span class="small text-muted text-truncate d-inline-block" style="max-width: 200px;">{{ p.approval_authority|default:"-" }}</span></td>
+                            <td class="text-center">
+                                <button class="btn btn-sm btn-outline-warning rounded-circle shadow-sm" data-bs-toggle="modal" data-bs-target="#editPosModal{{ p.id }}" title="แก้ไข"><i class="fas fa-pen"></i></button>
+                                <button class="btn btn-sm btn-outline-danger rounded-circle shadow-sm ms-1" data-bs-toggle="modal" data-bs-target="#deletePosModal{{ p.id }}" title="ลบ"><i class="fas fa-trash"></i></button>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="6" class="text-center py-4 text-muted">ยังไม่มีข้อมูลตำแหน่ง</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<!-- ========================================== -->
+<!-- 🌟 พื้นที่เก็บ Modal -->
+<!-- ========================================== -->
+
+<!-- Modal เพิ่มแผนก / ฝ่าย -->
+<div class="modal fade" id="addDeptModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <form method="POST" action="{% url 'org_structure_settings' %}" class="modal-content border-0 rounded-4 shadow-lg">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="add_dept">
+            <div class="modal-header bg-primary border-0">
+                <h6 class="modal-title fw-bold text-white"><i class="fas fa-plus me-2"></i>เพิ่มฝ่าย / แผนกใหม่</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="mb-3">
+                    <label class="form-label fw-bold text-muted small">ชื่อแผนก/ฝ่าย <span class="text-danger">*</span></label>
+                    <input type="text" name="name" class="form-control" required placeholder="เช่น ฝ่ายโซล่าเซลล์ หรือ แผนกจัดซื้อ">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold text-muted small">โค้ดย่อภาษาอังกฤษ (เพื่อสร้าง Username)</label>
+                    <input type="text" name="code" class="form-control text-uppercase" placeholder="เช่น SALE, MK" maxlength="10">
+                </div>
+                <div class="mb-0">
+                    <label class="form-label fw-bold text-muted small">สังกัดแผนกหลัก (เลือกเพื่อเป็นแผนกย่อย / ปล่อยว่างเพื่อตั้งเป็นฝ่ายหลัก)</label>
+                    <select name="parent_id" class="form-select">
+                        <option value="">-- ปล่อยว่าง (สร้างเป็นฝ่ายหลักสูงสุด) --</option>
+                        {% for d in departments %}
+                            {% if not d.parent %}
+                                <option value="{{ d.id }}">{{ d.name }}</option>
+                            {% endif %}
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer bg-light border-0">
+                <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">ยกเลิก</button>
+                <button type="submit" class="btn btn-primary fw-bold rounded-pill px-4 shadow-sm">บันทึกข้อมูล</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal เพิ่มตำแหน่ง -->
+<div class="modal fade" id="addPosModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <form method="POST" action="{% url 'org_structure_settings' %}" class="modal-content border-0 rounded-4 shadow-lg">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="add_pos">
+            <div class="modal-header bg-success border-0">
+                <h6 class="modal-title fw-bold text-white"><i class="fas fa-plus me-2"></i>เพิ่มตำแหน่งใหม่</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="mb-3">
+                    <label class="form-label fw-bold text-muted small">ชื่อตำแหน่ง <span class="text-danger">*</span></label>
+                    <input type="text" name="title" class="form-control" required placeholder="เช่น ผู้จัดการฝ่ายผลิต">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold text-muted small">โค้ดย่อภาษาอังกฤษ</label>
+                    <input type="text" name="code" class="form-control text-uppercase" placeholder="เช่น MGR" maxlength="10">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold text-muted small">สังกัดแผนก/ฝ่าย <span class="text-danger">*</span></label>
+                    <select name="dept_id" class="form-select" required>
+                        <option value="">-- เลือกแผนก --</option>
+                        {% for d in departments %}
+                            <option value="{{ d.id }}">{{ d.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold text-muted small">รายละเอียดงาน</label>
+                    <textarea name="description" class="form-control" rows="2"></textarea>
+                </div>
+                <div class="mb-0">
+                    <label class="form-label fw-bold text-muted small">อำนาจการอนุมัติ</label>
+                    <textarea name="approval_authority" class="form-control" rows="2"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer bg-light border-0">
+                <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">ยกเลิก</button>
+                <button type="submit" class="btn btn-success fw-bold rounded-pill px-4 text-white shadow-sm">บันทึกข้อมูล</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal แก้ไข/ลบ แผนกและตำแหน่ง (วนลูปสร้างไว้ล่วงหน้า) -->
+{% for d in departments %}
+<div class="modal fade text-start" id="editDeptModal{{ d.id }}" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <form method="POST" action="{% url 'org_structure_settings' %}" class="modal-content border-0 rounded-4 shadow-lg">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="edit_dept">
+            <input type="hidden" name="dept_id" value="{{ d.id }}">
+            <div class="modal-header bg-warning border-0">
+                <h6 class="modal-title fw-bold text-dark"><i class="fas fa-pen me-2"></i>แก้ไข: {{ d.name }}</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="mb-3">
+                    <label class="form-label fw-bold text-muted small">ชื่อแผนก/ฝ่าย <span class="text-danger">*</span></label>
+                    <input type="text" name="name" class="form-control" value="{{ d.name }}" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold text-muted small">โค้ดย่อภาษาอังกฤษ</label>
+                    <input type="text" name="code" class="form-control text-uppercase" value="{{ d.code|default:'' }}" maxlength="10">
+                </div>
+                <div class="mb-0">
+                    <label class="form-label fw-bold text-muted small">สังกัดแผนกหลัก (เว้นว่างถ้าเป็นแผนกสูงสุด)</label>
+                    <select name="parent_id" class="form-select">
+                        <option value="">-- เป็นฝ่ายหลักสูงสุด --</option>
+                        {% for p_dept in departments %}
+                            {% if p_dept.id != d.id and not p_dept.parent %}
+                                <option value="{{ p_dept.id }}" {% if d.parent_id == p_dept.id %}selected{% endif %}>{{ p_dept.name }}</option>
+                            {% endif %}
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer bg-light border-0">
+                <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">ยกเลิก</button>
+                <button type="submit" class="btn btn-warning fw-bold rounded-pill px-4 text-dark">บันทึกการแก้ไข</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="modal fade text-start" id="deleteDeptModal{{ d.id }}" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <form method="POST" action="{% url 'org_structure_settings' %}" class="modal-content border-0 rounded-4 shadow-lg text-center">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="delete_dept">
+            <input type="hidden" name="dept_id" value="{{ d.id }}">
+            <div class="modal-body p-4">
+                <i class="fas fa-exclamation-triangle fa-3x text-danger mb-3"></i>
+                <h5 class="fw-bold text-dark">ยืนยันการลบ?</h5>
+                <p class="text-muted small mb-4">คุณต้องการลบ <strong>{{ d.name }}</strong> ใช่หรือไม่?</p>
+                <button type="button" class="btn btn-secondary rounded-pill px-4 me-2" data-bs-dismiss="modal">ยกเลิก</button>
+                <button type="submit" class="btn btn-danger rounded-pill px-4 fw-bold">ลบเลย</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endfor %}
+
+{% for p in positions %}
+<div class="modal fade text-start" id="editPosModal{{ p.id }}" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <form method="POST" action="{% url 'org_structure_settings' %}" class="modal-content border-0 rounded-4 shadow-lg">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="edit_pos">
+            <input type="hidden" name="pos_id" value="{{ p.id }}">
+            <div class="modal-header bg-warning border-0">
+                <h6 class="modal-title fw-bold text-dark"><i class="fas fa-pen me-2"></i>แก้ไขตำแหน่ง: {{ p.title }}</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="mb-3">
+                    <label class="form-label fw-bold text-muted small">ชื่อตำแหน่ง <span class="text-danger">*</span></label>
+                    <input type="text" name="title" class="form-control" value="{{ p.title }}" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold text-muted small">โค้ดย่อภาษาอังกฤษ</label>
+                    <input type="text" name="code" class="form-control text-uppercase" value="{{ p.code|default:'' }}" maxlength="10">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold text-muted small">สังกัดแผนก <span class="text-danger">*</span></label>
+                    <select name="dept_id" class="form-select" required>
+                        {% for d in departments %}
+                            <option value="{{ d.id }}" {% if p.department_id == d.id %}selected{% endif %}>{{ d.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold text-muted small">รายละเอียดงาน</label>
+                    <textarea name="description" class="form-control" rows="2">{{ p.description|default:"" }}</textarea>
+                </div>
+                <div class="mb-0">
+                    <label class="form-label fw-bold text-muted small">อำนาจการอนุมัติ</label>
+                    <textarea name="approval_authority" class="form-control" rows="2">{{ p.approval_authority|default:"" }}</textarea>
+                </div>
+            </div>
+            <div class="modal-footer bg-light border-0">
+                <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">ยกเลิก</button>
+                <button type="submit" class="btn btn-warning fw-bold rounded-pill px-4 text-dark">บันทึกการแก้ไข</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="modal fade text-start" id="deletePosModal{{ p.id }}" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <form method="POST" action="{% url 'org_structure_settings' %}" class="modal-content border-0 rounded-4 shadow-lg text-center">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="delete_pos">
+            <input type="hidden" name="pos_id" value="{{ p.id }}">
+            <div class="modal-body p-4">
+                <i class="fas fa-exclamation-triangle fa-3x text-danger mb-3"></i>
+                <h5 class="fw-bold text-dark">ยืนยันการลบตำแหน่ง?</h5>
+                <p class="text-muted small mb-4">คุณต้องการลบตำแหน่ง <strong>{{ p.title }}</strong> ใช่หรือไม่?</p>
+                <button type="button" class="btn btn-secondary rounded-pill px-4 me-2" data-bs-dismiss="modal">ยกเลิก</button>
+                <button type="submit" class="btn btn-danger rounded-pill px-4 fw-bold">ลบเลย</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endfor %}
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        // 🌟 1. ดึงข้อมูลแท็บล่าสุดที่เปิดไว้
+        var activeTabId = localStorage.getItem('activeOrgTab2');
+        if (activeTabId) {
+            var triggerEl = document.querySelector('button[data-bs-target="' + activeTabId + '"]');
+            if (triggerEl) {
+                var tab = new bootstrap.Tab(triggerEl);
+                tab.show();
+            }
+        }
+
+        // 🌟 2. บันทึกแท็บเวลาคนคลิก
+        var tabElements = document.querySelectorAll('button[data-bs-toggle="tab"]');
+        tabElements.forEach(function(tabEl) {
+            tabEl.addEventListener('shown.bs.tab', function (event) {
+                var targetId = event.target.getAttribute('data-bs-target');
+                localStorage.setItem('activeOrgTab2', targetId);
+            });
+        });
+
+        // 🌟 3. ระบบค้นหา Real-time
+        function setupLiveSearch(inputId) {
+            var searchInput = document.getElementById(inputId);
+            if (!searchInput) return;
+
+            searchInput.addEventListener('keyup', function() {
+                var searchTerm = this.value.toLowerCase();
+                var tableBody = this.closest('.tab-pane').querySelector('table tbody');
+                if (!tableBody) return;
+
+                var rows = tableBody.querySelectorAll('tr');
+                rows.forEach(function(row) {
+                    if (row.querySelector('td[colspan]')) return; 
+                    var rowText = row.textContent.toLowerCase();
+                    row.style.display = rowText.includes(searchTerm) ? '' : 'none';
+                });
+            });
+        }
+        setupLiveSearch('searchDept');
+        setupLiveSearch('searchPos');
+
+        // 🌟 4. ระบบตัวกรอง Dropdown ตามฝ่าย (แท็บ 2 - แผนก)
+        const filterSelectDept = document.getElementById('filterDivision');
+        if (filterSelectDept) {
+            filterSelectDept.addEventListener('change', function() {
+                const selectedDivision = this.value;
+                const rows = document.querySelectorAll('#subDeptTable tbody tr.sub-dept-row');
+                
+                rows.forEach(row => {
+                    const rowParent = row.getAttribute('data-parent');
+                    if (selectedDivision === 'ALL' || rowParent === selectedDivision) {
+                        row.style.display = '';
+                    } else {
+                        row.style.display = 'none';
+                    }
+                });
+            });
+        }
+
+        // 🌟 5. [NEW] ระบบตัวกรอง Dropdown ตามฝ่าย (แท็บ 3 - ตำแหน่ง)
+        const filterSelectPos = document.getElementById('filterDivisionPos');
+        if (filterSelectPos) {
+            filterSelectPos.addEventListener('change', function() {
+                const selectedDivision = this.value;
+                const rows = document.querySelectorAll('#posTable tbody tr.pos-row');
+                
+                rows.forEach(row => {
+                    const rowDivision = row.getAttribute('data-division');
+                    if (selectedDivision === 'ALL' || rowDivision === selectedDivision) {
+                        row.style.display = '';
+                    } else {
+                        row.style.display = 'none';
+                    }
+                });
+            });
+        }
+    });
+</script>
+{% endblock %}

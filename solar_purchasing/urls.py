@@ -20,4 +20,5 @@ urlpatterns = [
     path('ppo/<int:pk>/', views.solar_ppo_detail, name='solar_ppo_detail'),
     path('ppo/<int:pk>/cancel/', views.solar_ppo_cancel, name='solar_ppo_cancel'), # 🌟 [NEW] เส้นทางยกเลิก
     path('payment/<int:po_id>/', views.solar_po_payment, name='solar_po_payment'),
+    path('po/<int:po_id>/print-rfq/', views.solar_po_print_rfq, name='solar_po_print_rfq')
 ]

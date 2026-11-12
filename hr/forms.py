@@ -1,5 +1,5 @@
 from django import forms
-from .models import LeaveRequest, Employee
+from .models import LeaveRequest, Employee, Department
 from django.core.exceptions import ValidationError
 import datetime
 
@@ -29,6 +29,14 @@ class EmployeeForm(forms.ModelForm):
     username = forms.CharField(required=False, widget=forms.TextInput(attrs={'class': 'form-control', 'autocomplete': 'off'}))
     password = forms.CharField(required=False, widget=forms.PasswordInput(attrs={'class': 'form-control', 'autocomplete': 'new-password'}))
     email = forms.EmailField(required=False, widget=forms.EmailInput(attrs={'class': 'form-control', 'autocomplete': 'off'}))
+
+    # 🌟 [NEW] กล่องจำลอง Step 1: เลือกฝ่าย (ดึงเฉพาะแผนกสูงสุดมาโชว์) 🌟
+    division = forms.ModelChoiceField(
+        queryset=Department.objects.filter(parent__isnull=True),
+        required=False,
+        empty_label="--- 1. เลือกฝ่าย (Division) ---",
+        widget=forms.Select(attrs={'class': 'form-select border-primary fw-bold', 'id': 'id_division'})
+    )
 
     # ✅ เปลี่ยนเงินเดือนเป็น CharField (รับข้อความ) เพื่อให้โชว์ลูกน้ำได้
     salary = forms.CharField(required=False, widget=forms.TextInput(attrs={
@@ -62,14 +70,16 @@ class EmployeeForm(forms.ModelForm):
             'status': forms.Select(attrs={'class': 'form-select'}),
             'position': forms.Select(attrs={'class': 'form-select'}),
             'department': forms.Select(attrs={'class': 'form-select'}),
+            # ✅ เพิ่ม Widget ให้ช่องเลือกทีมผลิต
+            'production_team': forms.Select(attrs={'class': 'form-select border-warning shadow-sm'}),
             'start_date': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'dd/mm/yyyy', 'autocomplete': 'off'}),
             'social_security_id': forms.TextInput(attrs={'class': 'form-control', 'autocomplete': 'off'}),
             'bank_account_no': forms.TextInput(attrs={'class': 'form-control', 'autocomplete': 'off'}),
-            
+
             # 🌟 [NEW] เพิ่ม Widget สำหรับจัดกลุ่มทีมขาย 🌟
             'sales_group': forms.Select(attrs={'class': 'form-select border-success'}),
             'group_role': forms.Select(attrs={'class': 'form-select border-success'}),
-            
+
             'introducer': forms.Select(attrs={'class': 'form-select'}),
             'business_rank': forms.Select(attrs={'class': 'form-select'}),
             'commission_rate': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
